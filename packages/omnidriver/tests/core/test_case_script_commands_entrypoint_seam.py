@@ -42,7 +42,6 @@ class _ForeignEntrypointPlugin(MinimalTestPlugin):
 
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         return CaseRuntimeConventions(
-            output_collection_relpath="outputs",
             case_entrypoints=("run.sh",),
             case_script_commands=("run.sh",),
         )

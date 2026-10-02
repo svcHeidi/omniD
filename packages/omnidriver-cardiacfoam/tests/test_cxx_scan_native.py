@@ -120,8 +120,8 @@ def test_keys_added_to_the_cxx_plan_are_uncatalogued_and_settable(tmp_path, monk
     assert not any(key.rsplit(".", 1)[-1] in case for key in _STUDY)
     monkeypatch.setenv("OMNIDRIVER_NATIVE_TUTORIALS", str(tree / "tutorials"))
     report = _plan(tree, tmp_path, _STUDY).to_json()
-    assert report["status"] == "ok", json.dumps(report["catalog_coverage_errors"], indent=1)
-    notes = " ".join(d["message"] for d in report["catalog_coverage_errors"] if d["code"] == "plugin_catalog_uncatalogued")
+    assert report["status"] == "ok", json.dumps(report["plugin_diagnostics"], indent=1)
+    notes = " ".join(d["message"] for d in report["plugin_diagnostics"] if d["code"] == "plugin_catalog_uncatalogued")
     staged = _staged(tmp_path)
     for name, value in _STUDY.items():
         leaf = name.rsplit(".", 1)[-1]
@@ -129,6 +129,12 @@ def test_keys_added_to_the_cxx_plan_are_uncatalogued_and_settable(tmp_path, monk
         assert f"{leaf} {value};" in staged
     assert "omniBlock { omniDeep 4.0; }" in staged
     assert list((tmp_path / "scratch" / "cxx-scan").glob("*.json"))
+    # One verdict per accepted key: the note above, never also a case-key warning.
+    accepted = {name.rsplit(".", 1)[-1] for name in _STUDY} | {"omniBlock"}
+    assert [
+        d["field"] for d in report["plugin_diagnostics"]
+        if d["code"] == "uncatalogued_case_dict_key" and d["field"] in accepted
+    ] == []
 
 
 def test_a_new_key_is_refused_at_a_path_the_cxx_does_not_read_or_with_the_wrong_type(tmp_path, monkeypatch):
@@ -155,6 +161,6 @@ def test_a_model_a_scanned_selection_table_registers_plans_uncatalogued(tmp_path
     tree = _tree_with_new_reads(tmp_path, reads=False, model=True)
     monkeypatch.setenv("OMNIDRIVER_NATIVE_TUTORIALS", str(tree / "tutorials"))
     report = _plan(tree, tmp_path, {_COEFFS + "ionicModel": "OmniProbe"}).to_json()
-    assert report["status"] == "ok", json.dumps(report["validation_diagnostics"], indent=1)
-    assert any('"value": "OmniProbe"' in d["message"] for d in report["catalog_coverage_errors"])
+    assert report["status"] == "ok", json.dumps(report["plugin_diagnostics"], indent=1)
+    assert any('"value": "OmniProbe"' in d["message"] for d in report["plugin_diagnostics"])
     assert "ionicModel OmniProbe;" in _staged(tmp_path)

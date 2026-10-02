@@ -72,15 +72,10 @@ def _entry_to_record(e) -> dict:
     return d
 
 
-def build_catalog(plugin: str | None) -> dict:
-    from omnidriver.core.plugin_interface import (
-        default_driver_context,
-        load_plugin_context,
-    )
-    if plugin:
-        context = load_plugin_context(plugin)
-    else:
-        context = default_driver_context()
+def build_catalog(plugin: str) -> dict:
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    context = load_plugin_context(plugin)
 
     by_phase: dict[str, list] = {p: [] for p in PHASES}
     for e in _all_entries(context):
@@ -111,10 +106,11 @@ def main() -> None:
     parser.add_argument("--out", required=True, help="output JSON path")
     parser.add_argument(
         "--plugin",
+        required=True,
         help=(
             "Plugin whose dictionary entries to export: an installed plugin id, "
             "or a trusted local-development import target "
-            "(module.path:PluginClass). Defaults to the single installed adapter."
+            "(module.path:PluginClass)."
         ),
     )
     args = parser.parse_args()

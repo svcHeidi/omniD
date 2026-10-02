@@ -6,7 +6,6 @@ import pytest
 
 from omnidriver.core.plugin_profile import (
     ESCAPE_ROLE_PREFIX,
-    KNOWN_ROLES,
     CaseFileRule,
     PluginProfile,
     load_plugin_profile,
@@ -217,8 +216,4 @@ def test_a_non_openfoam_role_survives_driver_context_end_to_end() -> None:
     context = driver_context(_FenicsLikePlugin(), source="test")
 
     assert fenics_rule in context.capabilities.case_files.all_rules()
-    assert fenics_rule in context.capabilities.case_files.required_rules()
-    # Not reclassified as OpenFOAM-owned by the tutorial_contracts.py split
-    # (`role.startswith("openfoam.")`) -- it is neither in KNOWN_ROLES nor
-    # under a reserved namespace.
     assert not fenics_rule.role.startswith("openfoam.")

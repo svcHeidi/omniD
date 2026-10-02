@@ -1,4 +1,4 @@
-"""`plan --strict --entry restitutionCurves` and its advertised `run --run-document` reach a completed real cardiacFoam solve.
+"""A strict plan of `restitutionCurves` and its advertised `run --run-document` reach a completed real cardiacFoam solve.
 The coarse mesh is a study value (the `blockMeshResolution` axis), never a case-file edit.
 ``OMNIDRIVER_NATIVE_TUTORIALS`` is supplied, never discovered: this test fails, not skips, without it.
 """
@@ -14,6 +14,9 @@ from pathlib import Path
 import pytest
 
 from cardiacfoam_native import native_tutorials_root
+from omnidriver.cli import main
+from omnidriver.core.plugin_interface import load_plugin_context
+from omnidriver.core.strict_planning import strict_plan
 
 pytestmark = [pytest.mark.native, pytest.mark.slow]
 
@@ -39,32 +42,20 @@ def test_restitution_curves_plan_strict_and_its_advertised_run_document_reach_co
     cases_root = _stage_scratch_copy(native_root, tmp_path / "native-scratch")
 
     # The first point of the native tworldS1S2Restitution/sweep.json, as this case's study `base`.
-    config = {
-        "restitutionCurves": {
-            "ionicModel": "TWorld",
-            "constant/electroProperties:singleCellSolverCoeffs.tissue": "epicardialCells",
-            "blockMeshResolution": [40, 6, 14],
-            "s1s2Protocol": {
-                "s1_interval_ms": 1000, "n_s1": 10, "n_s2": 2, "s2_interval_ms": 1500,
-            },
+    study = {
+        "ionicModel": "TWorld",
+        "constant/electroProperties:singleCellSolverCoeffs.tissue": "epicardialCells",
+        "blockMeshResolution": [40, 6, 14],
+        "s1s2Protocol": {
+            "s1_interval_ms": 1000, "n_s1": 10, "n_s2": 2, "s2_interval_ms": 1500,
         },
     }
-    config_path = tmp_path / "config.json"
-    config_path.write_text(json.dumps(config))
-
-    from omnidriver.cli import main
-
-    out = StringIO()
-    with redirect_stdout(out):
-        code = main([
-            "--plugin", "cardiacfoam",
-            "plan", "--strict", "--entry", "restitutionCurves",
-            "--config", str(config_path),
-            "--cases-root", str(cases_root),
-            "--scratch-dir", str(tmp_path / "scratch"),
-        ])
-    plan_payload = json.loads(out.getvalue())
-    assert code == 0, plan_payload
+    plan_payload = strict_plan(
+        "restitutionCurves",
+        overrides={"cases_root": str(cases_root), **study},
+        scratch_root=tmp_path / "scratch",
+        driver_context=load_plugin_context("cardiacfoam"),
+    ).to_json()
     assert plan_payload["status"] == "ok", plan_payload
 
     command = plan_payload["launch"]["command"]
@@ -77,7 +68,6 @@ def test_restitution_curves_plan_strict_and_its_advertised_run_document_reach_co
         "command it prints is immediately runnable"
     )
     committed_document = json.loads(run_document_path.read_text())
-    assert committed_document["configurationSource"] == "case"
     case_root = Path(committed_document["launch"]["caseRoot"])
 
     # Run the advertised command in-process, dropping its `python -m omnidriver` prefix.

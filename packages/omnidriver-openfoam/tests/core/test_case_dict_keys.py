@@ -156,11 +156,11 @@ def test_strict_plan_reports_a_misspelled_key_without_failing(tmp_path):
     # an unmatched key can never be allowed to fail a plan.
     import shutil
 
-    from omnidriver.core.plugin_interface import default_driver_context
+    from omnidriver.core.plugin_interface import load_plugin_context
     from omnidriver.core.strict_planning import strict_plan
+    from omnidriver.core.tutorial_records import case_folder_record
 
-    cases_root = tmp_path / "tutorials"
-    case = cases_root / "case"
+    case = tmp_path / "tutorials" / "case"
     shutil.copytree(_SINGLE_CELL, case)
     ep = case / "constant" / "electroProperties"
     ep.write_text(
@@ -170,30 +170,24 @@ def test_strict_plan_reports_a_misspelled_key_without_failing(tmp_path):
         )
     )
 
+    context = load_plugin_context("cardiacfoam")
+    record, cases_root = case_folder_record(case, driver_context=context)
     report = strict_plan(
-        "case",
-        entry_kind="case_folder",
+        record,
         overrides={"cases_root": str(cases_root)},
         environment_source="/no/such/openfoam/bashrc",
-        driver_context=default_driver_context(),
+        scratch_root=tmp_path / "scratch",
+        driver_context=context,
     )
     payload = report.to_json()
 
     warnings = [
         item
-        for item in payload["case_dict_key_diagnostics"]
+        for item in payload["plugin_diagnostics"]
         if item["code"] == "uncatalogued_case_dict_key"
     ]
     assert [w["field"] for w in warnings] == ["activeTensionModl"]
     assert all(w["level"] == "warning" for w in warnings)
-
-    # Warn-only: the key diagnostics must not appear in any error bucket.
-    for bucket in ("validation_diagnostics", "catalog_coverage_errors"):
-        assert not [
-            item
-            for item in payload[bucket]
-            if item["code"] == "uncatalogued_case_dict_key"
-        ]
 
 
 # ---------------------------------------------------------------------------
@@ -252,11 +246,11 @@ def test_a_misspelled_key_is_silently_replaced_by_the_catalogue_default(tmp_path
     import shutil
 
     from omnidriver.cardiacfoam import dict_builder as DB
-    from omnidriver.core.plugin_interface import default_driver_context
+    from omnidriver.core.plugin_interface import load_plugin_context
     from omnidriver.core.strict_planning import strict_plan
+    from omnidriver.core.tutorial_records import case_folder_record
 
-    cases_root = tmp_path / "tutorials"
-    case = cases_root / "case"
+    case = tmp_path / "tutorials" / "case"
     shutil.copytree(_SINGLE_CELL, case)
     ep = case / "constant" / "electroProperties"
     ep.write_text(ep.read_text().replace("stim_amplitude  60;", "stim_amplitud  25;"))
@@ -273,23 +267,27 @@ def test_a_misspelled_key_is_silently_replaced_by_the_catalogue_default(tmp_path
     )
     assert "stim_amplitud " not in rebuilt, "the misspelled key is dropped entirely"
 
+    context = load_plugin_context("cardiacfoam")
+    record, cases_root = case_folder_record(case, driver_context=context)
     payload = strict_plan(
-        "case",
-        entry_kind="case_folder",
+        record,
         overrides={"cases_root": str(cases_root)},
         environment_source="/no/such/openfoam/bashrc",
-        driver_context=default_driver_context(),
+        scratch_root=tmp_path / "scratch",
+        driver_context=context,
     ).to_json()
 
     # The plan is valid -- the built dict really is complete and correct.
     assert payload["status"] == "ok"
     assert not [
         item
-        for item in payload["validation_diagnostics"]
+        for item in payload["plugin_diagnostics"]
         if "stim_amplitude" in item["message"]
     ], "required_when cannot fire here; if it starts to, this test should change"
 
     # ...and the warning is the only thing that noticed.
     assert [
-        item["field"] for item in payload["case_dict_key_diagnostics"]
+        item["field"]
+        for item in payload["plugin_diagnostics"]
+        if item["code"] == "uncatalogued_case_dict_key"
     ] == ["stim_amplitud"]

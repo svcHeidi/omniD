@@ -8,7 +8,7 @@ requires:
 #
 # 1. Presence (check_provides()'s own gate, driver_context()-construction
 #    time): command_authorization, case_introspection, config_value,
-#    override_scopes and dict_diagnostics are absent from this list because
+#    override_scopes and plan_diagnostics are absent from this list because
 #    this plugin does not implement every member each of those adapts on its
 #    own (the environment half comes only from
 #    org.omnidriver.openfoam.environment) -- declaring them would fail
@@ -63,10 +63,8 @@ requires:
 # codebase has ever computed.
 provides:
   - dictionaries
-  - generic_case_factory
   - named_catalogs
   - artifacts
-  - case_compatibility
   - case_files
   - configuration_validator
   - cxx_mapping
@@ -74,9 +72,7 @@ provides:
   - manifest
   - override_schema
   - report_catalog
-  - run_document_configuration
   - run_semantic_validator
-  - sweep_materializer
   # The sole member get_record_key_validator adapts (record_key_validation)
   # is real, not a stub -- record_key_validation.record_key_validator
   # answers for every document a cardiac stack might see (its own module

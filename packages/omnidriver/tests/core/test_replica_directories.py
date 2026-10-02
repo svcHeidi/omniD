@@ -8,7 +8,6 @@ from pathlib import Path
 from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import is_replica_directory_name
-from omnidriver.core.runtime.registry import list_entries
 from omnidriver.core.runtime.sweep_runner import _stage_entry_case
 from plugins.minimal_plugin import MinimalTestPlugin
 
@@ -43,14 +42,6 @@ def test_declared_replicas_are_not_staged(tmp_path):
     _stage_entry_case(_source(tmp_path), staged, driver_context=driver_context(_DeclaresReplicas(), source="test"))
     assert not (staged / "rank0").exists()
     assert (staged / "processor0" / "f").is_file()
-
-
-def test_a_stack_that_declares_no_replicas_discovers_cases_inside_them(tmp_path):
-    case_root = tmp_path / "processor0" / "nestedCase"
-    case_root.mkdir(parents=True)
-    (case_root / "run-case").write_text("")
-    ctx = driver_context(MinimalTestPlugin(entrypoint="run-case"), source="test")
-    assert list_entries(tmp_path, driver_context=ctx) != []
 
 
 def test_a_bare_string_replica_globs_is_refused_by_name():

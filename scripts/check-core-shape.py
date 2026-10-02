@@ -54,6 +54,10 @@ TOKENS = (
     # regrowing, since only test_instance_directories.py's specific
     # assertions would otherwise catch a regression.
     "start_time", "startTime", "latestTime", "time_indexed", "{time}",
+    # Plan-report concepts that belong to one solver family's diagnostics
+    # (``get_plan_diagnostics``), not to the report core builds for every
+    # solver.
+    "function_object", "nondimensional", "dictionary_resolution",
 )
 
 # Chars treated as equivalent-to-absent when comparing spellings: they

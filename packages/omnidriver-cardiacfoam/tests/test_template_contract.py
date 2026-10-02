@@ -275,51 +275,6 @@ class TestTemplateAndSchemaContract(unittest.TestCase):
             [path for path in documented if any(fragment in path for fragment in forbidden_fragments)]
         )
 
-class TestMakeSpecDirectRun(unittest.TestCase):
-    """make_spec records the solver command it was given."""
-
-    def test_spec_accepts_solver_command(self) -> None:
-        import tempfile
-        from omnidriver.cardiacfoam.generic_case import make_spec
-        with tempfile.TemporaryDirectory() as d:
-            case_dir = Path(d) / "mycase"
-            case_dir.mkdir()
-            spec = make_spec(
-                cases_root=Path(d),
-                case_dir_name="mycase",
-                solver_command="cardiacFoam",
-            )
-            self.assertIsNotNone(spec)
-
-    def test_spec_accepts_pre_solve_commands(self) -> None:
-        import tempfile
-        from omnidriver.cardiacfoam.generic_case import make_spec
-        with tempfile.TemporaryDirectory() as d:
-            case_dir = Path(d) / "mycase"
-            case_dir.mkdir()
-            spec = make_spec(
-                cases_root=Path(d),
-                case_dir_name="mycase",
-                solver_command="cardiacFoam",
-                pre_solve_commands=["vtkUnstructuredToFoam", "setTorsoOrganConductivityField"],
-            )
-            self.assertIsNotNone(spec)
-
-    def test_metadata_records_solver_command(self) -> None:
-        import tempfile
-        from omnidriver.cardiacfoam.generic_case import make_spec
-        with tempfile.TemporaryDirectory() as d:
-            case_dir = Path(d) / "mycase"
-            case_dir.mkdir()
-            spec = make_spec(
-                cases_root=Path(d),
-                case_dir_name="mycase",
-                solver_command="cardiacFoam",
-                pre_solve_commands=["vtkUnstructuredToFoam"],
-            )
-            self.assertEqual(spec.metadata["solver_command"], "cardiacFoam")
-            self.assertEqual(spec.metadata["pre_solve_commands"], ["vtkUnstructuredToFoam"])
-
 
 if __name__ == "__main__":
     unittest.main()

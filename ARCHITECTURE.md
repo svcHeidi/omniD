@@ -5,7 +5,7 @@ This repository is the staging ground for the transition from a monolithic singl
 ## The Grand Vision: Monorepo + Namespace Packages
 The engine is shifting from being an OpenFOAM-specific orchestrator to a universal scientific workflow engine capable of orchestrating deterministic continuous simulations (e.g., FEniCS, deal.II, OpenFOAM) and steering dynamic optimization loops via autonomous agents.
 
-To achieve this, the project is adopting a **Monorepo** structure paired with Python **Namespace Packages** (PEP 420). All the code lives in one GitHub repository, but it is published as four strictly decoupled `pip` packages. (**Corrected 2026-09-19**: this said "three" — `omnidriver-cardiaccore` joined 2026-09-18, and the Architectural Rules below already documented it as a fourth, sibling adapter; only this intro sentence and the diagram below it had not caught up.)
+To achieve this, the project is adopting a **Monorepo** structure paired with Python **Namespace Packages** (PEP 420). All the code lives in one GitHub repository, but it is published as five strictly decoupled `pip` packages.
 
 ### Directory Structure & Import Semantics
 Because `src/omnidriver/` will not contain an `__init__.py` file in any of the packages, Python treats it as a namespace. Users can install them independently but import them beautifully:
@@ -17,10 +17,8 @@ omnidriver/ (GitHub Root)
 │   │   └── src/omnidriver/core/     <-- Universal DAG, provenance, schemas
 │   │       ├── quantities/          <-- Solver-neutral results-as-quantities: Quantity,
 │   │       │                            units, sentinels, the reader contract, comparison
-│   │       │                            (2026-09-26, topic B)
 │   │       └── runtime_records.py   <-- Core's own run-record filenames, declared once
-│   │                                    (workflow_state.json, run_document.json, ...;
-│   │                                    2026-09-26, spec A5)
+│   │                                    (workflow_state.json, run_document.json, ...)
 │   │
 │   ├── omnidriver-openfoam/         (import omnidriver.openfoam)
 │   │   └── src/omnidriver/openfoam/ <-- Translates core requests into OpenFOAM
@@ -28,20 +26,19 @@ omnidriver/ (GitHub Root)
 │   ├── omnidriver-cardiacfoam/          (import omnidriver.cardiacfoam)
 │   │   └── src/omnidriver/cardiacfoam/  <-- Cardiac physics and logic
 │   │       └── physics_layout.py/.json  <-- Which region(s) a case's physics type
-│   │                                        declares, one row per type (2026-09-26, A7)
+│   │                                        declares, one row per type
 │   │
-│   └── omnidriver-cardiaccore/          (import omnidriver.cardiaccore)
-│       └── src/omnidriver/cardiaccore/  <-- Cardiac preprocessing adapter; sibling to
-│                                             cardiacfoam, not a dependent of it (Rule 4)
+│   ├── omnidriver-cardiaccore/          (import omnidriver.cardiaccore)
+│   │   └── src/omnidriver/cardiaccore/  <-- Cardiac preprocessing adapter; sibling to
+│   │                                         cardiacfoam, not a dependent of it (Rule 4)
+│   │
+│   └── omnidriver-opencarp/             (import omnidriver.opencarp)
+│       └── src/omnidriver/opencarp/     <-- openCARP adapter; depends on core only (Rule 5)
 │
 ├── benchmarks/                      <-- Published, solver-neutral reference definitions
 │                                        (e.g. niederer2011.json); scripts/check-benchmark-
-│                                        references.py gates them (2026-09-26, topic B Task 4)
+│                                        references.py gates them
 ```
-
-**Corrected 2026-09-26 (final review M13):** the tree above did not mention
-`core/quantities/`, `core/runtime_records.py`, `benchmarks/` or
-`cardiacfoam/physics_layout.*`, all landed the same day by topics A and B.
 
 ### Architectural Rules
 1. **Core Independence:** `omnidriver.core` MUST NOT import anything from `openfoam` or `cardiac`. It must contain **zero** physics rules and **zero** OpenFOAM vocabulary.
@@ -50,8 +47,11 @@ omnidriver/ (GitHub Root)
 4. **Sibling adapters:** `omnidriver.cardiaccore` also depends on core and
    openfoam, and MUST NOT import `omnidriver.cardiacfoam` (nor the reverse).
    The two cardiac adapters are siblings; what passes between them is declared
-   and mediated, not imported. Added 2026-09-18 with that package's
-   integration; `scripts/check-import-boundaries.py` enforces all four.
+   and mediated, not imported.
+5. **Independent adapter:** `omnidriver.opencarp` depends on core only and
+   MUST NOT import `omnidriver.openfoam` or either cardiac adapter, nor may
+   any of them import it. `scripts/check-import-boundaries.py` enforces all
+   five.
 
 ## Migration Status
 
@@ -192,24 +192,17 @@ core owns, not a mapping), `get_configured_environment` (a transform, not a
 declaration, so it must thread through every implementer rather than merge),
 and `get_profile` (needing `case_files` concatenated and `provides` unioned,
 not resolved most-specific-first like every other opaque document) — adding
-`catalog`, `chain`, and `profile`. Task 9 later added a ninth,
-`tutorial_catalog`, for a different reason: `get_tutorial_catalog` is
-`:status: required` on every provider, so the plain `map` rule's duplicate-key
-error fired on the literal key `registered_tutorials` the first time two
-providers actually composed it — not a genuine collision, just two providers
-each answering the same fixed-shape required hook. So what ships today is
-nine:
+`catalog`, `chain`, and `profile`. So what ships today is eight:
 
 | shape | semantics | example member(s) |
 |---|---|---|
 | `set` | union of every implementer's declared set | `get_solver_commands`, `get_environment_commands` |
-| `map` | merge in stack order; a duplicate key is an error unless the more specific entry carries `overrides: <provider id>` naming whose declaration it replaces | `get_dict_groups`, `get_named_catalogs` |
+| `map` | merge in stack order; a duplicate key is an error unless the more specific entry carries `overrides: <provider id>` naming whose declaration it replaces | `get_dict_groups`, `get_named_catalogs`, `get_tutorial_records` |
 | `catalog` | the `map` rule applied to a `DictionaryCatalog`'s `documents`, then rebuilt into a catalog — core owns that type, so a provider cannot merge it itself | `get_dictionary_catalog` |
-| `tutorial_catalog` | unions `registered_tutorials`, merges `spec_factories` by tutorial name (a duplicate name is an error), and keeps only the most-specific value for any other key | `get_tutorial_catalog` |
 | `sequence` | concatenate every implementer's result, in stack order | `get_phases`, `validate_configuration`, `get_override_scopes` |
 | `single` | first non-`None` answer, most-specific provider first | `get_capabilities`, `get_config_value_reader`, `get_case_runtime_conventions` |
 | `chain` | thread the first argument through every implementer, in stack order | `get_configured_environment` |
-| `exclusive` | exactly one provider may implement; two implementers is an error, zero leaves the member absent so the capability's declared fallback refuses by name | `apply_overrides`, `materialize_sweep_case` |
+| `exclusive` | exactly one provider may implement; two implementers is an error, zero leaves the member absent so the capability's declared fallback refuses by name | `apply_overrides`, `get_override_target_paths` |
 | `profile` | the declarative profile itself: `case_files` concatenated (see the single-declarer rule below), `provides` unioned, everything else from the most specific provider | `get_profile` |
 
 `exclusive` also carries one cross-member constraint (`_CROSS_MEMBER_PAIRS`):
@@ -270,28 +263,6 @@ same path raises `ValueError` naming both. This is checked eagerly, at
 `compose()` time, because it is a packaging error, not something that should
 depend on which capability a run happens to touch.
 
-### The solver-tier-root refusal rule
-
-When no `DriverContext` is supplied and a caller relies on the implicit
-default, `plugin_discovery._default_selection` does not compose every
-unambiguously-installed adapter together. It first asks which installed
-candidates are **solver-tier roots** — candidates that nothing else
-installed declares `requires:` against (`_solver_tier_roots`). Exactly one
-root auto-composes with its full transitive `requires:` closure, which is
-what lets a single solver plugin (plus whatever environment adapter it
-requires) keep working with no `--plugin` flag at all. Two or more roots —
-e.g. cardiacCore and cardiacFoam installed side by side, neither requiring
-the other — raise `LookupError` naming every contested root and pointing at
-`--plugin` as the escape hatch, rather than silently composing two
-mutually-independent solver plugins into one stack. That silent composition
-is exactly what an earlier version of this function did, for a few hours on
-2026-09-21 (per the two same-day "Corrected" notes in its own docstring): it
-let a `single`-shape member such as
-`build_run_document_config` resolve to whichever sibling solver plugin
-happened to sort last alphabetically, not to the one that actually matched
-the case. `--plugin` continues to bypass this function entirely, narrowing
-straight to one provider (see `load_discovered_plugin`).
-
 ### Manifest visibility across a composed stack (corrected 2026-09-22)
 
 The composition spec's §4.4 point 3 stated, as a standing limitation: "an
@@ -348,30 +319,24 @@ member's fallback cannot be neutral and refuses by hook name instead.
 The table's `fallback` column below names one only where one exists (`none`
 otherwise) -- some optional-neutral members instead answer a neutral value
 inline, in the adapter itself, with no named fallback function (for example
-`dictionaries`'s `entries`, `catalog`, and `groups`, and `tutorials`'s
-`get_tutorial_displays`; contrast `phases` on the same `dictionaries`
-capability, which does name `absent_phases`).
+`dictionaries`'s `entries`, `catalog`, and `groups`; contrast `phases` on the
+same `dictionaries` capability, which does name `absent_phases`).
 
 | capability | protocol | adapts | consumed by | fallback | status |
 |---|---|---|---|---|---|
-| `generic_case_factory` | `GenericCaseFactoryCapability` | `get_generic_case_factory` | `omnidriver/core/runtime/registry.py` | none | get_generic_case_factory=optional-neutral |
-| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dictionary_catalog`, `get_phases` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/cardiacfoam/sweep.py`, `omnidriver/openfoam/apply_overrides.py`, `omnidriver/openfoam/dict_builder.py`, `omnidriver/core/specs/validation.py`, `omnidriver/core/strict_planning.py` | `absent_phases` | optional-neutral |
+| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dictionary_catalog`, `get_phases` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/openfoam/apply_overrides.py`, `omnidriver/openfoam/plan_diagnostics.py`, `omnidriver/core/specs/validation.py` | `absent_phases` | optional-neutral |
 | `manifest` | `CapabilityManifestCapability` | `get_capabilities` | `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/core/introspection.py`, `omnidriver/core/strict_planning.py` | none | required |
 | `configuration_validator` | `ConfigurationValidatorCapability` | `validate_configuration` | `omnidriver/core/strict_planning.py` | none | required |
 | `run_semantic_validator` | `RunSemanticValidatorCapability` | `validate_run_semantics` | `omnidriver/core/specs/validation.py` | none | required |
 | `artifacts` | `ArtifactPredictorCapability` | `predict_data_artifacts` | `omnidriver/core/runtime/artifacts.py` | none | required |
-| `run_document_configuration` | `RunDocumentConfigurationCapability` | `build_run_document_config`, `get_run_document_config_schema` | `omnidriver/core/runtime/run_document_adapter.py`, `omnidriver/core/runtime/run_document_exec.py` | `absent_run_document_config`, `absent_run_document_config_schema` | optional-neutral |
-| `cxx_mapping` | `CxxMappingCapability` | `get_profile` | `omnidriver/core/strict_planning.py` | none | required |
-| `mesh_diagnostic_policy` | `MeshDiagnosticPolicyCapability` | `get_mesh_geometry_diagnostics`, `get_base_mesh_geometry_diagnostics`, `is_nondimensional_case` | `omnidriver/core/strict_planning.py` | `absent_nondimensional_case`, `absent_base_mesh_geometry_diagnostics` | optional-neutral |
-| `case_compatibility` | `CaseCompatibilityCapability` | `has_case_marker`, `is_case_runnable_without_workflow` | `omnidriver/core/runtime/registry.py` | `absent_case_marker`, `absent_case_runnable_without_workflow` | optional-neutral |
-| `sweep_materializer` | `SweepMaterializerCapability` | `materialize_sweep_case`, `route_sweep_case_values` | `omnidriver/sweep_materialize.py`, `omnidriver/sweep_routing.py` | `absent_materialize_sweep_case`, `absent_route_sweep_case` | optional-refusing |
+| `cxx_mapping` | `CxxMappingCapability` | `get_profile` | `omnidriver/core/catalog_query.py`, `omnidriver/openfoam/plan_diagnostics.py` | none | required |
 | `command_authorization` | `CommandAuthorizationCapability` | `get_auxiliary_commands`, `get_environment_commands`, `get_solver_commands`, `get_utility_manifests`, `get_utility_roots`, `is_installed_environment_command` | `omnidriver/core/runtime/artifacts.py`, `omnidriver/core/runtime/workflow.py`, `omnidriver/core/strict_planning.py` | `absent_auxiliary_commands`, `absent_environment_commands`, `absent_is_installed_environment_command`, `absent_solver_commands`, `absent_utility_manifests`, `absent_utility_roots` | optional-neutral |
 | `case_introspection` | `CaseIntrospectionCapability` | `get_samplable_fields`, `resolve_case_models` | `omnidriver/core/runtime/provenance_inputs.py` | `absent_resolve_case_models`, `absent_samplable_fields` | optional-neutral |
-| `case_files` | `CaseFileContractCapability` | `get_profile`, `get_config_resolution_description` | `omnidriver/core/runtime/strict_audit.py`, `omnidriver/core/runtime/provenance_inputs.py` | `absent_describe_config_resolution` | get_profile=required, get_config_resolution_description=optional-neutral |
-| `case_runtime_conventions` | `CaseRuntimeConventionsCapability` | `get_case_runtime_conventions` | `omnidriver/core/runtime/registry.py`, `omnidriver/core/runtime/sweep_runner.py` | `absent_case_runtime_conventions` | optional-neutral |
+| `case_files` | `CaseFileContractCapability` | `get_profile` | `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/record_surface.py` | none | required |
+| `case_runtime_conventions` | `CaseRuntimeConventionsCapability` | `get_case_runtime_conventions` | `omnidriver/core/runtime/sweep_runner.py` | `absent_case_runtime_conventions` | optional-neutral |
 | `environment_preflight` | `EnvironmentPreflightCapability` | `get_environment_diagnostics`, `get_configured_environment`, `get_loaded_environment` | `omnidriver/core/strict_planning.py`, `omnidriver/core/runtime/sweep_runner.py`, `omnidriver/cli.py`, `omnidriver/conformance/checks.py` | `absent_environment_diagnostics`, `absent_configured_environment`, `absent_load_environment` | optional-neutral |
-| `dict_diagnostics` | `DictDiagnosticsCapability` | `get_function_object_field_diagnostics`, `get_case_dict_key_diagnostics` | `omnidriver/core/strict_planning.py` | `absent_function_object_field_diagnostics`, `absent_case_dict_key_diagnostics` | optional-neutral |
-| `override_schema` | `OverrideSchemaCapability` | `get_dict_entry_catalog`, `get_override_schema` | `omnidriver/core/introspection.py` | `absent_dict_entry_catalog`, `absent_override_schema` | optional-neutral |
+| `plan_diagnostics` | `PlanDiagnosticsCapability` | `get_plan_diagnostics` | `omnidriver/core/strict_planning.py` | none | optional-neutral |
+| `override_schema` | `OverrideSchemaCapability` | `get_dict_entry_catalog` | `omnidriver/openfoam/plan_diagnostics.py` | `absent_dict_entry_catalog` | optional-neutral |
 | `runtime_evidence` | `RuntimeEvidenceCapability` | `get_artifact_value_reader`, `get_extra_provenance_paths`, `get_log_redaction_patterns`, `get_solve_step_commands`, `get_telemetry_source_globs` | `omnidriver/conformance/checks.py`, `omnidriver/core/quantities/comparison.py`, `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/record_execution.py`, `omnidriver/core/runtime/workflow_runner.py` | none | optional-neutral |
 | `record_surface` | `RecordSurfaceCapability` | `get_agent_guidance`, `get_record_key_catalog` | `omnidriver/core/runtime/record_surface.py` | none | optional-neutral |
 | `case_provenance` | `CaseProvenanceCapability` | `get_generated_output_globs`, `get_input_roots`, `get_required_inputs` | `omnidriver/core/runtime/provenance_inputs.py` | none | optional-neutral |
@@ -380,13 +345,13 @@ capability, which does name `absent_phases`).
 | `override_scopes` | `OverrideScopeCapability` | `get_override_scopes`, `get_override_target_paths`, `apply_overrides`, `inspect_effective_configuration` | `omnidriver/openfoam/apply_overrides.py`, `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/step_candidate.py`, `omnidriver/core/strict_planning.py` | `absent_override_scopes`, `absent_override_target_paths`, `absent_apply_overrides`, `absent_inspect_effective_configuration` | get_override_scopes=optional-neutral, get_override_target_paths=optional-refusing, apply_overrides=optional-refusing, inspect_effective_configuration=optional-neutral |
 | `dict_regeneration` | `DictRegenerationCapability` | `get_regeneration_scopes` | `omnidriver/openfoam/apply_overrides.py` | `absent_dict_regeneration_scopes` | optional-neutral |
 | `config_value` | `ConfigValueCapability` | `get_config_value_reader` | `omnidriver/cardiacfoam/run_document_config.py`, `omnidriver/core/runtime/record_execution.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
-| `dict_key_scanner` | `DictKeyScannerCapability` | `get_dict_key_scanner` | `omnidriver/core/strict_planning.py`, `omnidriver/core/catalog_query.py` | `absent_dict_key_scanner` | optional-neutral |
+| `dict_key_scanner` | `DictKeyScannerCapability` | `get_dict_key_scanner` | `omnidriver/openfoam/plan_diagnostics.py`, `omnidriver/core/catalog_query.py` | `absent_dict_key_scanner` | optional-neutral |
 | `case_writer` | `CaseWriterCapability` | `resolve_case_mutation`, `get_supported_mutation_modes`, `get_rendered_formats`, `render_case_files` | none | none | resolve_case_mutation=optional-refusing, get_supported_mutation_modes=optional-refusing, get_rendered_formats=optional-refusing, render_case_files=optional-refusing |
-| `tutorial_records` | `TutorialRecordCapability` | `get_tutorial_records` | `omnidriver/core/runtime/registry.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
+| `tutorial_records` | `TutorialRecordCapability` | `get_tutorial_records` | `omnidriver/core/tutorial_records.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
 | `record_key_validation` | `RecordKeyValidationCapability` | `get_record_key_validator` | `omnidriver/core/runtime/record_execution.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
 | `case_value_comparison` | `CaseValueComparisonCapability` | `get_case_value_comparator` | `omnidriver/core/runtime/record_execution.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
 | `parallel_execution` | `ParallelExecutionCapability` | `get_parallel_steps` | `omnidriver/core/runtime/record_execution.py` | none | optional-neutral |
 
-32 capability seams.
+27 capability seams.
 
 <!-- END GENERATED: capability-seams -->

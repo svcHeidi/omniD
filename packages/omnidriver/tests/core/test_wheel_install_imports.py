@@ -41,18 +41,6 @@ if unexpected:
     sys.exit(1)
 print("all modules imported")
 
-# Importability is not the whole contract: a module can import fine and then
-# point at a data file the wheel never shipped. RUN_CASE_SCRIPT_RELPATH is
-# exactly that -- it resolves relative to the installed package, so it is
-# correct in a checkout and wrong in an install unless run_case.sh is declared
-# in [tool.setuptools.package-data]. That declaration was missing, and nothing
-# here noticed, because this test only ever imported.
-from omnidriver.core.runtime.generic_case import RUN_CASE_SCRIPT_RELPATH
-if not RUN_CASE_SCRIPT_RELPATH.is_file():
-    print(f"bundled data file missing from the wheel: {RUN_CASE_SCRIPT_RELPATH}")
-    sys.exit(1)
-print("bundled data files present")
-
 help_result = subprocess.run(
     [sys.executable, "-m", "omnidriver", "--help"],
     capture_output=True,
@@ -125,7 +113,7 @@ with tempfile.TemporaryDirectory() as raw:
         "    def get_extra_provenance_paths(self, case_root): return ()\\n"
         "    def get_artifact_value_reader(self, artifact_format): return None\\n\\n"
         "    def get_case_runtime_conventions(self):\\n"
-        "        return CaseRuntimeConventions(output_collection_relpath='output', case_entrypoints=('Allrun',), case_script_commands=('Allrun',))\\n\\n"
+        "        return CaseRuntimeConventions(case_entrypoints=('Allrun',), case_script_commands=('Allrun',))\\n\\n"
         "    def get_input_roots(self, case_root, resolved_case, *, conventions):\\n"
         "        return ('0',)\\n\\n"
         "    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):\\n"
@@ -153,8 +141,7 @@ with tempfile.TemporaryDirectory() as raw:
     initial = initial_workflow_state(dag)
     document = {
         "version": "3", "id": "wheel-resume", "name": "wheel-resume",
-        "createdAt": "", "lastModified": "", "status": "planned", "config": {},
-        "configurationSource": "document",
+        "createdAt": "", "lastModified": "", "status": "planned",
         "resolvedEntry": None, "workflowDag": dag, "workflowState": initial.to_json(),
         "launch": {"caseRoot": str(case_root), "outputDir": "output"},
         "expectedArtifacts": [], "validation": {},

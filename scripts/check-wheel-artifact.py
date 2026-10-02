@@ -52,19 +52,17 @@ def main() -> int:
             failures.append(f"import {name}: {type(exc).__name__}: {exc}")
     print(f"modules imported            : {len(names) - len(failures)}/{len(names)}")
 
-    # 2. With no plugin distribution installed, implicit context selection
-    #    must fail loudly. Core has no built-in solver context: inventing one
-    #    here would silently attach solver meaning to a core-only install.
-    try:
-        from omnidriver.core.plugin_interface import default_driver_context
-
-        default_driver_context()
-    except LookupError as exc:
-        print(f"no default context          : {type(exc).__name__}: {exc}")
-    except Exception as exc:  # noqa: BLE001
-        failures.append(f"default_driver_context() raised {type(exc).__name__}, not LookupError: {exc}")
-    else:
-        failures.append("default_driver_context() unexpectedly resolved without an adapter")
+    # 2. With no plugin distribution installed, the CLI refuses to run a
+    #    record without one named: core has no built-in solver context.
+    result = subprocess.run(
+        [sys.executable, "-m", "omnidriver", "describe", "--entry", "x"],
+        capture_output=True, text=True,
+    )
+    print(f"describe with no plugin     : exit {result.returncode}")
+    if result.returncode != 2 or "no plugin was selected" not in result.stderr:
+        failures.append(
+            f"`describe` with no plugin exited {result.returncode}, not the named refusal: {result.stderr[:300]}"
+        )
 
     # 3. The CLI is reachable. It hard-imported omnidriver.openfoam at module
     #    scope once, which made the whole command surface unusable in a

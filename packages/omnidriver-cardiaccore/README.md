@@ -79,7 +79,7 @@ identified prerequisite first.
 | `catalogs/operations.py` | Canonical callable usage contracts |
 | `catalogs/purkinje.py` | Shared method constants and named baseline categories |
 | `catalogs/support_boundary.py` | Field context and workflow support boundary |
-| `workflows/` | Workflow order, allowed overrides and RunDocument configuration |
+| `workflows/` | The one case-mutation resolver |
 | `operations/` | Python transformations, proposals and observations |
 | `agent_guidance/` | Packaged role manifest and short usage guidance |
 
@@ -105,15 +105,9 @@ The plugin advertises four workflows:
   selection and extends the terminals transmurally.
 
 The two pig workflows otherwise declare the same utility sequence. Reviewed
-inputs are passed through `input_overrides` in the normal run configuration,
-for example:
-
-```json
-{"input_overrides": {"$PURKINJE_SLAB.thickness": 0.05}}
-```
-
-This is a request example, not a new default or scientific recommendation.
-The workflow permits only its declared inputs and mutates a staged case.
+inputs are study values, `<document>:<key>` patches in a sweep spec over the
+record; `describe` lists them in `record_surface.keys`. The workflow permits
+only its declared inputs and mutates a staged case.
 The tree workflows retain fixed native seed/growth dictionaries; array seed
 proposals are not automatically applied. Coverage reports retain the named
 baseline's categories, but do not return scientific acceptance.

@@ -16,21 +16,18 @@ def test_minimal_plugin_declares_no_case_files() -> None:
         MinimalTestPlugin(), source="test:minimal-case-files",
     )
     contract = context.capabilities.case_files
-    assert contract.required_files() == ()
-    assert contract.conditional_files() == ()
+    assert contract.all_rules() == ()
     assert context.capabilities.case_runtime_conventions.conventions() == CORE_RUNTIME_RECORDS
     assert context.capabilities.case_provenance.input_roots(
         Path("case"), {}, conventions=CORE_RUNTIME_RECORDS,
     ) == ()
 
 
-def test_conditional_files_are_separated_from_required() -> None:
-    """Exercises `_CaseFileContractAdapter`'s always/conditional split -- core mechanics, not solver vocabulary."""
+def test_a_declared_case_script_is_a_rule_of_the_contract() -> None:
     contract = driver_context(
         MinimalTestPlugin(entrypoint="run-test-case"), source="test"
     ).capabilities.case_files
-    assert "run-test-case" in contract.conditional_files()
-    assert "run-test-case" not in contract.required_files()
+    assert [(rule.path, rule.required) for rule in contract.all_rules()] == [("run-test-case", "conditional")]
 
 
 def test_apply_returns_the_plugins_records() -> None:

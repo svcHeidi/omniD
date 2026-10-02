@@ -35,17 +35,14 @@ def test_driver_invokes_installed_namespace_without_source_path_injection(monkey
     assert result.returncode == 0
     argv, kwargs = calls.pop()
     assert argv[:5] == [dual_run.sys.executable, "-m", "omnidriver", "run", "--strict"]
-    expected_entry = ["--entry", "syntheticEntry"] if driver == "strict" else [
-        "--entry", "synthetic/case", "--entry-kind", "case_folder",
-    ]
+    expected_entry = (
+        ["--entry", "syntheticEntry", "--cases-root", str(tmp_path)] if driver == "strict"
+        else ["--case", str(tmp_path / "synthetic/case")]
+    )
     # The child interpreter cannot be handed a DriverContext, so the harness
     # names the adapter it means rather than relying on an ambient default that
     # does not exist once a second adapter is installed alongside cardiacfoam.
-    assert argv[5:] == (
-        ["--plugin", "cardiacfoam"]
-        + expected_entry
-        + ["--cases-root", str(tmp_path)]
-    )
+    assert argv[5:] == ["--plugin", "cardiacfoam"] + expected_entry
     assert kwargs == {"capture_output": True, "text": True}
     assert not calls
 
@@ -59,7 +56,7 @@ def test_installed_cli_rejects_missing_case_without_solver(monkeypatch, tmp_path
     case = RegressionCase("absent/case", None, (), "regression/reference.txt")
     result = dual_run._drive_agent(case, "generic", tmp_path / "absent-tutorials")
     assert result.returncode != 0
-    assert "Unknown entry" in result.stdout + result.stderr
+    assert "is not a directory" in result.stdout + result.stderr
 
 SINGLECELL_REF = """\
 # file                     time       variable  expected     tolerance

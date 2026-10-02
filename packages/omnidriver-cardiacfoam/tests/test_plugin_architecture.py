@@ -19,7 +19,6 @@ def test_cardiacfoam_plugin_satisfies_runtime_contract() -> None:
     assert ctx.identity.to_json()["providers"][-1]["id"] == "org.cardiacfoam"
     assert plugin.plugin_name == "cardiacFoam"
     assert plugin.get_dict_entries()
-    assert callable(plugin.get_generic_case_factory())
     assert {"deltaT", "endTime"} <= {
         entry.driver_path
         for entry in plugin.get_dictionary_catalog().documents["controlDict"]
@@ -32,7 +31,6 @@ def test_generic_openfoam_plugin_satisfies_runtime_contract() -> None:
 
     assert ctx.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.openfoam.environment"
     assert ctx.capabilities.dictionaries.entries() == ()
-    assert not hasattr(plugin, "get_generic_case_factory")
 
 
 def test_minimal_plugin_proves_non_cardiac_solver_contract() -> None:

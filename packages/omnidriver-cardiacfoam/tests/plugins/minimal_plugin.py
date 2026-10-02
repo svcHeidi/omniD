@@ -78,10 +78,6 @@ class MinimalOpenFOAMPlugin:
         del resolved
         return {}
 
-    def get_override_schema(self, tutorial_name, make_spec_info):
-        del tutorial_name, make_spec_info
-        return {}
-
     def get_dict_entry_catalog(self):
         return {}
 
@@ -99,7 +95,3 @@ class MinimalOpenFOAMPlugin:
     def get_artifact_value_reader(self, artifact_format: str):
         del artifact_format
         return None
-
-    def get_run_document_config_schema(self) -> dict:
-        """No solver semantics means no constraint on the config shape."""
-        return {"type": "object", "additionalProperties": True}

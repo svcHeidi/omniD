@@ -59,9 +59,7 @@ it is never silently reused.
 
 ## Executable proof
 
-`packages/omnidriver/tests/core/test_core_generic_case.py` proves neutral
-read-only planning and configuration closure inspection. The utility patch
-slice is exercised with a real `Allrun` subprocess in
+The utility patch slice is exercised with a real `Allrun` subprocess in
 `packages/omnidriver/tests/core/test_step_candidate.py`:
 
 - `test_neutral_utility_workflow_patches_and_dispatches_a_declared_case_script` —
@@ -74,9 +72,7 @@ slice is exercised with a real `Allrun` subprocess in
 Run the focused proof with:
 
 ```sh
-.venv/bin/python -m pytest \
-  packages/omnidriver/tests/core/test_core_generic_case.py \
-  packages/omnidriver/tests/core/test_step_candidate.py -q
+.venv/bin/python -m pytest packages/omnidriver/tests/core/test_step_candidate.py -q
 ```
 
 This is a local, host-owned workflow. It does not claim distributed locking,

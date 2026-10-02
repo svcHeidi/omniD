@@ -132,33 +132,19 @@ rules, validation, staging, and y interpretation. OmniD's `DictEntry` and
 `DictionaryCatalog` are the reusable Python contract; do not invent a second
 parser or schema engine for each solver.
 
-JSON is normally the user's experiment request. It says either “run this
-tutorial with these values” or “materialize one disposable case per listed
-value set.” It must be validated by the adapter and applied only to a staged
-case, never by changing the native tutorial defaults. For example, the first
-cardiacCore slice accepts a normal-run request of the form:
+JSON is normally the user's experiment request: a sweep spec that says “run
+this record with these values” or “materialize one disposable case per listed
+value set.” Its values are the record's `<document>:<key>` patches or axes. The
+adapter validates them and applies them only to a staged case, never by
+changing the native tutorial defaults. One disposable case per value of one
+key (a one-case request lists one value):
 
 ```json
 {
-  "input_overrides": {
-    "$PURKINJE_SLAB.thickness": 0.05
-  }
-}
-```
-
-Its one-axis sweep uses the same input object as the axis value:
-
-```json
-{
-  "base": {"entry": "cardiaccore-human-purkinje-slab"},
+  "base": {"entry": "humanSlab", "cases_root": "<repository>"},
   "sweep": {
     "mode": "cross_product",
-    "independent": {
-      "input_overrides": [
-        {"$PURKINJE_SLAB.thickness": 0.05},
-        {"$PURKINJE_SLAB.thickness": 0.10}
-      ]
-    }
+    "independent": {"<document>:<key>": [0.05, 0.10]}
   }
 }
 ```
@@ -238,8 +224,9 @@ the scanner already finds):
   mapping (`runtime_selection`).
 - `DictEntry.dynamic_path` with `<name>` segments covers instance-named blocks
   such as `regions.<id>.<key>`; do not enumerate instances or skip them.
-- `openfoam.case_dict_keys.case_dict_key_diagnostics` warns about keys written
-  in a supplied case that the catalog does not know.
+- `openfoam.plan_diagnostics.plan_diagnostics` warns, in a strict plan's
+  `plugin_diagnostics`, about keys written in a supplied case that the catalog
+  does not know (`uncatalogued_case_dict_key`).
 - `openfoam.dict_builder` (`select_applicable_entries`, `check_required`,
   `populate_values`) materializes dictionary text from catalog entries.
 - `core.utility_catalog.UtilityManifest` / `ProducesEntry` declare a native

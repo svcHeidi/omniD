@@ -118,19 +118,6 @@ class SolverPlugin(Protocol):
         ...
 
     # -- Configuration vocabulary --------------------------------------------
-    def get_override_schema(
-        self, tutorial_name: str, make_spec_info: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Machine-readable description of the ``--config`` JSON an agent may
-        write for this tutorial, including a worked example."""
-        ...
-
-    def get_run_document_config_schema(self) -> dict[str, Any]:
-        """JSON Schema for this plugin's RunDocument ``config`` object. Core
-        validates against it dynamically and reports structured diagnostics,
-        which is what lets an agent repair its own document."""
-        ...
-
     def get_dict_entry_catalog(self) -> dict[str, Any]:
         """The plugin's dictionary entries arranged by its own document names,
         unserialized -- core owns serialization, the plugin owns vocabulary."""
@@ -275,77 +262,20 @@ class SolverPluginOptionalHooks(Protocol):
     is absent, the adapter uses the named compatibility behavior documented in
     :mod:`omnidriver.core.compatibility`. These fallbacks are neutral or
     explicitly refuse unsupported operations; they do not infer a solver's
-    vocabulary. A plugin that does not implement ``route_sweep_case_values``
-    and ``materialize_sweep_case`` cannot be swept and is told so by name.
+    vocabulary.
 
     Hooks are grouped by the capability they back; see that capability's
     docstring in ``plugin_capabilities.py`` for the full contract.
     """
 
-    # -- CaseCompatibilityCapability -----------------------------------------
-    def has_case_marker(self, case_root: "Path") -> bool:
-        """Whether this case folder belongs to this plugin, by filesystem
-        evidence alone. Absent -> ``False``."""
-        ...
-
-    def is_case_runnable_without_workflow(self, case_root: "Path") -> bool:
-        """Whether a case without driver-owned workflow metadata is runnable.
-
-        Absent -> ``False``; an adapter-declared entrypoint is checked
-        separately by Core.
-        """
-        ...
-
-    # -- RunDocumentConfigurationCapability ----------------------------------
-    def build_run_document_config(
-        self, spec: "TutorialSpec",
-    ) -> tuple[dict[str, dict[str, Any]], tuple["StrictDiagnostic", ...]]:
-        """Build this plugin's RunDocument ``config`` object and any
-        diagnostics. Core imposes no key set (``schemas/run-document.json``
-        declares ``config`` open). Absent -> ``({}, ())``."""
-        ...
-
-    # -- MeshDiagnosticPolicyCapability --------------------------------------
-    def is_nondimensional_case(self, spec: "TutorialSpec") -> bool:
-        """Whether SI mesh-scale diagnostics should be skipped for this case.
-        Absent -> ``False``, keeping the diagnostics on."""
-        ...
-
-    def get_mesh_geometry_diagnostics(self, case_root: "Path") -> tuple[Any, ...]:
-        """Plan-time geometry checks over plugin-owned point sets that are not
-        polyMesh regions. Absent -> ``()``; there is no fallback, because "no
-        extra checks" is correct for a plugin that has none."""
-        ...
-
-    def get_base_mesh_geometry_diagnostics(self, case_root: "Path") -> tuple[Any, ...]:
-        """Base mesh-geometry classification supplied by the adapter.
-
-        Absent -> no base geometry evidence is claimed.
-        """
-        ...
-
-    # -- SweepMaterializerCapability -----------------------------------------
-    def route_sweep_case_values(
-        self,
-        *,
-        base: dict[str, Any],
-        resolved_axis_values: dict[str, Any],
-        driver_context: Any,
-    ) -> dict[str, Any]:
-        """Map one resolved sweep-axis combination onto this plugin's own
-        case vocabulary. Must be pure -- no writes; ``materialize_sweep_case``
-        does those. Absent -> sweeps are refused by name."""
-        ...
-
-    def materialize_sweep_case(self, *, case_dir: "Path", routed: dict[str, Any]) -> None:
-        """Write one routed sweep case to disk. Absent -> sweeps are refused
-        by name rather than materialized by another plugin's writer."""
-        ...
-
-    # -- CaseFileContractCapability ------------------------------------------
-    def get_config_resolution_description(self) -> str:
-        """One human-readable sentence naming which files resolve into a valid
-        RunDocument config. Absent -> a plugin-neutral sentence."""
+    # -- PlanDiagnosticsCapability ---------------------------------------------
+    def get_plan_diagnostics(
+        self, case_root: "Path", *, workflow_dag: dict[str, Any] | None, env: Mapping[str, str],
+        scratch_root: "Path | None", driver_context: Any,
+    ) -> tuple["StrictDiagnostic", ...]:
+        """What this provider adds to a strict plan: checks of the case or of
+        the solver's own source that core cannot express. An error fails the
+        plan; a warning or note never does. Absent -> nothing is added."""
         ...
 
     # -- CaseRuntimeConventionsCapability ------------------------------------
@@ -381,21 +311,6 @@ class SolverPluginOptionalHooks(Protocol):
     def get_configured_environment(self, env, driver_context) -> dict[str, str]:
         """Apply this adapter's environment contract to an already-sourced
         environment mapping. Absent -> the mapping is preserved unchanged."""
-        ...
-
-    # -- DictDiagnosticsCapability ---------------------------------------------
-    def get_function_object_field_diagnostics(
-        self, case_root: "Path", *, samplable: dict[str, Any],
-    ) -> tuple[Any, ...]:
-        """Warn about adapter-defined function objects sampling fields absent
-        from ``samplable``. Absent -> no such diagnostics are emitted."""
-        ...
-
-    def get_case_dict_key_diagnostics(
-        self, case_root: "Path", *, catalogued_paths, dict_relpaths: tuple[str, ...],
-    ) -> tuple[Any, ...]:
-        """Warn about dictionary keys absent from the plugin's catalogue.
-        Absent -> no format-specific key diagnostics are emitted."""
         ...
 
     # -- CaseProvenanceCapability --------------------------------------------
@@ -537,15 +452,6 @@ class SolverPluginOptionalHooks(Protocol):
         ordinary case for a plugin that has not migrated any tutorial onto
         this shape yet (see
         ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``)."""
-        ...
-
-    # -- GenericCaseFactoryCapability ------------------------------------------
-    def get_generic_case_factory(self):
-        """This plugin's own generic-case-folder factory, overriding core's
-        (``core.runtime.generic_case.make_generic_case_spec``) -- e.g.
-        cardiacFOAM's marker-aware wrapper, which supplies its own dictionary
-        files and mutation callback. Absent -> ``None``, meaning "use core's
-        own factory"."""
         ...
 
     # -- RecordKeyValidationCapability ------------------------------------------
@@ -897,9 +803,7 @@ def driver_context(
     is tracked by ``plugin_id`` internally, so which position wins the
     reorder does not matter). A shared string for a multi-provider stack
     whose providers do NOT share an origin silently records the wrong
-    provenance for every provider but one -- that was
-    :func:`~omnidriver.core.plugin_discovery.default_discovered_context`'s
-    bug before it started passing one source per provider explicitly.
+    provenance for every provider but one.
 
     ``plugin_selector`` is passed only by the loaders that turn a ``--plugin``
     value into a context; see :attr:`DriverContext.plugin_selector`.
@@ -1011,17 +915,3 @@ def load_plugin_context(target: str) -> DriverContext:
         plugin_class(), f"trusted-import:{target}",
     )
     return driver_context(*providers, source=sources, plugin_selector=target)
-
-
-def default_driver_context() -> DriverContext:
-    """Return a fresh compatibility context for the installed adapter set.
-
-    This function exists at public compatibility boundaries only. Core
-    internals must receive a :class:`DriverContext` explicitly and must not
-    retain it in module state. With no adapter, or with multiple adapters,
-    context creation raises rather than inventing a solver context.
-    """
-
-    from .compatibility import absent_default_driver_context
-
-    return absent_default_driver_context()

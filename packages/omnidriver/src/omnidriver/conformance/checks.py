@@ -39,8 +39,7 @@ from .harness import sweep_run, sweep_spec
 from .target import CheckVerdict, ConformanceTarget
 
 _PLAN_DIAGNOSTIC_GROUPS = (
-    "validation_diagnostics", "workflow_diagnostics", "catalog_coverage_errors",
-    "artifact_diagnostics", "mesh_geometry_diagnostics", "configuration_diagnostics",
+    "workflow_diagnostics", "artifact_diagnostics", "plugin_diagnostics", "configuration_diagnostics",
 )
 
 def _verdict(check_id: str, passed: bool, detail: str) -> CheckVerdict:
@@ -84,7 +83,7 @@ def check_describe_noop(target: ConformanceTarget) -> CheckVerdict:
     )
     preview = payload.get("record_preview")
     if preview is None:
-        return _verdict("C2", False, f"{target.record!r} did not resolve as a tutorial record (resolution={payload.get('resolution')!r})")
+        return _verdict("C2", False, f"describe of {target.record!r} carries no record preview")
     changed = [p for p in preview["patches"] if p["status"] != "unchanged"]
     if changed:
         return _verdict("C2", False, f"describe proposes {len(changed)} change(s) to the untouched native case: {changed}")

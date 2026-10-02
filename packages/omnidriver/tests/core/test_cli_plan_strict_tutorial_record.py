@@ -100,49 +100,34 @@ def test_plan_strict_over_a_tutorial_record_whose_native_case_is_missing_refuses
     assert "toyTutorial" in payload["error"]
 
 
+def _one_case_sweep(tmp_path, cases_root):
+    spec = tmp_path / "study.json"
+    spec.write_text(json.dumps({
+        "base": {"entry": "toyTutorial", "cases_root": str(cases_root)},
+        "sweep": {"mode": "zip", "independent": {"constant/mesh.json:cells": [7]}},
+    }))
+    return spec
+
+
 @pytest.mark.parametrize("plugin", [
     "plugins.conformance_toy:RefusingRendererPlugin",
     "plugins.conformance_toy:RefusingResolverPlugin",
+    "plugins.conformance_toy:RefusingReaderPlugin",
 ])
-def test_a_renderer_or_resolver_refusal_comes_back_as_structured_json_I2(tmp_path, capsys, plugin):
-    """A refusal the plugin's case writer raises (a `ValueError` subclass, like openCARP's `ParFormatError`) must come back as structured JSON, not a traceback."""
+def test_a_renderer_resolver_or_reader_refusal_comes_back_as_the_cases_structured_error(tmp_path, capsys, plugin):
+    """A refusal the plugin raises (a `ValueError` subclass, like openCARP's `ParFormatError`) while a case is committed -- from its case writer, or from the config-value reader reached through `split_unchanged` -- is that case's `materialization_error`, never a traceback."""
     from plugins.conformance_toy import TOY_REFUSAL
 
     cases_root = _native_toy_case(tmp_path)
-    config = tmp_path / "study.json"
-    config.write_text(json.dumps({"constant/mesh.json:cells": 7}))
     exit_code = main([
-        "plan", "--strict", "--plugin", plugin, "--entry", "toyTutorial",
-        "--cases-root", str(cases_root), "--config", str(config),
-        "--scratch-dir", str(tmp_path / "scratch"),
+        "sweep-plan", "--plugin", plugin, "--spec", str(_one_case_sweep(tmp_path, cases_root)),
+        "--output-dir", str(tmp_path / "out"),
     ])
     assert exit_code == 1
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["status"] == "failed"
-    assert "constant/mesh.json" in payload["error"]
-    assert TOY_REFUSAL in payload["error"]
-
-
-@pytest.mark.parametrize("action", [["plan", "--strict"], ["describe"]])
-def test_a_config_reader_refusal_comes_back_as_structured_json_naming_document_and_key_S_M1(
-    tmp_path, capsys, action,
-):
-    """A refusal the config-value reader raises (openCARP's `ParFormatError`) is a third refusal layer, reached through `split_unchanged`."""
-    from plugins.conformance_toy import REFUSING_READER_PLUGIN, TOY_REFUSAL
-
-    cases_root = _native_toy_case(tmp_path)
-    config = tmp_path / "study.json"
-    config.write_text(json.dumps({"constant/mesh.json:cells": 7}))
-    exit_code = main([
-        *action, "--plugin", REFUSING_READER_PLUGIN, "--entry", "toyTutorial",
-        "--cases-root", str(cases_root), "--config", str(config),
-        "--scratch-dir", str(tmp_path / "scratch"),
-    ])
-    assert exit_code == 1
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["status"] == "failed"
-    assert "constant/mesh.json:cells" in payload["error"]
-    assert TOY_REFUSAL in payload["error"]
+    (case,) = json.loads(capsys.readouterr().out)["cases"]
+    assert case["status"] == "failed"
+    assert "constant/mesh.json" in case["materialization_error"]
+    assert TOY_REFUSAL in case["materialization_error"]
 
 
 def test_plan_strict_against_a_read_only_tree_without_a_scratch_dir_refuses_as_json_S_I3(

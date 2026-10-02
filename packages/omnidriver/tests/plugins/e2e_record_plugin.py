@@ -162,14 +162,6 @@ class E2ERecordPlugin(MinimalTestPlugin):
     def get_case_value_comparator(self):
         return _typed_agree
 
-    def has_case_marker(self, case_root) -> bool:
-        """This fixture's own recognizable marker file, the toy `constant/mesh.json` (cardiacfoam's checks for `constant/electroProperties` instead)."""
-        return (Path(case_root) / "constant" / "mesh.json").exists()
-
-    # No `is_case_runnable_without_workflow`: core does not apply the
-    # runnable-case gate to a record run carrying its own steps
-    # (`run_document_exec._is_record_run_with_steps`).
-
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None) -> tuple:
         """The toy's one real check: its solver command resolves on the supplied PATH."""
         del workflow_dag, environment_source, driver_context
@@ -191,3 +183,14 @@ class E2ERecordPlugin(MinimalTestPlugin):
     def get_configured_environment(self, env, driver_context) -> dict:
         del driver_context
         return dict(env)
+
+
+class E2EFolderPlugin(E2ERecordPlugin):
+    """The toy record stack, which also declares a case entrypoint, so ``--case`` can run a folder."""
+
+    def get_case_runtime_conventions(self):
+        from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+
+        return CaseRuntimeConventions(
+            case_entrypoints=("run-test-case",), case_script_commands=("run-test-case",),
+        )

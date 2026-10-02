@@ -5,17 +5,21 @@ from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.strict_planning import strict_plan
-from plugins.declared_case_plugin import DeclaredCasePlugin
+from omnidriver.core.tutorial_records import case_folder_record
+from plugins.e2e_record_plugin import E2EFolderPlugin
 
 
 def _plan(tmp_path: Path):
-    case_root = tmp_path / "plainCase"
-    case_root.mkdir()
+    case_root = tmp_path / "cases" / "plainCase"
+    case_root.mkdir(parents=True)
     (case_root / "run-test-case").write_text("#!/bin/sh\nexit 0\n")
+    context = driver_context(E2EFolderPlugin(), source="test:coverage")
+    record, cases_root = case_folder_record(case_root, driver_context=context)
     return strict_plan(
-        "plainCase",
-        overrides={"cases_root": str(tmp_path)},
-        driver_context=driver_context(DeclaredCasePlugin(), source="test:coverage"),
+        record,
+        overrides={"cases_root": str(cases_root)},
+        scratch_root=tmp_path / "scratch",
+        driver_context=context,
     )
 
 
@@ -61,39 +65,15 @@ def test_a_suppressed_stage_does_not_reach_a_perfect_score(tmp_path: Path) -> No
     )
 
 
-def test_a_generic_case_reports_inapplicable_checks_as_such(tmp_path: Path) -> None:
-    """A generic case has no plugin dictionaries; saying `passed` claims it did."""
+def test_only_the_stages_every_solver_has_are_scored(tmp_path: Path) -> None:
+    """A check that depends on a solver's file formats is a plugin diagnostic, not a stage."""
     report = _plan(tmp_path)
 
-    assert _stage(report, "case_preparation_files").status == "not_applicable"
-    assert _stage(report, "dictionary_resolution").status == "not_applicable"
-
-
-def test_an_exempt_mesh_check_is_reported_as_inapplicable(tmp_path: Path) -> None:
-    """`_mesh_geometry_diagnostics` returns () for two unrelated reasons."""
-    report = _plan(tmp_path)
-
-    assert _stage(report, "mesh_geometry").status == "not_applicable"
-
-
-def test_an_inapplicable_check_leaves_the_denominator(tmp_path: Path) -> None:
-    """`not_applicable` is not a failure to cover; it is nothing to cover."""
-    report = _plan(tmp_path)
-    readiness = report.readiness_score
-
-    inapplicable = sum(
-        item.max_points for item in report.simulation_audit
-        if item.status == "not_applicable"
-    )
-    assert inapplicable > 0, "this plan was expected to have inapplicable stages"
-
-    assert readiness["max_score"] == 85 - inapplicable, (
-        "an inapplicable stage is still being counted as something this plan "
-        "owed and did not deliver"
-    )
-    # The suppressed one stays in: it was owed and was not done.
-    assert _stage(report, "environment_preflight").max_points == 10
-    assert "environment_preflight" in readiness["uncovered_stages"]
+    assert [item.stage for item in report.simulation_audit] == [
+        "workflow_preparation", "artifact_prediction", "environment_preflight",
+    ]
+    assert report.readiness_score["max_score"] == 45
+    assert "inapplicable_stages" not in report.readiness_score
 
 
 def test_a_partially_covered_plan_is_not_ready(tmp_path: Path) -> None:

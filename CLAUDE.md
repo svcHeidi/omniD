@@ -89,11 +89,11 @@ bash -c '<shell_prefix> OMNIDRIVER_OPENCARP_TUTORIALS=<opencarp>/share/tutorials
 ```
 
 **The scratch root is supplied, never invented.** Anything that
-stages — `plan --strict`/`step`/`run --strict` over a tutorial record (or a
-case-folder entry whose source lies inside this checkout), or a sweep with no
-`--output-dir` — needs `--scratch-dir <dir>` or `OMNIDRIVER_SCRATCH_DIR`; with
-neither it is refused by name as JSON (`ScratchRootNotSupplied`), and a scratch
-dir inside `--cases-root` is refused too. Core takes it as `strict_plan(...,
+stages — `plan --strict`/`step`/`run --strict` over a tutorial record or a
+`--case` folder, or a sweep with no `--output-dir` — needs `--scratch-dir <dir>`
+or `OMNIDRIVER_SCRATCH_DIR`; with neither it is refused by name as JSON
+(`ScratchRootNotSupplied`), and a scratch dir inside the cases root is refused
+too. Core takes it as `strict_plan(...,
 scratch_root=)`; every caller goes through `core.specs.paths.resolve_scratch_root`.
 The suites supply their own (`tmp_path`), so the commands above need nothing
 extra; a manual CLI run does.
@@ -113,13 +113,15 @@ A skip here hides exactly what the guard exists to find.
 | core declares no solver vocabulary | `test_core_declares_no_phase_vocabulary`, `test_core_exports_no_phase_vocabulary` |
 | core never invents a filesystem root | `test_core_never_invents_a_filesystem_root`; for the scratch root, `test_the_scratch_resolver_invents_no_default` and `test_nothing_rebuilds_a_dot_omnidriver_scratch_default` |
 | core threads its `DriverContext` through the public edge | `test_core_threads_its_context_through_the_public_edge` |
-| an explicitly-contexted operation never falls back to the default | `test_fallback_census.py` |
 | no compatibility fallback reaches cardiac code | `test_no_fallback_reaches_cardiac_code_at_all` |
 | a sentinel is never converted (-1 s is never -1000 ms) | `test_a_sentinel_is_resolved_before_conversion` |
 | a comparison report is written once | `test_a_report_is_written_once` |
 | the capability-seam table matches the docstrings | `scripts/export-capability-seams.py --check` |
+| a tutorial record is the only entry kind; a case folder that is no record runs as an ad hoc one-step record of the stack's declared entrypoint (`--case`), staged from the folder and never written | `test_case_folder_record.py`; `test_tutorial_records.py` |
+| a solver repository names its plugin, tutorials, C++ source and scripts in `omnidriver.toml`, read only from `--repo` or the repository of a supplied cases root (never searched for); `--plugin` alone serves a solver with no repository, and when both are given they must select the same stack | `test_repository.py`; `test_repository_source.py` (cardiacfoam) |
+| a plan report carries one `plugin_diagnostics` list, composed by the stack's `get_plan_diagnostics`; core names no function-object, nondimensional or dictionary-resolution concept | `scripts/check-core-shape.py`; `test_strict_planning.py`; `test_plan_diagnostics.py` (openfoam) |
 | a tutorial record/axis module never writes a case directly | `scripts/check-case-writes.py` (empty waiver list, scoped to `openfoam/axes/`, `cardiacfoam/records/`, `opencarp/records/`, `cardiaccore/records/` and the writer-free planner module `openfoam/case_planning.py`; relative imports are resolved before matching) |
-| a strict plan reads C++ only at a supplied source root (`cxx_mapping.source_root`), scans it when supplied, and says `plugin_cxx_source_not_supplied` once when not | `test_truth_layer_queries.py`; against the real trees `test_strict_planning.py::test_every_strict_plan_scans_the_supplied_source`, `test_cxx_scan_native.py` (`native`) and cardiacCore's `test_dict_key_scanner_native.py` (`native_cardiaccore`) |
+| a strict plan reads C++ only at a supplied source root (`cxx_mapping.source_root`), scans it when supplied, and says `plugin_cxx_source_not_supplied` once when not | `test_plan_diagnostics.py` (openfoam); against the real trees `test_strict_planning.py::test_every_strict_plan_scans_the_supplied_source`, `test_cxx_scan_native.py` (`native`) and cardiacCore's `test_dict_key_scanner_native.py` (`native_cardiaccore`) |
 | a key or model the C++ reads and the catalog lacks is an `uncatalogued` note, never a failure, and a study may set the key at exactly the path the scan places its read, whether or not the case holds it; a catalog claim an anchored read refutes fails the plan | `test_cxx_scan_native.py` (`native`): `test_keys_added_to_the_cxx_plan_are_uncatalogued_and_settable`, `test_a_new_key_is_refused_at_a_path_the_cxx_does_not_read_or_with_the_wrong_type`, `test_a_model_a_scanned_selection_table_registers_plans_uncatalogued`; `test_dict_keys_scanner.py` (openfoam) |
 | a solver's shell is declared in its manifest and rendered from supplied values only; a launcher from the other solver's MPI is refused | `test_environment_and_machine.py`; `test_an_mpirun_from_another_mpi_family_is_refused` (openfoam); openCARP's `opencarp_mpi_launcher_mismatch` (`native_opencarp`) |
 | core names no OpenFOAM layout beyond its recorded, shrinking debt | `scripts/check-core-shape.py` (baseline `scripts/core-shape-baseline.txt`; new tokens never added) |
@@ -139,10 +141,10 @@ do have ambient truth, so reading them is right. Full reasoning:
 `future/ENVIRONMENT_CONTRACT.md` §12.
 
 **Evaluate defaults lazily.** The same bug appeared twice in `core/specs/paths.py`
-consumers: a fallback computed *before* the branch that would have avoided it.
-`resolve_entry` raised from a wheel even when a path was supplied, and
-`resolve_run_script_path` raised even when a root was supplied and the file
-existed under it. If a default can raise, compute it only when you need it.
+consumers: a fallback computed *before* the branch that would have avoided it,
+so a call that supplied its path still raised. If a default can raise, compute
+it only when you need it: `resolve_scratch_root` runs only once an operation
+stages.
 
 ## Traps
 

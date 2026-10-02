@@ -82,11 +82,8 @@ def _output_dir_prefix(spec: TutorialSpec) -> str:
         return ""
 
 
-def _core_generic_artifacts(spec: TutorialSpec) -> tuple[DataArtifact, ...]:
-    """Artifacts guaranteed by the driver for a generic case-folder run."""
-
-    if not (spec.metadata or {}).get("generic_case"):
-        return ()
+def _core_artifacts(spec: TutorialSpec) -> tuple[DataArtifact, ...]:
+    """Artifacts the driver itself writes for every run."""
     prefix = _output_dir_prefix(spec)
     if not prefix:
         return ()
@@ -131,6 +128,6 @@ def predict_data_artifacts(
     )
     utility_derived = _predict_from_workflow_utilities(spec, driver_context)
     
-    derived = _core_generic_artifacts(spec) + plugin_derived + utility_derived
+    derived = _core_artifacts(spec) + plugin_derived + utility_derived
     
     return _merge_static_override(derived, static_tuple)

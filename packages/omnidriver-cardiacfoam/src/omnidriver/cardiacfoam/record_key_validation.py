@@ -43,8 +43,7 @@ Three outcomes:
    rather than a placeholder. Deliberate, not an oversight:
    ``common_dict_entries.CONTROL_DICT_ENTRIES`` does catalogue
    ``system/controlDict`` keys such as ``deltaT``, but for a different
-   capability (``run_document_config.py``'s ``--config`` schema), not this
-   one -- this validator checks only the two ``constant/`` documents above
+   capability, not this one -- this validator checks only the two ``constant/`` documents above
    against a catalog, never ``system/controlDict`` against
    ``CONTROL_DICT_ENTRIES``.
 

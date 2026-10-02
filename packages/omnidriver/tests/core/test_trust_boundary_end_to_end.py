@@ -1,9 +1,8 @@
-"""P2.9: end-to-end regression gate for the trust-boundary claims in SECURITY.md."""
+"""End-to-end regression gate for the trust-boundary claims in SECURITY.md."""
 from __future__ import annotations
 
 import json
 import os
-import tempfile
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
@@ -11,12 +10,12 @@ from unittest import mock
 
 import pytest
 
-from conftest import NO_REPO_ROOT, repo_root, skip_without_repo, skip_without_single_adapter
+from conftest import NO_REPO_ROOT, repo_root, skip_without_repo
 
-pytestmark = [skip_without_repo, skip_without_single_adapter]
+pytestmark = [skip_without_repo]
 
 from omnidriver.cli import main
-from omnidriver.core.runtime.models import TutorialSpec
+from omnidriver.core.plugin_interface import load_plugin_context
 from omnidriver.core.runtime.workflow_runner import (
     _resolve_case_cwd,
     _resolve_command,
@@ -24,66 +23,32 @@ from omnidriver.core.runtime.workflow_runner import (
 )
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
 from omnidriver.core.strict_planning import strict_plan
+from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 
 REPO_ROOT = repo_root or NO_REPO_ROOT
-# This omnidriver checkout's own SECURITY.md, not the cardiacFoam monorepo's --
-# the CLI/RunDocument/workflow code these tests drive against lives here.
+# This omnidriver checkout's own SECURITY.md: the CLI/RunDocument/workflow
+# code these tests drive against lives here.
 SECURITY_MD = REPO_ROOT / "SECURITY.md"
-# Vendored copy of the monorepo's singleCell tutorial dictionaries (see
-# fixtures/single_cell_tutorial/README.md), shipped alongside this test file
-# so this suite runs without a real cardiacFoam checkout instead of always
-# skipping in CI.
-SINGLE_CELL_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "single_cell_tutorial"
 
+PLUGIN = "plugins.e2e_record_plugin:E2EFolderPlugin"
+SCRIPT = "run-test-case"
 CASE_NAME = "trustBoundaryCase"
+RAN = "ran.marker"
 
-# An Allrun that produces exactly the artifacts strict planning predicts for
-# this case shape, so a permitted run reaches "completed" and a blocked one is
-# distinguishable by the absence of these files.
-ALLRUN_OK = (
-    "#!/bin/sh\n"
-    f"mkdir -p postProcessing 0.001\n"
-    f"touch postProcessing/{CASE_NAME}_1.txt 0.001/Vm 0.001/AV_Ta\n"
-    "exit 0\n"
-)
+# A case script that leaves exactly one file, so a permitted run reaches
+# "completed" and a blocked one is distinguishable by the file's absence.
+CASE_SCRIPT_OK = f"#!/bin/sh\ntouch {RAN}\nexit 0\n"
 
 
-def _write_case(root: Path, *, allrun: str = ALLRUN_OK, steps: list[dict] | None = None) -> Path:
-    """Create a minimal runnable OpenFOAM case with an Allrun-owned workflow."""
+def _write_case(root: Path, *, script: str = CASE_SCRIPT_OK) -> Path:
+    """A case folder whose workflow is the stack's declared case script."""
     case_root = root / CASE_NAME
-    (case_root / "constant").mkdir(parents=True)
-    (case_root / "system").mkdir()
-    (case_root / "constant" / "electroProperties").write_text(
-        (SINGLE_CELL_ROOT / "constant" / "electroProperties").read_text()
-    )
-    (case_root / "constant" / "physicsProperties").write_text(
-        (SINGLE_CELL_ROOT / "constant" / "physicsProperties").read_text()
-    )
-    for name in ("controlDict", "fvSchemes", "fvSolution"):
-        (case_root / "system" / name).write_text("\n")
-    allrun_path = case_root / "Allrun"
-    allrun_path.write_text(allrun)
-    os.chmod(allrun_path, 0o755)
-    del steps
+    (case_root / "system").mkdir(parents=True)
+    (case_root / "system" / "input.txt").write_text("authored\n")
+    script_path = case_root / SCRIPT
+    script_path.write_text(script)
+    os.chmod(script_path, 0o755)
     return case_root
-
-
-def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:
-    return TutorialSpec(
-        name=case_root.name,
-        case_root=case_root,
-        case_mutation=None,
-        metadata={
-            "setup_root": str(case_root),
-            "output_dir": str(case_root / "postProcessing"),
-            "entry_name": case_root.name,
-            "entry_kind": "case_folder",
-            "entry_path": case_root.name,
-            "source_type": "filesystem_case",
-            "workflow_family": None,
-            "workflow_dag": {"steps": steps},
-        },
-    )
 
 
 def _cli(argv: list[str]) -> tuple[int, dict]:
@@ -94,11 +59,12 @@ def _cli(argv: list[str]) -> tuple[int, dict]:
     return code, json.loads(out.getvalue())
 
 
-def _plan_to_file(cases_root: Path, doc_path: Path) -> dict:
-    """`plan --strict --entry` and persist the emitted RunDocument."""
+def _plan_to_file(case_root: Path, doc_path: Path, scratch: Path) -> dict:
+    """`plan --strict --case` and persist the emitted RunDocument, whose
+    ``launch.caseRoot`` is the staged copy under ``scratch``."""
     code, report = _cli([
-        "plan", "--strict", "--entry", CASE_NAME,
-        "--cases-root", str(cases_root),
+        "plan", "--strict", "--plugin", PLUGIN, "--case", str(case_root),
+        "--scratch-dir", str(scratch),
     ])
     assert code == 0, report
     run_document = report["run_document"]
@@ -107,64 +73,40 @@ def _plan_to_file(cases_root: Path, doc_path: Path) -> dict:
     return run_document
 
 
+def _staged(document: dict) -> Path:
+    return Path(document["launch"]["caseRoot"])
+
+
 def _tampered_document(
-    cases_root: Path,
-    doc_path: Path,
-    *,
-    steps: list[dict] | None = None,
-    launch: dict | None = None,
-    config: dict | None = None,
+    case_root: Path, doc_path: Path, scratch: Path,
+    *, steps: list[dict] | None = None, launch: dict | None = None,
 ) -> Path:
     """A real planned RunDocument with one field replaced by agent content."""
-    document = _plan_to_file(cases_root, doc_path)
+    document = _plan_to_file(case_root, doc_path, scratch)
     if steps is not None:
         document["workflowDag"]["steps"] = steps
         # The planned workflowState's digest describes the *original* DAG.
         # Swapping in different steps without clearing it makes every such
         # document look like a resume of a mismatched prior attempt --
         # rejected by validate_resume regardless of the field under test.
-        # None is what a never-run document already carries (see
-        # _hand_authored_document below, which omits the key entirely).
         document["workflowState"] = None
     if launch is not None:
         document["launch"] = {**document["launch"], **launch}
-    if config is not None:
-        document["config"] = config
     doc_path.write_text(json.dumps(document))
     return doc_path
 
 
-def _hand_authored_document(
-    doc_path: Path,
-    *,
-    case_root: Path,
-    steps: list[dict],
-    launch: dict | None = None,
-    config: dict | None = None,
-) -> Path:
+def _hand_authored_document(doc_path: Path, *, case_root: Path, steps: list[dict]) -> Path:
     """A RunDocument built by hand, never derived from `plan --strict`."""
-    if config is None:
-        with tempfile.TemporaryDirectory() as seed_dir:
-            seed_root = Path(seed_dir)
-            _write_case(seed_root)
-            seed_document = _plan_to_file(seed_root, seed_root / "seed.json")
-            config = seed_document["config"]
     document = {
         "version": "3",
         "id": "hand-authored",
         "name": "hand-authored",
         "status": "planned",
-        "config": config,
-        "configurationSource": "document",
-        "launch": launch if launch is not None else {
-            "caseRoot": str(case_root),
-            "outputDir": str(case_root / "omnidriver-output"),
-        },
+        "launch": {"caseRoot": str(case_root), "outputDir": str(case_root / "omnidriver-output")},
         "workflowDag": {
             "schema_version": "1",
-            "step_status_values": [
-                "pending", "running", "completed", "failed", "skipped",
-            ],
+            "step_status_values": ["pending", "running", "completed", "failed", "skipped"],
             "steps": steps,
         },
     }
@@ -200,286 +142,236 @@ def _plan_codes(report: dict) -> set[str]:
 # is set, both must resolve under it" (Trust boundaries / Mitigations).
 # --------------------------------------------------------------------------
 
-def test_case_root_outside_allowed_runs_root_is_rejected_before_execution() -> None:
+def test_case_root_outside_allowed_runs_root_is_rejected_before_execution(tmp_path) -> None:
     """SECURITY.md: "opt-in OMNIDRIVER_ALLOWED_RUNS_ROOT containment"."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(cases_root)
-        doc_path = cases_root / "run.json"
-        _plan_to_file(cases_root, doc_path)
+    case_root = _write_case(tmp_path / "cases")
+    doc_path = tmp_path / "run.json"
+    staged = _staged(_plan_to_file(case_root, doc_path, tmp_path / "scratch"))
 
-        elsewhere = cases_root / "allowed-elsewhere"
-        elsewhere.mkdir()
-        with mock.patch.dict(
-            os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(elsewhere)}
-        ):
-            code, payload = _cli(["run", "--run-document", str(doc_path)])
+    elsewhere = tmp_path / "allowed-elsewhere"
+    elsewhere.mkdir()
+    with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(elsewhere)}):
+        code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
 
-        assert code != 0, payload
-        assert "case_root_outside_allowed_root" in _codes(payload), payload
-        # Rejected at ingestion: the case script never ran.
-        assert not (case_root / "0.001").exists()
+    assert code != 0, payload
+    assert "case_root_outside_allowed_root" in _codes(payload), payload
+    # Rejected at ingestion: the case script never ran.
+    assert not (staged / RAN).exists()
 
 
-def test_output_dir_outside_allowed_runs_root_is_rejected_before_execution() -> None:
+def test_output_dir_outside_allowed_runs_root_is_rejected_before_execution(tmp_path) -> None:
     """SECURITY.md: containment applies to `outputDir`, not just `caseRoot`."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        root = Path(temp_dir)
-        allowed = root / "allowed"
-        allowed.mkdir()
-        case_root = _write_case(allowed)
-        doc_path = root / "run.json"
-        _plan_to_file(allowed, doc_path)
+    allowed = tmp_path / "allowed"
+    case_root = _write_case(allowed / "cases")
+    doc_path = allowed / "run.json"
+    document = _plan_to_file(case_root, doc_path, allowed / "scratch")
+    document["launch"]["outputDir"] = str(tmp_path / "outside-results")
+    doc_path.write_text(json.dumps(document))
 
-        document = json.loads(doc_path.read_text())
-        document["launch"]["outputDir"] = str(root / "outside-results")
-        doc_path.write_text(json.dumps(document))
+    with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}):
+        code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
 
-        with mock.patch.dict(
-            os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}
-        ):
-            code, payload = _cli(["run", "--run-document", str(doc_path)])
-
-        assert code != 0, payload
-        assert "output_dir_outside_allowed_root" in _codes(payload), payload
-        assert not (case_root / "0.001").exists()
+    assert code != 0, payload
+    assert "output_dir_outside_allowed_root" in _codes(payload), payload
+    assert not (_staged(document) / RAN).exists()
 
 
-def test_symlinked_case_root_cannot_escape_allowed_runs_root() -> None:
-    """SECURITY.md: paths are "resolved to canonical absolute paths", so containment "runs on resolved paths, so a symlink ..."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        root = Path(temp_dir)
-        allowed = root / "allowed"
-        allowed.mkdir()
-        outside = root / "outside"
-        outside.mkdir()
-        real_case = _write_case(outside)
-        doc_path = root / "run.json"
-        _plan_to_file(outside, doc_path)
+def test_symlinked_case_root_cannot_escape_allowed_runs_root(tmp_path) -> None:
+    """SECURITY.md: paths are "resolved to canonical absolute paths", so containment "runs on resolved paths, so a symlink ..."."""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    outside = tmp_path / "outside"
+    case_root = _write_case(outside / "cases")
+    doc_path = tmp_path / "run.json"
+    document = _plan_to_file(case_root, doc_path, outside / "scratch")
+    real_staged = _staged(document)
 
-        # A symlink that *lexically* sits inside the allowed root but points out.
-        link = allowed / CASE_NAME
-        link.symlink_to(real_case)
-        document = json.loads(doc_path.read_text())
-        document["launch"]["caseRoot"] = str(link)
-        document["launch"]["outputDir"] = str(link / "out")
-        doc_path.write_text(json.dumps(document))
+    # A symlink that *lexically* sits inside the allowed root but points out.
+    link = allowed / CASE_NAME
+    link.symlink_to(real_staged)
+    document["launch"]["caseRoot"] = str(link)
+    document["launch"]["outputDir"] = str(link / "out")
+    doc_path.write_text(json.dumps(document))
 
-        with mock.patch.dict(
-            os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}
-        ):
-            code, payload = _cli(["run", "--run-document", str(doc_path)])
+    with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}):
+        code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
 
-        assert code != 0, payload
-        assert "case_root_outside_allowed_root" in _codes(payload), payload
-        assert not (real_case / "0.001").exists()
+    assert code != 0, payload
+    assert "case_root_outside_allowed_root" in _codes(payload), payload
+    assert not (real_staged / RAN).exists()
 
 
-def test_allowed_runs_root_permits_a_contained_case() -> None:
+def test_allowed_runs_root_permits_a_contained_case(tmp_path) -> None:
     """Containment is a boundary, not a blanket refusal: an in-root case runs."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(cases_root)
-        doc_path = cases_root / "run.json"
-        _plan_to_file(cases_root, doc_path)
+    case_root = _write_case(tmp_path / "cases")
+    doc_path = tmp_path / "run.json"
+    staged = _staged(_plan_to_file(case_root, doc_path, tmp_path / "scratch"))
 
-        with mock.patch.dict(
-            os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(cases_root)}
-        ):
-            code, payload = _cli(["run", "--run-document", str(doc_path)])
+    with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(tmp_path)}):
+        code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
 
-        assert code == 0, payload
-        assert payload["status"] == "ok"
-        assert (case_root / "0.001" / "Vm").exists()
+    assert code == 0, payload
+    assert payload["status"] == "ok"
+    assert (staged / RAN).exists()
 
 
 # --------------------------------------------------------------------------
-# Documented-closed claim: "launch.caseRoot must be an existing, runnable
-# OpenFOAM case (registry._case_is_runnable)".
+# Documented-closed claim: "launch.caseRoot must be an existing directory".
 # --------------------------------------------------------------------------
 
-def test_case_root_must_be_an_existing_runnable_openfoam_case() -> None:
-    """SECURITY.md: "caseRoot must be a runnable OpenFOAM case"."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        _write_case(cases_root)
+def test_case_root_must_be_an_existing_directory(tmp_path) -> None:
+    case_root = _write_case(tmp_path / "cases")
+    scratch = tmp_path / "scratch"
 
-        not_a_case = cases_root / "just-a-directory"
-        not_a_case.mkdir()
-        doc_path = _tampered_document(
-            cases_root, cases_root / "run.json",
-            launch={"caseRoot": str(not_a_case), "outputDir": str(not_a_case / "out")},
-        )
-        code, payload = _cli(["run", "--run-document", str(doc_path)])
-        assert code != 0, payload
-        assert "case_root_not_a_runnable_case" in _codes(payload), payload
+    not_a_dir = tmp_path / "a-file"
+    not_a_dir.write_text("")
+    doc_path = _tampered_document(
+        case_root, tmp_path / "run.json", scratch,
+        launch={"caseRoot": str(not_a_dir), "outputDir": str(tmp_path / "out")},
+    )
+    code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
+    assert code != 0, payload
+    assert "case_root_not_a_directory" in _codes(payload), payload
 
-        missing = cases_root / "does-not-exist"
-        doc_path = _tampered_document(
-            cases_root, cases_root / "run2.json",
-            launch={"caseRoot": str(missing), "outputDir": str(missing / "out")},
-        )
-        code, payload = _cli(["run", "--run-document", str(doc_path)])
-        assert code != 0, payload
-        assert "case_root_missing" in _codes(payload), payload
+    missing = tmp_path / "does-not-exist"
+    doc_path = _tampered_document(
+        case_root, tmp_path / "run2.json", scratch,
+        launch={"caseRoot": str(missing), "outputDir": str(missing / "out")},
+    )
+    code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
+    assert code != 0, payload
+    assert "case_root_missing" in _codes(payload), payload
 
 
 # --------------------------------------------------------------------------
 # Documented-closed claim: the command allowlist (validate_workflow_commands).
 # --------------------------------------------------------------------------
 
-def test_command_authorization_rejects_an_unauthorized_bare_command() -> None:
-    """SECURITY.md: only "a known OpenFOAM/driver command, an Allrun-family case script, a registered utility, or an installed OpenFOAM app"."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(cases_root)
-        sentinel = cases_root / "PWNED"
-        doc_path = _tampered_document(
-            cases_root, cases_root / "run.json",
-            steps=[_step("touch", args=[str(sentinel)])],
-        )
-        code, payload = _cli(["run", "--run-document", str(doc_path)])
+def test_command_authorization_rejects_an_unauthorized_bare_command(tmp_path) -> None:
+    """SECURITY.md: only a command the stack declares, a case script it declares, a registered utility, or an installed environment application."""
+    case_root = _write_case(tmp_path / "cases")
+    sentinel = tmp_path / "PWNED"
+    doc_path = _tampered_document(
+        case_root, tmp_path / "run.json", tmp_path / "scratch",
+        steps=[_step("sh", args=["-c", f"touch {sentinel}"])],
+    )
+    code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
 
-        assert code != 0, payload
-        assert "unknown_workflow_command" in _codes(payload), payload
-        assert not sentinel.exists(), "unauthorized command must not execute"
-        assert not (case_root / "0.001").exists()
+    assert code != 0, payload
+    assert "unknown_workflow_command" in _codes(payload), payload
+    assert not sentinel.exists(), "unauthorized command must not execute"
 
 
-def test_command_authorization_rejects_an_absolute_path_command() -> None:
+def test_command_authorization_rejects_an_absolute_path_command(tmp_path) -> None:
     """SECURITY.md: "Absolute-path ... commands are rejected"."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        _write_case(cases_root)
-        sentinel = cases_root / "PWNED"
-        doc_path = _tampered_document(
-            cases_root, cases_root / "run.json",
-            steps=[_step("/usr/bin/touch", args=[str(sentinel)])],
-        )
-        code, payload = _cli(["run", "--run-document", str(doc_path)])
+    case_root = _write_case(tmp_path / "cases")
+    sentinel = tmp_path / "PWNED"
+    doc_path = _tampered_document(
+        case_root, tmp_path / "run.json", tmp_path / "scratch",
+        steps=[_step("/usr/bin/touch", args=[str(sentinel)])],
+    )
+    code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
 
-        assert code != 0, payload
-        assert "unknown_workflow_command" in _codes(payload), payload
-        message = " ".join(
-            d["message"] for d in payload["diagnostics"]
-            if d.get("code") == "unknown_workflow_command"
-        )
-        assert "explicit path" in message, payload
-        assert not sentinel.exists()
+    assert code != 0, payload
+    assert "unknown_workflow_command" in _codes(payload), payload
+    message = " ".join(
+        d["message"] for d in payload["diagnostics"]
+        if d.get("code") == "unknown_workflow_command"
+    )
+    assert "explicit path" in message, payload
+    assert not sentinel.exists()
 
 
-def test_command_authorization_rejects_an_arbitrary_relative_script() -> None:
-    """SECURITY.md: "arbitrary ./script commands are rejected" -- only ./Allrun-family case scripts may be given in path form."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(cases_root)
-        sentinel = cases_root / "PWNED"
-        pwn = case_root / "pwn.sh"
-        pwn.write_text(f"#!/bin/sh\ntouch {sentinel}\n")
-        os.chmod(pwn, 0o755)
+def test_command_authorization_rejects_an_arbitrary_relative_script(tmp_path) -> None:
+    """SECURITY.md: "arbitrary ./script commands are rejected" -- only the stack's declared case script may be given in path form."""
+    case_root = _write_case(tmp_path / "cases")
+    sentinel = tmp_path / "PWNED"
+    # The step runs in the staged copy, so the script must be in the case the plan stages.
+    pwn = case_root / "pwn.sh"
+    pwn.write_text(f"#!/bin/sh\ntouch {sentinel}\n")
+    os.chmod(pwn, 0o755)
+    scratch = tmp_path / "scratch"
 
-        doc_path = _tampered_document(
-            cases_root, cases_root / "run.json",
-            steps=[_step("./pwn.sh")],
-        )
-        code, payload = _cli(["run", "--run-document", str(doc_path)])
+    doc_path = _tampered_document(
+        case_root, tmp_path / "run.json", scratch, steps=[_step("./pwn.sh")],
+    )
+    code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
 
-        assert code != 0, payload
-        assert "unknown_workflow_command" in _codes(payload), payload
-        assert not sentinel.exists()
+    assert code != 0, payload
+    assert "unknown_workflow_command" in _codes(payload), payload
+    assert not sentinel.exists()
 
-        # ...while the documented exception (./Allrun-family) is accepted.
-        doc_path = _tampered_document(
-            cases_root, cases_root / "run_allrun.json",
-            steps=[_step("./Allrun", id="run", produces=[])],
-        )
-        code, payload = _cli(["run", "--run-document", str(doc_path)])
-        assert code == 0, payload
-        assert (case_root / "0.001" / "Vm").exists()
+    # ...while the declared case script is accepted.
+    doc_path = _tampered_document(
+        case_root, tmp_path / "run_script.json", scratch,
+        steps=[_step(f"./{SCRIPT}", id="run", produces=[])],
+    )
+    staged = _staged(json.loads(doc_path.read_text()))
+    code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
+    assert code == 0, payload
+    assert (staged / RAN).exists()
 
 
-def test_command_allowlist_has_one_owner_shared_by_both_producers() -> None:
+def test_command_allowlist_has_one_owner_shared_by_both_producers(tmp_path) -> None:
     """SECURITY.md: "Single command allowlist owner (validate_workflow_commands), enforced once at ingestion" -- so the strict planner and the run-document adapter cannot drift apart."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Producer 1: strict planning from a driver-owned Python workflow.
-        planner_root = Path(temp_dir) / "planner"
-        planner_root.mkdir()
-        planner_case = _write_case(planner_root)
-        with mock.patch(
-            "omnidriver.core.strict_planning.load_entry_spec",
-            return_value=_spec_with_workflow(
-                planner_case,
-                steps=[{"id": "run", "command": "curl", "depends_on": []}],
-            ),
-        ):
-            from omnidriver.core.plugin_interface import default_driver_context
+    ctx = load_plugin_context(PLUGIN)
+    # Producer 1: strict planning of a record whose step is an unauthorized command.
+    planner_root = tmp_path / "planner"
+    _write_case(planner_root)
+    record = TutorialRecord(
+        name=CASE_NAME, native_case_relpath=CASE_NAME,
+        workflow_steps=(WorkflowStep(step_id="run", command=("curl",)),),
+    )
+    plan_report = strict_plan(
+        record, overrides={"cases_root": str(planner_root)},
+        scratch_root=tmp_path / "planner-scratch", driver_context=ctx,
+    ).to_json()
+    assert "unknown_workflow_command" in _plan_codes(plan_report), plan_report
 
-            plan_report = strict_plan(
-                CASE_NAME,
-                overrides={"cases_root": str(planner_root)},
-                driver_context=default_driver_context(),
-            ).to_json()
-        assert "unknown_workflow_command" in _plan_codes(plan_report), plan_report
-
-        # Producer 2: an agent-authored RunDocument carrying the same command,
-        # ingested through the run path instead of the planner.
-        adapter_root = Path(temp_dir) / "adapter"
-        adapter_root.mkdir()
-        _write_case(adapter_root)
-        doc_path = _tampered_document(
-            adapter_root, adapter_root / "run.json", steps=[_step("curl")],
-        )
-        run_code, run_payload = _cli(["run", "--run-document", str(doc_path)])
-        assert run_code != 0, run_payload
-        assert "unknown_workflow_command" in _codes(run_payload), run_payload
+    # Producer 2: an agent-authored RunDocument carrying the same command,
+    # ingested through the run path instead of the planner.
+    adapter_root = tmp_path / "adapter"
+    case_root = _write_case(adapter_root)
+    doc_path = _tampered_document(
+        case_root, tmp_path / "run.json", tmp_path / "adapter-scratch", steps=[_step("curl")],
+    )
+    run_code, run_payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
+    assert run_code != 0, run_payload
+    assert "unknown_workflow_command" in _codes(run_payload), run_payload
 
 
 # --------------------------------------------------------------------------
 # Documented-closed claim: "No command shadowing: bare names resolve via PATH
-# only; only Allrun-family resolve case-locally".
+# only; only the stack's declared case scripts resolve case-locally".
 # --------------------------------------------------------------------------
 
-def test_case_directory_cannot_shadow_a_trusted_path_binary() -> None:
+def test_case_directory_cannot_shadow_a_trusted_path_binary(tmp_path) -> None:
     """SECURITY.md: "No command shadowing"."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(
-            cases_root,
-            steps=[{"id": "mesh", "command": "blockMesh", "depends_on": []}],
-        )
-        sentinel = cases_root / "PWNED"
-        shadow = case_root / "blockMesh"
-        shadow.write_text(f"#!/bin/sh\ntouch {sentinel}\n")
-        os.chmod(shadow, 0o755)
+    case_root = _write_case(tmp_path / "cases")
+    sentinel = tmp_path / "PWNED"
+    shadow = case_root / "touch"
+    shadow.write_text(f"#!/bin/sh\ncommand touch {sentinel}\n")
+    os.chmod(shadow, 0o755)
 
-        # The resolver is the enforcement point: a case-local `blockMesh` is
-        # never picked up, while an Allrun-family name deliberately is --
-        # for the *active plugin's* declared entrypoints, so this needs the
-        # same context the CLI round-trip below resolves implicitly (Core
-        # itself declares no case-script names; see
-        # workflow.case_script_commands's "with no context the set is
-        # empty" and test_case_script_commands_entrypoint_seam.py).
-        from omnidriver.core.plugin_interface import default_driver_context
+    # The resolver is the enforcement point: a case-local `touch` is never
+    # picked up, while the stack's declared case script deliberately is --
+    # for the *active plugin's* declared entrypoints (Core itself declares no
+    # case-script names; see workflow.case_script_commands's "with no
+    # context the set is empty" and test_case_script_commands_entrypoint_seam.py).
+    context = load_plugin_context(PLUGIN)
+    assert _resolve_command("touch", case_root) == "touch"
+    assert _resolve_command(SCRIPT, case_root, context) == str(case_root / SCRIPT)
 
-        active_context = default_driver_context()
-        assert _resolve_command("blockMesh", case_root) == "blockMesh"
-        assert _resolve_command("Allrun", case_root, active_context) == str(
-            case_root / "Allrun"
-        )
-
-        # End-to-end: running the step never executes the case-local shadow,
-        # whether or not a real blockMesh exists on this machine's PATH.
-        doc_path = _hand_authored_document(
-            cases_root / "run.json",
-            case_root=case_root,
-            steps=[_step("blockMesh", id="mesh")],
-        )
-        _cli(["run", "--run-document", str(doc_path)])
-        assert not sentinel.exists(), "case-local binary shadowed a PATH command"
+    # End-to-end: running the step never executes the case-local shadow.
+    doc_path = _hand_authored_document(
+        tmp_path / "run.json", case_root=case_root, steps=[_step("touch", args=["marker"])],
+    )
+    _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
+    assert not sentinel.exists(), "case-local binary shadowed a PATH command"
 
 
-def test_a_plugins_declared_entrypoint_resolves_case_locally_but_blockmesh_still_never_does() -> None:
-    """SECURITY.md: "No command shadowing", extended to the Tier 4 entrypoint seam (future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md) -- a plugin naming its entrypoint anything other than "Allrun" gets the same case-local resolution Allrun already has, but CORE_NEUTRAL_COMMANDS names like blockMesh must never resolve case-locally, regardless of which plugin is active."""
+def test_a_plugins_declared_entrypoint_resolves_case_locally_but_blockmesh_still_never_does(tmp_path) -> None:
+    """SECURITY.md: "No command shadowing", extended to the Tier 4 entrypoint seam (future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md) -- a plugin naming its entrypoint anything gets the same case-local resolution, but a command the stack does not declare as a case script must never resolve case-locally, regardless of which plugin is active."""
     from plugins.minimal_plugin import MinimalTestPlugin
 
     from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
@@ -512,156 +404,72 @@ def test_a_plugins_declared_entrypoint_resolves_case_locally_but_blockmesh_still
             # identically-shaped _ForeignEntrypointPlugin, the un-gated sibling
             # of this exact seam.
             return CaseRuntimeConventions(
-                output_collection_relpath="outputs",
                 case_entrypoints=("run.sh",),
                 case_script_commands=("run.sh",),
             )
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        case_root = Path(temp_dir)
-        (case_root / "run.sh").write_text("#!/bin/sh\n")
-        os.chmod(case_root / "run.sh", 0o755)
-        (case_root / "blockMesh").write_text("#!/bin/sh\ntouch PWNED\n")
-        os.chmod(case_root / "blockMesh", 0o755)
+    case_root = tmp_path
+    (case_root / "run.sh").write_text("#!/bin/sh\n")
+    os.chmod(case_root / "run.sh", 0o755)
+    (case_root / "blockMesh").write_text("#!/bin/sh\ntouch PWNED\n")
+    os.chmod(case_root / "blockMesh", 0o755)
 
-        ctx = _driver_context(_ForeignEntrypointPlugin(), source="test")
+    ctx = _driver_context(_ForeignEntrypointPlugin(), source="test")
 
-        assert _resolve_command("run.sh", case_root, ctx) == str(case_root / "run.sh")
-        assert _resolve_command("blockMesh", case_root, ctx) == "blockMesh"
-        # Without the plugin declaring it, the same name is not a case script.
-        assert _resolve_command("run.sh", case_root) == "run.sh"
+    assert _resolve_command("run.sh", case_root, ctx) == str(case_root / "run.sh")
+    assert _resolve_command("blockMesh", case_root, ctx) == "blockMesh"
+    # Without the plugin declaring it, the same name is not a case script.
+    assert _resolve_command("run.sh", case_root) == "run.sh"
 
 
 # --------------------------------------------------------------------------
 # Documented-closed claim: "Workflow cwd cannot escape caseRoot".
 # --------------------------------------------------------------------------
 
-def test_workflow_cwd_cannot_escape_case_root() -> None:
+def test_workflow_cwd_cannot_escape_case_root(tmp_path) -> None:
     """SECURITY.md: "Workflow `cwd` cannot escape `caseRoot`"."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(cases_root)
+    case_root = _write_case(tmp_path / "cases")
 
-        # Layer 1 -- ingestion, via the real CLI run path.
-        doc_path = _hand_authored_document(
-            cases_root / "run.json",
-            case_root=case_root,
-            steps=[_step("Allrun", cwd="../..")],
-        )
-        code, payload = _cli(["run", "--run-document", str(doc_path)])
-        assert code != 0, payload
-        assert "workflow_cwd_not_case_relative" in _codes(payload), payload
+    # Layer 1 -- ingestion, via the real CLI run path.
+    doc_path = _hand_authored_document(
+        tmp_path / "run.json", case_root=case_root, steps=[_step(SCRIPT, cwd="../..")],
+    )
+    code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
+    assert code != 0, payload
+    assert "workflow_cwd_not_case_relative" in _codes(payload), payload
 
-        # Layer 2 -- the runner's own resolved-path check.
-        with pytest.raises(ValueError, match="escapes case root"):
-            _resolve_case_cwd(case_root, "../..")
+    # Layer 2 -- the runner's own resolved-path check.
+    with pytest.raises(ValueError, match="escapes case root"):
+        _resolve_case_cwd(case_root, "../..")
 
-        outside = cases_root / "outside"
-        outside.mkdir()
-        (case_root / "escape").symlink_to(outside)
-        with pytest.raises(ValueError, match="escapes case root"):
-            _resolve_case_cwd(case_root, "escape")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (case_root / "escape").symlink_to(outside)
+    with pytest.raises(ValueError, match="escapes case root"):
+        _resolve_case_cwd(case_root, "escape")
 
 
 # --------------------------------------------------------------------------
 # Documented-closed claim: "Steps run argv-style (no shell)".
 # --------------------------------------------------------------------------
 
-def test_steps_run_argv_style_so_arguments_are_not_shell_interpreted() -> None:
+def test_steps_run_argv_style_so_arguments_are_not_shell_interpreted(tmp_path) -> None:
     """SECURITY.md: "Steps run argv-style (no shell)"."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        sentinel = cases_root / "PWNED"
-        recorded = "args.txt"
-        case_root = _write_case(
-            cases_root,
-            allrun=(
-                "#!/bin/sh\n"
-                f"printf '%s' \"$1\" > {recorded}\n"
-                f"mkdir -p postProcessing 0.001\n"
-                f"touch postProcessing/{CASE_NAME}_1.txt 0.001/Vm 0.001/AV_Ta\n"
-                "exit 0\n"
-            ),
-        )
-        doc_path = _hand_authored_document(
-            cases_root / "run.json",
-            case_root=case_root,
-            steps=[_step("Allrun", args=[f"; touch {sentinel}"])],
-        )
+    sentinel = tmp_path / "PWNED"
+    recorded = "args.txt"
+    case_root = _write_case(
+        tmp_path / "cases",
+        script=f"#!/bin/sh\nprintf '%s' \"$1\" > {recorded}\ntouch {RAN}\nexit 0\n",
+    )
+    doc_path = _hand_authored_document(
+        tmp_path / "run.json", case_root=case_root,
+        steps=[_step(SCRIPT, args=[f"; touch {sentinel}"])],
+    )
 
-        code, payload = _cli(["run", "--run-document", str(doc_path)])
-        assert code == 0, payload
-        assert not sentinel.exists(), "argument was interpreted by a shell"
-        assert (case_root / recorded).read_text() == f"; touch {sentinel}"
-
-
-# --------------------------------------------------------------------------
-# Documented-closed claim: "config via validate_run" at ingestion.
-# --------------------------------------------------------------------------
-
-def test_invalid_config_blocks_execution_at_ingestion() -> None:
-    """SECURITY.md: the RunDocument's `config` is validated at ingestion ("`config` via `validate_run`") before anything is executed."""
-    from omnidriver.core.plugin_interface import default_driver_context
-
-    active_context = default_driver_context()
-    if "myocardiumSolver" not in {
-        entry.driver_path for entry in active_context.capabilities.dictionaries.entries()
-    }:
-        pytest.skip(
-            f"{active_context.identity.providers[-1].id!r} declares no myocardiumSolver "
-            "catalog entry; this claim needs a cardiac-aware default plugin."
-        )
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(cases_root)
-        doc_path = _hand_authored_document(
-            cases_root / "run.json",
-            case_root=case_root,
-            steps=[_step("Allrun")],
-            config={
-                "anatomy": {},
-                "physics": {"type": "monodomain", "myocardiumSolver": "not-a-real-solver"},
-                "stimulus": {},
-                "solver": {},
-            },
-        )
-        code, payload = _cli(["run", "--run-document", str(doc_path)])
-
-        assert code != 0, payload
-        assert any(
-            d.get("level") == "error" for d in payload.get("diagnostics", ())
-        ), payload
-        assert not (case_root / "0.001").exists(), "config was not gated before execution"
-
-
-def test_non_mapping_config_phase_blocks_execution_at_ingestion() -> None:
-    """A wrong-*type* config phase must produce a diagnostic, not a crash."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(cases_root)
-        doc_path = _hand_authored_document(
-            cases_root / "run.json",
-            case_root=case_root,
-            steps=[_step("Allrun")],
-            config={
-                "anatomy": "not-an-object",
-                "physics": {},
-                "stimulus": {},
-                "solver": {},
-            },
-        )
-        # A traceback escaping `main` would fail here before any assertion.
-        code, payload = _cli(["run", "--run-document", str(doc_path)])
-
-        assert code != 0, payload
-        diagnostics = payload.get("diagnostics", ())
-        assert any(d.get("level") == "error" for d in diagnostics), payload
-        assert any(
-            d.get("field") == "anatomy" and "must be an object" in d.get("message", "")
-            for d in diagnostics
-        ), payload
-        assert not (case_root / "0.001").exists(), "config was not gated before execution"
+    code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
+    assert code == 0, payload
+    assert not sentinel.exists(), "argument was interpreted by a shell"
+    assert (case_root / recorded).read_text() == f"; touch {sentinel}"
 
 
 # --------------------------------------------------------------------------
@@ -671,88 +479,53 @@ def test_non_mapping_config_phase_blocks_execution_at_ingestion() -> None:
 # document to be updated instead of silently going stale.
 # --------------------------------------------------------------------------
 
-def test_case_script_caveat_is_still_documented_and_still_true() -> None:
+def test_case_script_caveat_is_still_documented_and_still_true(tmp_path) -> None:
     """SECURITY.md documents case scripts as "untrusted, unsandboxed by design" -- "running a case runs its code"."""
     text = SECURITY_MD.read_text()
     assert "unsandboxed by design" in text
     assert "Arbitrary code inside an invoked `Allrun`" in text
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        # The Allrun writes *outside* its own case root: nothing confines it.
-        escaped = cases_root / "written-by-allrun.txt"
-        _write_case(
-            cases_root,
-            allrun=(
-                "#!/bin/sh\n"
-                f"printf 'allrun ran unsandboxed' > {escaped}\n"
-                f"mkdir -p postProcessing 0.001\n"
-                f"touch postProcessing/{CASE_NAME}_1.txt 0.001/Vm 0.001/AV_Ta\n"
-                "exit 0\n"
-            ),
-        )
-        doc_path = cases_root / "run.json"
-        _plan_to_file(cases_root, doc_path)
-        code, payload = _cli(["run", "--run-document", str(doc_path)])
+    # The case script writes *outside* its own case root: nothing confines it.
+    escaped = tmp_path / "written-by-the-case-script.txt"
+    case_root = _write_case(
+        tmp_path / "cases",
+        script=f"#!/bin/sh\nprintf 'case script ran unsandboxed' > {escaped}\ntouch {RAN}\nexit 0\n",
+    )
+    doc_path = tmp_path / "run.json"
+    _plan_to_file(case_root, doc_path, tmp_path / "scratch")
+    code, payload = _cli(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
 
-        assert code == 0, payload
-        assert escaped.read_text() == "allrun ran unsandboxed", (
-            "SECURITY.md still claims Allrun contents are unsandboxed; if this "
-            "assertion fails a sandbox was added -- update SECURITY.md."
-        )
+    assert code == 0, payload
+    assert escaped.read_text() == "case script ran unsandboxed", (
+        "SECURITY.md still claims case script contents are unsandboxed; if this "
+        "assertion fails a sandbox was added -- update SECURITY.md."
+    )
 
 
-def test_run_workflow_step_is_still_a_trusted_unvalidating_primitive() -> None:
-    """SECURITY.md: "run_workflow_step is a trusted low-level primitive: a Python caller that invokes it directly with an unvalidated case_root / ..."""
+def test_run_workflow_step_is_still_a_trusted_unvalidating_primitive(tmp_path) -> None:
+    """SECURITY.md: "run_workflow_step is a trusted low-level primitive: a Python caller that invokes it directly with an unvalidated case_root / ..."."""
     text = SECURITY_MD.read_text()
     assert "run_workflow_step` is a trusted low-level primitive" in text
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        root = Path(temp_dir)
-        # Not an OpenFOAM case at all, and a command no allowlist authorizes.
-        bare_dir = root / "not-a-case"
-        bare_dir.mkdir()
-        sentinel = root / "written-by-unvalidated-runner.txt"
-        dag = {
-            "schema_version": "1",
-            "step_status_values": [
-                "pending", "running", "completed", "failed", "skipped",
-            ],
-            "steps": [{
-                "id": "s", "command": "touch", "args": [str(sentinel)],
-                "cwd": ".", "depends_on": [], "produces": [], "consumes": [],
-                "retry_policy": {}, "command_display": "touch",
-            }],
-        }
-        result = run_workflow_step(
-            dag, initial_workflow_state(dag), "s",
-            case_root=bare_dir, log_dir=root / "logs",
-        )
-        assert result.state.steps[0].status == "completed"
-        assert sentinel.exists(), (
-            "SECURITY.md still claims run_workflow_step performs no path/command "
-            "validation; if this fails, validation was added -- update SECURITY.md."
-        )
-
-
-def test_override_values_containing_a_coded_entry_are_rejected() -> None:
-    """Asserts the *mitigated* behaviour: `step --apply` refuses an override whose value smuggles executable OpenFOAM code into a case dictionary."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(cases_root)
-        control_dict = case_root / "system" / "controlDict"
-        control_dict.write_text("deltaT    0.001;\nendTime    1;\n")
-        doc_path = cases_root / "run.json"
-        _plan_to_file(cases_root, doc_path)
-
-        payload = '#codeStream { code #{ os << 0.001; #}; }'
-        overrides = cases_root / "ov.json"
-        overrides.write_text(json.dumps([{"driver_path": "deltaT", "value": payload}]))
-
-        code, report = _cli([
-            "step", "--run-document", str(doc_path), "--step", "run",
-            "--apply", str(overrides),
-        ])
-
-        assert code != 0, report
-        assert "#codeStream" not in control_dict.read_text()
+    # Not a case at all, and a command no allowlist authorizes.
+    bare_dir = tmp_path / "not-a-case"
+    bare_dir.mkdir()
+    sentinel = tmp_path / "written-by-unvalidated-runner.txt"
+    dag = {
+        "schema_version": "1",
+        "step_status_values": ["pending", "running", "completed", "failed", "skipped"],
+        "steps": [{
+            "id": "s", "command": "touch", "args": [str(sentinel)],
+            "cwd": ".", "depends_on": [], "produces": [], "consumes": [],
+            "retry_policy": {}, "command_display": "touch",
+        }],
+    }
+    result = run_workflow_step(
+        dag, initial_workflow_state(dag), "s",
+        case_root=bare_dir, log_dir=tmp_path / "logs",
+    )
+    assert result.state.steps[0].status == "completed"
+    assert sentinel.exists(), (
+        "SECURITY.md still claims run_workflow_step performs no path/command "
+        "validation; if this fails, validation was added -- update SECURITY.md."
+    )

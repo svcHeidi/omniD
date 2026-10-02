@@ -269,23 +269,28 @@ def test_an_allocation_in_the_environment_reaches_the_solver_layer(tmp_path, mon
 # -- the request surface: a study value and the CLI, the same way ---------------
 
 
-def _plan(tmp_path, capsys, *extra, config=None):
+def _plan(tmp_path, capsys, *extra):
     cases_root = _native_toy_case(tmp_path)
-    argv = ["plan", "--strict", "--plugin", PARALLEL_TOY_PLUGIN, "--entry", "toyTutorial",
-            "--cases-root", str(cases_root), "--scratch-dir", str(tmp_path / "scratch"), *extra]
-    if config is not None:
-        config_path = tmp_path / "config.json"
-        config_path.write_text(json.dumps(config))
-        argv += ["--config", str(config_path)]
-    code = main(argv)
+    code = main(["plan", "--strict", "--plugin", PARALLEL_TOY_PLUGIN, "--entry", "toyTutorial",
+                 "--cases-root", str(cases_root), "--scratch-dir", str(tmp_path / "scratch"), *extra])
     return code, json.loads(capsys.readouterr().out)
+
+
+def _plan_with_study(tmp_path, study, cli_study=None):
+    from omnidriver.core.strict_planning import strict_plan
+
+    return strict_plan(
+        "toyTutorial", overrides={"cases_root": str(_native_toy_case(tmp_path)), **study},
+        cli_study=cli_study, scratch_root=tmp_path / "scratch",
+        driver_context=load_plugin_context(PARALLEL_TOY_PLUGIN),
+    ).to_json()
 
 
 def test_the_cli_flag_and_the_study_value_plan_the_same_run(tmp_path, capsys, monkeypatch):
     monkeypatch.delenv("SLURM_NTASKS", raising=False)
     code_cli, from_cli = _plan(tmp_path / "cli", capsys, "--parallel")
-    code_study, from_study = _plan(tmp_path / "study", capsys, config={"toyTutorial": {"parallel": True}})
-    assert code_cli == code_study == 0, (from_cli, from_study)
+    from_study = _plan_with_study(tmp_path / "study", {"parallel": True})
+    assert code_cli == 0, from_cli
 
     def shape(payload):
         document = payload["run_document"]
@@ -306,12 +311,10 @@ def test_a_serial_run_document_says_nothing_of_parallel(tmp_path, capsys):
     assert [s["id"] for s in payload["run_document"]["workflowDag"]["steps"]] == ["solve"]
 
 
-def test_the_cli_and_a_study_that_disagree_are_refused_by_name(tmp_path, capsys):
-    code, payload = _plan(tmp_path, capsys, "--parallel", config={"toyTutorial": {"parallel": False}})
-    assert code == 1
-    assert payload["status"] == "failed"
-    assert "'parallel' is set to different values" in payload["error"]
-    assert "'cli'" in payload["error"]
+def test_the_cli_and_a_study_that_disagree_are_refused_by_name(tmp_path):
+    with pytest.raises(TutorialRecordError, match="'parallel' is set to different values") as caught:
+        _plan_with_study(tmp_path, {"parallel": False}, cli_study={"parallel": True})
+    assert "'cli'" in str(caught.value)
 
 
 def test_the_cli_passes_a_value_to_the_solver_layer(tmp_path, capsys):
@@ -348,17 +351,6 @@ def test_the_flag_is_refused_where_nothing_is_planned(argv, capsys):
     with pytest.raises(SystemExit):
         main(argv)
     assert "--parallel" in capsys.readouterr().err
-
-
-def test_the_flag_is_refused_for_an_entry_that_is_not_a_record(tmp_path, capsys):
-    case = tmp_path / "cases" / "plainCase"
-    case.mkdir(parents=True)
-    code = main(["plan", "--strict", "--plugin", E2E_PLUGIN, "--entry", "plainCase",
-                 "--cases-root", str(tmp_path / "cases"), "--scratch-dir", str(tmp_path / "scratch"),
-                 "--parallel"])
-    payload = json.loads(capsys.readouterr().out)
-    assert code == 1
-    assert "--parallel" in payload["error"] and "tutorial record" in payload["error"]
 
 
 def test_a_sweep_compares_serial_against_parallel_and_both_run(tmp_path, monkeypatch):
@@ -408,22 +400,6 @@ def test_the_sweep_cli_flag_reaches_every_record_case(tmp_path, capsys):
     assert code == 0, payload
     (case,) = payload["cases"]
     assert case["plan"]["run_document"]["resolvedEntry"]["parallel"] == {"requested": True, "allocation": None}
-
-
-def test_the_sweep_cli_flag_is_refused_for_a_sweep_that_is_not_over_a_record(tmp_path, capsys):
-    case = tmp_path / "cases" / "plainCase"
-    (case / "constant").mkdir(parents=True)
-    (case / "constant" / "mesh.json").write_text(json.dumps({"cells": "1"}))
-    spec_path = tmp_path / "sweep.json"
-    spec_path.write_text(json.dumps({
-        "base": {"entry": "plainCase", "cases_root": str(tmp_path / "cases")},
-        "sweep": {"mode": "cross_product", "independent": {"cells": [2]}},
-    }))
-    code = main(["sweep-plan", "--plugin", E2E_PLUGIN, "--spec", str(spec_path),
-                 "--output-dir", str(tmp_path / "out"), "--parallel"])
-    payload = json.loads(capsys.readouterr().out)
-    assert code == 1
-    assert "--parallel applies only to a tutorial record" in payload["spec_error"]
 
 
 def test_run_strict_runs_the_parallel_form_end_to_end(tmp_path, capsys, monkeypatch):

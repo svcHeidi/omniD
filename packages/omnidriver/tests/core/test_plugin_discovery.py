@@ -91,14 +91,6 @@ def test_discovery_is_empty_by_default_and_does_not_raise() -> None:
     assert isinstance(plugin_discovery.discover_plugins(), dict)
 
 
-def test_no_installed_adapter_never_creates_an_environment_fallback(monkeypatch) -> None:
-    monkeypatch.setattr(plugin_discovery, "_entry_points", lambda: ())
-    plugin_discovery._default_selection.cache_clear()
-
-    with pytest.raises(LookupError, match="no adapter is installed"):
-        plugin_discovery.default_discovered_context()
-
-
 class _RivalEntryPoint(_FakeEntryPoint):
     """A second distribution claiming the same entry-point name."""
 
@@ -173,47 +165,24 @@ def _solver_entry_point(name: str):
     return _fake_entry_point(name, lambda: _NamedTestPlugin(name, requires=(_ENV_ID,)))
 
 
-def test_one_solver_tier_root_still_composes_with_no_plugin_flag(monkeypatch) -> None:
-    """Exactly one solver-tier adapter, plus the environment provider it requires, composes with no --plugin needed."""
+def test_a_named_plugin_composes_with_the_environment_provider_it_requires(monkeypatch) -> None:
     monkeypatch.setattr(
         plugin_discovery,
         "_entry_points",
         lambda: (_env_entry_point(), _solver_entry_point("test.solver")),
     )
-    plugin_discovery._default_selection.cache_clear()
 
-    context = plugin_discovery.default_discovered_context()
+    context = plugin_discovery.load_discovered_plugin("test.solver")
 
-    ids = {p.id for p in context.identity.providers}
-    assert ids == {_ENV_ID, "test.solver"}
-
-
-def test_two_independent_solver_tier_plugins_are_refused_by_name(monkeypatch) -> None:
-    """Two adapters with no requires: relationship between them, each only requiring the shared environment provider, must not be silently composed together."""
-    monkeypatch.setattr(
-        plugin_discovery,
-        "_entry_points",
-        lambda: (
-            _env_entry_point(),
-            _solver_entry_point("test.solver-a"),
-            _solver_entry_point("test.solver-b"),
-        ),
-    )
-    plugin_discovery._default_selection.cache_clear()
-
-    with pytest.raises(LookupError, match="test.solver-a") as excinfo:
-        plugin_discovery.default_discovered_context()
-    assert "test.solver-b" in str(excinfo.value)
-    assert "--plugin" in str(excinfo.value)
+    assert {p.id for p in context.identity.providers} == {_ENV_ID, "test.solver"}
 
 
 # -- A broken entry point is refused by name (solver-conformance B-I1) --------
 #
 # A real ``importlib.metadata.EntryPoint`` whose target module does not exist,
 # so ``load()`` raises the genuine ``ModuleNotFoundError`` a half-installed
-# third-party distribution would. Before this, one such entry anywhere in the
-# group aborted default selection and even an explicit ``--plugin`` for an
-# unrelated, working stack, with a bare ``ModuleNotFoundError``.
+# third-party distribution would. One such entry anywhere in the group must
+# not abort an explicit ``--plugin`` for an unrelated, working stack.
 
 _BROKEN_TARGET = "no_such_module_omnidriver_test.plugin:Plugin"
 
@@ -257,20 +226,3 @@ def test_an_unmet_requirement_names_broken_entries_as_possible_providers(monkeyp
         plugin_discovery.load_discovered_plugin("test.solver")
     assert "aaa-broken" in str(excinfo.value)
     assert _BROKEN_TARGET in str(excinfo.value)
-
-
-def test_default_selection_refuses_a_broken_entry_by_name(monkeypatch) -> None:
-    """Refused, not skipped: the broken entry may be the root the user meant, so silently composing the others would change which stack runs."""
-    monkeypatch.setattr(
-        plugin_discovery,
-        "_entry_points",
-        lambda: (_broken_entry_point(), _env_entry_point(), _solver_entry_point("test.solver")),
-    )
-    plugin_discovery._default_selection.cache_clear()
-
-    with pytest.raises(LookupError, match="aaa-broken") as excinfo:
-        plugin_discovery.default_discovered_context()
-    message = str(excinfo.value)
-    assert _BROKEN_TARGET in message
-    assert "No module named 'no_such_module_omnidriver_test'" in message
-    assert "--plugin" in message

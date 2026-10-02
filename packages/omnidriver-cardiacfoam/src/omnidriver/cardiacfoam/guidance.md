@@ -2,7 +2,10 @@
 
 Study keys are `<document>:<dotted.key>`, e.g.
 `constant/electroProperties:singleCellSolverCoeffs.tissue`. `describe` lists
-every key a record's case accepts, in `record_surface.keys`. Each rule in
+every key a record's case accepts, in `record_surface.keys`. A study goes in a
+sweep spec (`sweep-plan`/`sweep-run --spec`, whose `base` names `entry` and
+`cases_root`; a one-case study is a one-value axis). A single `plan`/`run`
+takes the native case as it is, plus `--parallel`. Each rule in
 this first part is one the record-key validator
 (`record_key_validation.record_key_validator`) or the catalogue already
 enforces; none is new. The last section is about the mesh.
@@ -53,8 +56,8 @@ check it; the refusals it names are the record's own.
   **generated**, from a recipe the case owns and every run rebuilds, or
   **supplied**, a finished artifact brought in and not rebuilt. Anything
   from outside the native tree is supplied by you and never discovered.
-  Every cardiacFOAM record today generates its mesh. Supplied inputs for a
-  record are a later item.
+  Every cardiacFOAM record today generates its mesh, and none declares a
+  supplied input.
 - **blockMesh is the default route.** A record runs its native case's own
   route unless the study picks another: `blockMesh` with
   `system/blockMeshDict`, or the dictionary the case's own scripts name. For
@@ -84,8 +87,11 @@ check it; the refusals it names are the record's own.
   shape it with study values and step arguments, for example a `-dict`
   naming a dictionary you composed, or any `-setnumber lc`. What ran, what
   it read and wrote, and the fingerprints are recorded. The choice is yours.
-- **Serial only.** Running the solve in parallel belongs to the OpenFOAM
-  layer (a later item), not to a record's routes.
+- **Serial by default.** Ask for the solve in parallel with the study value
+  `parallel` or `--parallel`. The OpenFOAM layer then decomposes, runs the
+  solve under `mpirun` and reconstructs; N is the case's
+  `system/decomposeParDict:numberOfSubdomains`, and `parallel: N` must equal
+  it. A record's routes do not change.
 - **A route selector need not choose a mesh.**
   `manufacturedMonodomain1D3D`'s selector, `"solver"`, instead picks which
   solve command runs after the same `blockMesh` step: `"coupled"` (the

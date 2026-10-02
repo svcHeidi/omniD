@@ -69,35 +69,6 @@ skip_without_monorepo = pytest.mark.skipif(
 )
 
 
-def _default_adapter_resolves() -> bool:
-    """Whether ``default_driver_context()`` resolves to a single clean answer."""
-    from omnidriver.core.plugin_interface import default_driver_context
-
-    try:
-        default_driver_context()
-    # LookupError: _default_selection's "no adapter" / "every name contested"
-    # cases. ValueError: provider_stack.compose's packaging conflicts (see
-    # above). These are the only two exception types either path can raise.
-    except (LookupError, ValueError):
-        return False
-    return True
-
-
-#: Apply to any test module whose CLI/RunDocument round-trip calls omit
-#: ``--plugin`` and rely on ``default_driver_context()``'s implicit
-#: resolution -- which only succeeds when exactly one adapter is installed.
-#: Distinct from ``skip_without_monorepo``: this is about how many adapter
-#: *packages* are installed, not whether a monorepo checkout exists.
-skip_without_single_adapter = pytest.mark.skipif(
-    not _default_adapter_resolves(),
-    reason=(
-        "Requires exactly one omnidriver.plugins adapter installed so "
-        "default_driver_context() has an unambiguous answer; this test's "
-        "CLI calls omit --plugin. See test-openfoam's CI job."
-    ),
-)
-
-
 @pytest.fixture
 def driver_context_for_installed_plugins() -> list:
     """A :class:`DriverContext` per discoverable plugin, skipping when none is installed."""

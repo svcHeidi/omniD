@@ -12,11 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
-from .configuration_source import resolve_configuration_source
 from .models import DataArtifact, data_artifact_from_json
-# _case_is_runnable is a private helper reused as-is rather than promoted to
-# a public API.
-from .registry import _case_is_runnable
 from .run_model import RunDocument
 from .workflow import normalize_workflow_dag, validate_workflow_commands, workflow_output_artifacts
 from .workflow_state import (
@@ -26,7 +22,6 @@ from .workflow_state import (
 )
 from omnidriver.core.planning_types import SimulationAuditItem, StrictDiagnostic, diagnostic
 from omnidriver.core.provider_identity import stack_identity_mismatch
-from omnidriver.core.specs.validation import validate_run
 
 if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
@@ -35,18 +30,6 @@ if TYPE_CHECKING:
 #: The RunDocument's on-disk filename, named once here rather than restated
 #: as a literal at each write/read site.
 RUN_DOCUMENT_FILENAME = "run_document.json"
-
-
-def _is_record_run_with_steps(run_doc: RunDocument) -> bool:
-    """A tutorial-record run whose document carries the record's steps is
-    runnable without asking the adapter's ``is_case_runnable_without_workflow``,
-    since the record itself supplies the workflow DAG -- the wrong question
-    for core to ask here. ``resolvedEntry.entryKind`` is stated by the
-    planner, the same way ``configurationSource`` is stated rather than
-    inferred."""
-    resolved = run_doc.resolvedEntry if isinstance(run_doc.resolvedEntry, dict) else {}
-    dag = run_doc.workflowDag if isinstance(run_doc.workflowDag, dict) else {}
-    return resolved.get("entryKind") == "tutorial_record" and bool(dag.get("steps"))
 
 
 @dataclass(frozen=True)
@@ -102,29 +85,6 @@ def _allowed_runs_root(env: dict[str, str] | None = None) -> Path | None:
     return Path(value).resolve()
 
 
-def _validate_config_against_plugin_schema(
-    run_doc: RunDocument,
-    driver_context: "DriverContext",
-    diagnostics: list[StrictDiagnostic],
-) -> None:
-    """Append a ``plugin_config_schema_violation`` diagnostic per violation,
-    mirroring ``run_document_adapter``'s emission-side check so planner and
-    executor stay symmetric."""
-    import jsonschema
-
-    config_schema = driver_context.capabilities.run_document_configuration.schema()
-    try:
-        jsonschema.validate(run_doc.config, config_schema)
-    except jsonschema.exceptions.ValidationError as exc:
-        diagnostics.append(diagnostic(
-            "error",
-            "plugin_config_schema_violation",
-            f"Plugin-declared config schema rejected the run document config: "
-            f"{exc.message}",
-            field=".".join(str(part) for part in exc.absolute_path) or "config",
-        ))
-
-
 def build_execution_inputs(
     run_doc: RunDocument,
     *,
@@ -160,32 +120,7 @@ def build_execution_inputs(
                 field="plugin",
             ))
 
-    # 1) Config validity against the selected plugin's live dictionary
-    # catalog and semantic validators, plus the plugin-declared config
-    # schema (1b) -- but only when this document's own `config` is the
-    # configuration to check. `run_doc.configurationSource` states that
-    # explicitly, and `resolve_configuration_source` is the SAME function
-    # `run_document_adapter._run_document_from_case` calls on the emission
-    # path, so a config the planner would refuse to emit is a config the
-    # executor refuses to ingest -- one rule, not two that can drift.
-    #
-    # An ingested, agent-authored document is untrusted: declaring "case" is
-    # refused outright when `config` is not actually empty -- an attacker
-    # cannot use "case" to smuggle unvalidated document config past this
-    # gate, and the plugin-identity check just above still applies
-    # regardless of `configurationSource`.
-    source_decision = resolve_configuration_source(
-        getattr(run_doc, "configurationSource", None), run_doc.config,
-    )
-    diagnostics.extend(source_decision.diagnostics)
-    if source_decision.validate_document_config:
-        # `validate_run` already returns the canonical `StrictDiagnostic`
-        # shape (with `source` carrying the phase), so these pass through
-        # unchanged.
-        diagnostics.extend(validate_run(run_doc, driver_context=driver_context))
-        _validate_config_against_plugin_schema(run_doc, driver_context, diagnostics)
-
-    # 2) Expected artifacts: reconstruct, reporting any malformed entry.
+    # 1) Expected artifacts: reconstruct, reporting any malformed entry.
     expected_artifacts: list[DataArtifact] = []
     raw_artifacts = run_doc.expectedArtifacts
     if not isinstance(raw_artifacts, (list, tuple)):
@@ -203,7 +138,7 @@ def build_execution_inputs(
                 diagnostic("error", "invalid_expected_artifact", str(exc), field="expectedArtifacts")
             )
 
-    # 3) Re-normalize the supplied DAG so a hand-authored workflow gets the
+    # 2) Re-normalize the supplied DAG so a hand-authored workflow gets the
     #    same shape guarantees and diagnostics as a strict-planned one.
     dag, wf_diagnostics = normalize_workflow_dag(
         run_doc.workflowDag,
@@ -214,11 +149,11 @@ def build_execution_inputs(
     for d in wf_diagnostics:
         diagnostics.append(diagnostic(d.level, d.code, d.message, field=d.field))
 
-    # 4) Command allowlist — same gate as the --entry path.
+    # 3) Command allowlist — same gate as the --entry path.
     for d in validate_workflow_commands(dag, driver_context=driver_context):
         diagnostics.append(diagnostic(d.level, d.code, d.message, field=d.field))
 
-    # 5) Launch paths are mandatory for execution.
+    # 4) Launch paths are mandatory for execution.
     raw_launch = run_doc.launch
     if raw_launch is None:
         launch: dict[str, Any] = {}
@@ -246,9 +181,7 @@ def build_execution_inputs(
             field="launch.outputDir",
         ))
 
-    # 5b) Validate + canonicalize launch paths against the selected adapter's
-    # case contract. caseRoot is the solver/environment output base and must
-    # be runnable according to that adapter. Resolve (follow symlinks) so all
+    # 4b) Canonicalize the launch paths: resolve (follow symlinks) so all
     # downstream checks and the artifact gate use one canonical absolute path.
     resolved_case_root: Path | None = None
     if case_root_raw:
@@ -264,16 +197,6 @@ def build_execution_inputs(
             diagnostics.append(diagnostic(
                 "error", "case_root_not_a_directory",
                 f"Run document launch.caseRoot is not a directory: {case_root_raw}.",
-                field="launch.caseRoot",
-            ))
-            resolved_case_root = None
-        elif not _is_record_run_with_steps(run_doc) and not _case_is_runnable(
-            resolved_case_root, driver_context=driver_context,
-        ):
-            diagnostics.append(diagnostic(
-                "error", "case_root_not_a_runnable_case",
-                f"Run document launch.caseRoot is not runnable according to the "
-                f"selected adapter: {case_root_raw}.",
                 field="launch.caseRoot",
             ))
             resolved_case_root = None
@@ -314,7 +237,7 @@ def build_execution_inputs(
                 field="launch.outputDir",
             ))
 
-    # 6) Workflow state: prefer the document's snapshot, else derive from DAG.
+    # 5) Workflow state: prefer the document's snapshot, else derive from DAG.
     workflow_state: WorkflowRunState | None
     if run_doc.workflowState is not None:
         try:

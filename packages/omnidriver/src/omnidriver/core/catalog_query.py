@@ -19,9 +19,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
 from .runtime.record_surface import ANY_KEY, key_pattern, lists_key
+from .tutorial_records import lookup_record
 
 if TYPE_CHECKING:
     from .plugin_interface import DriverContext
+    from .tutorial_records import TutorialRecord
 
 
 def _matches(entry: Mapping[str, Any], document: str | None, key: str | None) -> bool:
@@ -82,22 +84,14 @@ def uncatalogued_query(driver_context: "DriverContext", *, cache_root: Path | No
 
 
 def catalog_query(
-    entry: str,
+    entry: "str | TutorialRecord",
     *,
     cases_root: Path,
     document: str | None = None,
     key: str | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
-    from .runtime.registry import resolve_entry
-    from .tutorial_records import TutorialRecordError
-
-    resolution = resolve_entry(entry, overrides={"cases_root": str(cases_root)}, driver_context=driver_context)
-    if resolution["resolution"] != "tutorial_record":
-        raise TutorialRecordError(
-            f"catalog lists a tutorial record's keys, and {entry!r} is not a tutorial record"
-        )
-    record = resolution["record"]
+    record = lookup_record(entry, driver_context=driver_context)
     native_case_root = Path(cases_root) / record.native_case_relpath
     cxx = cxx_evidence(driver_context, os.environ)
     values = (cxx or {}).get("selector_values", {})
@@ -114,7 +108,7 @@ def catalog_query(
         cxx["uncatalogued"] = len(cxx["uncatalogued"])
         cxx["unresolved"] = len(cxx["unresolved"])
     return {
-        "entry": entry,
+        "entry": record.name,
         "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
         "native_case_root": str(native_case_root),
         "document": document,

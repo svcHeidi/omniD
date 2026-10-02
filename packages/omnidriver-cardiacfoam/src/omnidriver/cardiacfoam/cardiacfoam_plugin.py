@@ -197,12 +197,6 @@ class CardiacFoamPlugin:
 
         return samplable_fields(resolved)
 
-    def get_override_schema(self, tutorial_name: str, make_spec_info: dict) -> dict:
-        """cardiacFoam's authored --config schema, including a worked example."""
-        from omnidriver.cardiacfoam.override_schema import config_schema
-
-        return config_schema(tutorial_name, make_spec_info)
-
     def get_solve_step_commands(self) -> frozenset:
         """Commands that actually run the solver, for telemetry collection."""
         from omnidriver.cardiacfoam.runtime_evidence import (
@@ -287,18 +281,6 @@ class CardiacFoamPlugin:
             self.get_dictionary_catalog(), self.get_dict_groups(),
         )
 
-    def get_config_resolution_description(self) -> str:
-        """Which files resolve into a valid RunDocument config, in one sentence.
-
-        Moved here from core's absent_describe_config_resolution fallback, which
-        hardcoded this string behind a plugin_id check. Core owning a sentence
-        about electroProperties was the last reachable cardiac gate.
-        """
-        return (
-            "physicsProperties and electroProperties resolve into a valid "
-            "RunDocument config."
-        )
-
     def get_report_catalog(self) -> tuple:
         """Post-run reports this plugin offers. Core owns the machinery; the
         catalog is plugin data."""
@@ -370,14 +352,6 @@ class CardiacFoamPlugin:
         from omnidriver.cardiacfoam.records import TUTORIAL_RECORDS
 
         return TUTORIAL_RECORDS
-
-    def get_generic_case_factory(self):
-        # This plugin's own marker-aware case-folder wrapper, supplying
-        # cardiacFOAM's dictionary files and mutation callback in place of
-        # core's neutral default.
-        from omnidriver.cardiacfoam.generic_case import make_generic_case_spec
-
-        return make_generic_case_spec
 
     def validate_configuration(self, spec: TutorialSpec) -> tuple[StrictDiagnostic, ...]:
         from pathlib import Path
@@ -476,53 +450,6 @@ class CardiacFoamPlugin:
         from omnidriver.cardiacfoam.artifacts_predictor import predict_cardiac_artifacts
         return predict_cardiac_artifacts(case_root, spec)
 
-    def build_run_document_config(self, spec):
-        from omnidriver.cardiacfoam.run_document_config import build_config
-
-        return build_config(spec)
-
-    def get_run_document_config_schema(self) -> dict:
-        """cardiacFoam's RunDocument.config JSON Schema (the phase vocabulary)."""
-        from omnidriver.cardiacfoam.config_schema import (
-            get_run_document_config_schema,
-        )
-
-        return get_run_document_config_schema()
-
-    def has_case_marker(self, case_root: Path) -> bool:
-        """Return the historical cardiac case-folder discovery evidence."""
-        from omnidriver.cardiacfoam.case_compatibility import has_case_marker
-
-        return has_case_marker(case_root)
-
-    def is_case_runnable_without_workflow(self, case_root: Path) -> bool:
-        """Preserve legacy runnability for uncontracted cardiac cases."""
-        from omnidriver.cardiacfoam.case_compatibility import (
-            is_runnable_without_workflow,
-        )
-
-        return is_runnable_without_workflow(case_root)
-
-    def route_sweep_case_values(
-        self,
-        *,
-        base,
-        resolved_axis_values,
-        driver_context,
-    ):
-        from omnidriver.cardiacfoam.sweep import route_case_values
-
-        return route_case_values(
-            base=base,
-            resolved_axis_values=resolved_axis_values,
-            driver_context=driver_context,
-        )
-
-    def materialize_sweep_case(self, *, case_dir: Path, routed) -> None:
-        from omnidriver.cardiacfoam.sweep import materialize_case
-
-        materialize_case(case_dir=case_dir, routed=routed)
-
     def get_solver_commands(self) -> frozenset[str]:
         """This plugin's artifact-producing solver commands."""
         from omnidriver.cardiacfoam.command_authorization import (
@@ -556,23 +483,3 @@ class CardiacFoamPlugin:
         )
 
         return utility_roots()
-
-    def is_nondimensional_case(self, spec) -> bool:
-        from omnidriver.cardiacfoam.planning_policy import (
-            is_nondimensional_case,
-        )
-
-        return is_nondimensional_case(spec)
-
-    def get_mesh_geometry_diagnostics(self, case_root: Path) -> tuple:
-        """Scale checks for point sets core's region discovery cannot see.
-
-        cardiacFoam cases may carry a Purkinje conduction tree in
-        ``constant/purkinjeGraph*`` -- a Foam dictionary with its own point
-        list, not a mesh region.
-        """
-        from omnidriver.cardiacfoam.mesh_geometry import (
-            purkinje_graph_diagnostics,
-        )
-
-        return purkinje_graph_diagnostics(case_root)

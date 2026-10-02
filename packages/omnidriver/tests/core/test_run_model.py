@@ -28,13 +28,6 @@ def _valid_run_dict():
         "createdAt": "2026-04-20T10:00:00Z",
         "lastModified": "2026-04-20T10:00:00Z",
         "status": "draft",
-        "config": {
-            "anatomy": {},
-            "physics": {},
-            "stimulus": {},
-            "solver": {},
-        },
-        "configurationSource": "document",
         "validation": {},
         "resolvedEntry": None,
         "workflowDag": None,
@@ -60,31 +53,10 @@ def test_run_document_round_trip():
     doc = RunDocument.from_json(_valid_run_dict())
     back = doc.to_json()
     assert back["id"] == "run-0001"
-    assert back["config"]["anatomy"] == {}
     assert back["status"] == "draft"
     assert back["version"] == "3"
 
 
-def test_schema_accepts_valid_heterogeneity_block(schema):
-    doc = _valid_run_dict()
-    doc["config"]["physics"] = {
-        "myocardiumSolver": "monodomainSolver",
-        "ionicModel": "BuenoOrovio",
-        "tissue": "epicardialCells",
-        "ionicHeterogeneity.field": "t",
-        "ionicHeterogeneity.mode": "namedRegions",
-        "ionicHeterogeneity.transitionMode": "blend",
-        "ionicHeterogeneity.smoothing": "smoothstep",
-    }
-    jsonschema.validate(doc, schema)  # does not raise
-
-
-def test_schema_still_allows_unlisted_physics_keys(schema):
-    # additionalProperties stays open: the dict-catalog has far more keys
-    # than the schema enumerates.
-    doc = _valid_run_dict()
-    doc["config"]["physics"] = {"someUncataloguedKey": "x"}
-    jsonschema.validate(doc, schema)  # does not raise
 
 
 def test_schema_accepts_normalized_workflow_dag(schema):
@@ -250,39 +222,9 @@ def test_core_declares_no_phase_vocabulary() -> None:
     assert not hasattr(run_model, "Phase")
 
 
-def test_run_document_config_accepts_arbitrary_non_cardiac_keys() -> None:
-    """A non-cardiac plugin's config shape (no anatomy/physics/stimulus/solver keys at all) must pass core schema validation -- the core schema no longer enforces a fixed phase vocabulary."""
-    from omnidriver.core.runtime.run_model import RunDocument
-
-    doc = RunDocument(
-        id="plan-non-cardiac",
-        name="non-cardiac-entry",
-        status="draft",
-        config={"mesh": {"type": "tet"}, "material": {"model": "neoHookean"}},
-        configurationSource="document",
-    )
-    payload = doc.to_json()
-    assert payload["config"] == {"mesh": {"type": "tet"}, "material": {"model": "neoHookean"}}
-
-
-def test_schema_rejects_missing_configuration_source(schema):
-    """Step 4c: a document that omits `configurationSource` is refused by name, not silently treated as any particular source."""
-    bad = _valid_run_dict()
-    del bad["configurationSource"]
+@pytest.mark.parametrize("retired", ["config", "configurationSource"])
+def test_a_document_carrying_a_retired_field_is_refused_not_translated(retired):
+    old = _valid_run_dict()
+    old[retired] = {} if retired == "config" else "document"
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(bad, schema)
-
-
-def test_schema_rejects_unknown_configuration_source(schema):
-    """An agent-authored value outside the closed enum is refused, not coerced or ignored -- there is no third source and no default."""
-    bad = _valid_run_dict()
-    bad["configurationSource"] = "somewhere-else"
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(bad, schema)
-
-
-def test_from_json_refuses_a_document_missing_configuration_source():
-    bad = _valid_run_dict()
-    del bad["configurationSource"]
-    with pytest.raises(jsonschema.ValidationError):
-        RunDocument.from_json(bad)
+        RunDocument.from_json(old)

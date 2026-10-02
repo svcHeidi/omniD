@@ -185,9 +185,6 @@ def test_distinct_case_file_paths_compose():
     composed = provider_stack.compose(
         provider_stack.order_providers([env, solver])
     )
-    assert sorted(composed.case_files.required_files()) == [
-        "constant/electroProperties", "system/controlDict",
-    ]
     assert sorted(rule.path for rule in composed.case_files.all_rules()) == [
         "constant/electroProperties", "system/controlDict",
     ]

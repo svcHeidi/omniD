@@ -43,8 +43,7 @@ def own_driver_context():
 
     Fresh per call -- a context is cheap and callers are entitled to mutate
     what they are given. Imports are function-local because
-    ``cardiacfoam_plugin`` reaches back into ``generic_case``, one of this
-    helper's own callers.
+    ``cardiacfoam_plugin`` imports modules that call this helper.
 
     Composes the OpenFOAM environment adapter, which ``plugin.yaml`` declares
     under ``requires``: a single-provider stack here would make

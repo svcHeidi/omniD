@@ -1,6 +1,6 @@
 # omnidriver security model
 
-omnidriver lets a semi-trusted agent author a `RunDocument` (config + workflow
+omnidriver lets a semi-trusted agent author a `RunDocument` (workflow
 DAG + launch paths) that the strict executor runs as subprocesses. This is the
 threat model the code is written against. It assumes a local, single-tenant
 host.
@@ -14,14 +14,12 @@ host.
 - **Agent-provided (validated at ingestion):** the `RunDocument`. Validation
   happens once, at ingestion — `RunDocument` load + `build_execution_inputs` +
   the CLI `run`/`step` path:
-  - `config` via `validate_run`.
   - `workflowDag` normalized, then the command allowlist
     (`validate_workflow_commands`) — a known OpenFOAM/driver command, an
     `Allrun`-family case script, a registered utility, or an installed OpenFOAM
     app. Absolute-path and arbitrary `./script` commands are rejected.
-  - `launch.caseRoot` must be an existing, runnable OpenFOAM case
-    (`registry._case_is_runnable`); `caseRoot`/`outputDir` are resolved to
-    canonical absolute paths; when `OMNIDRIVER_ALLOWED_RUNS_ROOT` is set, both
+  - `launch.caseRoot` must be an existing directory; `caseRoot`/`outputDir`
+    are resolved to canonical absolute paths; when `OMNIDRIVER_ALLOWED_RUNS_ROOT` is set, both
     must resolve under it.
   This is the only path untrusted document content reaches execution.
 - **Case-authored (untrusted, unsandboxed by design):** the contents of
@@ -52,7 +50,7 @@ results directory — it is not forced under `caseRoot`.
   `future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md` for the full
   reasoning and the six call sites this touches.
 - Workflow `cwd` cannot escape `caseRoot`.
-- `caseRoot` must be a runnable OpenFOAM case; `caseRoot`/`outputDir` resolved to
+- `caseRoot` must be an existing directory; `caseRoot`/`outputDir` resolved to
   canonical paths; opt-in `OMNIDRIVER_ALLOWED_RUNS_ROOT` containment.
   **Corrected 2026-09-26 (final review M10):** this variable was renamed from
   `DRIVERFOAM_ALLOWED_RUNS_ROOT` with no dated note at the time, against this

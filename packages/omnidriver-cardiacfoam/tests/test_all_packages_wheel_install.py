@@ -153,7 +153,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         env=clean_environment,
     )
     payload = json.loads(describe)
-    assert payload["resolved_name"] == "niederer2011"
+    assert payload["entry"]["entry_name"] == "niederer2011"
     # Providers are ordered least-specific first; cardiacFoam is the last.
     assert (
         payload["capability_manifest"]["plugin_identity"]["providers"][-1]["id"]
@@ -177,7 +177,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         env=clean_environment,
     )
     cardiaccore_payload = json.loads(cardiaccore_describe)
-    assert cardiaccore_payload["resolved_name"] == "humanSlab"
+    assert cardiaccore_payload["entry"]["entry_name"] == "humanSlab"
     assert (
         cardiaccore_payload["capability_manifest"]["plugin_identity"]["providers"][-1]["id"]
         == "org.omnidriver.cardiaccore"

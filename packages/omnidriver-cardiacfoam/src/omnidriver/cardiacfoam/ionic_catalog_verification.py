@@ -270,8 +270,8 @@ def _synthesize_case(case_dir: Path, model: str, entry: Any) -> None:
     (case_dir / "system" / "controlDict").write_text(build_control_dict())
 
     # electroModel.C requires a real fvMesh regardless of solver, so the
-    # utility needs one meshed the same way as every other case_folder case:
-    # a blockMeshDict. Writing it here costs no OpenFOAM binary --
+    # utility needs one meshed the same way as every other case: a
+    # blockMeshDict. Writing it here costs no OpenFOAM binary --
     # `test_case_synthesis_works_without_the_solver`
     # exercises exactly this function without one; running `blockMesh`
     # itself is `_verify_one`'s job, which already requires the environment

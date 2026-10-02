@@ -90,11 +90,6 @@ class OpenFOAMEnvironmentPlugin:
     def predict_data_artifacts(self, case_root, spec):
         return ()
 
-    def get_base_mesh_geometry_diagnostics(self, case_root):
-        from .mesh_geometry import mesh_geometry_diagnostics
-
-        return mesh_geometry_diagnostics(case_root)
-
     def get_environment_diagnostics(
         self, workflow_dag, *, env=None, environment_source=None, driver_context=None,
     ):
@@ -170,20 +165,12 @@ class OpenFOAMEnvironmentPlugin:
         ) if Path(case_root).is_dir() else []
         return (start, *(f"{name}/{start}" for name in replicas))
 
-    def get_function_object_field_diagnostics(self, case_root, *, samplable):
-        from .function_object_fields import function_object_field_diagnostics
+    def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
+        from .plan_diagnostics import plan_diagnostics
 
-        return function_object_field_diagnostics(case_root, samplable=samplable)
-
-    def get_case_dict_key_diagnostics(
-        self, case_root, *, catalogued_paths, dict_relpaths,
-    ):
-        from .case_dict_keys import case_dict_key_diagnostics
-
-        return case_dict_key_diagnostics(
-            case_root,
-            catalogued_paths=catalogued_paths,
-            dict_relpaths=dict_relpaths,
+        return plan_diagnostics(
+            case_root, workflow_dag=workflow_dag, env=env,
+            scratch_root=scratch_root, driver_context=driver_context,
         )
 
     def apply_overrides(
@@ -259,10 +246,6 @@ class OpenFOAMEnvironmentPlugin:
 
     def get_case_runtime_conventions(self):
         return openfoam_case_runtime_conventions()
-
-    def build_run_document_config(self, spec):
-        del spec
-        return {}, ()
 
     # -- CaseWriterCapability: format ownership -------------------------------
     def get_rendered_formats(self) -> "frozenset[str]":

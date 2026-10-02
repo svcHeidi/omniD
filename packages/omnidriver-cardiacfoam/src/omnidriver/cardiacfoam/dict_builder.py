@@ -35,7 +35,7 @@ text from selectors + overrides. The pipeline reuses the existing dict-entry
 catalog (`dict_entries.py`), the structured-constraint validator
 (`validation.py`), and the path conventions encoded in `slot_key`.
 
-The builder composes existing primitives. Every output passes through `validate_run`
+The builder composes existing primitives. Every output passes through `validate_context`
 before being returned; an agent that gets a string back is guaranteed it
 is validator-clean.
 """
@@ -50,7 +50,6 @@ from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_group
 from omnidriver.openfoam.dict_builder import (
     _PLACEHOLDER_RE,
     _openfoam_value_token,
-    _populated_to_run,
     _serialize_block,
     _set_nested,
     populate_values,
@@ -63,7 +62,7 @@ from omnidriver.core.case_write import CaseMutationRequest, ParameterAssignment,
 from omnidriver.core.specs.validation import (
     _predicate_matches,
     slot_key,
-    validate_run,
+    validate_context,
 )
 
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
@@ -288,7 +287,7 @@ def build_electro_properties(
 
     Raises:
         ValueError: required+applicable entry has no value, mutex violation,
-            or any structured-constraint violation from `validate_run`.
+            or any structured-constraint violation from `validate_context`.
     """
     context = resolve_context(selectors, overrides=overrides)
 
@@ -307,11 +306,10 @@ def build_electro_properties(
     # does), so we don't pre-call `check_required` from the public builder
     # entry-point. `check_required` stays exported for callers that want
     # just the required-field subset.
-    context_ = own_driver_context()
-    run = _populated_to_run(
-        populated, entries, context_.capabilities.dictionaries.phases(),
-    )
-    errors = [e for e in validate_run(run, entries=entries, driver_context=context_) if e.level == "error"]
+    errors = [
+        e for e in validate_context(populated, entries=entries, driver_context=own_driver_context())
+        if e.level == "error"
+    ]
     if errors:
         raise ValueError(
             "build_electro_properties: validator rejected synthesised dict:\n  - "
@@ -326,7 +324,6 @@ def build_electro_properties(
 _SELECTOR_KEYS: frozenset[str] = frozenset(
     {"myocardiumSolver", "ionicModel", "tissue", "conductivitySource"}
 )
-SELECTOR_KEYS: frozenset[str] = _SELECTOR_KEYS  # public alias for external consumers (e.g. sweep_routing.py)
 
 _COEFFS_PREFIX = "$ELECTRO_MODEL_COEFFS."
 
@@ -846,7 +843,7 @@ def build_physics_properties(
 
     Raises:
         ValueError: required entry has no value, or any structured
-            constraint violation from `validate_run`.
+            constraint violation from `validate_context`.
     """
     context = resolve_context(selectors, overrides=overrides)
     # Scope to physics entries — electro entries don't belong here.
@@ -855,11 +852,10 @@ def build_physics_properties(
         entries, context, typical_value_fallback=typical_value_fallback,
     )
 
-    context_ = own_driver_context()
-    run = _populated_to_run(
-        populated, entries, context_.capabilities.dictionaries.phases(),
-    )
-    errors = [e for e in validate_run(run, entries=entries, driver_context=context_) if e.level == "error"]
+    errors = [
+        e for e in validate_context(populated, entries=entries, driver_context=own_driver_context())
+        if e.level == "error"
+    ]
     if errors:
         raise ValueError(
             "build_physics_properties: validator rejected synthesised dict:\n  - "
@@ -885,8 +881,7 @@ def _typed_value(value: Any) -> tuple[str, Any]:
     """The `ParameterAssignment` kind and coerced value for one selector or
     override value.
 
-    A selector/override value here is `Any`-typed at the call site
-    (`electro_overrides: dict[str, Any]` in `sweep.py`), but a
+    A selector/override value here is `Any`-typed at the call site, but a
     `ParameterAssignment` carries typed data, never rendered text -- so a
     value this cannot type is refused by name rather than silently
     flattened to a string. No current caller supplies one (every
@@ -1163,11 +1158,8 @@ def build_case(
     `include_allrun`: when True, a hand-runnable ``Allrun`` joins this same
     plan -- see `resolve_synthesis_mutation`'s own
     handling of the `$CARDIACFOAM.synthesis.include_allrun` meta parameter
-    this sets below. This is not `dry_run`-gated either:
-    `sweep.py::materialize_case` is the one production caller and always
-    wants the script written whether or not the case is also being launched
-    immediately, and `Allrun` is a case input, not part of the filesystem
-    effect a dry run exists to skip."""
+    this sets below. This is not `dry_run`-gated either: `Allrun` is a case
+    input, not part of the filesystem effect a dry run exists to skip."""
     from pathlib import Path as _Path
     import datetime as _datetime
     import tempfile as _tempfile
@@ -1304,7 +1296,7 @@ def build_and_launch(
 ) -> dict:
     """Build both dicts and write them, through one committed case-write
     plan, to ``case_dir``. Nothing is launched: run the written case with
-    ``omnidriver run --strict`` (``--entry-kind case_folder``).
+    ``omnidriver run --strict --case <case_dir>``.
 
     Args:
         electro_selectors: selectors for build_electro_properties.
@@ -1330,10 +1322,7 @@ def build_and_launch(
         include_allrun: when True, a hand-runnable ``Allrun`` joins the same
             committed plan as the dictionaries above -- see ``build_case``'s
             own docstring for
-            the exact rule. ``sweep.py::materialize_case`` is the one
-            production caller and always passes True; every other caller
-            (tests, a direct launch with no sweep involved) keeps the
-            pre-existing default of no ``Allrun`` at all.
+            the exact rule. Default: no ``Allrun``.
 
     Returns:
         A dict carrying ``case_dir`` (str), ``status`` (``"dry_run_complete"``

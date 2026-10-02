@@ -61,13 +61,6 @@ class _Plugin:
     def get_capabilities(self):
         return {}
 
-    def get_generic_case_factory(self):
-        # A per-instance-distinguishable answer: proves context isolation
-        # the same way the deleted `get_tutorial_catalog`'s per-instance
-        # `registered_tutorials` name used to (step S6).
-        tutorial_name = self._tutorial_name
-        return lambda **_: tutorial_name
-
     def validate_configuration(self, spec):
         return ()
 
@@ -97,15 +90,9 @@ class _Plugin:
         del resolved
         return {}
 
-    def get_override_schema(self, tutorial_name, make_spec_info):
-        del tutorial_name, make_spec_info
-        return {}
-
-    def get_run_document_config_schema(self) -> dict:
-        return {"type": "object", "additionalProperties": True}
-
     def get_dict_entry_catalog(self):
-        return {}
+        # A per-instance-distinguishable answer: proves context isolation.
+        return {self._tutorial_name: ()}
 
     def get_solve_step_commands(self) -> frozenset:
         return frozenset()
@@ -124,7 +111,8 @@ class _Plugin:
 
 
 def _named_factory(context) -> str:
-    return context.capabilities.generic_case_factory.factory()()
+    (name,) = context.capabilities.override_schema.dict_entry_catalog()
+    return name
 
 
 def test_contexts_do_not_share_plugin_selection() -> None:

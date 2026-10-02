@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable, Mapping, Protocol, TYPE_CHECKING
+from typing import Any, Mapping, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .plugin_interface import SolverPlugin
@@ -47,40 +47,6 @@ class ArtifactPredictionRequest:
 
 
 @dataclass(frozen=True)
-class RunDocumentConfigurationRequest:
-    """Input to :class:`RunDocumentConfigurationCapability`: the spec whose
-    plugin-owned RunDocument ``config`` object is to be built."""
-
-    spec: "TutorialSpec"
-
-
-@dataclass(frozen=True)
-class CaseCompatibilityRequest:
-    """Input to :class:`CaseCompatibilityCapability`: the case folder to judge
-    by filesystem evidence, before any dictionary is parsed."""
-
-    case_root: Path
-
-
-@dataclass(frozen=True)
-class SweepRoutingRequest:
-    """Input to :class:`SweepMaterializerCapability` ``route``: the sweep's
-    static base values plus one expanded axis combination from core."""
-
-    base: dict[str, Any]
-    resolved_axis_values: dict[str, Any]
-
-
-@dataclass(frozen=True)
-class SweepMaterializationRequest:
-    """Input to :class:`SweepMaterializerCapability` ``materialize``: where to
-    write, and the routed values ``route`` produced for this case."""
-
-    case_dir: Path
-    routed: dict[str, Any]
-
-
-@dataclass(frozen=True)
 class ResolvedInput:
     """One field-level input a solver plugin's case model resolves to an
     actual on-disk path -- or fails to.
@@ -108,7 +74,6 @@ class CaseRuntimeConventions:
     neutral: no authored path is silently removed from a staged case.
     """
 
-    output_collection_relpath: str | None = None
     generated_directory_names: tuple[str, ...] = ()
     generated_file_names: tuple[str, ...] = ()
     generated_file_prefixes: tuple[str, ...] = ()
@@ -117,7 +82,6 @@ class CaseRuntimeConventions:
     generated_case_markers: tuple[str, ...] = ()
     case_entrypoints: tuple[str, ...] = ()
     case_script_commands: tuple[str, ...] = ()
-    case_discovery_ignored_directory_names: tuple[str, ...] = ()
     #: fnmatch globs naming a directory, at any depth in the case tree, that
     #: holds one replica of the case per parallel rank (OpenFOAM:
     #: ``processor*``). Core skips them when staging and discovering cases
@@ -192,22 +156,6 @@ class RuntimeDependency:
     required: bool
 
 
-class GenericCaseFactoryCapability(Protocol):
-    """A plugin's own generic-case-folder factory, when it wants to override
-    core's own (``core.runtime.generic_case.make_generic_case_spec``).
-
-    Optional-neutral: absent, or the whole hook, answers ``None`` --
-    ``registry.resolve_entry`` falls back to core's own factory.
-
-    :adapts: get_generic_case_factory
-    :consumed-by: omnidriver/core/runtime/registry.py
-    :fallback: none
-    :status: get_generic_case_factory=optional-neutral
-    """
-
-    def factory(self) -> Callable[..., Any] | None: ...
-
-
 class DictionaryCatalogCapability(Protocol):
     """The plugin's dictionary vocabulary, in three shapes for three callers.
 
@@ -224,7 +172,7 @@ class DictionaryCatalogCapability(Protocol):
     plugin's).
 
     :adapts: get_dict_entries, get_dict_groups, get_dictionary_catalog, get_phases
-    :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/dict_entries.py, omnidriver/cardiacfoam/sweep.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/dict_builder.py, omnidriver/core/specs/validation.py, omnidriver/core/strict_planning.py
+    :consumed-by: omnidriver/dict_entries.py, omnidriver/cardiacfoam/dict_entries.py, omnidriver/openfoam/apply_overrides.py, omnidriver/openfoam/plan_diagnostics.py, omnidriver/core/specs/validation.py
     :fallback: absent_phases
     :status: optional-neutral
     """
@@ -313,31 +261,6 @@ class ArtifactPredictorCapability(Protocol):
     def predict(self, request: ArtifactPredictionRequest) -> tuple["DataArtifact", ...]: ...
 
 
-class RunDocumentConfigurationCapability(Protocol):
-    """The plugin's half of a RunDocument: its ``config`` object and schema.
-
-    ``schemas/run-document.json`` declares ``config`` as an open object
-    (``additionalProperties: true``) with no fixed key set, so the whole
-    vocabulary inside it belongs to the plugin. ``build`` produces the object
-    and any diagnostics; ``schema`` produces the JSON Schema core validates it
-    against dynamically, turning a plugin's own rules into structured
-    diagnostics an agent can act on.
-
-    The fallback returns an empty config. It must not invent a phase or
-    configuration vocabulary for an adapter that did not declare one.
-
-    :adapts: build_run_document_config, get_run_document_config_schema
-    :consumed-by: omnidriver/core/runtime/run_document_adapter.py, omnidriver/core/runtime/run_document_exec.py
-    :fallback: absent_run_document_config, absent_run_document_config_schema
-    :status: optional-neutral
-    """
-
-    def build(
-        self, request: RunDocumentConfigurationRequest,
-    ) -> tuple[dict[str, dict[str, Any]], tuple["StrictDiagnostic", ...]]: ...
-    def schema(self) -> dict[str, Any]: ...
-
-
 class CxxMappingCapability(Protocol):
     """The plugin's declarative profile: case-file rules and C++ provenance.
 
@@ -347,129 +270,12 @@ class CxxMappingCapability(Protocol):
     also backs :class:`CaseFileContractCapability`.
 
     :adapts: get_profile
-    :consumed-by: omnidriver/core/strict_planning.py
+    :consumed-by: omnidriver/core/catalog_query.py, omnidriver/openfoam/plan_diagnostics.py
     :fallback: none
     :status: required
     """
 
     def profile(self) -> Any: ...
-
-
-class DictDiagnosticsCapability(Protocol):
-    """Warn-only checks of a case's on-disk dict files against declared
-    vocabulary: sampled fields absent from the capability manifest, and dict
-    keys absent from the plugin's catalogue.
-
-    Both read and parse the case's dictionary files (via ``foamlib`` for
-    OpenFOAM), which core has no business doing itself -- a FEniCS plugin's
-    catalogue is checked against its own config format, not OpenFOAM syntax.
-    Neither ever fails a plan; a false positive here is a question for a
-    human, not a defect -- which is why they land in ``all_diagnostics`` but
-    never in ``plan_diagnostics``. ``strict_planning.py``'s ``all_diagnostics``
-    assembly carries the reasoning. (This used to cite
-    ``strict_planning._resolve_entry``, which has never existed; the only
-    ``resolve_entry`` in the repo is ``core/runtime/registry.py``'s, and it is
-    not what the sentence meant.)
-
-    :adapts: get_function_object_field_diagnostics, get_case_dict_key_diagnostics
-    :consumed-by: omnidriver/core/strict_planning.py
-    :fallback: absent_function_object_field_diagnostics, absent_case_dict_key_diagnostics
-    :status: optional-neutral
-    """
-
-    def function_object_fields(
-        self, case_root: Path, *, samplable: dict[str, Any],
-    ) -> tuple[Any, ...]: ...
-
-    def case_dict_keys(
-        self,
-        case_root: Path,
-        *,
-        catalogued_paths: Any,
-        dict_relpaths: tuple[str, ...],
-    ) -> tuple[Any, ...]: ...
-
-
-class MeshDiagnosticPolicyCapability(Protocol):
-    """Plugin-owned exemptions from, and additions to, core's mesh diagnostics.
-
-    Core applies the generic mesh-diagnostics lifecycle. The active adapter
-    supplies the geometry interpretation, non-dimensional exemptions, and
-    any additional geometry that is not part of the base environment format.
-
-    ``is_nondimensional`` falls back to ``False``, which keeps diagnostics on
-    when an adapter has not declared an exemption.
-
-    ``base_geometry_diagnostics`` is the classification itself -- despite the
-    class docstring above, it was never actually core's own logic; it's
-    OpenFOAM-specific (``polyMesh`` region parsing), so it has to be
-    plugin-routed like everything else here, not called directly by core.
-
-    :adapts: get_mesh_geometry_diagnostics, get_base_mesh_geometry_diagnostics, is_nondimensional_case
-    :consumed-by: omnidriver/core/strict_planning.py
-    :fallback: absent_nondimensional_case, absent_base_mesh_geometry_diagnostics
-    :status: optional-neutral
-    """
-
-    def is_nondimensional(self, spec: "TutorialSpec") -> bool: ...
-    def extra_geometry_diagnostics(self, case_root: Path) -> tuple[Any, ...]: ...
-    def base_geometry_diagnostics(self, case_root: Path) -> tuple[Any, ...]: ...
-
-
-class CaseCompatibilityCapability(Protocol):
-    """Whether a case folder on disk belongs to this plugin, and whether it
-    can run without driver-owned workflow metadata.
-
-    Both questions are answered from filesystem evidence alone, before any
-    dictionary is parsed, so the adapter owns the case markers and the
-    no-workflow run policy. Core first checks an adapter-declared entrypoint;
-    the fallback returns ``False``.
-
-    ``is_case`` composes both filesystem signals into one predicate: a case
-    whose declared entrypoint was since removed, but which still carries a
-    generated marker from a prior run (e.g. OpenFOAM's ``run_document.json``),
-    is still this plugin's case. Not a new plugin hook: it reads the
-    already-adapted ``has_case_marker`` plus whatever
-    ``get_case_runtime_conventions`` the stack composes.
-
-    :adapts: has_case_marker, is_case_runnable_without_workflow
-    :consumed-by: omnidriver/core/runtime/registry.py
-    :fallback: absent_case_marker, absent_case_runnable_without_workflow
-    :status: optional-neutral
-    """
-
-    def has_case_marker(self, request: CaseCompatibilityRequest) -> bool: ...
-    def is_runnable_without_workflow(self, request: CaseCompatibilityRequest) -> bool: ...
-    def is_case(self, request: CaseCompatibilityRequest) -> bool: ...
-
-
-class SweepMaterializerCapability(Protocol):
-    """How one resolved sweep-axis combination becomes a runnable case.
-
-    Core owns sweep *expansion* -- ``sweep_expansion.py`` computes the
-    cross-product or zip of axes, validates lengths, and caps case counts
-    without knowing what any axis means. This capability owns what a resolved
-    combination *is*: which of the plugin's dictionaries and keys each axis
-    lands in, and how the case is written.
-
-    The split between the two methods is pure/impure, not two kinds of sweep.
-    ``route`` is a total function from axis values to a routed mapping and
-    must not touch the filesystem, which is what makes ``sweep-plan``
-    non-destructive; ``materialize`` does every write.
-
-    Uniquely among these capabilities, the fallback cannot be neutral. An
-    empty routing would silently yield a case that is not the one the sweep
-    asked for, so an adapter without these hooks is refused by name instead.
-    This prevents one adapter's materializer from running for another.
-
-    :adapts: materialize_sweep_case, route_sweep_case_values
-    :consumed-by: omnidriver/sweep_materialize.py, omnidriver/sweep_routing.py
-    :fallback: absent_materialize_sweep_case, absent_route_sweep_case
-    :status: optional-refusing
-    """
-
-    def route(self, request: SweepRoutingRequest, *, driver_context: Any) -> dict[str, Any]: ...
-    def materialize(self, request: SweepMaterializationRequest) -> None: ...
 
 
 class CommandAuthorizationCapability(Protocol):
@@ -521,12 +327,11 @@ class CaseIntrospectionCapability(Protocol):
 
 
 class CaseFileContractCapability(Protocol):
-    """Which case files the active plugin's profile declares, and how strictly.
+    """Which case files the active plugin's profile declares.
 
-    Sourced directly from ``PluginProfile.case_files``: ``required_files``
-    lists every rule whose ``required`` is ``"always"``; ``conditional_files``
-    lists the rest. ``required_rules`` returns the same required rules with
-    their ``role`` intact.
+    Sourced directly from ``PluginProfile.case_files``: ``all_rules`` returns
+    every declared rule with its ``role`` intact, whether the file is
+    ``required`` always or only conditionally.
 
     **Roles are namespaced and the prefix is load-bearing.** Core owns only
     its documented namespaces; every other namespace belongs to the adapter.
@@ -535,35 +340,24 @@ class CaseFileContractCapability(Protocol):
     from a hard-coded file path. ``get_profile()`` is a required v1 member, so
     every adapter carries this data and no compatibility fallback is needed.
 
-    ``describe_config_resolution`` is different: it is a human-readable
-    sentence, not derived from ``case_files`` data, so it uses the
-    compatibility fallback only when an adapter has not authored one.
-
-    ``all_rules`` returns every declared rule regardless of ``required``
-    status, since a file can legitimately be conditional rather than always
-    required.
-
     ``get_profile`` deliberately backs this capability AND
     ``CxxMappingCapability``: one declaration, two consumers with different
     concerns, not a duplicate intake.
 
-    :adapts: get_profile, get_config_resolution_description
-    :consumed-by: omnidriver/core/runtime/strict_audit.py, omnidriver/core/runtime/provenance_inputs.py
-    :fallback: absent_describe_config_resolution
-    :status: get_profile=required, get_config_resolution_description=optional-neutral
+    :adapts: get_profile
+    :consumed-by: omnidriver/core/runtime/provenance_inputs.py, omnidriver/core/runtime/record_surface.py
+    :fallback: none
+    :status: required
     """
 
-    def required_files(self) -> tuple[str, ...]: ...
-    def conditional_files(self) -> tuple[str, ...]: ...
-    def required_rules(self) -> tuple["CaseFileRule", ...]: ...
     def all_rules(self) -> tuple["CaseFileRule", ...]: ...
-    def describe_config_resolution(self) -> str: ...
+
+
 class CaseRuntimeConventionsCapability(Protocol):
     """Generated-path and output-root declarations for one environment.
 
     A staging transaction needs to distinguish reusable authored inputs from
-    derived output, and an entry-mode sweep may need to snapshot one shared
-    output tree between cases. Those are Core mechanisms. The path names are
+    derived output. That is a Core mechanism. The path names are
     environment conventions, so this capability supplies them as data. A
     plugin without the optional hook receives only core's own run records
     (``runtime_records.CORE_RUNTIME_RECORDS``, merged into every answer):
@@ -571,7 +365,7 @@ class CaseRuntimeConventionsCapability(Protocol):
     convention-specific tree.
 
     :adapts: get_case_runtime_conventions
-    :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/core/runtime/sweep_runner.py
+    :consumed-by: omnidriver/core/runtime/sweep_runner.py
     :fallback: absent_case_runtime_conventions
     :status: optional-neutral
     """
@@ -617,29 +411,48 @@ class EnvironmentPreflightCapability(Protocol):
     ) -> dict[str, str]: ...
 
 
-class OverrideSchemaCapability(Protocol):
-    """The plugin's authored configuration vocabulary.
+class PlanDiagnosticsCapability(Protocol):
+    """What a solver stack adds to a strict plan's diagnostics.
 
-    ``config_schema`` is the machine-readable description of the ``--config``
-    JSON an agent writes, including a worked example for the named tutorial,
-    when the plugin has one to give. When it does not (an unrecognized
-    tutorial, or no hook at all), the adapter derives the answer from
-    :class:`RunDocumentConfigurationCapability`'s validated schema instead of
-    handing back a second, independently-authored empty answer -- see
-    :meth:`_OverrideSchemaAdapter.config_schema`. ``dict_entry_catalog``
-    returns the plugin's dictionary entries arranged by its own document
-    names, **unserialized** -- core owns serialization, the plugin owns the
-    vocabulary and the document shape.
+    Every stack has the stages core reports on its own (workflow, artifacts,
+    environment). What else a plan can say about a case -- a catalogue the
+    solver's source contradicts, a sampled field the model does not expose, a
+    case key nothing reads -- depends on the solver's file formats, which core
+    does not know. The hook returns ``StrictDiagnostic`` values; an error
+    fails the plan, a warning or note never does. Composed by concatenation in
+    stack order.
 
-    :adapts: get_dict_entry_catalog, get_override_schema
-    :consumed-by: omnidriver/core/introspection.py
-    :fallback: absent_dict_entry_catalog, absent_override_schema
+    ``scratch_root`` is where the supplied scratch root lets a stack cache work
+    derived from its own inputs (``None`` when none was supplied).
+
+    :adapts: get_plan_diagnostics
+    :consumed-by: omnidriver/core/strict_planning.py
+    :fallback: none
     :status: optional-neutral
     """
 
-    def config_schema(
-        self, tutorial_name: str, make_spec_info: dict[str, Any],
-    ) -> dict[str, Any]: ...
+    def diagnostics(
+        self,
+        case_root: Path,
+        *,
+        workflow_dag: dict[str, Any] | None,
+        env: Mapping[str, str],
+        scratch_root: Path | None,
+        driver_context: Any,
+    ) -> tuple[Any, ...]: ...
+
+
+class OverrideSchemaCapability(Protocol):
+    """The plugin's dictionary entries arranged by its own document names,
+    **unserialized** -- core owns serialization, the plugin owns the
+    vocabulary and the document shape.
+
+    :adapts: get_dict_entry_catalog
+    :consumed-by: omnidriver/openfoam/plan_diagnostics.py
+    :fallback: absent_dict_entry_catalog
+    :status: optional-neutral
+    """
+
     def dict_entry_catalog(self) -> dict[str, Any]: ...
 
 
@@ -889,7 +702,7 @@ class DictKeyScannerCapability(Protocol):
     fallback (``absent_dict_key_scanner``) reports nothing.
 
     :adapts: get_dict_key_scanner
-    :consumed-by: omnidriver/core/strict_planning.py, omnidriver/core/catalog_query.py
+    :consumed-by: omnidriver/openfoam/plan_diagnostics.py, omnidriver/core/catalog_query.py
     :fallback: absent_dict_key_scanner
     :status: optional-neutral
     """
@@ -909,19 +722,17 @@ class TutorialRecordCapability(Protocol):
     cannot give one axis name two meanings. Resolving a record calls no
     plugin code at all, until an axis it names actually runs (see
     ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
-    §3). ``runtime.registry.resolve_entry`` dispatches on this catalog
-    explicitly, alongside the factory registry and a bare case path -- never
-    trying one and falling back to another.
+    §3). ``tutorial_records.lookup_record`` resolves an entry name in this
+    catalog.
 
     **No fallback.** ``catalog()`` returns ``None``, not ``{}``, when the
     plugin declares no ``get_tutorial_records`` hook at all -- distinct from
     a plugin that implements the hook and simply registers no records yet.
-    ``runtime.registry.resolve_entry`` treats ``None`` as "this stack
-    dispatches no tutorial records", skipping record dispatch explicitly
-    rather than iterating a fabricated empty mapping.
+    ``lookup_record`` treats ``None`` as "this stack registers no tutorial
+    records" rather than iterating a fabricated empty mapping.
 
     :adapts: get_tutorial_records
-    :consumed-by: omnidriver/core/runtime/registry.py, omnidriver/conformance/checks.py
+    :consumed-by: omnidriver/core/tutorial_records.py, omnidriver/conformance/checks.py
     :fallback: none
     :status: optional-neutral
     """
@@ -1054,15 +865,6 @@ class CaseWriterCapability(Protocol):
 
 
 @dataclass(frozen=True)
-class _GenericCaseFactoryAdapter:
-    plugin: "SolverPlugin"
-
-    def factory(self) -> Callable[..., Any] | None:
-        hook = getattr(self.plugin, "get_generic_case_factory", None)
-        return hook() if callable(hook) else None
-
-
-@dataclass(frozen=True)
 class _DictionaryCatalogAdapter:
     plugin: "SolverPlugin"
 
@@ -1164,200 +966,11 @@ class _ArtifactPredictorAdapter:
 
 
 @dataclass(frozen=True)
-class _RunDocumentConfigurationAdapter:
-    plugin: "SolverPlugin"
-
-    def build(
-        self, request: RunDocumentConfigurationRequest,
-    ) -> tuple[dict[str, dict[str, Any]], tuple["StrictDiagnostic", ...]]:
-        hook = getattr(self.plugin, "build_run_document_config", None)
-        if callable(hook):
-            return hook(request.spec)
-        # Older plugins receive the neutral compatibility configuration.
-        from .compatibility import absent_run_document_config
-
-        return absent_run_document_config(self.plugin, request.spec)
-
-    def schema(self) -> dict[str, Any]:
-        hook = getattr(self.plugin, "get_run_document_config_schema", None)
-        if callable(hook):
-            return hook()
-        from .compatibility import absent_run_document_config_schema
-
-        return absent_run_document_config_schema(self.plugin)
-
-
-@dataclass(frozen=True)
 class _CxxMappingAdapter:
     plugin: "SolverPlugin"
 
     def profile(self) -> Any:
         return self.plugin.get_profile()
-
-
-@dataclass(frozen=True)
-class _DictDiagnosticsAdapter:
-    plugin: "SolverPlugin"
-
-    def function_object_fields(
-        self, case_root: Path, *, samplable: dict[str, Any],
-    ) -> tuple[Any, ...]:
-        hook = getattr(self.plugin, "get_function_object_field_diagnostics", None)
-        if callable(hook):
-            return tuple(hook(case_root, samplable=samplable))
-        from .compatibility import absent_function_object_field_diagnostics
-
-        return tuple(absent_function_object_field_diagnostics(case_root, samplable=samplable))
-
-    def case_dict_keys(
-        self,
-        case_root: Path,
-        *,
-        catalogued_paths: Any,
-        dict_relpaths: tuple[str, ...],
-    ) -> tuple[Any, ...]:
-        hook = getattr(self.plugin, "get_case_dict_key_diagnostics", None)
-        if callable(hook):
-            return tuple(hook(
-                case_root, catalogued_paths=catalogued_paths, dict_relpaths=dict_relpaths,
-            ))
-        from .compatibility import absent_case_dict_key_diagnostics
-
-        return tuple(absent_case_dict_key_diagnostics(
-            case_root, catalogued_paths=catalogued_paths, dict_relpaths=dict_relpaths,
-        ))
-
-
-@dataclass(frozen=True)
-class _MeshDiagnosticPolicyAdapter:
-    plugin: "SolverPlugin"
-
-    def is_nondimensional(self, spec: "TutorialSpec") -> bool:
-        hook = getattr(self.plugin, "is_nondimensional_case", None)
-        if callable(hook):
-            return bool(hook(spec))
-        from .compatibility import absent_nondimensional_case
-
-        return absent_nondimensional_case(self.plugin, spec)
-
-    def extra_geometry_diagnostics(self, case_root: Path) -> tuple[Any, ...]:
-        """Plugin-owned plan-time geometry checks core cannot express.
-
-        Core may provide generic geometry checks; an adapter may own further
-        domain-specific point sets that are not mesh regions. A plugin that
-        declares no such check contributes nothing -- there is no legacy
-        fallback here, because "no extra checks" is the correct answer for a
-        plugin that never had any.
-        """
-        hook = getattr(self.plugin, "get_mesh_geometry_diagnostics", None)
-        if callable(hook):
-            return tuple(hook(case_root))
-        return ()
-
-    def base_geometry_diagnostics(self, case_root: Path) -> tuple[Any, ...]:
-        """Return adapter-owned base-geometry diagnostics, if supported.
-
-        Core does not parse a solver's mesh format directly. An absent hook
-        yields the neutral compatibility result.
-        """
-        hook = getattr(self.plugin, "get_base_mesh_geometry_diagnostics", None)
-        if callable(hook):
-            return tuple(hook(case_root))
-        from .compatibility import absent_base_mesh_geometry_diagnostics
-
-        return tuple(absent_base_mesh_geometry_diagnostics(case_root))
-
-
-@dataclass(frozen=True)
-class _CaseCompatibilityAdapter:
-    plugin: "SolverPlugin"
-
-    def has_case_marker(self, request: CaseCompatibilityRequest) -> bool:
-        hook = getattr(self.plugin, "has_case_marker", None)
-        if callable(hook):
-            return bool(hook(request.case_root))
-        from .compatibility import absent_case_marker
-
-        return absent_case_marker(self.plugin, request.case_root)
-
-    def is_runnable_without_workflow(self, request: CaseCompatibilityRequest) -> bool:
-        hook = getattr(self.plugin, "is_case_runnable_without_workflow", None)
-        if callable(hook):
-            return bool(hook(request.case_root))
-        from .compatibility import absent_case_runnable_without_workflow
-
-        return absent_case_runnable_without_workflow(self.plugin, request.case_root)
-
-    def is_case(self, request: CaseCompatibilityRequest) -> bool:
-        """Marker, entrypoint, or a leftover generated-case marker -- any one
-        signal is enough. See the capability docstring for why this
-        collapses ``registry``'s own duplicated ``has_case_marker(...) or
-        _has_entrypoint(...)`` check."""
-        if self.has_case_marker(request):
-            return True
-        hook = getattr(self.plugin, "get_case_runtime_conventions", None)
-        if callable(hook):
-            conventions = hook()
-        else:
-            from .compatibility import absent_case_runtime_conventions
-
-            conventions = absent_case_runtime_conventions()
-        case_root = request.case_root
-        if any((case_root / relpath).is_file() for relpath in conventions.case_entrypoints):
-            return True
-        return any(
-            (case_root / marker).exists() for marker in conventions.generated_case_markers
-        )
-
-
-@dataclass(frozen=True)
-class _SweepMaterializerAdapter:
-    plugin: "SolverPlugin"
-
-    def route(self, request: SweepRoutingRequest, *, driver_context: Any) -> dict[str, Any]:
-        hook = getattr(self.plugin, "route_sweep_case_values", None)
-        if callable(hook):
-            return hook(
-                base=request.base,
-                resolved_axis_values=request.resolved_axis_values,
-                driver_context=driver_context,
-            )
-        # Compatibility bridge for existing third-party-style plugins. A
-        # missing adapter route remains a refusal rather than another
-        # adapter's materializer.
-        from .compatibility import absent_route_sweep_case
-
-        return absent_route_sweep_case(
-            self.plugin,
-            base=request.base,
-            resolved_axis_values=request.resolved_axis_values,
-            driver_context=driver_context,
-        )
-
-    def materialize(
-        self,
-        request: SweepMaterializationRequest | None = None,
-        *,
-        case_dir: Path | None = None,
-        routed: dict[str, Any] | None = None,
-    ) -> None:
-        """Write one resolved sweep case, or refuse by name.
-
-        Accepts the contract member's own argument names
-        (``case_dir``/``routed``) as well as the request object, since a
-        composed stack is addressed in *member* terms.
-        """
-        if request is None:
-            request = SweepMaterializationRequest(case_dir=case_dir, routed=routed)
-        hook = getattr(self.plugin, "materialize_sweep_case", None)
-        if callable(hook):
-            hook(case_dir=request.case_dir, routed=request.routed)
-            return
-        from .compatibility import absent_materialize_sweep_case
-
-        absent_materialize_sweep_case(
-            self.plugin, case_dir=request.case_dir, routed=request.routed
-        )
 
 
 @dataclass(frozen=True)
@@ -1438,30 +1051,9 @@ class _CaseIntrospectionAdapter:
 class _CaseFileContractAdapter:
     plugin: "SolverPlugin"
 
-    def _rules(self) -> tuple["CaseFileRule", ...]:
+    def all_rules(self) -> tuple["CaseFileRule", ...]:
         return tuple(self.plugin.get_profile().case_files)
 
-    def required_rules(self) -> tuple["CaseFileRule", ...]:
-        """Required rules with their ``role`` intact, so a consumer need not
-        re-derive plugin semantics from a path prefix."""
-        return tuple(rule for rule in self._rules() if rule.required == "always")
-
-    def required_files(self) -> tuple[str, ...]:
-        return tuple(rule.path for rule in self.required_rules())
-
-    def conditional_files(self) -> tuple[str, ...]:
-        return tuple(rule.path for rule in self._rules() if rule.required != "always")
-
-    def all_rules(self) -> tuple["CaseFileRule", ...]:
-        return self._rules()
-
-    def describe_config_resolution(self) -> str:
-        hook = getattr(self.plugin, "get_config_resolution_description", None)
-        if callable(hook):
-            return str(hook())
-        from .compatibility import absent_describe_config_resolution
-
-        return absent_describe_config_resolution(self.plugin)
 
 @dataclass(frozen=True)
 class _CaseRuntimeConventionsAdapter:
@@ -1550,32 +1142,30 @@ class _EnvironmentPreflightAdapter:
 
 
 @dataclass(frozen=True)
-class _OverrideSchemaAdapter:
+class _PlanDiagnosticsAdapter:
     plugin: "SolverPlugin"
 
-    def config_schema(
-        self, tutorial_name: str, make_spec_info: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Return the plugin's config documentation, or the validated schema.
+    def diagnostics(
+        self,
+        case_root: Path,
+        *,
+        workflow_dag: dict[str, Any] | None,
+        env: Mapping[str, str],
+        scratch_root: Path | None,
+        driver_context: Any,
+    ) -> tuple[Any, ...]:
+        hook = getattr(self.plugin, "get_plan_diagnostics", None)
+        if not callable(hook):
+            return ()
+        return tuple(hook(
+            case_root, workflow_dag=workflow_dag, env=env,
+            scratch_root=scratch_root, driver_context=driver_context,
+        ))
 
-        A plugin with real per-tutorial vocabulary to document (e.g.
-        cardiacFoam's worked examples) supplies it here and that answer wins
-        unchanged. When a plugin has nothing tutorial-specific to say -- an
-        unrecognized tutorial name, or no ``get_override_schema`` hook at all
-        -- the answer derives from
-        ``RunDocumentConfigurationCapability.schema()`` instead, so it never
-        diverges from the schema core actually validates against.
-        """
-        hook = getattr(self.plugin, "get_override_schema", None)
-        if callable(hook):
-            answer = dict(hook(tutorial_name, make_spec_info))
-        else:
-            from .compatibility import absent_override_schema
 
-            answer = absent_override_schema(self.plugin, tutorial_name, make_spec_info)
-        if answer:
-            return answer
-        return _RunDocumentConfigurationAdapter(self.plugin).schema()
+@dataclass(frozen=True)
+class _OverrideSchemaAdapter:
+    plugin: "SolverPlugin"
 
     def dict_entry_catalog(self) -> dict[str, Any]:
         hook = getattr(self.plugin, "get_dict_entry_catalog", None)
@@ -2066,28 +1656,21 @@ class PluginCapabilities:
 
     **What a missing optional hook means.** The named fallback runs. No
     fallback branches on plugin identity, so a given fallback returns the
-    same answer for every plugin. Two fallbacks cannot be neutral: a plugin
-    without the sweep hooks is refused by name rather than swept by another
-    plugin's writer.
+    same answer for every plugin.
     """
 
-    generic_case_factory: GenericCaseFactoryCapability
     dictionaries: DictionaryCatalogCapability
     manifest: CapabilityManifestCapability
     configuration_validator: ConfigurationValidatorCapability
     run_semantic_validator: RunSemanticValidatorCapability
     artifacts: ArtifactPredictorCapability
-    run_document_configuration: RunDocumentConfigurationCapability
     cxx_mapping: CxxMappingCapability
-    mesh_diagnostic_policy: MeshDiagnosticPolicyCapability
-    case_compatibility: CaseCompatibilityCapability
-    sweep_materializer: SweepMaterializerCapability
     command_authorization: CommandAuthorizationCapability
     case_introspection: CaseIntrospectionCapability
     case_files: CaseFileContractCapability
     case_runtime_conventions: CaseRuntimeConventionsCapability
     environment_preflight: EnvironmentPreflightCapability
-    dict_diagnostics: DictDiagnosticsCapability
+    plan_diagnostics: PlanDiagnosticsCapability
     override_schema: OverrideSchemaCapability
     runtime_evidence: RuntimeEvidenceCapability
     record_surface: RecordSurfaceCapability
@@ -2116,23 +1699,18 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
     """
 
     return PluginCapabilities(
-        generic_case_factory=_GenericCaseFactoryAdapter(plugin),
         dictionaries=_DictionaryCatalogAdapter(plugin),
         manifest=_CapabilityManifestAdapter(plugin),
         configuration_validator=_ConfigurationValidatorAdapter(plugin),
         run_semantic_validator=_RunSemanticValidatorAdapter(plugin),
         artifacts=_ArtifactPredictorAdapter(plugin),
-        run_document_configuration=_RunDocumentConfigurationAdapter(plugin),
         cxx_mapping=_CxxMappingAdapter(plugin),
-        mesh_diagnostic_policy=_MeshDiagnosticPolicyAdapter(plugin),
-        case_compatibility=_CaseCompatibilityAdapter(plugin),
-        sweep_materializer=_SweepMaterializerAdapter(plugin),
         command_authorization=_CommandAuthorizationAdapter(plugin),
         case_introspection=_CaseIntrospectionAdapter(plugin),
         case_files=_CaseFileContractAdapter(plugin),
         case_runtime_conventions=_CaseRuntimeConventionsAdapter(plugin),
         environment_preflight=_EnvironmentPreflightAdapter(plugin),
-        dict_diagnostics=_DictDiagnosticsAdapter(plugin),
+        plan_diagnostics=_PlanDiagnosticsAdapter(plugin),
         override_schema=_OverrideSchemaAdapter(plugin),
         runtime_evidence=_RuntimeEvidenceAdapter(plugin),
         record_surface=_RecordSurfaceAdapter(plugin),

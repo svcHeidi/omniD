@@ -256,13 +256,12 @@ def _stage_tutorials_root(case: RegressionCase) -> tuple[Path, Path]:
 def _drive_agent(case: RegressionCase, driver: str, cases_root: Path) -> subprocess.CompletedProcess:
     """``--plugin`` is explicit: with several adapters installed the child has no default."""
     if driver == "strict":
-        entry_args = ["--entry", case.entry_name]
+        entry_args = ["--entry", case.entry_name, "--cases-root", str(cases_root)]
     else:
-        entry_args = ["--entry", case.case_dir, "--entry-kind", "case_folder"]
+        entry_args = ["--case", str(cases_root / case.case_dir)]
     argv = [
         sys.executable, "-m", "omnidriver", "run", "--strict",
-        "--plugin", "cardiacfoam",
-        *entry_args, "--cases-root", str(cases_root),
+        "--plugin", "cardiacfoam", *entry_args,
     ]
     return subprocess.run(argv, capture_output=True, text=True)
 

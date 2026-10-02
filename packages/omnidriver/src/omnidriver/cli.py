@@ -20,22 +20,11 @@ from .core.runtime.postprocess_phase import (
     write_case_record,
 )
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
-from .core.runtime.registry import ENTRY_KIND_VALUES
-from .core.runtime.sweep_runner import (
-    _materialize_entry_case,
-    _stage_entry_case,
-    sweep_plan,
-    sweep_run,
-)
+from .core.runtime.sweep_runner import sweep_plan, sweep_run
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.provider_identity import stack_identity_mismatch
-from omnidriver.core.specs.paths import default_setup_dir_name
-from omnidriver.core.specs.paths import (
-    default_sweep_output_dir,
-    repo_root_or_none,
-    resolve_scratch_root,
-)
+from omnidriver.core.specs.paths import default_sweep_output_dir, resolve_scratch_root
 from omnidriver.core.strict_planning import _utility_produces_by_command, strict_plan
 from .core.runtime.run_document_exec import build_execution_inputs, load_run_document, _allowed_runs_root
 from .core.runtime.fresh import ensure_fresh_output_dir
@@ -51,7 +40,7 @@ from .core.runtime.execution_context import (
     StepExecutionContext as _ExecutionContext,
 )
 from .core.sweep.sweep_expansion import SweepValidationError
-from .core.tutorial_records import PARALLEL_STUDY_NAME, TutorialRecordError
+from .core.tutorial_records import PARALLEL_STUDY_NAME, TutorialRecordError, case_folder_record
 
 
 if TYPE_CHECKING:
@@ -466,28 +455,21 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
 
 def _context_from_entry(
     *,
-    selected_entry: str,
-    entry_kind: str | None,
+    selected_entry,
     overrides: dict | None,
-    config_path: str | None,
     environment_source: str | None,
     driver_context,
     allow_unresolved_configuration: bool = False,
-    stage_for_execution: bool = False,
-    fresh: bool = False,
     scratch_dir: str | None = None,
     cli_study: dict | None = None,
     inputs: dict | None = None,
 ) -> tuple[_ExecutionContext | None, int]:
-    replan_entry = selected_entry
-    replan_entry_kind = entry_kind
-    replan_overrides = dict(overrides or {})
-    try:
-        report = strict_plan(
+    label = getattr(selected_entry, "name", selected_entry)
+
+    def plan():
+        return strict_plan(
             selected_entry,
-            entry_kind=entry_kind,
             overrides=overrides,
-            config_path=config_path,
             environment_source=environment_source,
             allow_unresolved_configuration=allow_unresolved_configuration,
             scratch_root=scratch_dir,
@@ -495,10 +477,13 @@ def _context_from_entry(
             inputs=inputs,
             driver_context=driver_context,
         )
+
+    try:
+        report = plan()
     except TutorialRecordError as exc:
         print(json.dumps({
             "status": "failed",
-            "entry": selected_entry,
+            "entry": label,
             "error": str(exc),
         }, indent=2))
         return None, 1
@@ -515,109 +500,6 @@ def _context_from_entry(
             "error": "strict plan did not produce workflow_dag and workflow_state",
         }, indent=2))
         return None, 1
-    source_case_root = Path(report.launch["case_root"]).resolve()
-    # Staging protects this checkout's own tracked case content from being
-    # mutated by a run; it applies only to registered cases inside this
-    # checkout. Outside a checkout (an installed wheel) there is nothing of
-    # ours to protect, so nothing is staged, and asking for the root must not
-    # raise.
-    _repo_root = repo_root_or_none()
-    if (
-        stage_for_execution
-        and _repo_root is not None
-        and source_case_root.is_relative_to(_repo_root)
-    ):
-        safe_entry = "".join(
-            char if char.isalnum() or char in {"-", "_", "."} else "_"
-            for char in selected_entry
-        ).strip("._") or "entry"
-        try:
-            staged_case_root = resolve_scratch_root(
-                scratch_dir, cases_root=(overrides or {}).get("cases_root"),
-            ) / "runs" / safe_entry
-        except TutorialRecordError as exc:
-            print(json.dumps({
-                "status": "failed",
-                "entry": selected_entry,
-                "error": str(exc),
-            }, indent=2))
-            return None, 1
-        if fresh or not staged_case_root.exists():
-            _stage_entry_case(source_case_root, staged_case_root, driver_context=driver_context)
-        staged_overrides = dict(overrides or {})
-        staged_overrides["cases_root"] = str(staged_case_root.parent)
-        staged_overrides["case_dir_name"] = staged_case_root.name
-        # Sanitisation above can flatten a name-bearing entry (e.g. one with
-        # "/" or other non alnum/-/_/. characters), so `cases_root` no longer
-        # contains a path `selected_entry` resolves by name (KeyError:
-        # "Unknown entry"). Route through the registry's generic-alias entry
-        # instead, which resolves purely from `case_dir_name` above -- but
-        # only when staging actually changed the name; an unflattened entry
-        # still resolves by its own name.
-        if safe_entry != selected_entry:
-            replan_entry = "genericcase"
-            replan_entry_kind = "case_folder"
-        replan_overrides = staged_overrides
-        try:
-            report = strict_plan(
-                replan_entry,
-                entry_kind=replan_entry_kind,
-                overrides=staged_overrides,
-                config_path=config_path,
-                environment_source=environment_source,
-                allow_unresolved_configuration=allow_unresolved_configuration,
-                scratch_root=scratch_dir,
-                cli_study=cli_study,
-                inputs=inputs,
-                driver_context=driver_context,
-            )
-        except TutorialRecordError as exc:
-            print(json.dumps({
-                "status": "failed",
-                "entry": selected_entry,
-                "error": str(exc),
-            }, indent=2))
-            return None, 1
-        readiness = is_launchable(
-            plan_status=report.status,
-            environment_diagnostics=report.environment_diagnostics,
-        )
-        if not readiness.structural_ok:
-            print(json.dumps(report.to_json(), indent=2))
-            return None, 1
-    if stage_for_execution and config_path is not None:
-        try:
-            replan_entry, replan_overrides = _materialize_entry_case(
-                replan_entry,
-                replan_overrides,
-                driver_context=driver_context,
-            )
-            report = strict_plan(
-                replan_entry,
-                entry_kind=replan_entry_kind,
-                overrides=replan_overrides,
-                config_path=config_path,
-                environment_source=environment_source,
-                allow_unresolved_configuration=allow_unresolved_configuration,
-                scratch_root=scratch_dir,
-                cli_study=cli_study,
-                inputs=inputs,
-                driver_context=driver_context,
-            )
-        except (OSError, ValueError, TutorialRecordError) as exc:
-            print(json.dumps({
-                "status": "failed",
-                "entry": selected_entry,
-                "error": f"Could not materialize entry case: {exc}",
-            }, indent=2))
-            return None, 1
-        readiness = is_launchable(
-            plan_status=report.status,
-            environment_diagnostics=report.environment_diagnostics,
-        )
-        if not readiness.structural_ok:
-            print(json.dumps(report.to_json(), indent=2))
-            return None, 1
     execution_env = driver_context.capabilities.environment_preflight.load(
         environment_source=environment_source,
         driver_context=driver_context,
@@ -627,17 +509,7 @@ def _context_from_entry(
     planned_output_dir = Path(report.launch["output_dir"]).resolve()
 
     def replan_after_mutation() -> _ReplannedExecution:
-        replanned_report = strict_plan(
-            replan_entry,
-            entry_kind=replan_entry_kind,
-            overrides=replan_overrides,
-            config_path=config_path,
-            environment_source=environment_source,
-            allow_unresolved_configuration=allow_unresolved_configuration,
-            scratch_root=scratch_dir,
-            cli_study=cli_study,
-            driver_context=driver_context,
-        )
+        replanned_report = plan()
         replanned_readiness = is_launchable(
             plan_status=replanned_report.status,
             environment_diagnostics=replanned_report.environment_diagnostics,
@@ -662,7 +534,7 @@ def _context_from_entry(
 
     return (
         _ExecutionContext(
-            entry_label=selected_entry,
+            entry_label=label,
             workflow_dag=report.workflow_dag,
             planned_state=report.workflow_state,
             case_root=Path(report.launch["case_root"]),
@@ -874,38 +746,49 @@ def build_parser() -> argparse.ArgumentParser:
         "--plugin",
         help=(
             "Plugin to drive: an installed plugin id from the "
-            "'omnidriver.plugins' entry-point group, a trusted "
-            "local-development import target (module.path:PluginClass). "
-            "Defaults to the sole installed solver-tier adapter, composed "
-            "with whatever it requires (e.g. an environment adapter it names "
-            "in requires:); explicit selection is required when none is "
-            "installed, or when two or more installed adapters are mutually "
-            "independent solver-tier plugins with no requires: relationship "
-            "tying them together. "
-            "A colon always selects the import form. Either form executes "
-            "the plugin's Python code."
+            "'omnidriver.plugins' entry-point group, or a trusted "
+            "local-development import target (module.path:PluginClass); a "
+            "colon always selects the import form. Either form executes the "
+            "plugin's Python code. For a solver with no repository; "
+            "otherwise the repository's omnidriver.toml names the plugin, "
+            "and --plugin, when given too, must select the same stack."
+        ),
+    )
+    parser.add_argument(
+        "--repo",
+        metavar="DIR",
+        help=(
+            "A solver repository: DIR holds an omnidriver.toml naming its "
+            "plugin, tutorials, C++ source and helper scripts. Its tutorials "
+            "folder is the cases root. A --cases-root (or "
+            "$OMNIDRIVER_CASES_ROOT) that is a repository's tutorials folder "
+            "selects the repository the same way. Never searched for."
         ),
     )
     parser.add_argument(
         "--entry",
         required=False,
         help=(
-            "Entry name or relative workflow/case path to run. "
-            "Available entry names are declared by the selected adapter."
+            "The tutorial record to describe, plan or run: a name the selected "
+            "stack registers (`describe` lists them)."
         ),
     )
     parser.add_argument(
-        "--entry-kind",
-        choices=list(ENTRY_KIND_VALUES),
-        help="Optional entry classification override for --entry resolution.",
+        "--case",
+        metavar="DIR",
+        help=(
+            "Run a case folder that is not a record, in place of --entry: an "
+            "ad hoc record of one step, the stack's declared case entrypoint, "
+            "staged from DIR, which is never written. Refused where the "
+            "stack declares no entrypoint."
+        ),
     )
     parser.add_argument(
         "--run-document",
         help=(
-            "Path to an agent-authored RunDocument v3 JSON file. With "
-            "action=run/step, executes the document's workflowDag/config "
-            "instead of regenerating the plan from --entry. Mutually "
-            "exclusive with --entry."
+            "Path to a RunDocument v3 JSON file. With action=run/step, "
+            "executes the document's workflowDag instead of regenerating "
+            "the plan from --entry. Mutually exclusive with --entry/--case."
         ),
     )
     parser.add_argument(
@@ -946,8 +829,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=_parallel_value,
         metavar="N",
         help=(
-            "For a tutorial record (describe, plan/step/run --strict, "
-            "sweep-plan/sweep-run): run its solve step in the composed "
+            "For describe, plan/step/run --strict, sweep-plan/sweep-run: "
+            "run the record's solve step in the composed "
             "stack's parallel form -- the same request as the study value "
             "'parallel', from another source; one that disagrees with the "
             "study's is refused. Absent: serial. '--parallel' leaves the "
@@ -966,14 +849,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="NAME=PATH",
         help=(
-            "For a tutorial record (describe, plan/step/run --strict, "
-            "sweep-plan/sweep-run): supply one of its declared inputs -- data "
+            "For describe, plan/step/run --strict, sweep-plan/sweep-run: "
+            "supply one of the record's declared inputs -- data "
             "outside its native case folder (a patient anatomy bundle, a "
             "shared mesh) that has no ambient location. Repeatable. A record "
             "with no native location for an input refuses to plan/run "
             "without it, by name; describe never refuses, and lists each "
-            "input's supplied status instead. Refused by name for an entry "
-            "that is not a tutorial record."
+            "input's supplied status instead."
         ),
     )
     parser.add_argument(
@@ -999,14 +881,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--continue-on-error",
         action="store_true",
         help="Continue executing remaining cases after a failure.",
-    )
-    parser.add_argument(
-        "--config",
-        help=(
-            "Path to JSON file with make_spec overrides: either a top-level map "
-            "keyed by entry name (the names `describe` lists for the selected "
-            "plugin) or a direct parameter object for the selected entry."
-        ),
     )
     parser.add_argument(
         "--cases-root",
@@ -1062,11 +936,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Safety cap on expanded sweep case count (default 200).",
     )
     parser.add_argument(
-        "--retry-failed",
-        action="store_true",
-        help="For action=sweep-run: rerun cases whose last recorded status was failed.",
-    )
-    parser.add_argument(
         "--fresh",
         action="store_true",
         help=(
@@ -1079,8 +948,7 @@ def build_parser() -> argparse.ArgumentParser:
             "too-shallow path, anything outside OMNIDRIVER_ALLOWED_RUNS_ROOT "
             "when set, or a directory with no recognizable omnidriver "
             "artifact. No confirmation prompt -- treat --output-dir as fully "
-            "disposable when passing this flag. Mutually exclusive with "
-            "--retry-failed."
+            "disposable when passing this flag."
         ),
     )
     parser.add_argument(
@@ -1136,40 +1004,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _load_spec_overrides(config_path: str, entry: str) -> dict:
-    payload = json.loads(Path(config_path).read_text())
-    if not isinstance(payload, dict):
-        raise ValueError("Config file must contain a JSON object")
-
-    normalized_requested = entry.strip().casefold()
-    for key, value in payload.items():
-        if key.casefold() == normalized_requested:
-            if not isinstance(value, dict):
-                raise ValueError(f"Config section '{key}' must be a JSON object")
-            return _normalize_spec_overrides(value)
-
-    known_tutorial_keys = {"genericcase", "randomcase"}
-    if any(key.casefold() in known_tutorial_keys for key in payload):
-        raise KeyError(
-            f"No config section found for entry '{entry}'. "
-            f"Available config sections: {', '.join(payload.keys())}"
-        )
-
-    return _normalize_spec_overrides(payload)
-
-
-def _normalize_spec_overrides(overrides: dict) -> dict:
-    normalized = dict(overrides)
-
-    case_dir_name = normalized.get("case_dir_name")
-    setup_dir_name = normalized.get("setup_dir_name")
-    if case_dir_name is not None and setup_dir_name is not None:
-        if str(setup_dir_name) == default_setup_dir_name(str(case_dir_name)):
-            normalized.pop("setup_dir_name")
-
-    return normalized
-
-
 _FLAG_ERRORS_BY_ACTION = {
     "describe": (
         ("dry_run", "--dry-run is not valid with action=describe"),
@@ -1190,7 +1024,6 @@ _FLAG_ERRORS_BY_ACTION = {
     "catalog": (
         ("dry_run", "--dry-run is not valid with action=catalog"),
         ("continue_on_error", "--continue-on-error is not valid with action=catalog"),
-        ("config", "--config is not valid with action=catalog"),
         ("parallel", "--parallel is not valid with action=catalog"),
         ("inputs", "--input is not valid with action=catalog"),
     ),
@@ -1207,8 +1040,8 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
             parser.error(message)
     if (args.document or args.key or args.uncatalogued) and args.action != "catalog":
         parser.error("--document/--key/--uncatalogued are only valid with action=catalog")
-    if args.uncatalogued and (args.entry or args.document or args.key):
-        parser.error("--uncatalogued lists the whole stack's C++ reads; it takes no --entry/--document/--key")
+    if args.uncatalogued and (args.entry or args.case or args.document or args.key):
+        parser.error("--uncatalogued lists the whole stack's C++ reads; it takes no --entry/--case/--document/--key")
     if args.action not in {"plan", "step", "run"} and args.strict:
         parser.error("--strict is only valid with action=plan, action=step, or action=run")
     if args.allow_unresolved_configuration and args.action not in {"plan", "step", "run"}:
@@ -1227,34 +1060,40 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--tail-lines is only valid with action=step or action=run")
     if args.run_document and args.action not in {"run", "step"}:
         parser.error("--run-document is only valid with action=run or action=step")
-    if args.run_document and args.entry:
-        parser.error("--run-document and --entry are mutually exclusive")
-    if args.run_document and (args.config or args.entry_kind or args.cases_root):
-        parser.error("--config/--entry-kind/--cases-root are not valid with --run-document")
+    if args.repo and args.cases_root:
+        parser.error("--repo supplies the cases root (its tutorials folder); --cases-root is not valid with it")
+    if args.repo and args.action in {"recover", "compare"}:
+        parser.error(f"--repo is not valid with action={args.action}")
+    if args.entry and args.case:
+        parser.error("--entry and --case are mutually exclusive")
+    if args.run_document and (args.entry or args.case):
+        parser.error("--run-document and --entry/--case are mutually exclusive")
+    if args.run_document and args.cases_root:
+        parser.error("--cases-root is not valid with --run-document")
+    if args.case and args.cases_root:
+        parser.error("--case names the folder itself; --cases-root is not valid with it")
+    if args.case and args.action not in {"describe", "catalog", "plan", "step", "run"}:
+        parser.error("--case is only valid with action=describe, catalog, plan, step or run")
     if args.parallel is not None and (
         args.run_document or args.action not in {"describe", "plan", "step", "run", "sweep-plan", "sweep-run"}
     ):
         parser.error(
             "--parallel is only valid where a tutorial record's run is planned: "
-            "describe, plan/step/run with --entry, sweep-plan, sweep-run"
+            "describe, plan/step/run with --entry/--case, sweep-plan, sweep-run"
         )
     if args.run_document and args.allow_unresolved_configuration:
         parser.error("--allow-unresolved-configuration requires --entry, not --run-document")
     if args.action in {"sweep-plan", "sweep-run"}:
         if args.entry:
             parser.error(f"--entry is not valid with action={args.action}; use --spec")
-        if args.config or args.entry_kind or args.cases_root:
-            parser.error(f"--config/--entry-kind/--cases-root are not valid with action={args.action}")
+        if args.cases_root:
+            parser.error(f"--cases-root is not valid with action={args.action}")
         if args.strict or args.run_document or args.step or args.apply is not None:
             parser.error(f"--strict/--run-document/--step/--apply are not valid with action={args.action}")
     if args.action in {"sweep-plan", "sweep-run"} and not args.spec:
         parser.error(f"action={args.action} requires --spec")
-    if args.retry_failed and args.action != "sweep-run":
-        parser.error("--retry-failed is only valid with action=sweep-run")
     if args.fresh and args.action not in {"step", "run", "sweep-run"}:
         parser.error("--fresh is only valid with action=step, action=run, or action=sweep-run")
-    if args.fresh and args.retry_failed:
-        parser.error("--fresh and --retry-failed are mutually exclusive")
     if args.max_cases != 200 and args.action not in {"sweep-plan", "sweep-run"}:
         parser.error("--max-cases is only valid with action=sweep-plan or action=sweep-run")
     if args.action not in {"sweep-plan", "sweep-run", "recover"} and (args.spec or args.output_dir):
@@ -1262,9 +1101,9 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
     if args.action == "recover":
         if not args.case_root or not args.output_dir:
             parser.error("action=recover requires --case-root and --output-dir")
-        if any((args.entry, args.run_document, args.config, args.cases_root, args.spec)):
+        if any((args.entry, args.case, args.run_document, args.cases_root, args.spec)):
             parser.error(
-                "--entry/--run-document/--config/--cases-root/--spec are not valid "
+                "--entry/--case/--run-document/--cases-root/--spec are not valid "
                 "with action=recover"
             )
     elif args.case_root or args.transaction_id:
@@ -1274,26 +1113,26 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
     if args.action == "compare":
         if not args.comparison_request or not args.report:
             parser.error("action=compare requires --comparison-request and --report")
-        if any((args.entry, args.run_document, args.config, args.cases_root, args.spec, args.output_dir,
-                args.plugin, args.scratch_dir)):
-            parser.error("--entry/--run-document/--config/--cases-root/--spec/--output-dir/--plugin/--scratch-dir "
+        if any((args.entry, args.case, args.run_document, args.cases_root, args.spec, args.output_dir,
+                args.plugin, args.repo, args.scratch_dir)):
+            parser.error("--entry/--case/--run-document/--cases-root/--spec/--output-dir/--plugin/--repo/--scratch-dir "
                          "are not valid with action=compare: each run in the request names its own plugin and sweep")
     elif args.comparison_request or args.report:
         parser.error("--comparison-request/--report are only valid with action=compare")
     if args.action == "env" and any((
-        args.entry, args.run_document, args.config, args.cases_root, args.spec, args.output_dir,
+        args.entry, args.case, args.run_document, args.cases_root, args.spec, args.output_dir,
         args.scratch_dir, args.parallel is not None, args.inputs, args.dry_run, args.continue_on_error,
     )):
-        parser.error("action=env takes only --plugin: it reports the stack's environment, not a run's")
+        parser.error("action=env takes only --plugin or --repo: it reports the stack's environment, not a run's")
     if args.action == "scan" and any((
-        args.entry, args.run_document, args.config, args.cases_root, args.spec, args.output_dir,
+        args.entry, args.case, args.run_document, args.cases_root, args.spec, args.output_dir,
         args.parallel is not None, args.inputs, args.dry_run, args.continue_on_error,
     )):
-        parser.error("action=scan takes only --plugin and --scratch-dir: it rescans the stack's C++ source")
-    if not args.run_document and not args.entry and not args.uncatalogued and args.action not in {
+        parser.error("action=scan takes only --plugin or --repo, and --scratch-dir: it rescans the stack's C++ source")
+    if not args.run_document and not args.entry and not args.case and not args.uncatalogued and args.action not in {
         "recover", "sweep-plan", "sweep-run", "compare", "env", "scan",
     }:
-        parser.error("--entry is required (or use --run-document with action=run/step)")
+        parser.error("--entry or --case is required (or use --run-document with action=run/step)")
 
 
 def _sweep_output_dir(args) -> str | Path | None:
@@ -1370,6 +1209,68 @@ def _scan_or_uncatalogued(args, driver_context) -> int:
     return 0 if summary["status"] == "ok" else 1
 
 
+def _select_stack(parser: argparse.ArgumentParser, args):
+    """The stack to drive and the repository it was selected from, if any.
+
+    A repository comes from ``--repo``, or from the supplied cases root when
+    that is a repository's tutorials folder: a declared place, never a search.
+    Its ``omnidriver.toml`` names the plugin; ``--plugin`` alone names it for
+    a solver with no repository, and when both are given they must select the
+    same stack. The repository's C++ source is supplied to the stack through
+    the variable its profile declares."""
+    from .core.plugin_interface import load_plugin_context
+    from .core.provider_identity import stack_identity_mismatch
+    from .core.repository import RepositoryError, read_repository, repository_of_cases_root
+
+    repository = None
+    try:
+        if args.repo:
+            repository = read_repository(Path(args.repo).expanduser())
+        elif args.action not in {"recover", "compare"}:
+            supplied = args.cases_root or os.environ.get("OMNIDRIVER_CASES_ROOT")
+            if supplied:
+                repository = repository_of_cases_root(Path(supplied))
+    except RepositoryError as exc:
+        parser.error(str(exc))
+    selector = args.plugin or (repository.plugin if repository is not None else None)
+    if selector is None:
+        parser.error(
+            "no plugin was selected: pass --plugin, or --repo (or a --cases-root that is a "
+            "repository's tutorials folder) whose omnidriver.toml names one"
+        )
+    try:
+        context = load_plugin_context(selector)
+        declared = load_plugin_context(repository.plugin) if repository is not None and args.plugin else None
+    except Exception as exc:
+        parser.error(f"Failed to load plugin {selector!r}: {exc}")
+    if declared is not None:
+        mismatch = stack_identity_mismatch(declared.identity.to_json(), context.identity.to_json())
+        if mismatch:
+            parser.error(
+                f"--plugin {args.plugin!r} and {repository.root / 'omnidriver.toml'} "
+                f"(plugin = {repository.plugin!r}) select different stacks ({', '.join(mismatch)})"
+            )
+    if repository is not None:
+        for provider in context.providers:
+            mapping = provider.get_profile().cxx_mapping
+            if mapping is None:
+                continue
+            if (repository.tutorials / mapping.source_root_relative).resolve() != repository.source:
+                parser.error(
+                    f"{repository.root / 'omnidriver.toml'} declares source = {repository.source}, but "
+                    f"{provider.plugin_id} finds its C++ source at {mapping.source_root_relative!r} "
+                    f"beside the tutorials folder {repository.tutorials}"
+                )
+            supplied_value = os.environ.get(mapping.source_root_variable)
+            if supplied_value and Path(supplied_value).expanduser().resolve() != repository.tutorials:
+                parser.error(
+                    f"{mapping.source_root_variable}={supplied_value} disagrees with the tutorials "
+                    f"folder {repository.tutorials} that {repository.root / 'omnidriver.toml'} declares"
+                )
+            os.environ[mapping.source_root_variable] = str(repository.tutorials)
+    return context, repository
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1381,15 +1282,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.action == "compare":
         return _compare_quantities(args)
 
-    from .core.plugin_interface import default_driver_context, load_plugin_context
-    try:
-        if args.plugin:
-            driver_context = load_plugin_context(args.plugin)
-        else:
-            driver_context = default_driver_context()
-    except Exception as exc:
-        parser.error(f"Failed to load plugin {args.plugin!r}: {exc}")
-
+    driver_context, repository = _select_stack(parser, args)
 
     if args.action == "env":
         from .core.environment_connection import environment_report
@@ -1401,8 +1294,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.action == "scan" or args.uncatalogued:
         return _scan_or_uncatalogued(args, driver_context)
 
-    selected_entry = args.entry
-    # The CLI's own study source, beside --config's.
+    # The CLI's own study source, beside a sweep's `base`.
     cli_study = {PARALLEL_STUDY_NAME: args.parallel} if args.parallel is not None else {}
     # --input NAME=PATH, repeatable; never discovered (CLAUDE.md).
     cli_inputs: dict[str, str] = {}
@@ -1414,28 +1306,23 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(f"--input {name!r} was given more than once")
         cli_inputs[name] = path
 
-    overrides = (
-        _load_spec_overrides(args.config, selected_entry)
-        if args.config
-        else None
-    )
-    # Unconditional: the chain always applies, so an unset --cases-root
-    # means OMNIDRIVER_CASES_ROOT or the working directory, never a location
-    # core invented.
-    if overrides is None:
-        overrides = {}
-    # `cases_root` is a genuine make_spec keyword, so it reads as a valid
-    # config key -- but resolve_cases_root deliberately has no config-file
-    # tier, and the assignment below would overwrite it. Refuse it by name
-    # rather than drop it silently.
-    if "cases_root" in overrides:
-        parser.error(
-            f"--config {args.config} sets 'cases_root', which is not read from "
-            "a config file; supply it with --cases-root or the "
-            "OMNIDRIVER_CASES_ROOT environment variable "
-            "(future/ENVIRONMENT_CONTRACT.md §12)"
-        )
-    overrides["cases_root"] = str(resolve_cases_root(args.cases_root))
+    selected_entry = args.entry
+    if args.case:
+        try:
+            selected_entry, case_cases_root = case_folder_record(args.case, driver_context=driver_context)
+        except TutorialRecordError as exc:
+            print(json.dumps({"status": "failed", "action": args.action, "error": str(exc)}, indent=2))
+            return 1
+        cases_root = case_cases_root
+    elif repository is not None:
+        cases_root = repository.tutorials
+    else:
+        # Unconditional: the chain always applies, so an unset --cases-root
+        # means OMNIDRIVER_CASES_ROOT or the working directory, never a
+        # location core invented.
+        cases_root = resolve_cases_root(args.cases_root)
+    overrides = {"cases_root": str(cases_root)}
+    entry_label = getattr(selected_entry, "name", selected_entry)
 
     if args.action == "catalog":
         from .core.catalog_query import catalog_query
@@ -1443,14 +1330,14 @@ def main(argv: list[str] | None = None) -> int:
         try:
             result = catalog_query(
                 selected_entry,
-                cases_root=Path(overrides["cases_root"]),
+                cases_root=cases_root,
                 document=args.document,
                 key=args.key,
                 driver_context=driver_context,
             )
         except (TutorialRecordError, KeyError) as exc:
             print(json.dumps({
-                "status": "failed", "entry": selected_entry, "action": "catalog", "error": str(exc),
+                "status": "failed", "entry": entry_label, "action": "catalog", "error": str(exc),
             }, indent=2))
             return 1
         print(json.dumps(result, indent=2))
@@ -1461,9 +1348,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             description = describe_entry(
                 selected_entry,
-                entry_kind=args.entry_kind,
                 overrides=overrides,
-                config_path=args.config,
                 cli_study=cli_study,
                 inputs=cli_inputs,
                 driver_context=driver_context,
@@ -1471,7 +1356,7 @@ def main(argv: list[str] | None = None) -> int:
         except TutorialRecordError as exc:
             print(json.dumps({
                 "status": "failed",
-                "entry": selected_entry,
+                "entry": entry_label,
                 "action": "describe",
                 "error": str(exc),
             }, indent=2))
@@ -1485,9 +1370,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             report = strict_plan(
                 selected_entry,
-                entry_kind=args.entry_kind,
                 overrides=overrides,
-                config_path=args.config,
                 environment_source=args.environment_source,
                 allow_unresolved_configuration=args.allow_unresolved_configuration,
                 scratch_root=args.scratch_dir,
@@ -1498,7 +1381,7 @@ def main(argv: list[str] | None = None) -> int:
         except TutorialRecordError as exc:
             print(json.dumps({
                 "status": "failed",
-                "entry": selected_entry,
+                "entry": entry_label,
                 "action": "plan",
                 "error": str(exc),
             }, indent=2))
@@ -1510,46 +1393,19 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if readiness.structural_ok else 1
 
-    if args.action == "step":
+    if args.action in {"step", "run"}:
         if not (args.strict or args.run_document):
-            parser.error("action=step requires --strict or --run-document")
-        if not args.step:
+            parser.error(f"action={args.action} requires --strict or --run-document")
+        if args.action == "step" and not args.step:
             parser.error("action=step requires --step <id>")
         if args.run_document:
             return _run_document_dispatch(args, driver_context)
         context, failure_code = _context_from_entry(
             selected_entry=selected_entry,
-            entry_kind=args.entry_kind,
             overrides=overrides,
-            config_path=args.config,
             environment_source=args.environment_source,
             driver_context=driver_context,
             allow_unresolved_configuration=args.allow_unresolved_configuration,
-            stage_for_execution=True,
-            fresh=args.fresh,
-            scratch_dir=args.scratch_dir,
-            cli_study=cli_study,
-            inputs=cli_inputs,
-        )
-        if context is None:
-            return failure_code
-        return _dispatch_context(args, context)
-
-    if args.action == "run":
-        if not (args.strict or args.run_document):
-            parser.error("action=run requires --strict or --run-document")
-        if args.run_document:
-            return _run_document_dispatch(args, driver_context)
-        context, failure_code = _context_from_entry(
-            selected_entry=selected_entry,
-            entry_kind=args.entry_kind,
-            overrides=overrides,
-            config_path=args.config,
-            environment_source=args.environment_source,
-            driver_context=driver_context,
-            allow_unresolved_configuration=args.allow_unresolved_configuration,
-            stage_for_execution=True,
-            fresh=args.fresh,
             scratch_dir=args.scratch_dir,
             cli_study=cli_study,
             inputs=cli_inputs,
@@ -1590,7 +1446,6 @@ def main(argv: list[str] | None = None) -> int:
                 args.spec,
                 output_dir=output_dir,
                 max_cases=args.max_cases,
-                retry_failed=args.retry_failed,
                 case_timeout_s=args.case_timeout_s,
                 fresh=args.fresh,
                 cli_study=cli_study,

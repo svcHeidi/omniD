@@ -318,15 +318,6 @@ class RefusingReaderPlugin(E2ERecordPlugin):
         return _read
 
 
-NO_RUNNABLE_HOOK_PLUGIN = "plugins.conformance_toy:NoRunnableHookPlugin"
-
-
-class NoRunnableHookPlugin(E2ERecordPlugin):
-    """Declares no ``is_case_runnable_without_workflow``, explicitly, whatever its base does."""
-
-    is_case_runnable_without_workflow = None
-
-
 UNDECLARED_OUTPUT_PLUGIN = "plugins.conformance_toy:UndeclaredOutputPlugin"
 
 

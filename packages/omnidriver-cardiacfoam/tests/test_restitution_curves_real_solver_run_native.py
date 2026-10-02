@@ -88,13 +88,6 @@ def test_restitution_curves_single_case_reaches_completed_via_the_real_cli(
         assert step["status"] == "completed", step
         assert step["exit_code"] == 0, step
 
-    # The committed record case is "case"-sourced, so its structurally empty
-    # config is not checked against the plugin's config schema.
-    run_document = json.loads(
-        (output_dir / "case_0001" / "run_document.json").read_text()
-    )
-    assert run_document["configurationSource"] == "case"
-
     # A real solve writes a multi-sample postProcessing trace, not an empty stub.
     solved_case = output_dir / "cases" / "case_0001"
     trace_files = list((solved_case / "postProcessing").glob("*.txt"))

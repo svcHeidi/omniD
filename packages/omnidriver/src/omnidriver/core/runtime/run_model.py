@@ -19,14 +19,6 @@ import jsonschema
 # test_phases_are_plugin_declared.py.
 Status = Literal["draft", "queued", "planning", "planned", "running", "completed", "failed"]
 
-# Where a RunDocument's plugin configuration lives: "document" means
-# `config` itself carries it; "case" means the staged case files do, and
-# `config` must be empty. No third, inferred value -- see
-# `core.runtime.configuration_source`, the one function both
-# `run_document_adapter` and `run_document_exec` call to decide what a
-# given source implies.
-ConfigurationSource = Literal["document", "case"]
-
 _SCHEMA = json.loads(
     resources.files("omnidriver.schemas")
     .joinpath("run-document.json")
@@ -45,16 +37,6 @@ class RunDocument:
     id: str
     name: str
     status: Status
-    # Plugin-defined: the core schema constrains ``config`` to an object but
-    # imposes no shape on the per-phase values. Annotating the values as
-    # ``dict`` would assert a guarantee the schema no longer makes;
-    # ``specs.validation.validate_run`` enforces the mapping shape and
-    # reports violations as diagnostics.
-    config: dict[str, Any]
-    #: No default (see the module-level note above): every caller that
-    #: builds a RunDocument -- planning, a test, a hand-authored document --
-    #: must say explicitly where its configuration lives.
-    configurationSource: ConfigurationSource
     version: str = "3"
     createdAt: str = ""
     lastModified: str = ""
@@ -90,8 +72,6 @@ class RunDocument:
             id=data["id"],
             name=data["name"],
             status=data["status"],
-            config=data["config"],
-            configurationSource=data["configurationSource"],
             version=data.get("version", "3"),
             createdAt=data.get("createdAt", ""),
             lastModified=data.get("lastModified", ""),

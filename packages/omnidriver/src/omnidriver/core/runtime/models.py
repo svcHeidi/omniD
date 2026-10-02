@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Final
+from typing import Any, Final
 
 
 ArtifactFormat = str
@@ -15,7 +15,7 @@ names the only two values core itself ever writes, for its own artifacts."""
 
 CORE_ARTIFACT_FORMATS: Final[frozenset[str]] = frozenset({"json_summary", "log"})
 """Format values used by artifacts core predicts for itself (see
-``runtime/artifacts.py``'s generic-case fallback) -- not a validation gate
+``runtime/artifacts.py``'s core artifacts) -- not a validation gate
 on plugin-declared formats, which may be anything."""
 
 
@@ -169,30 +169,13 @@ def data_artifact_from_json(data: dict[str, Any]) -> DataArtifact:
     )
 
 
-CaseMutationFn = Callable[[Path], Any]
-
-
 @dataclass(frozen=True)
 class TutorialSpec:
-    """Full tutorial definition consumed by the driver engine.
+    """One committed record case: its name, staged root and planning metadata.
 
-    Built by exactly two constructors: a case folder
-    (``core.runtime.generic_case``) and a tutorial record
-    (``core.runtime.record_execution``) -- a spec is always exactly one
-    case. ``case_mutation`` is the one optional callable, called once
-    against the staged case root, returning whatever ``CaseWriteRecord``
-    (or ``None``) it wrote.
+    Built only by ``core.runtime.record_execution.record_case_spec``.
     """
 
     name: str
     case_root: Path
-    #: Optional: ``None`` when the spec mutates nothing (a marker-less
-    #: generic case folder with no adapter-supplied callback, or a tutorial
-    #: record, whose commit-time patches already happened before this spec
-    #: was ever built -- see ``record_execution.commit_record_case``).
-    #: Called with the staged case root only, once, by whichever caller
-    #: stages it (``sweep_runner._materialize_entry_case``,
-    #: ``introspection._resolve_proposed_changes``) -- never against
-    #: ``spec.case_root`` itself.
-    case_mutation: CaseMutationFn | None = None
     metadata: dict[str, Any] = field(default_factory=dict)

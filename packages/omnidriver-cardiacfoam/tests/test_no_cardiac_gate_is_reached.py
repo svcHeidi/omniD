@@ -41,7 +41,7 @@ def test_reading_every_capability_under_cardiac_fires_no_gated_fallback() -> Non
 
     with compatibility.track_fallback_calls() as calls:
         caps = context.capabilities
-        caps.case_files.describe_config_resolution()
+        caps.case_files.all_rules()
         caps.report_catalog.reports()
         caps.named_catalogs.catalogs()
         caps.override_scopes.scopes()

@@ -69,15 +69,8 @@ class CardiacCorePlugin:
         return {}
 
     def validate_configuration(self, spec: Any) -> tuple[Any, ...]:
-        """Check this spec's workflow-relevant catalog entries at plan time.
-
-        Delegates to ``workflows.run_config.validate_configuration``, so a
-        co-required pair left half-set in the resolved case is reported here
-        rather than only surfacing later at run/step time.
-        """
-        from .workflows.run_config import validate_configuration
-
-        return validate_configuration(spec, self)
+        del spec
+        return ()
 
     def validate_run_semantics(self, context: dict[str, Any]) -> tuple[Any, ...]:
         del context
@@ -106,19 +99,6 @@ class CardiacCorePlugin:
     def get_samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]:
         del resolved
         return {}
-
-    def get_run_document_config_schema(self) -> dict[str, Any]:
-        return {
-            "type": "object",
-            "required": ["preprocessing"],
-            "properties": {"preprocessing": {"type": "object"}},
-            "additionalProperties": False,
-        }
-
-    def build_run_document_config(self, spec):
-        from .workflows.run_config import build_config
-
-        return build_config(spec)
 
     def get_dict_entry_catalog(self) -> dict[str, Any]:
         return {name: list(entries) for name, entries in DOCUMENTS.items()}

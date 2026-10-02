@@ -9,27 +9,6 @@ description = "openCARP cardiac electrophysiology plugin for OmniD, driven as bi
 requires-python = ">=3.11"
 dependencies = ["omnidriver>=0.1.0"]
 
-# Deferred to Task 11 (2026-09-25): registering this entry point before
-# omnidriver.opencarp.plugin exists breaks EVERY package's default plugin
-# discovery, not just this one's tests. plugin_discovery._requires_graph
-# calls entry_point.load()() for every unambiguous name unconditionally,
-# uncached exceptions are ModuleNotFoundError (not LookupError/ValueError),
-# and packages/omnidriver/tests/conftest.py's _default_adapter_resolves()
-# only catches the latter two -- so the whole omnidriver/tests collection
-# aborted the moment this package was installed editable, in every venv
-# shape (all packages; core alone with this package added; the wheel).
-# Verified by installing with the entry point active and running
-# `pytest packages/omnidriver/tests -q`: ModuleNotFoundError during conftest
-# collection, for every test in the package, not merely opencarp's own.
-# Restore this table in Task 11, once OpenCARPPlugin exists.
-# Corrected 2026-09-25 (review B-I1, commit "fix(core): refuse a broken
-# plugin entry point by name"): discovery no longer calls load()() unguarded.
-# A broken entry is now refused by name (BrokenPluginError, a LookupError)
-# and no longer breaks an explicit --plugin for another stack. The deferral
-# still stands: an active entry with no module would make the implicit
-# default refuse, by name, in every venv that installs this package.
-# Enabled 2026-09-25 (Task 11): omnidriver.opencarp.plugin:OpenCARPPlugin now
-# exists, so the entry point no longer names a missing module.
 [project.entry-points."omnidriver.plugins"]
 opencarp = "omnidriver.opencarp.plugin:OpenCARPPlugin"
 

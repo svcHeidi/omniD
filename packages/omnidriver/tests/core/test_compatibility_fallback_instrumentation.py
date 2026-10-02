@@ -23,5 +23,5 @@ def test_explicit_v2_plugin_calls_no_legacy_fallback() -> None:
 
     context = driver_context(MinimalTestPlugin(), source="test:minimal")
     with compatibility.track_fallback_calls() as calls:
-        context.capabilities.run_document_configuration.schema()
+        context.capabilities.override_schema.dict_entry_catalog()
     assert calls == []

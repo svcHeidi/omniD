@@ -1,7 +1,7 @@
-"""The config-schema prose and dict-entry document shape are plugin knowledge.
+"""The dict-entry document shape is plugin knowledge.
 
-Core assembles and serializes; the plugin supplies the vocabulary. A generic
-OpenFOAM plugin must therefore emit no cardiacFoam token at all.
+Core serializes; the plugin supplies the vocabulary. A generic OpenFOAM plugin
+must therefore emit no cardiacFoam token at all.
 """
 
 from __future__ import annotations
@@ -21,18 +21,6 @@ _CARDIAC_TOKENS = (
     "monodomainSolverCoeffs",
     "TNNP",
 )
-
-_MAKE_SPEC_INFO = {"parameters": {"ionic_models": {"default": ["TNNP"]}}}
-
-
-def test_generic_config_schema_mentions_no_cardiac_tokens() -> None:
-    schema = driver_context(MinimalTestPlugin(), source="test:override-schema").capabilities.override_schema.config_schema(
-        "someTutorial", _MAKE_SPEC_INFO
-    )
-    blob = json.dumps(schema)
-    leaked = [token for token in _CARDIAC_TOKENS if token in blob]
-    assert leaked == [], f"generic config schema leaked cardiac tokens: {leaked}"
-
 
 def test_generic_dict_entry_catalog_names_no_cardiac_document() -> None:
     """The previous version of this test asserted only on ``.values()``, so a cardiac leak in the *keys* (``physicsProperties``/``electroProperties``) was invisible to it."""

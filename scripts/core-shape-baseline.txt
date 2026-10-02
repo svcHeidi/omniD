@@ -3,4 +3,5 @@
 # This is debt, not a waiver: scripts/check-core-shape.py fails on any new
 # (file, token) pair, any higher count, and any count that shrank without
 # this file being edited to match -- so the total can only go down.
-core/runtime/generic_case.py	case.foam	3	The `touch_case_foam` parameter and the matching `"touch_case_foam"` metadata key it is stored into. Shrank from 9 (2026-09-28, step S6): `_normalize_case_specs`'s multi-`cases=` machinery, `CaseConfig.params`, and their per-item `item.get("touch_case_foam", ...)` merge were deleted outright (no production caller ever passed `cases=` with real multiple entries; `TutorialSpec` is always exactly one case now). It is the same "touch the ParaView reader marker file" concept as the `case.foam` literal, just spelled as a Python identifier and a dict key instead of a dotted string.
+core/runtime/remediation_audit.py	dictionary_resolution	1	The `effective_dictionary_resolution` key of a `step --apply` audit record: the effective-dictionary read-back is an OpenFOAM concept in the remediation path. Retires with the `--apply` edit format.
+core/runtime/step_candidate.py	dictionary_resolution	1	The same `effective_dictionary_resolution` key, on the step result payload. Retires with the `--apply` edit format.

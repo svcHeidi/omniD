@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import stat
 import json
 from pathlib import Path
@@ -16,8 +15,8 @@ def test_trusted_neutral_plugin_executes_its_declared_case_script(
     tmp_path: Path,
     capsys,
 ) -> None:
-    case_root = tmp_path / "plainCase"
-    case_root.mkdir()
+    case_root = tmp_path / "cases" / "plainCase"
+    case_root.mkdir(parents=True)
     script = case_root / "run-test-case"
     script.write_text("#!/bin/sh\nprintf neutral > neutral-proof.txt\n")
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
@@ -26,13 +25,14 @@ def test_trusted_neutral_plugin_executes_its_declared_case_script(
         "run",
         "--strict",
         "--plugin",
-        "plugins.declared_case_plugin:DeclaredCasePlugin",
-        "--entry", "plainCase",
-        "--cases-root", str(tmp_path),
+        "plugins.e2e_record_plugin:E2EFolderPlugin",
+        "--case", str(case_root),
+        "--scratch-dir", str(tmp_path / "scratch"),
     ])
 
     assert exit_code == 0
-    assert (case_root / "neutral-proof.txt").read_text() == "neutral"
+    assert (tmp_path / "scratch" / "records" / "plainCase" / "neutral-proof.txt").read_text() == "neutral"
+    assert not (case_root / "neutral-proof.txt").exists()
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "ok"
 
@@ -52,8 +52,6 @@ def test_run_document_validation_uses_the_selected_plugin(tmp_path: Path) -> Non
         name="plainOpenFoamCase",
         status="planned",
         plugin=context.identity.to_json(),
-        config={"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}},
-        configurationSource="document",
         workflowDag={
             "steps": [{"id": "run", "command": "run-test-case", "depends_on": []}],
         },
@@ -87,8 +85,6 @@ def test_run_document_rejects_a_mismatched_supplied_plugin(tmp_path: Path) -> No
         name="plainOpenFoamCase",
         status="planned",
         plugin=planned_plugin,
-        config={"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}},
-        configurationSource="document",
         workflowDag={"steps": [{"id": "run", "command": "run-test-case", "depends_on": []}]},
         launch={
             "caseRoot": str(case_root),
@@ -130,8 +126,6 @@ def test_cli_context_from_run_document_rejects_a_mismatched_supplied_plugin(
         name="plainOpenFoamCase",
         status="planned",
         plugin=planned_plugin,
-        config={"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}},
-        configurationSource="document",
     )
     doc_path = tmp_path / "run_document.json"
     doc_path.write_text(json.dumps(run_doc.to_json()))

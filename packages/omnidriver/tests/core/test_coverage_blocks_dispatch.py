@@ -4,8 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-import pytest
-
 from omnidriver.core.planning_types import SimulationAuditItem
 from omnidriver.core.runtime.launch_readiness import is_launchable
 
@@ -25,13 +23,12 @@ def test_an_unavailable_required_check_blocks():
     assert "effective_configuration" in readiness.blocking_reason
 
 
-@pytest.mark.parametrize("status", ["not_requested", "not_applicable"])
-def test_a_declined_or_inapplicable_check_does_not_block(status):
+def test_a_declined_check_does_not_block():
     readiness = is_launchable(
         plan_status="ok",
         simulation_audit=(
             SimulationAuditItem(
-                stage="scientific", status=status,
+                stage="environment_preflight", status="not_requested",
                 points=0, max_points=10, summary="x", evidence={},
             ),
         ),
@@ -51,7 +48,7 @@ def test_the_dispatch_gate_receives_the_audit(tmp_path: Path):
     case_root = tmp_path / "case"
     case_root.mkdir()
     unavailable_item = SimulationAuditItem(
-        stage="dictionary_resolution", status="unavailable",
+        stage="artifact_prediction", status="unavailable",
         points=0, max_points=20, summary="could not run", evidence={},
     )
     report = SimpleNamespace(
@@ -73,13 +70,10 @@ def test_the_dispatch_gate_receives_the_audit(tmp_path: Path):
         )
     )
 
-    with mock.patch.object(cli, "strict_plan", return_value=report), \
-         mock.patch.object(cli, "repo_root_or_none", return_value=None):
+    with mock.patch.object(cli, "strict_plan", return_value=report):
         execution, code = cli._context_from_entry(
             selected_entry="someEntry",
-            entry_kind=None,
             overrides=None,
-            config_path=None,
             environment_source=None,
             driver_context=driver_context,
         )
@@ -108,7 +102,7 @@ def test_an_available_audit_does_not_block_on_coverage_alone(tmp_path: Path):
         environment_diagnostics=(),
         simulation_audit=(
             SimulationAuditItem(
-                stage="dictionary_resolution", status="passed",
+                stage="artifact_prediction", status="passed",
                 points=20, max_points=20, summary="ok", evidence={},
             ),
         ),
@@ -127,13 +121,10 @@ def test_an_available_audit_does_not_block_on_coverage_alone(tmp_path: Path):
         )
     )
 
-    with mock.patch.object(cli, "strict_plan", return_value=report), \
-         mock.patch.object(cli, "repo_root_or_none", return_value=None):
+    with mock.patch.object(cli, "strict_plan", return_value=report):
         execution, code = cli._context_from_entry(
             selected_entry="someEntry",
-            entry_kind=None,
             overrides=None,
-            config_path=None,
             environment_source=None,
             driver_context=driver_context,
         )

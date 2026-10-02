@@ -6,17 +6,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from omnidriver.core.runtime.run_model import RunDocument
 from omnidriver.core.specs.validation import (
     _entry_is_applicable,
     _predicate_matches,
-    primary_phase,
     slot_key,
 )
 
 if TYPE_CHECKING:
     from omnidriver.core.contracts.dictionary import DictEntry
-    from omnidriver.core.plugin_interface import DriverContext
 
 
 def select_applicable_entries(
@@ -149,66 +146,9 @@ def populate_values(
     return populated
 
 
-def _populated_to_run(
-    populated: dict[str, str],
-    entries: list[DictEntry],
-    phase_order: tuple[str, ...],
-) -> RunDocument:
-    """Distribute populated values into a Run document keyed by each entry's
-    primary phase; unmatched keys go to the first declared phase."""
-    # phase_order comes from the active plugin's declared phases, never a
-    # hardcoded cardiac set -- a plugin with different phase words must not KeyError.
-    config: dict[str, dict[str, str]] = {ph: {} for ph in phase_order}
-    default_phase = phase_order[0] if phase_order else ""
-    placed: set[str] = set()
-    for entry in entries:
-        key = slot_key(entry.driver_path)
-        if key not in populated:
-            continue
-        ph = primary_phase(entry, phase_order) or default_phase
-        config[ph][key] = populated[key]
-        placed.add(key)
-    # A populated key with no matching DictEntry (a selector key) lands in the default phase.
-    for key, val in populated.items():
-        if key not in placed:
-            config[default_phase][key] = val
-    # Ephemeral, in-memory: exists only for validate_run's checks over what
-    # `synthesize` just populated, never serialized or executed.
-    return RunDocument(id="dict_builder", name="dict_builder",
-                       status="draft", config=config,
-                       configurationSource="document")
-
-
 import re as _re
 
 _PLACEHOLDER_RE = _re.compile(r"<[A-Za-z_][A-Za-z0-9_]*>")
-
-
-def is_known_override_driver_path(
-    key: str,
-    *,
-    driver_context: "DriverContext",
-) -> bool:
-    """True if `key` matches a real dict-entry driver_path in the active
-    plugin's catalog.
-
-    Matching is prefix-agnostic (via `slot_key`) and honours `dynamic_path`
-    templates by treating any `<placeholder>` segment as a wildcard. A pure
-    membership check: it does not consider whether the entry is *applicable*
-    in a given selector context (`select_applicable_entries`'s job).
-    """
-    normalized = slot_key(key)
-    for entry in driver_context.capabilities.dictionaries.catalog().entries:
-        entry_key = slot_key(entry.driver_path)
-        if getattr(entry, "dynamic_path", False):
-            # re.escape leaves `<`, `>`, letters and `_` untouched, so
-            # escaping first and substituting placeholders after is safe.
-            pattern = _PLACEHOLDER_RE.sub(r"[^.]+", _re.escape(entry_key))
-            if _re.fullmatch(pattern, normalized):
-                return True
-        elif entry_key == normalized:
-            return True
-    return False
 
 
 def match_dynamic_entry(
@@ -216,7 +156,7 @@ def match_dynamic_entry(
 ) -> "tuple[DictEntry, dict[str, str]] | None":
     """Match `key` against a `dynamic_path` entry's template, returning the
     entry and the concrete value each placeholder captured (or None). Same
-    wildcard convention as `is_known_override_driver_path`.
+    wildcard convention as the catalogue's ``<placeholder>`` segments.
 
     Returns the first match; the catalog has no two dynamic entries whose
     templates collide at the same segment length today.

@@ -1004,6 +1004,26 @@ def locate(scan: Scan, entries: Iterable, *, document: str) -> dict[str, frozens
         placed.update({root: frozenset(places) for root, places in found.items()})
 
 
+def reads_at(scan: Scan, placed: dict[str, frozenset[tuple[str, ...]]], trail: tuple[str, ...]) -> bool:
+    """Whether some read in ``scan`` names the key (or sub-dictionary) at
+    ``trail``, a path from a document's root: a read whose root ``locate``
+    placed (``placed``) so that its place, scope and key spell it. A leading
+    ``<model>Coeffs`` segment of ``trail`` and a leading ``$TOKEN`` segment of
+    a place both stand for the same runtime-selection block and are dropped."""
+    if trail and trail[0].endswith("Coeffs"):
+        trail = trail[1:]
+    for read in scan.reads:
+        if read.key is None or read.scope is None:
+            continue
+        for place in placed.get(read.root, ()):
+            spelled = place + read.scope + (read.key,)
+            if spelled and spelled[0].startswith("$"):
+                spelled = spelled[1:]
+            if len(spelled) == len(trail) and all(_segment_matches(*pair) for pair in zip(spelled, trail)):
+                return True
+    return False
+
+
 def _same_function(defined: str, called: str) -> bool:
     """A definition and a call name one function when one spelling is the
     other with more of its namespace or class qualification."""

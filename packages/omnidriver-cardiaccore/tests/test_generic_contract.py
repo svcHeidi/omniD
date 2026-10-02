@@ -19,13 +19,6 @@ def test_plugin_has_a_valid_context() -> None:
     assert context.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
     assert len(context.capabilities.dictionaries.entries()) == 88  # includes rvLocalBands
     assert context.capabilities.dictionaries.phases() == ("preprocessing",)
-    # No factory tutorial survives: every one migrated onto a tutorial
-    # record (see `context.capabilities.tutorial_records.catalog()`) or,
-    # for cardiaccore-pig-transmural-purkinje (no native tutorial at all),
-    # was dropped outright. cardiacCore never overrode the generic-case
-    # factory that replaced the deleted factory registry, so the new
-    # capability answers `None`.
-    assert context.capabilities.generic_case_factory.factory() is None
     assert set(context.capabilities.tutorial_records.catalog()) == {
         "humanSlab", "idealizedHeart", "idealizedHeartEndocardial", "idealizedHeartPigTransmural",
     }
@@ -46,8 +39,8 @@ def test_plugin_exposes_agent_guidance_catalogs() -> None:
 
 
 def test_controlled_allrun_executes_without_domain_claims(tmp_path: Path, capsys) -> None:
-    case_root = tmp_path / "controlled-case"
-    case_root.mkdir()
+    case_root = tmp_path / "cases" / "controlled-case"
+    case_root.mkdir(parents=True)
     allrun = case_root / "Allrun"
     allrun.write_text("#!/bin/sh\nprintf generic-proof > generic-proof.txt\n")
     allrun.chmod(allrun.stat().st_mode | stat.S_IXUSR)
@@ -55,12 +48,14 @@ def test_controlled_allrun_executes_without_domain_claims(tmp_path: Path, capsys
     result = main([
         "run", "--strict",
         "--plugin", "omnidriver.cardiaccore.plugin:CardiacCorePlugin",
-        "--entry", "controlled-case",
-        "--cases-root", str(tmp_path),
+        "--case", str(case_root),
+        "--scratch-dir", str(tmp_path / "scratch"),
     ])
 
     assert result == 0
-    assert (case_root / "generic-proof.txt").read_text() == "generic-proof"
+    staged = tmp_path / "scratch" / "records" / "controlled-case"
+    assert (staged / "generic-proof.txt").read_text() == "generic-proof"
+    assert not (case_root / "generic-proof.txt").exists()
     assert json.loads(capsys.readouterr().out)["status"] == "ok"
 
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
@@ -60,10 +60,15 @@ def case_dict_key_diagnostics(
     *,
     catalogued_paths: Iterable[str],
     dict_relpaths: Sequence[str],
+    scanned: Callable[[str, tuple[str, ...]], bool] | None = None,
 ) -> tuple[StrictDiagnostic, ...]:
     """Warn (never error) about keys in `dict_relpaths` absent from the
     catalogue; the catalogue deliberately omits keys OpenFOAM itself owns, so
     an unmatched key needs human judgement rather than a failed plan.
+
+    ``scanned(relpath, trail)`` says whether the solver's own source reads
+    that key: the plan then reports it once, as an uncatalogued note, and this
+    check stays silent.
 
     Matching is by position, not bare name: a trail matches a catalogue path
     (or a path prefix) with `<placeholder>` segments matching any name --
@@ -87,7 +92,10 @@ def case_dict_key_diagnostics(
             from foamlib import FoamFile
 
             parsed = FoamFile(path)
-            unmatched = _unmatched(parsed, known)
+            unmatched = [
+                trail for trail in _unmatched(parsed, known)
+                if scanned is None or not scanned(relpath, trail)
+            ]
         except Exception as exc:
             diagnostics.append(
                 diagnostic(

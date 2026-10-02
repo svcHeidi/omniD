@@ -21,24 +21,12 @@ requires:
 #   - artifacts: predict_data_artifacts unconditionally returns `()`.
 #   - run_semantic_validator: validate_run_semantics unconditionally
 #     returns `()`.
+#   - configuration_validator: validate_configuration unconditionally
+#     returns `()`.
 #   - runtime_evidence: all four adapted members (get_artifact_value_reader,
 #     get_extra_provenance_paths, get_solve_step_commands,
 #     get_telemetry_source_globs) ignore their arguments and return a fixed
 #     empty/`None` value.
-#
-# run_document_configuration is genuinely implemented: a per-tutorial
-# $CARDIAC_CONDUCTIVITY/... schema, not a stub.
-#
-# configuration_validator's validate_configuration is also genuinely
-# implemented, wired to workflows/run_config.validate_configuration: it
-# checks the spec's own workflow-relevant catalog entries against the
-# resolved case at plan time (required / enum / co_required_with /
-# mutually_exclusive_with), by composing this provider with the OpenFOAM
-# environment adapter it requires and reusing core's validate_run, and it
-# exempts a generic case_folder run (spec.metadata["generic_case"]). It is
-# still not declared in provides: below -- undeclared-but-real is a
-# different gap than hollowness, and the realness standard above does not
-# settle it.
 #
 # Realness governs check_provides(); it does not reach resolutions()
 # (provider_stack.py), which picks each capability's winner purely by
@@ -53,7 +41,6 @@ provides:
   - named_catalogs
   - cxx_mapping
   - manifest
-  - run_document_configuration
   # get_record_key_validator is the sole member adapting
   # record_key_validation; it answers for every document a cardiacCore stack
   # might see (record_key_validation.record_key_validator's own module

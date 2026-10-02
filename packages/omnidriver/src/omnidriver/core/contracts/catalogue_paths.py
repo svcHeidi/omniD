@@ -3,9 +3,8 @@
 Core owns ``DictEntry``, so it owns parsing a ``driver_path`` into its
 scope-stripped, wildcard-aware form; nothing here reads a file, parses C++,
 or knows an OpenFOAM dictionary. This is split from the OpenFOAM C++ scanner
-because ``strict_planning`` calls ``catalogued_paths`` eagerly, before a
-capability can dispatch to a plugin's own hook -- keeping it here lets a
-plugin implement ``get_case_dict_key_diagnostics`` without importing
+because a plugin's plan diagnostics (``get_plan_diagnostics``) call
+``catalogued_paths`` -- keeping it here lets a plugin do that without importing
 ``omnidriver.openfoam``. ``omnidriver.openfoam.dict_keys_scanner`` re-exports
 these for the legal C++ drift direction.
 """

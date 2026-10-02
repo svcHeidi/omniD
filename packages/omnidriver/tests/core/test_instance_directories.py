@@ -9,7 +9,6 @@ from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.models import DataArtifact, expand_path_pattern
 from omnidriver.core.runtime.reconciler import declared_instance_names, reconcile_artifacts
-from omnidriver.core.runtime.sweep_runner import _clean_stale_instances
 from plugins.minimal_plugin import MinimalTestPlugin
 
 _DECLARED = CaseRuntimeConventions(instance_directory_pattern=r"^step-\d+$", preserved_instance_names=("step-0",))
@@ -44,18 +43,6 @@ def test_declared_instances_are_exactly_what_the_plugins_pattern_matches(tmp_pat
     assert names == ("step-0", "step-1")
     report = reconcile_artifacts(tmp_path, (_ARTIFACT,), instance_names=names)
     assert sorted(Path(m["path"]).parent.name for m in report.artifacts[0]["matched_files"]) == ["step-0", "step-1"]
-
-
-def test_cleaning_removes_generated_instances_and_keeps_preserved_ones(tmp_path):
-    _dirs(tmp_path, "step-0", "step-1", "0.5")
-    _clean_stale_instances(tmp_path, conventions=_DECLARED)
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["0.5", "step-0"]
-
-
-def test_a_stack_that_declares_no_instances_cleans_nothing(tmp_path):
-    _dirs(tmp_path, "0", "0.5")
-    _clean_stale_instances(tmp_path, conventions=CaseRuntimeConventions())
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["0", "0.5"]
 
 
 def test_the_time_vocabulary_is_gone():

@@ -1,4 +1,4 @@
-"""The four duplicate intakes deferred until providers could compose."""
+"""Duplicate intakes that composition removed."""
 
 from __future__ import annotations
 
@@ -19,15 +19,6 @@ def stack_context():
     )
 
 
-def test_config_schema_has_one_source(stack_context):
-    """Two capabilities answered "what may config contain"."""
-    caps = stack_context.capabilities
-    assert (
-        caps.override_schema.config_schema("any", {})
-        == caps.run_document_configuration.schema()
-    ), "the two config schemas must no longer be independently authored"
-
-
 def test_core_builds_the_capability_manifest(stack_context):
     """The plugin must not assemble what core can compose."""
     import inspect
@@ -35,8 +26,3 @@ def test_core_builds_the_capability_manifest(stack_context):
 
     source = inspect.getsource(CardiacFoamPlugin.get_capabilities)
     assert "build_capability_manifest" not in source
-
-
-def test_a_case_is_recognised_by_one_predicate(stack_context):
-    caps = stack_context.capabilities
-    assert hasattr(caps.case_compatibility, "is_case")

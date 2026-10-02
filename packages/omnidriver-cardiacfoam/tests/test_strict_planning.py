@@ -11,17 +11,15 @@ import tempfile
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
-from omnidriver.core import strict_planning
 from omnidriver.cli import main
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-from omnidriver.core.runtime.models import TutorialSpec
+from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 from omnidriver.core.strict_planning import strict_plan
 
 pytestmark = pytest.mark.native
@@ -66,22 +64,8 @@ def _stage_case_dictionaries(native_root: Path, relpath: str, scratch_cases_root
             shutil.copytree(src, scratch_case / name)
 
 
-def _spec_with_workflow(case_root: Path, *, steps: list[dict]) -> TutorialSpec:
-    return TutorialSpec(
-        name=case_root.name,
-        case_root=case_root,
-        case_mutation=None,
-        metadata={
-            "setup_root": str(case_root),
-            "output_dir": str(case_root / "postProcessing"),
-            "entry_name": case_root.name,
-            "entry_kind": "case_folder",
-            "entry_path": case_root.name,
-            "source_type": "filesystem_case",
-            "workflow_family": None,
-            "workflow_dag": {"steps": steps},
-        },
-    )
+def _record_with_steps(name: str, *steps: WorkflowStep) -> TutorialRecord:
+    return TutorialRecord(name=name, native_case_relpath=name, workflow_steps=steps)
 
 
 def test_cli_plan_strict_prints_json_and_returns_zero(tmp_path: Path) -> None:
@@ -106,7 +90,7 @@ def test_strict_plan_status_ignores_environment_only_errors(tmp_path: Path, monk
     monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
     monkeypatch.delenv("WM_PROJECT_DIR", raising=False)
     monkeypatch.setattr(
-        strict_planning.shutil,
+        shutil,
         "which",
         lambda name, *_, **__: f"/usr/bin/{name}" if name == "cardiacFoam" else None,
     )
@@ -135,7 +119,7 @@ def test_cli_run_strict_refuses_environment_errors_before_execution(tmp_path: Pa
     monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
     monkeypatch.delenv("WM_PROJECT_DIR", raising=False)
     monkeypatch.setattr(
-        strict_planning.shutil,
+        shutil,
         "which",
         lambda name, *_, **__: f"/usr/bin/{name}" if name == "cardiacFoam" else None,
     )
@@ -166,35 +150,30 @@ def test_cli_run_strict_refuses_environment_errors_before_execution(tmp_path: Pa
     )
 
 
-def test_strict_plan_fails_on_unknown_workflow_command() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = cases_root / "badCase"
-        (case_root / "constant").mkdir(parents=True)
-        (case_root / "system").mkdir()
-        (case_root / "constant" / "physicsProperties").write_text("type electroModel;\n")
-        (case_root / "constant" / "electroProperties").write_text(
-            "myocardiumSolver singleCellSolver;\n"
-            "singleCellSolverCoeffs\n"
-            "{\n"
-            "    ionicModel AlievPanfilov;\n"
-            "    tissue myocyte;\n"
-            "    solutionAlgorithm explicit;\n"
-            "}\n"
-        )
-        for name in ("controlDict", "fvSchemes", "fvSolution"):
-            (case_root / "system" / name).write_text("\n")
-        with mock.patch.object(
-            strict_planning,
-            "load_entry_spec",
-            return_value=_spec_with_workflow(
-                case_root,
-                steps=[{"id": "unknown", "command": "notARealUtility", "depends_on": []}],
-            ),
-        ):
-            report = strict_plan(
-                "badCase",
-                overrides={"cases_root": str(cases_root)}, driver_context=_CTX,)
+def test_strict_plan_fails_on_unknown_workflow_command(tmp_path: Path) -> None:
+    cases_root = tmp_path / "cases"
+    case_root = cases_root / "badCase"
+    (case_root / "constant").mkdir(parents=True)
+    (case_root / "system").mkdir()
+    (case_root / "constant" / "physicsProperties").write_text("type electroModel;\n")
+    (case_root / "constant" / "electroProperties").write_text(
+        "myocardiumSolver singleCellSolver;\n"
+        "singleCellSolverCoeffs\n"
+        "{\n"
+        "    ionicModel AlievPanfilov;\n"
+        "    tissue myocyte;\n"
+        "    solutionAlgorithm explicit;\n"
+        "}\n"
+    )
+    for name in ("controlDict", "fvSchemes", "fvSolution"):
+        (case_root / "system" / name).write_text("\n")
+
+    report = strict_plan(
+        _record_with_steps("badCase", WorkflowStep(step_id="unknown", command=("notARealUtility",))),
+        overrides={"cases_root": str(cases_root)},
+        scratch_root=tmp_path / "scratch",
+        driver_context=_CTX,
+    )
 
     payload = report.to_json()
     assert payload["status"] == "failed"
@@ -204,88 +183,52 @@ def test_strict_plan_fails_on_unknown_workflow_command() -> None:
     )
 
 
-def test_strict_plan_fails_on_unknown_workflow_dependency() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = cases_root / "badDependency"
-        (case_root / "constant").mkdir(parents=True)
-        (case_root / "system").mkdir()
-        (case_root / "constant" / "physicsProperties").write_text("type electroModel;\n")
-        (case_root / "constant" / "electroProperties").write_text(
-            "myocardiumSolver singleCellSolver;\n"
-            "singleCellSolverCoeffs\n"
-            "{\n"
-            "    ionicModel AlievPanfilov;\n"
-            "    tissue myocyte;\n"
-            "    solutionAlgorithm explicit;\n"
-            "}\n"
-        )
-        for name in ("controlDict", "fvSchemes", "fvSolution"):
-            (case_root / "system" / name).write_text("\n")
-        with mock.patch.object(
-            strict_planning,
-            "load_entry_spec",
-            return_value=_spec_with_workflow(
-                case_root,
-                steps=[{"id": "solve", "command": "cardiacFoam", "depends_on": ["mesh"]}],
-            ),
-        ):
-            report = strict_plan(
-                "badDependency",
-                overrides={"cases_root": str(cases_root)}, driver_context=_CTX,)
-
-    payload = report.to_json()
-    assert payload["status"] == "failed"
-    assert payload["readiness_score"]["status"] == "blocked"
-    assert "workflow_preparation" in payload["readiness_score"]["blocked_stages"]
-    workflow_audit = next(
-        item for item in payload["simulation_audit"]
-        if item["stage"] == "workflow_preparation"
+def test_strict_plan_fails_for_a_solver_no_artifact_handler_covers(tmp_path: Path) -> None:
+    cases_root = tmp_path / "cases"
+    case_root = cases_root / "missingArtifacts"
+    (case_root / "constant").mkdir(parents=True)
+    (case_root / "system").mkdir()
+    (case_root / "constant" / "physicsProperties").write_text("type electroModel;\n")
+    (case_root / "constant" / "electroProperties").write_text(
+        "myocardiumSolver futureSolver;\n"
+        "futureSolverCoeffs\n"
+        "{\n"
+        "    ionicModel AlievPanfilov;\n"
+        "}\n"
     )
-    assert workflow_audit["points"] == 0
-    assert payload["run_document"]["status"] == "failed"
-    assert payload["run_document"]["validation"]["status"] == "failed"
-    assert any(
-        item["code"] == "unknown_workflow_dependency"
-        for item in payload["workflow_diagnostics"]
+    for name in ("controlDict", "fvSchemes", "fvSolution"):
+        (case_root / "system" / name).write_text("\n")
+
+    report = strict_plan(
+        _record_with_steps("missingArtifacts", WorkflowStep(step_id="solve", command=("cardiacFoam",))),
+        overrides={"cases_root": str(cases_root)},
+        scratch_root=tmp_path / "scratch",
+        driver_context=_CTX,
     )
-
-
-def test_strict_plan_fails_when_artifact_prediction_is_empty() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = cases_root / "missingArtifacts"
-        (case_root / "constant").mkdir(parents=True)
-        (case_root / "system").mkdir()
-        (case_root / "constant" / "physicsProperties").write_text("type electroModel;\n")
-        (case_root / "constant" / "electroProperties").write_text(
-            "myocardiumSolver futureSolver;\n"
-            "futureSolverCoeffs\n"
-            "{\n"
-            "    ionicModel AlievPanfilov;\n"
-            "}\n"
-        )
-        for name in ("controlDict", "fvSchemes", "fvSolution"):
-            (case_root / "system" / name).write_text("\n")
-
-        report = strict_plan(
-            "missingArtifacts",
-            overrides={"cases_root": str(cases_root)}, driver_context=_CTX,)
 
     payload = report.to_json()
     assert payload["status"] == "failed"
     assert any(
-        item["code"] == "empty_artifact_prediction"
+        item["code"] == "unknown_solver" and item["field"] == "myocardiumSolver"
         for item in payload["artifact_diagnostics"]
     )
 
 
-def test_every_strict_plan_scans_the_supplied_source() -> None:
+def test_every_strict_plan_scans_the_supplied_source(tmp_path: Path) -> None:
     """With the source supplied, the catalogue diagnostics are the scan's:
     no contradiction, and only ``uncatalogued`` notes."""
-    _native_tutorials_root()
-    diagnostics = strict_planning._catalog_diagnostics(_CTX)
-    assert {(d.level, d.code) for d in diagnostics} <= {("info", "plugin_catalog_uncatalogued")}
+    cases_root = tmp_path / "cases"
+    _stage_case_dictionaries(_native_tutorials_root(), _SINGLE_CELL_RELPATH, cases_root)
+    report = strict_plan(
+        "singleCell", driver_context=_CTX,
+        overrides={"cases_root": str(cases_root)},
+        scratch_root=tmp_path / "scratch",
+    ).to_json()
+    catalogue = [
+        d for d in report["plugin_diagnostics"]
+        if d["code"].startswith(("plugin_catalog_", "plugin_cxx_"))
+    ]
+    assert {(d["level"], d["code"]) for d in catalogue} <= {("info", "plugin_catalog_uncatalogued")}
 
 
 def test_batched_ionic_model_does_not_require_optional_batched_keys(tmp_path: Path):

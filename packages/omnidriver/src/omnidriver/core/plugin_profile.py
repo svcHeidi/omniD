@@ -159,23 +159,6 @@ def _is_valid_environment_role(role: str) -> bool:
     return all(part.replace("_", "").replace("-", "").isalnum() for part in (namespace, leaf))
 
 
-#: Namespaces whose files belong to the plugin or the case rather than to the
-#: simulation environment. Every other validated namespace is adapter-owned.
-_NON_ENVIRONMENT_NAMESPACES: frozenset[str] = frozenset({"plugin", "case"})
-
-
-def is_environment_role(role: str) -> bool:
-    """True when ``role`` names a file the simulation environment owns.
-
-    Core owns only the ``plugin`` and ``case`` namespaces. An adapter owns
-    every other validated namespace, including a legacy ``x-`` namespace.
-    """
-    namespace, separator, _ = role.partition(".")
-    if not separator:
-        return False
-    return namespace not in _NON_ENVIRONMENT_NAMESPACES
-
-
 def entrypoint_relpaths(driver_context: Any | None) -> tuple[str, ...]:
     """Case-relative executable paths declared by the active environment.
 
@@ -190,19 +173,6 @@ def entrypoint_relpaths(driver_context: Any | None) -> tuple[str, ...]:
         driver_context.capabilities.case_runtime_conventions.conventions()
         .case_entrypoints
     )
-
-
-def entrypoint_command(driver_context: Any | None) -> str:
-    """The single command name a generated workflow step should invoke.
-
-    A workflow step names one command; ``entrypoint_relpaths`` may return
-    several. The first declared wins, which matches what ``_has_entrypoint``
-    already treats as sufficient for case detection.
-    """
-    paths = entrypoint_relpaths(driver_context)
-    if not paths:
-        raise ValueError("The active environment did not declare a case entrypoint.")
-    return paths[0]
 
 
 def replica_directory_globs(driver_context: Any | None) -> tuple[str, ...]:

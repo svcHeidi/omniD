@@ -86,18 +86,11 @@ def test_openfoam_never_resolves_an_implicit_driver_context() -> None:
 # parameter required): the call itself lives in omnidriver/*.py, which
 # _CORE_ROOT does not scan.
 #
-# sweep_runner.py:273 and :449 did exactly that until Part B of
-# docs/superpowers/specs/2026-09-02-neutral-default-context-design.md, calling
-# materialize_case() with no context one line after route_case_values() was
-# given one.
-#
 # This set is written out rather than inferred. An inferred rule would either
 # miss functions or fire on unrelated same-named calls; an explicit list is
 # greppable, and _test_the_guarded_names_still_exist below fails loudly if one
 # of these stops existing rather than letting the guard quietly shrink.
 _CONTEXT_TAKING_PUBLIC_EDGE = {
-    "materialize_case": "omnidriver.sweep_materialize",
-    "route_case_values": "omnidriver.sweep_routing",
     "all_documented_driver_paths": "omnidriver.dict_entries",
 }
 

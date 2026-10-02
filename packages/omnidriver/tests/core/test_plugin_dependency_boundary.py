@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from types import SimpleNamespace
 
 import omnidriver.core
 
@@ -100,35 +99,6 @@ def test_core_executable_literals_do_not_encode_adapter_conventions() -> None:
                 offenders.append(f"{path.relative_to(_CORE_ROOT)}:{node.lineno}")
 
     assert offenders == []
-
-
-def test_catalogue_paths_follow_adapter_case_file_rules(tmp_path: Path) -> None:
-    """Dictionary discovery must not assume environment directory names."""
-    from omnidriver.core.plugin_profile import CaseFileRule
-    from omnidriver.core.strict_planning import _owned_dict_relpaths
-
-    case_root = tmp_path / "case"
-    (case_root / "config").mkdir(parents=True)
-    (case_root / "config" / "solver.yaml").write_text("solver: demo\n")
-    rules = (
-        CaseFileRule(
-            path="config/solver.yaml",
-            kind="configuration",
-            role="x-neutral.configuration",
-            required="always",
-        ),
-    )
-    context = SimpleNamespace(
-        capabilities=SimpleNamespace(
-            case_files=SimpleNamespace(all_rules=lambda: rules),
-            override_schema=SimpleNamespace(
-                dict_entry_catalog=lambda: {"solver.yaml": ()},
-            ),
-        ),
-    )
-    spec = SimpleNamespace(case_root=case_root, metadata={})
-
-    assert _owned_dict_relpaths(spec, context) == ("config/solver.yaml",)
 
 
 ADAPTER_PACKAGES = (

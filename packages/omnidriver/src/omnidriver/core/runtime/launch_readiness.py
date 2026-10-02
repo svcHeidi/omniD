@@ -24,7 +24,7 @@ class LaunchReadiness:
     coverage_ok: bool = True
 
 
-# Owed check that couldn't run; not_requested/not_applicable are recorded but don't block.
+# Owed check that couldn't run; not_requested is recorded but doesn't block.
 _BLOCKING_OUTCOME = "unavailable"
 
 
@@ -41,7 +41,7 @@ def is_launchable(
     with ``level == "error"`` block launch; ``level == "warning"`` entries only
     set ``has_warnings``. In ``simulation_audit``, a stage scored
     ``unavailable`` blocks launch (a required check could not run);
-    ``not_requested`` and ``not_applicable`` do not. Omitting
+    ``not_requested`` does not. Omitting
     ``simulation_audit`` means no coverage information was supplied, and never
     blocks -- offline planning must keep working with the runtime absent.
     """

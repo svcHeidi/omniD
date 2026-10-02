@@ -12,16 +12,9 @@ import pytest
 from omnidriver.cardiacfoam.physics_layout import (
     PhysicsLayoutError,
     physics_type,
-    region_document,
     region_of,
 )
-from omnidriver.cardiacfoam.planning_policy import is_nondimensional_case
 from omnidriver.core.tutorial_records import TutorialRecordError
-
-
-class _Spec:
-    def __init__(self, case_root: Path) -> None:
-        self.case_root = case_root
 
 
 def _write(path: Path, text: str) -> None:
@@ -89,23 +82,8 @@ def test_an_unknown_role_is_refused_for_a_single_region_type(tmp_path):
 def test_a_case_without_physics_properties_is_single_region(tmp_path):
     _write(tmp_path / "constant" / "electroProperties", "myocardiumSolver monodomainSolver;\n")
     assert region_of(tmp_path, "electro") is None
-    assert region_document(tmp_path, "electro", "electroProperties") == (
-        tmp_path / "constant" / "electroProperties"
-    )
 
 
 def test_a_case_without_physics_properties_still_refuses_an_unknown_role(tmp_path):
     with pytest.raises(PhysicsLayoutError, match="solid"):
         region_of(tmp_path, "solid")
-
-
-def test_the_hook_lets_a_physics_layout_error_propagate(tmp_path):
-    _write(tmp_path / "constant" / "physicsProperties", "type fsiModel;\n")
-    with pytest.raises(PhysicsLayoutError, match="fsiModel"):
-        is_nondimensional_case(_Spec(tmp_path))
-
-
-def test_the_hook_still_swallows_the_detectors_own_parse_failure(tmp_path):
-    """A ``KeyError`` from ``detect_myocardium_solver_name`` still answers "not exempt"."""
-    _write(tmp_path / "constant" / "electroProperties", "myocardiumSolver monodomainSolver;\n")
-    assert is_nondimensional_case(_Spec(tmp_path)) is False

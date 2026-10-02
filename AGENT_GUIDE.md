@@ -10,26 +10,60 @@
 
 | Action | Function | Module |
 |---|---|---|
-| Discover tutorials, dict keys, ionic models, utilities | `describe_tutorial(...)` | `omnidriver.core.introspection` |
-| Build a non-mutating strict launch contract | `strict_plan(...)` | `omnidriver.core.strict_planning` |
+| Discover records, dict keys, ionic models, utilities | `describe_entry(...)` | `omnidriver.core.introspection` |
+| Plan one record case (stages a copy, never writes the native case) | `strict_plan(...)` | `omnidriver.core.strict_planning` |
 | Execute an agent-authored RunDocument | `omnidriver run/step --run-document <file>`; `build_execution_inputs(...)` | `omnidriver.core.runtime.run_document_exec` |
 | Execute one strict workflow step | `run_workflow_step(...)` | `omnidriver.core.runtime.workflow_runner` |
 | Read/write strict workflow state | `workflow_state_from_json(...)`, `WorkflowRunState.to_json()` | `omnidriver.core.runtime.workflow_state` |
 | Validate RunDocument v3 (any other version is refused) | `RunDocument.from_json(...)` | `omnidriver.core.runtime.run_model` |
-| Validate a configuration before launching | `validate_run(run, *, entries=None)` | `omnidriver.core.specs.validation` |
+| Check a flat `{slot_key: value}` context against the catalogue's rules | `validate_context(context, entries=, driver_context=)` | `omnidriver.core.specs.validation` |
 | Synthesize a fresh `electroProperties` / `physicsProperties` | `build_electro_properties(...)`, `build_physics_properties(...)` | `omnidriver.cardiacfoam.dict_builder` |
 | Parse an existing `electroProperties` back to selectors + overrides | `parse_electro_properties(path)` | `omnidriver.cardiacfoam.dict_builder` |
-| Write a from-scratch case's dicts as one committed plan (the sweep's case writer; nothing is launched) | `build_and_launch(...)` | `omnidriver.cardiacfoam.dict_builder` |
+| Write a from-scratch case's dicts as one committed plan (nothing is launched) | `build_and_launch(...)` | `omnidriver.cardiacfoam.dict_builder` |
 | Locate predicted outputs | `strict_plan(...)`'s `expected_artifacts` field (also in `omnidriver plan --strict` JSON) | `omnidriver.core.strict_planning` |
 | Verify outputs vs predictions | `artifact_reconciliation` in `run --strict`/`step --strict` JSON output | `omnidriver.core.runtime.reconciler` |
 | List past runs | `list_runs(root)` | `omnidriver.core.runtime.run_discovery` |
-| Plan/run a parameter sweep | `omnidriver sweep-plan/sweep-run --spec sweep.json --output-dir <dir>` | `omnidriver.core.runtime.sweep_runner` |
+| Plan/run a study over a record | `omnidriver sweep-plan/sweep-run --spec sweep.json --output-dir <dir>` | `omnidriver.core.runtime.sweep_runner` |
+
+## Selecting the stack
+
+A solver repository names itself in an `omnidriver.toml` at its root, with
+exactly four keys, each a path relative to the repository and inside it:
+
+```toml
+plugin = "cardiacfoam"
+tutorials = "tutorials"
+source = "src"
+scripts = "applications/scripts"
+```
+
+omnidriver reads it only from a place you supply, never by searching upward
+from the working directory:
+
+- `--repo <dir>`: the repository. Its `plugin` selects the stack and its
+  `tutorials` is the cases root (`--cases-root` is refused with it). Its
+  `source` must be where the plugin's `cxx_mapping` finds the C++ relative to
+  the tutorials folder. omnidriver exports the profile's declared source
+  variable (`OMNIDRIVER_NATIVE_TUTORIALS` for cardiacFOAM,
+  `OMNIDRIVER_CARDIACCORE_TREE` for cardiacCore) from the repository, and
+  refuses a variable already set to something else. `scripts` is read, not
+  yet used.
+- `--cases-root <dir>` or `$OMNIDRIVER_CASES_ROOT`, when it is a repository's
+  tutorials folder: the cases root itself or its parent holds an
+  `omnidriver.toml` whose `tutorials` is that folder. The working-directory
+  default for the cases root infers nothing.
+- `--plugin <id>`, for a solver with no repository (openCARP, the test toys):
+  an installed id from the `omnidriver.plugins` entry-point group, or
+  `module.path:PluginClass` (a colon always selects this trusted
+  local-development import; neither form is sandboxed). Given with a
+  repository, it must select the same stack or the run is refused by name.
+
+With neither a repository nor `--plugin` the run is refused: there is no
+default plugin and no choice among installed plugins. `capability_manifest`'s
+accept-surface is the selected stack's own, so `allowed_commands.core` changes
+with the stack.
 
 ## Preferred strict agent loop
-
-A single per-operation driver context supplies focused solver capabilities
-internally; omitted contexts, RunDocument v3, optional-hook fallbacks,
-commands, diagnostics, and artifacts behave as documented below.
 
 Use strict planning before launching. It is the only path that tells an agent
 whether the run is machine-readable, validated, catalog-covered, artifact
@@ -47,32 +81,50 @@ automatically, on the fly, whenever it is missing or older than the compiled
 (`otool -L`/`ldd`) to infer which backend was compiled, never by trusting an
 asserted flag. omnidriver rejects an unset, invalid, unbuilt, or
 compiled-metadata-mismatched selection instead of letting a shell resolver
-silently select another checkout. This runtime file is separate from
-case/sweep overrides and applies to all cardiacFoam entries.
+silently select another checkout. This runtime file is separate from study
+values and applies to all cardiacFoam records.
 
 ```bash
-omnidriver plan --strict --entry singleCell
-omnidriver run --strict --entry singleCell
+omnidriver plan --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry singleCell
+omnidriver run  --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry singleCell
 ```
 
-The `plan --strict` command is non-mutating. It prints JSON with:
+`--entry` is the name of a tutorial record the selected stack registers;
+`describe` lists them in its `records` key. A record is the only entry kind.
+`plan`, `step` and `run` stage the record's case under
+`<scratch>/records/<name>`; the scratch directory is supplied (`--scratch-dir`
+or `OMNIDRIVER_SCRATCH_DIR`, outside the cases root) or the command is refused
+by name (`ScratchRootNotSupplied`). The native case is never written. A single
+plan, step or run takes the native case as it is, plus `--parallel` and
+`--input`; any study (`document:key` patches, axes, `parallel`) goes in a
+sweep spec (see "Running a study: sweeps").
+
+`describe --entry <record>` takes no study values; it returns `entry`,
+`records`, `plugin_catalogs`, `record_preview`, `record_surface` and
+`capability_manifest`. A preview of a study is `sweep-plan`.
+
+The `plan --strict` command stages the case and persists the plan's
+`run_document.json` under `launch.output_dir`. It prints JSON with:
 
 - `status`: `ok` or `failed`
-- `entry`: the raw entry identifier as requested (pre-resolution)
-- `resolved_entry`: case/spec identity and paths
-- `readiness_score`: weighted 0-100 score summarising whether the driver has
-  enough concrete case-generation and run-preparation evidence to execute
-- `simulation_audit`: scored stages showing exactly how simulations are created
-  and prepared: `build_cases()`, required OpenFOAM files, dictionary
-  resolution, workflow DAG normalization, artifact prediction, environment
-  preflight, and mesh geometry
-- `validation_diagnostics`: RunDocument and configuration validation results
+- `entry`: the record name as requested
+- `resolved_entry`: `{entry_name, entry_path}`
+- `readiness_score`: weighted 0-100 score over the three stages in
+  `simulation_audit`
+- `simulation_audit`: the scored stages `workflow_preparation` (workflow DAG
+  normalization), `artifact_prediction` and `environment_preflight`
 - `workflow_diagnostics`: normalized workflow-DAG validation results (command
   allowlist, DAG structure)
-- `catalog_coverage_errors`: strict dict-key coverage failures
-- `artifact_diagnostics`: solver/utility/artifact prediction coverage failures
+- `artifact_diagnostics`: the stack's configuration validation and the
+  command allowlist
 - `environment_diagnostics`: missing executables, unsourced OpenFOAM env, missing MPI launcher
-- `mesh_geometry_diagnostics`: mesh-scale / geometry sanity checks
+- `plugin_diagnostics`: the stack's own checks (`get_plan_diagnostics`);
+  errors fail the plan, warnings and notes never do. The OpenFOAM layer
+  answers it for cardiacFOAM and cardiacCore with the catalogue compared with
+  the scanned C++ (see "The C++ scan"), `unknown_sampled_field` warnings (see
+  "Function objects") and `uncatalogued_case_dict_key` warnings for case keys
+  nothing catalogues; a key the scan reads is reported once, as the
+  `uncatalogued` note, never again as a case-key warning
 - `workflow_dag`: normalized executable steps
 - `workflow_state`: initial pending step state
 - `expected_artifacts`: predicted machine-readable artifacts
@@ -90,24 +142,19 @@ state. If the saved state is `failed`, it exits non-zero and does not retry the
 failed step automatically. Use `step --strict` for an explicit manual rerun:
 
 ```bash
-omnidriver step --strict --entry singleCell --step solve
+omnidriver step --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry singleCell --step solve
 ```
 
 **Resuming can silently replay stale results.** If `workflow_state.json`
 already says `completed` — e.g. a leftover case directory from a previous
 session, code change, or experiment — `run --strict`/`step --strict` report
 success and exit 0 without invoking the solver at all; there is no warning.
-This was hit in practice: a sweep re-run after a solver code change reported
-the previous day's numbers as fresh, caught only because the "new" errors
-matched the old ones to six significant figures — two different code
-versions cannot agree that precisely, so identical numbers meant identical
-(non-)execution, not agreement. Any re-run intended as a genuine before/after
-comparison after a code or config change MUST pass `--fresh`, which deletes
-the resolved output directory before running so the workflow executes
-exactly as it would on a first run:
+Any re-run intended as a genuine before/after comparison after a code or
+config change MUST pass `--fresh`, which deletes the resolved output directory
+before running so the workflow executes exactly as it would on a first run:
 
 ```bash
-omnidriver run --strict --entry singleCell --fresh
+omnidriver run --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry singleCell --fresh
 ```
 
 `--fresh` refuses to delete anything that doesn't look like omnidriver's own
@@ -119,12 +166,7 @@ fully disposable and copy out anything you want to keep first.
 
 `--max-total-attempts <N>` caps the total number of step executions across the
 whole run (a retry-storm guard on top of each step's per-step `max_attempts`).
-It defaults to unbounded, preserving prior behavior.
-
-For `sweep-run`, `--case-timeout-s <seconds>` sets a wall-clock timeout per case
-subprocess; a case that exceeds it is recorded as failed (with a `timeout_error`
-in its summary) and the sweep continues to the next case rather than hanging.
-Defaults to no timeout.
+It defaults to unbounded.
 
 Programmatic planning uses the same contract:
 
@@ -133,41 +175,63 @@ from omnidriver.core.plugin_interface import load_plugin_context
 from omnidriver.core.strict_planning import strict_plan
 
 # `driver_context` is keyword-only and has NO default: which adapter's
-# semantics a plan is built under is supplied, never guessed. Resolve it once,
-# the way the CLI does for `--plugin`, and thread it down.
-report = strict_plan("singleCell", driver_context=load_plugin_context("cardiacfoam"))
+# semantics a plan is built under is supplied, never guessed. `cases_root` and
+# the scratch root are supplied too. Any other key in `overrides` is a study
+# value for this one case.
+report = strict_plan(
+    "singleCell",
+    overrides={"cases_root": "<tutorials>"},
+    scratch_root="<scratch>",
+    driver_context=load_plugin_context("cardiacfoam"),
+)
 payload = report.to_json()
 if payload["status"] != "ok":
     raise RuntimeError(payload)
 print(payload["workflow_state"]["current_step_id"])
 ```
 
+### Running a case folder that is not a record
+
+`--case <dir>` stands in for `--entry` when you hold a case folder that is no
+record: one you wrote, or one `build_and_launch(..., include_allrun=True)`
+produced.
+
+```bash
+omnidriver run --strict --plugin cardiacfoam --case <dir> --scratch-dir <scratch>
+```
+
+It builds an ad hoc record of one step, `run`, that runs the stack's declared
+case entrypoint (`Allrun` for the OpenFOAM stacks), staged from `<dir>` into
+`<scratch>/records/<dir name>`; `<dir>` is never written. The folder must hold
+that entrypoint. `--case` is valid with `describe`, `catalog`, `plan`, `step`
+and `run`, excludes `--entry` and `--cases-root`, and is refused by name where
+the stack declares no entrypoint (openCARP).
+
 ### Executing an agent-authored RunDocument
 
 `plan --strict` emits a complete `run_document` (RunDocument v3) in its JSON
-output. An agent can persist that document, edit it (e.g. tune `config`, add or
-reorder `workflowDag` steps, set per-step `retry_policy`), and execute the
-edited document directly — the driver runs *your* document instead of
-regenerating one from `--entry`:
+output. An agent can persist that document, edit it (e.g. add or reorder
+`workflowDag` steps, set per-step `retry_policy`), and execute the edited
+document directly — the driver runs *your* document instead of regenerating
+one from `--entry`:
 
 ```bash
 # 1. Plan and capture the run document the planner produced.
-omnidriver plan --strict --entry singleCell > plan.json
+omnidriver plan --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry singleCell > plan.json
 python3 -c "import json; json.dump(json.load(open('plan.json'))['run_document'], open('run.json','w'))"
 
-# 2. (optional) edit run.json — config, workflowDag, retry_policy, expectedArtifacts.
+# 2. (optional) edit run.json — workflowDag, retry_policy, expectedArtifacts.
 
 # 3. Execute the document. No --entry; --strict is implied by the document.
-omnidriver run  --run-document run.json
-omnidriver step --run-document run.json --step solve   # single step
+omnidriver run  --repo <cardiacFOAM> --run-document run.json
+omnidriver step --repo <cardiacFOAM> --run-document run.json --step solve   # single step
 ```
 
-`--run-document` is mutually exclusive with `--entry` (and with
-`--config`/`--entry-kind`/`--cases-root`). Before executing, the driver:
+`--run-document` is mutually exclusive with `--entry`, `--case` and
+`--cases-root`. Before executing, the driver:
 
-1. Loads and schema-validates the document (a `version: "1"` document is
-   migrated to v2 automatically).
-2. Runs `validate_run` on its `config`.
+1. Loads and schema-validates the document. Any version but 3 is refused.
+2. Checks the document's plugin identity against the selected stack.
 3. Re-normalizes the supplied `workflowDag` and enforces the **command
    allowlist**: each step's command must be a known OpenFOAM/driver core
    command, a recognized case script (`Allrun`-family), an entry in the
@@ -177,12 +241,13 @@ omnidriver step --run-document run.json --step solve   # single step
    compiled utility). Arbitrary non-OpenFOAM commands are rejected before
    anything runs. Note: when OpenFOAM is not sourced, only the core set +
    case scripts + declared utility manifests are accepted.
-4. Requires `launch.caseRoot` and `launch.outputDir`.
+4. Requires `launch.caseRoot` (an existing directory) and `launch.outputDir`;
+   when `OMNIDRIVER_ALLOWED_RUNS_ROOT` is set, both must resolve under it.
 
 If any of these produce an error-level diagnostic, the command prints
 `{"status": "failed", "diagnostics": [...]}` and exits non-zero **without
 executing anything**. Otherwise execution, `workflow_state.json` resume,
-retry/backoff, and `failure_context` behave exactly as for the `--entry` path.
+retry/backoff, and `failure_context` behave exactly as for an `--entry` run.
 
 **Command-boundary guarantees.** Steps run argv-style (no shell). A step's
 working directory cannot escape `caseRoot`. Bare command names resolve via
@@ -200,133 +265,34 @@ contract, and the explicit list of what is and is not mitigated. For the
 plugin-boundary compatibility fallbacks (optional-hook defaults), see
 `omnidriver/core/compatibility.py`.
 
-## Sweeping a parameter grid
+## Running a study: sweeps
 
-For running many cases off one parameter grid, use `sweep-plan`/`sweep-run`
-instead of hand-looping `build_and_launch`. A `sweep.json` has two top-level
-objects:
+A study — values to change in a record's native case — goes in a sweep spec.
+`sweep-plan` previews every case without running anything; `sweep-run`
+additionally runs each. A one-case study is a one-value axis. A `sweep.json`
+has two top-level objects:
 
-- `"base"`: fixed values applied to every case — `electro_selectors`,
-  `physics_selectors`, `electro_overrides`, `physics_overrides`, `delta_t`,
-  `end_time` (same shapes as `build_and_launch`'s kwargs).
+- `"base"`: `entry` (the record) and `cases_root` (where its native case
+  lives, relative to the directory the sweep runs from), both required: a
+  record has no ambient cases root, and the sweep commands refuse
+  `--cases-root`. Every other key is a study value fixed across every case.
 - `"sweep"`: `"mode"` (`"cross_product"` or `"zip"`), `"independent"` (axis
-  name to list of values, routed into `build_and_launch`'s parameters per
-  below), and `"dependent"` (a list of `{"name", "derive", "of"}` entries for
-  derived *labels only* — not routed through the selector rules below —
-  currently the only registered `derive` function is `case_id_template`,
-  which joins the named `of` values into a `caseId` label).
+  name to list of values), and `"dependent"` (a list of
+  `{"name", "derive", "of"}` entries for derived *labels only*; the registered
+  derivations are `case_id_template`, which joins the named `of` values into a
+  `caseId`, and `output_dir_name_template`).
 
-```json
-{
-  "base": {
-    "electro_selectors": {"myocardiumSolver": "singleCellSolver", "tissue": "epicardialCells"},
-    "physics_selectors": {"type": "electroModel"}
-  },
-  "sweep": {
-    "mode": "cross_product",
-    "independent": {"ionicModel": ["TNNP", "BuenoOrovio"], "deltaT": [1e-6, 2e-6]},
-    "dependent": [{"name": "caseId", "derive": "case_id_template", "of": ["ionicModel", "deltaT"]}]
-  }
-}
-```
+Each `independent`/`dependent` name, and each `base` key other than
+`entry`/`cases_root`, is a `document:dotted.path` key, one of the record's own
+axes, its route selector (`mesh`), `parallel`, or a naming key (`caseId`,
+`output_dir_name`). Anything else is refused up front, for the whole sweep.
+`describe --entry <record> --cases-root <tutorials>` lists the record's axes
+and keys.
 
-Each resolved case's axis values route automatically into `build_and_launch`'s
-parameters: `myocardiumSolver`/`ionicModel`/`tissue` go to `electro_selectors`,
-`type` goes to `physics_selectors`, `deltaT`/`endTime` go to the dedicated
-`delta_t`/`end_time` kwargs, `dx` goes to the dedicated `dx` kwarg (mesh
-resolution in mm, see below), any other `system/controlDict` key is rejected
-outright, and any key that isn't a recognized electroProperties/
-physicsProperties driver_path is rejected outright too (it would otherwise
-have no effect on the generated case). Everything recognized falls through
-to `electro_overrides`.
-
-Every case is *materialized* fresh: `build_and_launch(..., dry_run=True)`
-writes its dict files, and the sweep runner additionally writes a generated
-`Allrun` script and a `workflow_contract.json`, into `<output_dir>/<case_id>/`.
-This is not a registered-tutorial lookup; each case is its own on-disk
-`case_folder` entry.
-
-### Mesh provisioning for from-scratch cases
-
-A freshly materialized `case_folder` has no author-supplied mesh, so
-`build_and_launch` provisions one based on `myocardiumSolver`. Every solver
-meshes the same way: a `system/blockMeshDict` is
-written and the generated `Allrun` runs `blockMesh` before `cardiacFoam`.
-
-- `singleCellSolver` (no real geometry): the `blockMeshDict` is fixed at one
-  hex cell, matching the native `singleCell` tutorial's own one-cell block —
-  there is no resolution to choose.
-- `monodomainSolver`/`bidomainSolver`/`eikonalSolver` (need real geometry): a
-  generic default `system/blockMeshDict` is written (a small cubic slab,
-  "walls" patch — **not** tuned to any specific tutorial's science). Sweep
-  this mesh's resolution with the `dx` axis (**metres**, isotropic cell size — this is a
-  from-scratch `case_folder` mechanism, unrelated to the tutorial-record
-  `dx` axis `records/niederer_2011.py` declares for the Niederer benchmark,
-  which happens to share the same name but resolves against that case's own
-  `system/blockMeshDict` instead). `dx` derives the cell count for the fixed
-  default slab size via `specs/mesh_provisioning.py::cell_counts_from_dx`,
-  which raises `ValueError` if `dx` does not evenly divide the slab size —
-  deliberately no silent rounding, the same rigor
-  `records/niederer_2011.py`'s own `dx` axis applies to its (different,
-  non-cubic) slab; both share the `cell_counts_from_dx` calculation,
-  differing only in how the result gets written (`mesh_provisioning.py`
-  generates a fresh file from its own template; the Niederer record's axis
-  patches an existing author-provided file through the normal case-write
-  channel).
-  `dx` is meaningless for `singleCellSolver` (no geometry to resolve) and
-  raises `ValueError` rather than silently having no effect. `dx` also has
-  nothing to do with real anatomical meshes imported via
-  `vtkUnstructuredToFoam` (most real tutorials) — those are unstructured
-  meshes with no cell-size concept, and this mechanism never touches them.
-- A mesh already present under `constant/polyMesh/` or `system/blockMeshDict`
-  is never clobbered by a repeat `build_and_launch` call, regardless of that
-  call's own `overwrite` flag — this protects a hand-authored custom mesh
-  from being silently replaced by the generic default.
-If the sweep declares a `caseId` dependent entry, it becomes the case's
-directory name (validated for uniqueness and path-safety); otherwise cases
-are named `case_0001`, `case_0002`, ... in expansion order.
-
-Both actions enforce a safety cap of 200 expanded cases by default (override
-with `--max-cases`), checked before any case is expanded or materialized:
-
-```bash
-omnidriver sweep-plan --spec sweep.json --output-dir .tmp/omnidriver/sweeps/my_sweep/
-omnidriver sweep-run --spec sweep.json --output-dir .tmp/omnidriver/sweeps/my_sweep/
-```
-
-`sweep-plan` materializes and strict-plans every case without launching
-anything. `sweep-run` additionally launches each case and is resumable:
-re-invoking it against the same `--output-dir` skips cases already recorded
-as `completed` in `sweep_manifest.json`, leaves `failed` cases alone unless
-`--retry-failed` is passed, and refuses to proceed at all if `sweep.json` has
-changed since that output directory's manifest was created (a spec-hash
-mismatch) — use a fresh `--output-dir` or resolve the mismatch first.
-
-`--fresh` applies here too, and matters more: a solver/code change
-invalidates every case in the sweep equally, so `sweep-run --fresh` deletes
-the *entire* `--output-dir` (not just individual cases) before re-running
-everything from scratch — this also sidesteps the spec-hash-mismatch refusal
-above, since there's no old manifest left to compare against. Mutually
-exclusive with `--retry-failed` (resume-only-failures vs. wipe-everything are
-contradictory intents).
-
-See `omnidriver/core/runtime/sweep_runner.py` for the full implementation.
-
-### Sweeping an existing registered tutorial (`base.entry`)
-
-The generic mode above always materializes a fresh, from-scratch `case_folder`
-via `build_and_launch`. Some tutorials (`manufacturedMonodomainPseudoECG` and
-others under `omnidriver/specs/tutorials/`) instead expose their own
-`make_spec(**kwargs)` with tutorial-specific parameters (e.g.
-`manufacturedMonodomainPseudoECG`'s `dimensions`/`number_cells`/`dt_values`).
-To sweep one of these instead of a from-scratch case, set `base.entry` to the
-tutorial's registered name.
-
-`niederer2011` is a **tutorial record** (`records/niederer_2011.py`) — a
-thin, declarative pointer at the native case
-(`NiedererEtAl2011verification`), not a factory tutorial. Its study names real
-`document:dotted.path` keys and its own `dx`/`tetDx` axes directly, in the
-case's own units (metres, seconds):
+`niederer2011` is a **tutorial record** (`records/niederer_2011.py`), a thin,
+declarative pointer at the native case (`NiedererEtAl2011verification`). Its
+study names real `document:dotted.path` keys and its own `dx`/`tetDx` axes
+directly, in the case's own units (metres, seconds):
 
 ```json
 {
@@ -351,65 +317,44 @@ This is the native study
 Niederer et al. (2011)'s grid, Δx 0.5/0.2/0.1 mm × Δt 0.05/0.01/0.005 ms,
 with `endTime` per Δx chosen so every probe has activated. Run it from
 the native repository root:
-`omnidriver --plugin cardiacfoam sweep-plan --spec tutorials/NiedererEtAl2011verification/setup/studies/cartesianConvergence/sweep_hex_convergence.json --output-dir <dir>`.
+`omnidriver sweep-plan --repo . --scratch-dir <scratch> --spec tutorials/NiedererEtAl2011verification/setup/studies/cartesianConvergence/sweep_hex_convergence.json`.
 
-**A record sweep names its own cases root.** `base.cases_root` says where
-the record's native case lives: here `tutorials`, relative to the directory
-the sweep runs from. A record has no ambient cases root, and `sweep-plan`/
-`sweep-run` refuse `--cases-root`, so a record sweep without
-`base.cases_root` is refused before any case exists, as the CLI's JSON
-failure. Each `independent`/`dependent` name, and each `base` key other than
-`entry`/`cases_root`, is a `document:dotted.path` key, one of the record's
-own axes, its route selector (`mesh`), or a sweep naming key (`caseId`,
-`output_dir_name`). Anything else is refused up front,
-for the whole sweep. Each case is staged from the native case into
-`<output_dir>/cases/<case_id>/` and committed there; the native tree is never
-written. `describe --entry niederer2011 --cases-root tutorials` lists the
-record's axes and keys.
+One case with study values is the same spec with one-value axes:
 
-The paragraph below describes only the remaining **factory** tutorials.
+```json
+{
+  "base": {"entry": "niederer2011", "cases_root": "tutorials", "mesh": "hex"},
+  "sweep": {"mode": "zip", "independent": {"dx": [0.0005], "system/controlDict:endTime": [0.2]}}
+}
+```
 
-For a factory tutorial (not a record), every axis value is forwarded
-verbatim as a keyword argument to that
-tutorial's own `make_spec(**overrides)` — there is no fixed vocabulary the way
-generic mode has (`electro_selectors`/`dx`/etc.); `make_spec` validates its
-own keyword arguments and an unrecognized one is a normal `TypeError`,
-reported as that case's `materialization_error`, same as any other per-case
-failure. Values fixed across every case in the sweep (like a factory's
-`solvers`/`end_time_by_dx`) go in `base`; per-case values come from
-`independent`/`dependent` and win on conflict.
+Each case is staged from the native case into `<output_dir>/cases/<case_id>/`
+and committed there; the native tree is never written. A `caseId` dependent
+entry becomes the case's directory name (validated for uniqueness and
+path-safety); otherwise cases are named `case_0001`, `case_0002`, ... in
+expansion order. A case that cannot be staged or planned fails alone
+(`materialization_error`, or `plan_error` in `sweep-run`), not the whole
+sweep. `sweep-plan` reports each
+case's `status`, `record_commit_status`, `unchanged_patches` (a patch that
+already matched the case) and its full `plan`.
 
-**One case per resolved combination, and why.** Several of these tutorials'
-own `apply_case()` methods patch `system/controlDict`/`system/blockMeshDict*`
-directly instead of writing an isolated per-case directory. omnidriver stages
-a fresh copy under the disposable workspace before applying those mutations,
-but each resolved axis combination must still collapse to exactly one case —
-if it doesn't (e.g. a config that still fans out internally because a
-constraining kwarg like `solvers` is missing),
-`sweep-plan`/`sweep-run` reports that case as `failed` with a clear
-`materialization_error` rather than silently applying only the first of
-several. In practice this means giving `dt`/`dx`-style axes their own
-dedicated sweep row (`"zip"` mode with per-case single-element lists)
-instead of relying on the tutorial's own internal multi-value fan-out.
-Entry-mode sweeps remain serial because each case owns its staged case tree
-and post-processing boundary.
+`sweep-run` plans and runs the cases serially, each as a child
+`omnidriver run --run-document <output_dir>/<case_id>/run_document.json`, and
+records them in `sweep_manifest.json`. A sweep does not resume across
+invocations: an `--output-dir` that already holds a manifest is refused by
+name, and `--fresh` deletes the whole `--output-dir` and starts over.
+`--case-timeout-s <seconds>` marks a case that exceeds it failed (a
+`timeout_error` in its summary) and the sweep continues; `--max-cases`
+(default 200) caps the expanded case count, checked before any case is
+staged. Keep a failed output directory when diagnosing; cleanup is an
+explicit, disposable-output action.
 
-**Entry-mode execution is staged and disposable.** `sweep-plan` and
-`sweep-run` copy the registered tutorial into
-`<output_dir>/cases/<case_id>/` before calling `apply_case()`; the source under
-`tutorials/` is never the mutable execution root. All generated
-meshes, processor/time directories, logs, workflow state, manifests,
-post-processing output, and archives must stay below the disposable
-workspace. Keep a failed workspace when diagnosing a run;
-cleanup is an explicit, disposable-output action.
+`--output-dir` defaults to `<scratch>/sweeps/<spec-name>`, which needs
+`--scratch-dir` (or `OMNIDRIVER_SCRATCH_DIR`); with neither the command is
+refused by name (`ScratchRootNotSupplied`) rather than writing into the
+checkout (see `CLAUDE.md`'s scratch-root rule).
 
-A sweep with no `--output-dir` needs `--scratch-dir <dir>` (or
-`OMNIDRIVER_SCRATCH_DIR`); without one it is refused by name
-(`ScratchRootNotSupplied`) rather than silently writing into the checkout
-(see `CLAUDE.md`'s scratch-root rule).
-
-Everything else — the manifest, `--retry-failed`, `--case-timeout-s`,
-`--max-cases`, resumability — is identical to generic mode.
+See `omnidriver/core/runtime/sweep_runner.py` for the full implementation.
 
 ## Running a record in parallel
 
@@ -418,12 +363,12 @@ once, and serial is the default, as the native `Allrun` is. To run the solve
 in parallel, ask for it; the solver's own layer knows how, and the code checks
 the facts.
 
-**The request.** One reserved study name, `parallel`, in any study source
-(`--config`'s entry, a sweep's `base`, or a sweep axis), or `--parallel` on the
-CLI (`describe`, `plan`/`step`/`run --strict --entry <record>`, `sweep-plan`,
-`sweep-run`). The flag is the same request from its own source: a job script
-adds it without editing the study, and a flag that disagrees with the study's
-value is refused by name, never merged. Absent or `false` is serial. A sweep
+**The request.** One reserved study name, `parallel`, in a sweep's `base` or
+as a sweep axis, or `--parallel` on the CLI (`describe`,
+`plan`/`step`/`run --strict --entry <record>`, `sweep-plan`, `sweep-run`). The
+flag is the same request from its own source: a job script adds it without
+editing the study, and a flag that disagrees with the study's value is refused
+by name, never merged. Absent or `false` is serial. A sweep
 axis `"parallel": [false, true]` runs one case of each.
 
 - `parallel: true` / `--parallel`: the solver layer finds N itself.
@@ -438,9 +383,9 @@ What each layer does with it:
 | openCARP | `<solve>` as `mpirun -np N openCARP ...`; outputs keep their names, node order and location (`docs/solver-learning/opencarp.md` I7) | the scheduler's allocation for `parallel: true`, or the `N` you supply. `true` outside a scheduler is refused. The `mpirun` first on PATH must be the launcher of the MPI openCARP was built against; preflight refuses another MPI's (`opencarp_mpi_launcher_mismatch`, I2, I5) |
 
 `describe --entry <record> --parallel` previews the form before anything runs:
-`record_preview.workflow_commands` shows each step's command line, with N as the
-study's uncommitted values would make it, and `record_preview.parallel` the
-request. A run's document carries `resolvedEntry.parallel` (`{"requested": ...,
+`record_preview.workflow_commands` shows each step's command line, with N as
+the request alone would make it, and `record_preview.parallel` the request. A
+run's document carries `resolvedEntry.parallel` (`{"requested": ...,
 "allocation": ...}`), and its DAG differs, so a serial and a parallel run of one
 case are told apart in provenance. A serial run's document has no
 `resolvedEntry.parallel`.
@@ -453,7 +398,7 @@ refused by name, and you change one of them.
 
 - OpenFOAM: make `numberOfSubdomains` equal the allocation. Put it in the study
   (`"system/decomposeParDict:numberOfSubdomains": 64`), or request
-  `--ntasks` equal to what the case says.
+  `--parallel N` equal to what the case says.
 - openCARP: `--parallel` with no count uses the allocation.
 
 A Slurm job script for the Niederer campaign:
@@ -479,8 +424,8 @@ solver starts, naming both numbers.
 record whose selected steps run no declared solve command
 (`get_solve_step_commands`); `parallel: null`; OpenFOAM given a count that differs from
 `numberOfSubdomains`, or a case with no `numberOfSubdomains`; openCARP given `true` with no allocation, or
-a count that disagrees with one; a malformed `SLURM_NTASKS`; `--parallel` for
-an entry that is not a tutorial record, or with `--run-document`.
+a count that disagrees with one; a malformed `SLURM_NTASKS`; `--parallel` with
+`--run-document`.
 
 ## Polling a long-running run
 
@@ -507,15 +452,12 @@ updated after every step, so the read above is safe at any instant.
 
 The execution engine hands off to the postprocessing phase once a workflow or sweep reaches a terminal state. This is split into two independent pieces:
 
-1. **The brain (`build_sweep_context`)**: Reads the sweep's own record (`sweep_manifest.json`), verifies it against what is actually on disk (resolving entry-mode vs generic-mode output directory differences), and returns a single grounded `SweepContext`.
-2. **The postprocessing module (`run_postprocessing_module`)**: A separate function that receives the `SweepContext` and a task. It always refuses (`not_configured`) rather than guessing an undeclared generic analysis task -- there is no automatic per-case script discovery any more.
+1. **The brain (`build_sweep_context`)**: Reads the sweep's own record (`sweep_manifest.json`), verifies it against what is actually on disk, and returns a single grounded `SweepContext`.
+2. **The postprocessing module (`run_postprocessing_module`)**: A separate function that receives the `SweepContext` and a task. It always refuses (`not_configured`) rather than guessing an undeclared generic analysis task -- there is no automatic per-case script discovery.
 
-If an agent needs deeper reasoning than the flat summary, it must use the brain's query functions:
-
-- `read_case_workflow_state(context, case_id)`
-- `read_case_output_file(context, case_id, relative_path)`
-
-These query functions raise clearly on an unknown case ID and safely restrict reads to files the brain has already verified.
+If an agent needs deeper reasoning than the flat summary, it reads one case's
+durable execution state with `read_case_workflow_state(context, case_id)`,
+which raises clearly on an unknown case ID.
 
 ### Post-processing utilities
 
@@ -531,7 +473,7 @@ and may use these utilities from it.
 
 Strict planning predicts artifacts before launch and assigns artifact ids to
 workflow steps when catalog coverage is available. The strict step/run path
-now reconciles claimed artifact ids against on-disk files after each step. If an
+reconciles claimed artifact ids against on-disk files after each step. If an
 expected artifact is missing, the step automatically fails with a `missing_artifacts` code.
 
 ### Reading a failed strict step
@@ -570,7 +512,7 @@ To apply a chosen fix mechanically, write an overrides file
 (`[{"driver_path": "...", "value": "..."}]`) and run:
 
 ```
-omnidriver step --strict --step <id> --apply overrides.json
+omnidriver step --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry <record> --step <id> --apply overrides.json
 ```
 
 This validates each override for *applyability*, applies it via the dict mutators
@@ -991,31 +933,22 @@ and, under a launcher, its path, version and rank count.
 
 Three layers of discovery:
 
-1. **What tutorials exist?** `omnidriver.core.introspection` does not export a `describe_launch_matrix` function. Read `registered_tutorials`/`available_tutorials` off `describe_entry(...)`'s output (see item 6 below), or call `list_entries(cases_root, driver_context=driver_context)` / `list_case_directories(cases_root, driver_context=driver_context)` from `omnidriver.core.runtime.registry` directly.
+1. **What records exist?** The `records` key of `describe --entry <record>`'s output (`describe_entry(...)` programmatically) lists every tutorial record the selected stack registers.
 2. **What dict keys can I set?** Iterate `omnidriver.cardiacfoam.dict_entries_catalog.ELECTRO_PROPERTY_ENTRY_GROUPS` and `omnidriver.cardiacfoam.common_dict_entries.PHYSICS_PROPERTY_ENTRIES` for case-physics entries. For time-control use `omnidriver.cardiacfoam.common_dict_entries.CONTROL_DICT_ENTRIES` (`deltaT`, `endTime`). Each entry carries `driver_path`, `value_kind`, `enum_values`, `unit`, `typical_value`, and structured constraints (`applicable_when`, `forbidden_when`, `required_when`, `mutually_exclusive_with`). These live in the `omnidriver-cardiacfoam` package, not `omnidriver.dict_entries` in core — core's `dict_entries.py` only exposes context-aware helpers such as `get_electro_property_entry_groups(driver_context)`.
 3. **What ionic models can I pick?** `from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG`. Each entry carries `states`, `algebraic`, `compatible_solvers`, `compatible_tissues`, `species`, `cardiac_region`, `recommended_exports`.
 4. **What utilities are known?** `from omnidriver.core.utility_catalog import load_utility_manifests`; call it with a plugin's utility root(s) (`plugin.get_utility_roots()`) to get a `dict[str, UtilityManifest]`. Strict planning fails when a workflow command has missing required `produces` metadata. There is no `UTILITY_CATALOG` module-level constant — core names no solver's utilities by design; see `future/UTILITY_CATALOG_STANDALONE_GAP.md`.
 5. **What does the C++ read that the catalogue lacks?** `omnidriver catalog --plugin P --uncatalogued` (see "The C++ scan" above). (`omnidriver.plugins` is the entry-point group name, not a package path.)
 6. **What commands may a workflow step run, and what fields may a function object sample?** Read the `capability_manifest` block emitted by both `describe --entry <name>` and `plan --strict --entry <name>` (and `describe_entry(...)` / `strict_plan(...).to_json()` programmatically). It is the authoritative, machine-readable accept-surface: `allowed_commands` (`core`, `case_scripts`, `utilities`, plus the `$FOAM_APPBIN` note) mirrors the command allowlist exactly, and `samplable_fields` lists the field names the *resolved* model exposes,
 keyed by region. **Both blocks are plugin-dependent.** For cardiacFoam the
-regions are `electro` / `solid`; under `--plugin none` neither key is
-present (only `note`), so read the keys that are there rather than
+regions are `electro` / `solid`; read the keys that are there rather than
 assuming a fixed set. Author `workflowDag` commands and `functions{}` field lists against this instead of guessing — a command outside `allowed_commands` is rejected before execution, and a field outside `samplable_fields` is dropped silently by the solver (see below).
-
-**Hand-built case directories need both an `Allrun` and a `workflow_contract.json`.**
-A directory resolved as `entry_kind="case_folder"` (any case directory under
-`cases_root` that isn't a registered tutorial) needs an executable
-`Allrun` script *and* a `workflow_contract.json` whose `"steps"` array is
-non-empty. Without a populated `"steps"` array, the registry silently sets
-the resolved entry's workflow DAG to `None` — there is no diagnostic that
-names `workflow_contract.json` or `Allrun` specifically, so `strict_plan`
-just blocks at the `workflow_preparation` stage with a generic "workflow DAG
-is missing or invalid" error and no pointer to the actual cause
-(`sweep_materialize.py` writes both files for exactly this reason).
 
 ## What the validator catches
 
-`validate_run(run)` runs seven families of checks:
+`validate_context(context, entries=, driver_context=)` checks a flat
+`{slot_key: value}` context against the catalogue, then appends the plugin's
+own `validate_run_semantics` rules. cardiacFOAM's dict builders call it. Seven
+families of checks:
 
 - **Required fields** — every `required` entry has a value.
 - **Enum membership** — values for enum-typed entries are in `enum_values`.
@@ -1082,10 +1015,10 @@ cardiacFoam-specific:**
 Outputs land where OpenFOAM puts them:
 `postProcessing/<functionObjectName>/<time>/<field>`.
 
-**Strict planning now checks sampled field names.** `plan --strict` parses each
+**Strict planning checks sampled field names.** `plan --strict` parses each
 `controlDict` `functions{}` sub-dict's `fields (...)` list and emits a
 **warning-level** `unknown_sampled_field` diagnostic (in the report's
-`function_object_diagnostics`) for any field the resolved model does not expose —
+`plugin_diagnostics`) for any field the resolved model does not expose —
 `region solid;` blocks are checked against the mechanics fields, everything else
 against the electro fields (`capability_manifest.samplable_fields`). This is
 **non-blocking**: it never fails a plan, because the catalog can lag the C++
@@ -1180,8 +1113,19 @@ build_and_launch(
 and `Allrun` when `include_allrun=True`) through one committed case-write
 plan; it never launches anything itself. If the call returns without
 raising, the case structure, boundary conditions, and property files are
-consistent enough to run. Run the written case with
-`omnidriver run --strict --entry-kind case_folder --entry <case_dir>`.
+consistent enough to run. Run the written case, with `include_allrun=True`
+so it holds an entrypoint, as `omnidriver run --strict --case <case_dir>` (see
+"Running a case folder that is not a record").
+
+A case with no mesh gets a generic `system/blockMeshDict`, and the generated
+`Allrun` runs `blockMesh` before `cardiacFoam`. `singleCellSolver` gets one
+hex cell. `monodomainSolver`/`bidomainSolver`/`eikonalSolver` get a small cubic
+slab sized by `dx` (metres, isotropic cell size; not tuned to any tutorial).
+`dx` must divide the slab evenly (`cell_counts_from_dx` in
+`omnidriver.openfoam.mesh_provisioning` refuses silent rounding) and raises
+`ValueError` for `singleCellSolver`. A mesh already under `constant/polyMesh/`
+or `system/blockMeshDict` is never clobbered, whatever `overwrite` says, and
+`dx` never touches an anatomical mesh imported with `vtkUnstructuredToFoam`.
 
 ### Parsing Complex OpenFOAM Dictionaries
 
@@ -1208,8 +1152,8 @@ or `sed`.
 
 ```python
 from omnidriver.core.runtime.run_discovery import list_runs
-for manifest in list_runs("/path/to/runs/dir"):
-    print(manifest["run_id"], manifest["status"], manifest["_manifest_path"])
+for state in list_runs("/path/to/runs/dir"):
+    print(state["status"], state["_state_path"])
 ```
 
 ## Known gaps
@@ -1254,31 +1198,16 @@ If your agent depends on any of these, expect failure and consider a workaround 
 - `omnidriver/core/runtime/workflow_runner.py` — low-level strict step executor
 - `omnidriver/schemas/run-document.json` (packaged resource) — canonical RunDocument v3 JSON Schema
 
-## Plugin selection (Phase 1)
-
-`--plugin` accepts an installed plugin id from the `omnidriver.plugins`
-entry-point group, a trusted `module.path:PluginClass` local-development
-import (a colon always selects this form), or `none` for generic OpenFOAM.
-The `capability_manifest` accept-surface is plugin-dependent:
-`allowed_commands.core` lists solver-neutral OpenFOAM commands plus the
-active plugin's own, so it changes with `--plugin`.
-
----
-
 ## Adding a New cardiacFoam Tutorial
 
-cardiacFoam has no factory-tutorial path. Every tutorial registers a
-**tutorial record**
+Every cardiacFoam tutorial is a **tutorial record**
 (`docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`), a
 thin declarative pointer at a native case plus its studies, not Python that
-builds cases. Electromechanics has no tutorial yet (see above). There is
-nothing left to register a factory into, and a deleted tutorial name is
-refused like any other unknown entry.
+builds cases. Electromechanics has no tutorial yet (see above).
 
 To add a new tutorial, add a `TutorialRecord` under
 `omnidriver/cardiacfoam/records/` and wire it into
-`records/__init__.py`'s `TUTORIAL_RECORDS`, plus a `TutorialDisplay` entry in
-`omnidriver/cardiacfoam/tutorial_displays.py`. `records/single_cell.py` is
+`records/__init__.py`'s `TUTORIAL_RECORDS`. `records/single_cell.py` is
 the smallest complete worked example; `records/manufactured_bidomain.py`
 shows a record with several studies and a shared axis. See the design doc
 above for the record/axis/workflow-step shape, and
@@ -1313,8 +1242,8 @@ Two Protocol classes define the contract:
 
 | Class | Members | Required when |
 |---|---|---|
-| `SolverPlugin` | 29 | Always |
-| `SolverPluginOptionalHooks` | 27 (probe-based) | Never required; enable capabilities |
+| `SolverPlugin` | the contract's declared members | Only those `validate_plugin` names (below) |
+| `SolverPluginOptionalHooks` | probe-based hooks | Never required; enable capabilities |
 
 ### Mandatory files
 
@@ -1323,11 +1252,12 @@ Two Protocol classes define the contract:
 | `my_solver_plugin.py` | Python class implementing the contract |
 | `plugin.yaml` | Manifest: identity, case file rules, optional C++ roots |
 | `pyproject.toml` entry-point | `[project.entry-points."omnidriver.plugins"]` |
+| `omnidriver.toml` | In a solver's own repository, if it has one: `plugin`, `tutorials`, `source`, `scripts` (see "Selecting the stack") |
 
 ### Required Members (all plugins)
 
-The list below is `_REQUIRED_PLUGIN_MEMBERS`'s own 10: the 4 identity strings
-plus the 6 capability members `capability_seams.members_by_tier()["required"]`
+The list below is `_REQUIRED_PLUGIN_MEMBERS`'s own nine: the 4 identity strings
+plus the 5 capability members `capability_seams.members_by_tier()["required"]`
 names -- the two places that decide enforcement, kept in sync by
 construction (`plugin_interface._required_plugin_members`).
 
@@ -1338,7 +1268,6 @@ plugin_version          # str — plugin semantics version
 plugin_api_version      # str — "2", the only supported contract version
 get_profile()           # PluginProfile from load_plugin_profile("plugin.yaml")
 get_capabilities()      # CapabilityManifest via build_capability_manifest()
-get_tutorial_catalog()  # dict with spec_factories, registered_tutorials
 validate_configuration(spec)   # tuple[StrictDiagnostic, ...]
 validate_run_semantics(context) # tuple[...]
 predict_data_artifacts(case_root, spec) # tuple[DataArtifact, ...]
@@ -1363,8 +1292,10 @@ get_utility_manifests()         # dict[str, Any]
 get_utility_roots()             # tuple[Path, ...]
 resolve_case_models(case_root)  # dict — best-effort, never raise
 get_samplable_fields(resolved)  # dict[str, tuple[str, ...]] — by region
-get_override_schema(tutorial, info) -> dict
-get_run_document_config_schema() -> dict  # JSON Schema
+get_tutorial_records()          # dict[str, TutorialRecord] — what `--entry` names
+get_plan_diagnostics(case_root, *, workflow_dag, env, scratch_root, driver_context)
+                                # tuple[StrictDiagnostic, ...] — added to a strict plan
+get_case_runtime_conventions()  # CaseRuntimeConventions; `case_entrypoints` is the file `--case` runs
 get_dict_entry_catalog()        # dict — entries by document name (unserialized)
 get_solve_step_commands()       # frozenset[str]
 get_telemetry_source_globs(command) # tuple[str, ...]
@@ -1372,9 +1303,8 @@ get_extra_provenance_paths(case_root) # tuple[RuntimeDependency, ...]
 get_artifact_value_reader(format)    # Any | None
 ```
 
-`get_dict_entries`, `get_dictionary_catalog`,
-`get_dict_groups` and `get_tutorial_displays` are optional; absent, each
-answers empty. A plugin without dictionaries (openCARP) omits them.
+`get_dict_entries`, `get_dictionary_catalog` and
+`get_dict_groups` are optional; absent, each answers empty. A plugin without dictionaries (openCARP) omits them.
 
 There is no shipped scaffold to copy in this repository. The closest in-repo
 example of a plugin with no domain-specific semantics is
@@ -1393,15 +1323,10 @@ openCARP v18.1 binary.
 
 ### Key Optional Hooks (`SolverPluginOptionalHooks`, probed with `getattr`)
 
-Two have no neutral fallback — sweeps fail if they are absent:
-
 | Hook | If absent |
 |---|---|
-| `route_sweep_case_values(...)` | **Sweeps refused by name** |
-| `materialize_sweep_case(...)` | **Sweeps refused by name** |
-| `has_case_marker(case_root)` | `False` |
-| `is_nondimensional_case(spec)` | `False` (SI mesh checks on) |
-| `build_run_document_config(spec)` | `({}, ())` |
+| `get_tutorial_records()` | no records: `--entry` refuses every name |
+| `get_plan_diagnostics(...)` | `()`: the plan adds nothing of the stack's own. An error fails the plan; a warning or note never does |
 | `get_override_scopes()` | `()` |
 | `get_regeneration_scopes()` | `()` |
 | `get_report_catalog()` | `()` |
@@ -1433,7 +1358,7 @@ print('OK:', ctx.identity)
 "
 
 # Strict plan
-omnidriver --plugin mysolver plan --strict --entry <tutorial_or_case_path>
+omnidriver plan --strict --plugin mysolver --cases-root <tutorials> --scratch-dir <scratch> --entry <record>
 ```
 
 ### `validate_plugin()` cross-validation rules
@@ -1447,11 +1372,9 @@ omnidriver --plugin mysolver plan --strict --entry <tutorial_or_case_path>
 | Error | Cause |
 |---|---|
 | `KeyError: 'mysolver'` | Wrong entry-point group or not installed |
-| `TypeError: missing required members: X` | Missing v1 methods |
-| `TypeError: missing v2 contract; missing: X` | Missing v2 callables |
+| `TypeError: SolverPlugin is missing required members: X` | A required member (above) is absent |
 | `TypeError: profile id does not match plugin_id` | YAML id ≠ class property |
 | `TypeError: duplicate paths: X` | Two `DictEntry` share same `driver_path` |
-| Sweep refused: `does not implement route_sweep_case_values` | Implement sweep hooks |
 
 ### See also
 

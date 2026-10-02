@@ -3,71 +3,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from omnidriver.cli import main
-from omnidriver.core.plugin_profile import CxxMapping, load_plugin_profile
-from omnidriver.core.strict_planning import _catalog_diagnostics
+from omnidriver.core.plugin_profile import load_plugin_profile
 
 _TOY = "plugins.e2e_record_plugin:E2ERecordPlugin"
-
-
-def _context(mapping, *, report=None):
-    scans = []
-
-    def scan(root, *, allowlist_path, entries, cache_root=None, force=False):
-        scans.append(root)
-        return SimpleNamespace(to_json=lambda: report)
-
-    capabilities = SimpleNamespace(
-        cxx_mapping=SimpleNamespace(profile=lambda: SimpleNamespace(cxx_mapping=mapping)),
-        dict_key_scanner=SimpleNamespace(scan=scan),
-        dictionaries=SimpleNamespace(entries=lambda: ()),
-    )
-    return SimpleNamespace(
-        capabilities=capabilities, identity=SimpleNamespace(resolutions={"cxx_mapping": "toy"}),
-    ), scans
-
-
-def _mapping(tmp_path: Path) -> CxxMapping:
-    return CxxMapping(
-        source_root_variable="TOY_NATIVE_TREE", source_root_relative="src",
-        allowlist_path=tmp_path / "allowlist.json",
-    )
-
-
-def test_an_unsupplied_source_root_is_one_info_diagnostic_and_no_scan(tmp_path, monkeypatch):
-    monkeypatch.delenv("TOY_NATIVE_TREE", raising=False)
-    context, scans = _context(_mapping(tmp_path))
-    (diagnostic,) = _catalog_diagnostics(context)
-    assert (diagnostic.level, diagnostic.code) == ("info", "plugin_cxx_source_not_supplied")
-    assert "TOY_NATIVE_TREE" in diagnostic.message
-    assert scans == []
-
-
-def test_a_supplied_root_that_is_not_a_directory_is_refused(tmp_path, monkeypatch):
-    monkeypatch.setenv("TOY_NATIVE_TREE", str(tmp_path / "absent"))
-    context, scans = _context(_mapping(tmp_path))
-    (diagnostic,) = _catalog_diagnostics(context)
-    assert (diagnostic.level, diagnostic.code) == ("error", "plugin_cxx_source_unavailable")
-    assert scans == []
-
-
-def test_a_contradiction_is_an_error_and_an_uncatalogued_read_a_note(tmp_path, monkeypatch):
-    (tmp_path / "tree" / "src").mkdir(parents=True)
-    monkeypatch.setenv("TOY_NATIVE_TREE", str(tmp_path / "tree"))
-    report = {
-        "status": "failed", "contradictions": ["a.b: catalogued, but the C++ reads no 'b'"],
-        "uncatalogued": [{"kind": "key", "key": "c"}], "unresolved": [{"key": "d"}],
-    }
-    context, scans = _context(_mapping(tmp_path), report=report)
-    diagnostics = _catalog_diagnostics(context)
-    assert scans == [(tmp_path / "tree" / "src").resolve()]
-    assert [(d.level, d.code) for d in diagnostics] == [
-        ("error", "plugin_catalog_contradiction"), ("info", "plugin_catalog_uncatalogued"),
-    ]
 
 
 def test_the_profile_names_a_variable_and_a_relation_never_a_path(tmp_path):

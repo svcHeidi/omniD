@@ -2,10 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-from conftest import skip_without_monorepo
-pytestmark = skip_without_monorepo
-
 from omnidriver.openfoam.function_object_fields import (
     function_object_field_diagnostics,
 )
@@ -91,19 +87,6 @@ def test_missing_controldict_is_silent(tmp_path):
         tmp_path, samplable={"electro": set(), "solid": set()}
     )
     assert diags == ()
-
-
-def test_strict_plan_exposes_field_family_and_stays_ok(monkeypatch):
-    monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
-    from omnidriver.core.plugin_interface import default_driver_context
-    from omnidriver.core.strict_planning import strict_plan
-
-    report = strict_plan(
-        "singleCell", driver_context=default_driver_context(),
-    ).to_json()
-    assert "function_object_diagnostics" in report
-    # A clean registered entry must not be pushed to failed by this family.
-    assert report["status"] == "ok"
 
 
 def test_electro_controldict_subdir_scanned(tmp_path):

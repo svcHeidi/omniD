@@ -265,9 +265,9 @@ def test_generic_plugin_declares_zero_override_scopes():
 
 
 def test_cardiac_plugin_declares_the_electro_model_coeffs_scope():
-    from omnidriver.core.plugin_interface import default_driver_context
+    from omnidriver.core.plugin_interface import load_plugin_context
 
-    context = default_driver_context()
+    context = load_plugin_context("cardiacfoam")
     scopes = context.capabilities.override_scopes.scopes()
     assert len(scopes) == 1
     scope = scopes[0]
@@ -277,10 +277,10 @@ def test_cardiac_plugin_declares_the_electro_model_coeffs_scope():
 
 
 def test_cardiac_scope_resolve_entry_matches_the_old_hardcoded_behavior(tmp_path):
-    from omnidriver.core.plugin_interface import default_driver_context
+    from omnidriver.core.plugin_interface import load_plugin_context
 
     case = _case(tmp_path)
-    context = default_driver_context()
+    context = load_plugin_context("cardiacfoam")
     scope = context.capabilities.override_scopes.scopes()[0]
     scope_path, key = scope.resolve_entry(
         "$ELECTRO_MODEL_COEFFS.solutionAlgorithm", case,
@@ -311,9 +311,9 @@ def test_generic_plugin_declares_zero_regeneration_scopes():
 
 
 def test_cardiac_plugin_declares_the_myocardium_solver_regeneration_scope():
-    from omnidriver.core.plugin_interface import default_driver_context
+    from omnidriver.core.plugin_interface import load_plugin_context
 
-    context = default_driver_context()
+    context = load_plugin_context("cardiacfoam")
     scopes = context.capabilities.dict_regeneration.scopes()
     assert len(scopes) == 1
     scope = scopes[0]

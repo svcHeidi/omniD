@@ -10,7 +10,7 @@ import pytest
 from omnidriver.core import compatibility
 from omnidriver.core.case_write import ParameterAssignment, ResolvedMutation, RenderedFile, _digest_bytes
 from omnidriver.core.plugin_interface import driver_context
-from omnidriver.core.runtime import record_execution, registry
+from omnidriver.core.runtime import record_execution
 from omnidriver.core.sweep import sweep_expansion
 from omnidriver.core.tutorial_records import (
     AxisContract,
@@ -25,6 +25,7 @@ from omnidriver.core.tutorial_records import (
     WorkflowStep,
     build_tutorial_record_catalog,
     combine_patches,
+    lookup_record,
     patches_to_parameters,
     resolve_case_patches,
     resolve_variant_selector,
@@ -874,130 +875,24 @@ def test_parameter_assignment_refuses_a_string_for_validated():
 
 
 # ---------------------------------------------------------------------------
-# Explicit entry-kind dispatch (registry.resolve_entry)
+# Resolving a record by name
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_entry_dispatches_a_tutorial_record_explicitly(tmp_path):
+def test_lookup_record_resolves_a_registered_name_case_insensitively():
     record = _record()
-    plugin = MinimalTestPlugin(tutorial_records={"toyTutorial": record})
-    context = driver_context(plugin, source="test:records")
+    context = driver_context(MinimalTestPlugin(tutorial_records={"toyTutorial": record}), source="test:records")
 
-    resolution = registry.resolve_entry(
-        "toyTutorial", overrides={"cases_root": str(tmp_path)}, driver_context=context,
-    )
-    assert resolution["resolution"] == "tutorial_record"
-    assert resolution["entry_kind"] == "tutorial_record"
-    assert resolution["record"] is record
+    assert lookup_record("toyTutorial", driver_context=context) is record
+    assert lookup_record(" TOYTUTORIAL ", driver_context=context) is record
+    assert lookup_record(record, driver_context=context) is record
 
 
-def test_a_record_is_never_resolved_as_a_case_folder(tmp_path):
-    """Step S6 deleted the factory registry entirely (there is no more ``entry_kind="registered_tutorial"`` to refuse a record against); the one other kind a record can still be asked for and refused against is ``case_folder``."""
-    record = _record()
-    plugin = MinimalTestPlugin(tutorial_records={"toyTutorial": record})
-    context = driver_context(plugin, source="test:records")
+def test_lookup_record_refuses_an_unregistered_name_listing_the_registered_ones():
+    context = driver_context(MinimalTestPlugin(tutorial_records={"toyTutorial": _record()}), source="test:records")
 
-    with pytest.raises(KeyError):
-        registry.resolve_entry(
-            "toyTutorial", entry_kind="case_folder",
-            overrides={"cases_root": str(tmp_path)}, driver_context=context,
-        )
-
-
-def test_resolve_entry_refuses_a_name_that_is_both_a_record_and_a_case_path(tmp_path):
-    """M8: the same "one name must not name both" refusal the record/factory ambiguity already gets, extended to a record name that is ALSO an existing case path (found via cwd, the same way any bare case path resolves)."""
-    record = _record(name="toyTutorial")
-    case_dir = tmp_path / "toyTutorial"
-    case_dir.mkdir()
-    (case_dir / "run-test-case").write_text("#!/bin/sh\n")
-    entrypoint_plugin = MinimalTestPlugin(
-        entrypoint="run-test-case", tutorial_records={"toyTutorial": record},
-    )
-    entrypoint_context = driver_context(entrypoint_plugin, source="test:m8")
-
-    old_cwd = Path.cwd()
-    import os
-    os.chdir(tmp_path)
-    try:
-        with pytest.raises(KeyError, match="ambiguous"):
-            registry.resolve_entry(
-                "toyTutorial", overrides={"cases_root": str(tmp_path)},
-                driver_context=entrypoint_context,
-            )
-    finally:
-        os.chdir(old_cwd)
-
-
-def test_resolve_entry_refuses_a_name_that_is_both_a_record_and_a_case_folder_under_cases_root(tmp_path):
-    """B1/M6: the third ambiguity `classify_entry` refuses -- a record shadowed by a DIFFERENT, same-NAMED case folder under `cases_root` (not cwd, and not the record's own native case -- see the test right below this one for why that specific case must NOT be flagged)."""
-    cases_root = tmp_path / "cases"
-    # The record's real native case lives elsewhere...
-    (cases_root / "nativeCases" / "toyTutorial").mkdir(parents=True)
-    # ...but an UNRELATED directory happens to sit directly under cases_root
-    # with the exact name the record is registered under.
-    case_dir = cases_root / "toyTutorial"
-    case_dir.mkdir(parents=True)
-    (case_dir / "run-test-case").write_text("#!/bin/sh\n")
-    record = _record(name="toyTutorial", native_case_relpath="nativeCases/toyTutorial")
-    plugin = MinimalTestPlugin(
-        entrypoint="run-test-case", tutorial_records={"toyTutorial": record},
-    )
-    context = driver_context(plugin, source="test:record-vs-case-folder")
-
-    with pytest.raises(KeyError, match="ambiguous"):
-        registry.resolve_entry(
-            "toyTutorial", overrides={"cases_root": str(cases_root)},
-            driver_context=context,
-        )
-
-
-def test_resolve_entry_does_not_confuse_a_records_own_independently_recognizable_native_case(tmp_path):
-    """The refinement the test above depends on: a record's OWN native case is routinely ALSO independently recognizable as a plain case_folder (a real adapter's has_case_marker/entrypoint declaration knows its own format, which the native case obviously satisfies) -- that is the SAME directory discovered twice by two different catalogs, not a naming collision with anything else, and must resolve as a record exactly like it would if the directory were unrecognizable as a case at all."""
-    cases_root = tmp_path / "cases"
-    native = cases_root / "toyTutorial"
-    native.mkdir(parents=True)
-    (native / "run-test-case").write_text("#!/bin/sh\n")
-    record = _record(name="toyTutorial", native_case_relpath="toyTutorial")
-    plugin = MinimalTestPlugin(
-        entrypoint="run-test-case", tutorial_records={"toyTutorial": record},
-    )
-    context = driver_context(plugin, source="test:record-self-recognizable")
-
-    resolution = registry.resolve_entry(
-        "toyTutorial", overrides={"cases_root": str(cases_root)},
-        driver_context=context,
-    )
-    assert resolution["resolution"] == "tutorial_record"
-
-
-def test_resolve_entry_never_resolves_a_records_own_relpath_as_a_case_folder(tmp_path):
-    """B2 (second half): a tutorial-record entry must never be a `_match_entry` candidate."""
-    record = _record(name="toyTutorial", native_case_relpath="natives/toy")
-    plugin = MinimalTestPlugin(tutorial_records={"toyTutorial": record})
-    context = driver_context(plugin, source="test:b2-match-entry")
-    (tmp_path / "cases").mkdir()
-
-    with pytest.raises(KeyError, match="Unknown entry"):
-        registry.resolve_entry(
-            "natives/toy", overrides={"cases_root": str(tmp_path / "cases")},
-            driver_context=context,
-        )
-
-
-# ---------------------------------------------------------------------------
-# B2: every consumer of a resolve_entry result refuses a tutorial_record
-# resolution BY NAME, rather than crashing on a missing factory_overrides.
-# ---------------------------------------------------------------------------
-
-
-def test_load_entry_spec_refuses_a_tutorial_record_by_name(tmp_path):
-    record = _record()
-    plugin = MinimalTestPlugin(tutorial_records={"toyTutorial": record})
-    context = driver_context(plugin, source="test:b2")
-    with pytest.raises(TutorialRecordError, match="load_entry_spec"):
-        registry.load_entry_spec(
-            "toyTutorial", overrides={"cases_root": str(tmp_path)}, driver_context=context,
-        )
+    with pytest.raises(TutorialRecordError, match=r"unknown tutorial record 'natives/toy'.*toyTutorial"):
+        lookup_record("natives/toy", driver_context=context)
 
 
 def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path):
@@ -1024,8 +919,8 @@ def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path)
         },
         driver_context=context,
     )
-    assert described["resolution"] == "tutorial_record"
-    assert described["entry"]["entry_kind"] == "tutorial_record"
+    assert described["entry"] == {"entry_name": "toyTutorial", "entry_path": record.native_case_relpath}
+    assert described["records"] == ["toyTutorial"]
     preview = described["record_preview"]
     by_document = {p["document"]: p for p in preview["patches"]}
     assert by_document["constant/physics.json"]["value"] == "modelBeta"
@@ -1033,10 +928,6 @@ def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path)
     assert by_document["constant/physics.json"]["validated"] is True
     assert by_document["constant/mesh.json"]["status"] == "unchanged"
     assert preview["command_arguments"]["mesh"] == ["-N", "5"]
-    # write_surface (the factory-tutorial section this sits beside) makes no
-    # sense for a record -- there is no spec, no plan_case -- and is simply
-    # absent rather than a fabricated empty answer.
-    assert "write_surface" not in described
 
 
 def test_describe_entry_refuses_a_tutorial_record_preview_without_cases_root(tmp_path):
@@ -1052,26 +943,6 @@ def test_describe_entry_refuses_a_tutorial_record_preview_without_cases_root(tmp
 
     with pytest.raises(TutorialRecordError, match="cases_root"):
         describe_entry("toyTutorial", overrides={}, driver_context=context)
-
-
-def test_describe_tutorial_output_for_a_factory_tutorial_is_unchanged(tmp_path):
-    """A factory-tutorial describe (the case_folder path) must still carry write_surface, never the record_preview key."""
-    from omnidriver.core.introspection import describe_entry
-
-    case_dir = tmp_path / "plainCase"
-    case_dir.mkdir()
-    (case_dir / "run-test-case").write_text("#!/bin/sh\n")
-    plugin = MinimalTestPlugin(entrypoint="run-test-case")
-    context = driver_context(plugin, source="test:describe-factory")
-
-    described = describe_entry(
-        str(case_dir),
-        overrides={"cases_root": str(tmp_path), "output_dir_name": "output"},
-        driver_context=context,
-    )
-    assert described["resolution"] == "case_path"
-    assert "write_surface" in described
-    assert "record_preview" not in described
 
 
 # ---------------------------------------------------------------------------
@@ -1650,7 +1521,7 @@ def test_tutorial_record_capability_seams_call_no_legacy_fallback_when_absent():
 # design.md, "Owner decisions" dated 2026-09-25): `strict_plan` handles a
 # tutorial_record resolution directly (stage + commit + spec, the same
 # shared sequence a sweep case uses), rather than refusing by name through
-# `load_entry_spec`. The CLI end-to-end path lives in
+# an entry registry. The CLI end-to-end path lives in
 # `test_cli_plan_strict_tutorial_record.py`; these are the direct, in-
 # process unit tests of `strict_plan` itself.
 # ---------------------------------------------------------------------------
@@ -1772,8 +1643,7 @@ def test_record_case_spec_builds_the_generic_workflow_dag_shape(tmp_path):
     )
     assert spec.name == "case_0001"
     assert spec.case_root == staged
-    assert spec.metadata["generic_case"] is True
-    assert spec.metadata["entry_kind"] == "tutorial_record"
+    assert spec.metadata["entry_name"] == "toyTutorial"
     workflow_dag = spec.metadata["workflow_dag"]
     assert workflow_dag == {
         "steps": [
@@ -1787,9 +1657,6 @@ def test_record_case_spec_builds_the_generic_workflow_dag_shape(tmp_path):
             },
         ]
     }
-    # The case was already committed by commit_record_case; this spec's own
-    # mutation is a genuine no-op.
-    assert spec.case_mutation(staged) is None
 
 
 # ---------------------------------------------------------------------------

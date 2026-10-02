@@ -4,9 +4,10 @@ Every test overrides SKIP_ENV_DIAGNOSTICS (set suite-wide in conftest.py)
 and monkeypatches shutil.which / os.environ instead of touching the machine.
 """
 
+import shutil
+
 import pytest
 
-from omnidriver.core import strict_planning
 from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
 from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.openfoam.environment_preflight import (
@@ -183,7 +184,7 @@ def clean_env(monkeypatch):
 
 def test_missing_executable_is_error(clean_env):
     clean_env.setattr(
-        strict_planning.shutil, "which", _which_factory({"blockMesh", "cardiacFoam"})
+        shutil, "which", _which_factory({"blockMesh", "cardiacFoam"})
     )
     diags = _diags(_dag("blockMesh", "cardiacFoam", "setExprFields"))
     missing = [d for d in diags if d.code == "missing_executable"]
@@ -196,7 +197,7 @@ def test_missing_executable_is_error(clean_env):
 
 def test_present_executables_have_no_error(clean_env):
     clean_env.setattr(
-        strict_planning.shutil, "which", _which_factory({"blockMesh", "cardiacFoam"})
+        shutil, "which", _which_factory({"blockMesh", "cardiacFoam"})
     )
     diags = _diags(_dag("blockMesh", "cardiacFoam"))
     assert "missing_executable" not in {d.code for d in diags}
@@ -205,7 +206,7 @@ def test_present_executables_have_no_error(clean_env):
 def test_case_script_commands_are_not_path_checked(clean_env):
     # Allrun/Allclean/etc are case-local scripts resolved relative to
     # caseRoot at execution time, never on PATH by design.
-    clean_env.setattr(strict_planning.shutil, "which", _which_factory(set()))
+    clean_env.setattr(shutil, "which", _which_factory(set()))
     diags = _diags(_dag("Allrun"), openfoam_environment_context())
     assert "missing_executable" not in {d.code for d in diags}
 
@@ -238,7 +239,7 @@ def test_a_declared_entrypoint_is_also_not_path_checked():
 
 
 def test_mpi_wrapper_checks_launcher_and_program(clean_env):
-    clean_env.setattr(strict_planning.shutil, "which", _which_factory({"mpirun"}))
+    clean_env.setattr(shutil, "which", _which_factory({"mpirun"}))
     diags = _diags(
         _dag(("mpirun", ["-np", "4", "cardiacFoam", "-parallel"]))
     )
@@ -248,20 +249,20 @@ def test_mpi_wrapper_checks_launcher_and_program(clean_env):
 
 
 def test_parallel_without_launcher_reports_missing_mpi(clean_env):
-    clean_env.setattr(strict_planning.shutil, "which", _which_factory({"cardiacFoam"}))
+    clean_env.setattr(shutil, "which", _which_factory({"cardiacFoam"}))
     diags = _diags(_dag(("cardiacFoam", ["-parallel"])))
     assert "missing_mpi" in {d.code for d in diags}
 
 
 def test_serial_plan_has_no_mpi_error(clean_env):
-    clean_env.setattr(strict_planning.shutil, "which", _which_factory({"cardiacFoam"}))
+    clean_env.setattr(shutil, "which", _which_factory({"cardiacFoam"}))
     diags = _diags(_dag("cardiacFoam"))
     assert "missing_mpi" not in {d.code for d in diags}
 
 
 def test_missing_wm_project_dir_is_error(clean_env):
     clean_env.delenv("WM_PROJECT_DIR", raising=False)
-    clean_env.setattr(strict_planning.shutil, "which", _which_factory({"cardiacFoam"}))
+    clean_env.setattr(shutil, "which", _which_factory({"cardiacFoam"}))
     diags = _diags(_dag("cardiacFoam"))
     errors = [d for d in diags if d.code == "missing_openfoam_env"]
     assert len(errors) == 1
@@ -270,7 +271,7 @@ def test_missing_wm_project_dir_is_error(clean_env):
 
 def test_partial_openfoam_env_is_warning_only(clean_env):
     clean_env.delenv("WM_PROJECT_VERSION", raising=False)
-    clean_env.setattr(strict_planning.shutil, "which", _which_factory({"cardiacFoam"}))
+    clean_env.setattr(shutil, "which", _which_factory({"cardiacFoam"}))
     diags = _diags(_dag("cardiacFoam"))
     partial = [d for d in diags if d.code == "partial_openfoam_env"]
     assert len(partial) == 1
@@ -280,14 +281,14 @@ def test_partial_openfoam_env_is_warning_only(clean_env):
 
 def test_skip_env_diagnostics_short_circuits(monkeypatch):
     monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
-    monkeypatch.setattr(strict_planning.shutil, "which", _which_factory(set()))
+    monkeypatch.setattr(shutil, "which", _which_factory(set()))
     assert _diags(_dag("cardiacFoam")) == ()
 
 
 def test_both_partial_env_vars_missing_yield_two_warnings(clean_env):
     clean_env.delenv("WM_PROJECT_VERSION", raising=False)
     clean_env.delenv("FOAM_USER_LIBBIN", raising=False)
-    clean_env.setattr(strict_planning.shutil, "which", _which_factory({"cardiacFoam"}))
+    clean_env.setattr(shutil, "which", _which_factory({"cardiacFoam"}))
     diags = _diags(_dag("cardiacFoam"))
     partial = {d.field for d in diags if d.code == "partial_openfoam_env"}
     assert partial == {"WM_PROJECT_VERSION", "FOAM_USER_LIBBIN"}
@@ -297,7 +298,7 @@ def test_no_partial_warnings_when_openfoam_unsourced(clean_env):
     clean_env.delenv("WM_PROJECT_DIR", raising=False)
     clean_env.delenv("WM_PROJECT_VERSION", raising=False)
     clean_env.delenv("FOAM_USER_LIBBIN", raising=False)
-    clean_env.setattr(strict_planning.shutil, "which", _which_factory({"cardiacFoam"}))
+    clean_env.setattr(shutil, "which", _which_factory({"cardiacFoam"}))
     diags = _diags(_dag("cardiacFoam"))
     codes = {d.code for d in diags}
     assert "missing_openfoam_env" in codes
@@ -352,7 +353,7 @@ def test_report_to_json_environment_diagnostics_defaults_empty():
 
 def test_unsourced_environment_does_not_block_a_plan_that_needs_no_openfoam(clean_env):
     clean_env.delenv("WM_PROJECT_DIR", raising=False)
-    clean_env.setattr(strict_planning.shutil, "which", _which_factory(set()))
+    clean_env.setattr(shutil, "which", _which_factory(set()))
 
     diags = _diags({"steps": []})
 
@@ -365,7 +366,7 @@ def test_unsourced_environment_does_not_block_a_plan_that_needs_no_openfoam(clea
 
 def test_an_unsourced_environment_is_still_reported_when_nothing_needs_it(clean_env):
     clean_env.delenv("WM_PROJECT_DIR", raising=False)
-    clean_env.setattr(strict_planning.shutil, "which", _which_factory(set()))
+    clean_env.setattr(shutil, "which", _which_factory(set()))
 
     diags = _diags({"steps": []})
 

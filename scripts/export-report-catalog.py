@@ -32,8 +32,7 @@ Backend authors report definitions against ``omnidriver/core/report_catalog.py``
 ``ReportDefinition`` record; each plugin owns its own catalog (the built-in
 cardiac plugin's lives at ``omnidriver/cardiacfoam/reports.py``)
 and this script writes it to a stable JSON catalog for external consumers.
-Defaults to the built-in cardiacFoam plugin, matching v1 behavior, unless
-``--plugin`` selects otherwise.
+``--plugin`` selects the plugin.
 
 URL templates are emitted verbatim — substitution of ``{port}`` and
 ``{kind}`` happens outside this exporter. The Python side never knows the
@@ -50,15 +49,10 @@ from pathlib import Path
 from omnidriver.core.report_catalog import to_record
 
 
-def build_catalog(plugin: str | None) -> dict:
-    from omnidriver.core.plugin_interface import (
-        default_driver_context,
-        load_plugin_context,
-    )
-    if plugin:
-        context = load_plugin_context(plugin)
-    else:
-        context = default_driver_context()
+def build_catalog(plugin: str) -> dict:
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    context = load_plugin_context(plugin)
     reports = context.capabilities.report_catalog.reports()
     return {
         "version": "1",
@@ -71,10 +65,11 @@ def main() -> None:
     parser.add_argument("--out", required=True, help="output JSON path")
     parser.add_argument(
         "--plugin",
+        required=True,
         help=(
             "Plugin whose report catalog to export: an installed plugin id, "
             "a trusted local-development import target "
-            "(module.path:PluginClass). Defaults to the single installed adapter."
+            "(module.path:PluginClass)."
         ),
     )
     args = parser.parse_args()

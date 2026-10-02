@@ -1,9 +1,7 @@
-"""The cardiac plugin's config-schema prose and dict-entry document shape: cardiac vocabulary
+"""The cardiac plugin's dict-entry document shape: cardiac vocabulary
 only the cardiac plugin supplies. Core's tests assert the absence of these tokens."""
 
 from __future__ import annotations
-
-import json
 
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
@@ -12,20 +10,6 @@ from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 # Two adapters are installed side by side, so there is no ambient default
 # left to discover. A test that means cardiacFoam says so.
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:override_schema_capability")
-
-_MAKE_SPEC_INFO = {"parameters": {"ionic_models": {"default": ["TNNP"]}}}
-
-
-def test_cardiac_config_schema_keeps_its_documented_tokens() -> None:
-    schema = _CTX.capabilities.override_schema.config_schema(
-        "singleCell", _MAKE_SPEC_INFO
-    )
-    blob = json.dumps(schema)
-    assert "$ELECTRO_MODEL_COEFFS" in blob
-    assert "electroProperties" in blob
-    # The worked example is tutorial-specific, so the name must be threaded
-    # through rather than baked into the plugin.
-    assert "singleCell" in schema["worked_example"]["json"]
 
 
 def test_cardiac_dict_entry_catalog_keeps_its_document_shape() -> None:

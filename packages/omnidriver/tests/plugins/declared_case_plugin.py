@@ -13,7 +13,6 @@ class DeclaredCasePlugin(MinimalTestPlugin):
 
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         return CaseRuntimeConventions(
-            output_collection_relpath="outputs",
             case_entrypoints=("run-test-case",),
             case_script_commands=("run-test-case",),
         )

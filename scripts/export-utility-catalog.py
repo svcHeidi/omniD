@@ -33,8 +33,7 @@ list is inlined as an array of objects. ``source_path`` is converted to a
 string relative to whichever utility root the manifest was loaded from, so
 the output is portable regardless of where that root is installed.
 
-Defaults to the built-in cardiacFoam plugin, matching v1 behavior, unless
-``--plugin`` selects otherwise -- same convention as export-report-catalog.py.
+``--plugin`` selects the plugin.
 
 Usage::
 
@@ -110,15 +109,10 @@ def _relativize(path: Path, roots: tuple[Path, ...]) -> Path:
     return path
 
 
-def build_catalog(plugin: str | None) -> dict:
-    from omnidriver.core.plugin_interface import (
-        default_driver_context,
-        load_plugin_context,
-    )
-    if plugin:
-        context = load_plugin_context(plugin)
-    else:
-        context = default_driver_context()
+def build_catalog(plugin: str) -> dict:
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    context = load_plugin_context(plugin)
 
     authorization = context.capabilities.command_authorization
     manifests = authorization.utility_manifests()
@@ -137,10 +131,11 @@ def main() -> None:
     parser.add_argument("--out", required=True, help="output JSON path")
     parser.add_argument(
         "--plugin",
+        required=True,
         help=(
             "Plugin whose utility catalog to export: an installed plugin id, "
             "a trusted local-development import target "
-            "(module.path:PluginClass). Defaults to the single installed adapter."
+            "(module.path:PluginClass)."
         ),
     )
     args = parser.parse_args()

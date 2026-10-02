@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 from omnidriver.core.planning_types import (
     StrictDiagnostic,
@@ -12,40 +11,25 @@ from omnidriver.core.planning_types import (
 )
 from .models import DataArtifact
 
-if TYPE_CHECKING:
-    from ..plugin_interface import DriverContext  # noqa: F401
 
-
-#: The operator's switch for declining the plugin's geometry-diagnostics
-#: checks.
-SKIP_GEOMETRY_DIAGNOSTICS_ENV = "SKIP_GEOMETRY_DIAGNOSTICS"
-
-
+#: The stages every solver has. A check that depends on a solver's file formats
+#: is a plugin diagnostic (``get_plan_diagnostics``), not a stage.
 _READINESS_WEIGHTS = {
-    "case_preparation_files": 15,
-    "dictionary_resolution": 20,
     "workflow_preparation": 20,
     "artifact_prediction": 15,
     "environment_preflight": 10,
-    "mesh_geometry": 5,
 }
 
 
 #: Outcomes for a stage that did not run. Each is a distinct fact -- the
-#: operator declined the check, it cannot apply to this plan, or the thing
-#: it needs was absent -- that must not be conflated with `passed`: an empty
-#: diagnostic tuple has no error and no warning either way.
-UNCOVERED_OUTCOMES = frozenset({"not_requested", "not_applicable", "unavailable"})
+#: operator declined the check, or the thing it needs was absent -- that must
+#: not be conflated with `passed`: an empty diagnostic tuple has no error and
+#: no warning either way. Both are gaps: work owed and not done costs the plan
+#: its points.
+UNCOVERED_OUTCOMES = frozenset({"not_requested", "unavailable"})
 
 #: The stage ran. Its status is then derived from its diagnostics, as before.
 EXECUTED = "executed"
-
-#: The one uncovered outcome that leaves the denominator. `not_requested` and
-#: `unavailable` are gaps -- work that was owed and not done -- so they stay in
-#: and cost the plan its points. `not_applicable` is not a gap: there was
-#: nothing to do. Counting it would replace paying for work never done with
-#: penalising a plan for work never owed, which is the same defect mirrored.
-NOT_APPLICABLE = "not_applicable"
 
 
 def _score_from_diagnostics(
@@ -108,105 +92,15 @@ def _score_from_diagnostics(
     )
 
 
-def _case_preparation_files_audit(
-    case_root: Path,
-    *,
-    generic_case: bool = False,
-    required_files: tuple[str, ...] = (),
-) -> SimulationAuditItem:
-    max_points = _READINESS_WEIGHTS["case_preparation_files"]
-    if generic_case:
-        return SimulationAuditItem(
-            stage="case_preparation_files",
-            status=NOT_APPLICABLE,
-            points=0,
-            max_points=max_points,
-            summary=(
-                "Generic case-folder execution relies on its declared workflow "
-                "rather than the plugin's dictionary requirements, so there are "
-                "no required adapter files to check for."
-            ),
-            evidence={"case_root": str(case_root), "required": [], "generic_case": True},
-        )
-    existing = [relpath for relpath in required_files if (case_root / relpath).exists()]
-    missing = [relpath for relpath in required_files if not (case_root / relpath).exists()]
-    if not missing:
-        status = "passed"
-        points = max_points
-        summary = "The case root already contains the required adapter files."
-    elif existing:
-        status = "warning"
-        points = int(max_points * len(existing) / len(required_files))
-        summary = "Some required adapter files are missing before execution."
-    else:
-        status = "blocked"
-        points = 0
-        summary = "The case root does not contain required adapter files."
-    return SimulationAuditItem(
-        stage="case_preparation_files",
-        status=status,
-        points=points,
-        max_points=max_points,
-        summary=summary,
-        evidence={
-            "case_root": str(case_root),
-            "required": list(required_files),
-            "existing": existing,
-            "missing": missing,
-        },
-    )
-
-
 def _build_simulation_audit(
     *,
-    spec,
-    driver_context: "DriverContext",
     workflow_dag: dict[str, Any] | None,
     artifacts: tuple[DataArtifact, ...],
-    validation_diagnostics: tuple[StrictDiagnostic, ...],
     workflow_diagnostics: tuple[StrictDiagnostic, ...],
     artifact_diagnostics: tuple[StrictDiagnostic, ...],
     environment_diagnostics: tuple[StrictDiagnostic, ...],
-    mesh_geometry_diagnostics: tuple[StrictDiagnostic, ...],
-    mesh_geometry_exempt: bool = False,
-    required_case_files: tuple[str, ...] = (),
 ) -> tuple[tuple[SimulationAuditItem, ...], dict[str, Any]]:
-    generic_case = bool(spec.metadata.get("generic_case")) if spec.metadata else False
-    case_files_item = _case_preparation_files_audit(
-        Path(spec.case_root),
-        generic_case=generic_case,
-        required_files=required_case_files,
-    )
     items = [
-        case_files_item,
-        _score_from_diagnostics(
-            stage="dictionary_resolution",
-            diagnostics=validation_diagnostics,
-            success_summary=(
-                "The generic case needs no plugin configuration parsing."
-                if generic_case else
-                driver_context.capabilities.case_files.describe_config_resolution()
-            ),
-            warning_summary=(
-                "Generic case validation emitted warnings."
-                if generic_case else
-                "The dictionaries resolve, but validation emitted warnings."
-            ),
-            error_summary=(
-                "The generic case contract could not be resolved."
-                if generic_case else
-                "The dictionaries could not be resolved into a valid run config."
-            ),
-            outcome=NOT_APPLICABLE if generic_case else EXECUTED,
-            uncovered_summary=(
-                "The generic case declares its own workflow and has no plugin "
-                "configuration to parse, so there was nothing to resolve."
-            ),
-            evidence={
-                "diagnostic_count": len(validation_diagnostics),
-                "generic_case": generic_case,
-            },
-        ),
         _score_from_diagnostics(
             stage="workflow_preparation",
             diagnostics=workflow_diagnostics,
@@ -251,49 +145,12 @@ def _build_simulation_audit(
                 "diagnostic_count": len(environment_diagnostics),
             },
         ),
-        _score_from_diagnostics(
-            stage="mesh_geometry",
-            diagnostics=mesh_geometry_diagnostics,
-            success_summary="Mesh-scale checks did not find run-preparation issues.",
-            warning_summary="Mesh-scale checks emitted warnings.",
-            error_summary="Mesh-scale checks found run-preparation issues.",
-            # Three ways to arrive with an empty tuple, and they are not the
-            # same fact: the operator declined the check, the case has no mesh
-            # scale to check, or the mesh was examined and was clean.
-            outcome=(
-                "not_requested" if SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ
-                else NOT_APPLICABLE if mesh_geometry_exempt
-                else EXECUTED
-            ),
-            uncovered_summary=(
-                "Mesh-scale checks were not requested: SKIP_GEOMETRY_DIAGNOSTICS is "
-                "set, so no mesh geometry was examined."
-                if SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ else
-                "This entry declares no physical mesh scale, so there is no "
-                "mesh geometry to check."
-            ),
-            evidence={
-                "skipped": SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ,
-                "exempt": mesh_geometry_exempt,
-                "diagnostic_count": len(mesh_geometry_diagnostics),
-            },
-        ),
     ]
     score = sum(item.points for item in items)
-    # The applicable denominator: what this plan actually owed. A
-    # `not_applicable` stage owed nothing and is excluded; `not_requested` and
-    # `unavailable` owed something and did not deliver, so they stay in and
-    # cost the plan its points.
-    max_score = sum(
-        item.max_points for item in items if item.status != NOT_APPLICABLE
-    )
+    max_score = sum(item.max_points for item in items)
     blocked = [item.stage for item in items if item.status == "blocked"]
     warnings = [item.stage for item in items if item.status == "warning"]
-    uncovered = [
-        item.stage for item in items
-        if item.status in UNCOVERED_OUTCOMES and item.status != NOT_APPLICABLE
-    ]
-    inapplicable = [item.stage for item in items if item.status == NOT_APPLICABLE]
+    uncovered = [item.stage for item in items if item.status in UNCOVERED_OUTCOMES]
     readiness = {
         "score": score,
         "max_score": max_score,
@@ -310,6 +167,5 @@ def _build_simulation_audit(
         "blocked_stages": blocked,
         "warning_stages": warnings,
         "uncovered_stages": uncovered,
-        "inapplicable_stages": inapplicable,
     }
     return tuple(items), readiness

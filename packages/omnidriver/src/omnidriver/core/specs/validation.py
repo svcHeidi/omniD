@@ -1,17 +1,15 @@
-"""Run-document validator.
+"""The catalogue's structured rules over a flat ``{slot_key: value}`` context.
 
 Checks required-field omissions, enum violations, and each ``DictEntry``'s
 structured constraints (``applicable_when``, ``forbidden_when``,
-``required_when``, ``mutually_exclusive_with``, ``co_required_with``)
-against a flattened view of the run config, evaluated once per entry at its
-*primary* phase -- the first phase in the adapter-declared order it claims.
+``required_when``, ``mutually_exclusive_with``, ``co_required_with``),
+evaluated once per entry at its *primary* phase -- the first phase in the
+adapter-declared order it claims.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Iterable
 
 from omnidriver.core.contracts.dictionary import DictEntry
@@ -20,9 +18,6 @@ if TYPE_CHECKING:
     from omnidriver.core.plugin_interface import DriverContext
 
 from ..planning_types import StrictDiagnostic, diagnostic
-def _all_entries(driver_context: "DriverContext"):
-    yield from driver_context.capabilities.dictionaries.entries()
-
 
 def primary_phase(entry, phase_order: tuple[str, ...]) -> str | None:
     """Return the editing phase for a (possibly multi-phase) entry.
@@ -88,68 +83,6 @@ def _lookup_slot(mapping: dict[str, Any], driver_path: str):
     if driver_path in mapping:
         return mapping[driver_path]
     return mapping.get(slot_key(driver_path))
-
-
-def _slice_value(run, phase: str, driver_path: str):
-    """Look up the slot value for a driver_path inside a phase slice."""
-    slice_ = run.config.get(phase, {}) or {}
-    return _lookup_slot(slice_, driver_path)
-
-
-def _non_mapping_phase_errors(run, phase_order: tuple[str, ...]) -> list[StrictDiagnostic]:
-    """Reject any ``run.config`` phase slice that is not a mapping.
-
-    ``RunDocument.config`` is plugin-defined and the core JSON Schema only
-    constrains it to be an object -- per-phase values are unconstrained.
-    Both :func:`_flatten_context` (``slice_.items()``) and
-    :func:`_slice_value` (``slice_.get(...)``) assume every slice is
-    dict-shaped, so an agent-authored document such as
-    ``config={"anatomy": "not-an-object"}`` would otherwise raise an
-    uncaught ``AttributeError`` instead of producing a diagnostic. This
-    single guard protects both; ``validate_run`` returns early when it
-    fires, so neither helper ever sees a non-mapping slice.
-
-    ``None`` and other falsy values are tolerated: both helpers already
-    coerce them to an empty slice.
-    """
-    errors: list[StrictDiagnostic] = []
-    for phase, slice_ in (run.config or {}).items():
-        if not slice_ or isinstance(slice_, Mapping):
-            continue
-        errors.append(diagnostic(
-            level="error",
-            code="run_validation",
-            message=(
-                f"config[{phase!r}] must be an object, got "
-                f"{type(slice_).__name__}."
-            ),
-            # `source` is the *reporting* phase and must stay inside the
-            # declared vocabulary; the offending key is carried by `field`.
-            source=phase if phase in phase_order else (
-                phase_order[0] if phase_order else ""
-            ),
-            field=str(phase),
-        ))
-    return errors
-
-
-def _flatten_context(run) -> dict[str, Any]:
-    """Build a flat predicate-key → value view across every phase slice.
-
-    Structured-constraint predicates reference slot-keys (the post-
-    ``slot_key`` form: ``myocardiumSolver``, ``ionicModel``,
-    ``singleCellStimulus.stim_amplitude``, ...). Multiple phases never
-    write the same slot-key in practice; if they do, the last wins —
-    document the convention rather than silently merging.
-    """
-    context: dict[str, Any] = {}
-    for slice_ in run.config.values():
-        if not slice_:
-            continue
-        for key, val in slice_.items():
-            if val not in (None, ""):
-                context[key] = val
-    return context
 
 
 def _predicate_matches(
@@ -281,92 +214,51 @@ def _format_predicate(predicate: dict[str, Any]) -> str:
     return " and ".join(parts)
 
 
-def _all_entries_list(driver_context: "DriverContext | None" = None):
-    return list(_all_entries(driver_context))
-
-
-def validate_run(
-    run,
+def validate_context(
+    context: dict[str, Any],
     *,
     entries: Iterable[DictEntry] | None = None,
     driver_context: "DriverContext",
 ) -> tuple[StrictDiagnostic, ...]:
-    """Validate ``run`` against the dict-entry catalog.
+    """Validate a flat ``{slot_key: value}`` context against the catalogue.
 
-    ``entries`` overrides the live catalog for testability and for callers
-    that want to validate against a curated subset (e.g., dict_builder).
-    When omitted, the full live catalog is used.
-
-    A ``run.config`` whose phase slices are not all mappings is reported as
-    error-level diagnostics and short-circuits the remaining checks (see
-    :func:`_non_mapping_phase_errors`).
+    ``entries`` overrides the live catalogue for callers that validate against
+    a curated subset (the dictionary builders). The plugin's own run-semantics
+    rules are appended last.
     """
     from omnidriver.core.plugin_capabilities import RunSemanticValidationRequest
 
-    # 0) Shape guard. Every later step indexes phase slices as mappings;
-    #    bail out with diagnostics rather than crashing on a malformed one.
     phase_order = driver_context.capabilities.dictionaries.phases()
-
-    shape_errors = _non_mapping_phase_errors(run, phase_order)
-    if shape_errors:
-        return tuple(shape_errors)
-
     entry_list: list[DictEntry] = (
-        list(entries) if entries is not None else _all_entries_list(driver_context)
+        list(entries) if entries is not None
+        else list(driver_context.capabilities.dictionaries.entries())
     )
-    context = _flatten_context(run)
+    context = {key: val for key, val in context.items() if val not in (None, "")}
     errors: list[StrictDiagnostic] = []
 
-    # 1) Required-field checks. Skip entries whose applicable_when fails —
-    #    requiredness is conditional on applicability. When an entry has
-    #    both ``required=True`` and a non-empty ``required_when``, the
-    #    latter narrows the former: requiredness fires only when at least
-    #    one ``required_when`` predicate matches.
+    # Requiredness is conditional on applicability; ``required_when`` narrows
+    # ``required`` to the contexts where one of its predicates matches.
     for e in entry_list:
         if not _entry_is_applicable(e, context):
             continue
         if not is_required_in_context(e, context):
             continue
         if e.dynamic_path:
-            # Dynamic-path entries describe templates (e.g.
-            # "conductionNetworkDomains.<name>.*"); this generic pass has
-            # no way to discover which concrete <name> instances a given
-            # run configures, so it cannot check their required leaves.
-            # That is left to section 4 below (a plugin's own
-            # run_semantic_validator), if the active plugin implements it
-            # for this template family -- see e.g. the cardiacfoam
-            # plugin's _evaluate_dynamic_required_fields. Not every
-            # dynamic-path template is guaranteed such a check.
+            # A template names no concrete instance, so its required leaves
+            # are the plugin's run-semantics rules to check.
             continue
-        ph = primary_phase(e, phase_order)
-        if ph is None:
-            # An entry whose phases fall outside the active plugin's declared
-            # order is a catalog defect, not a pass -- report it rather than
-            # silently skipping the check.
+        if primary_phase(e, phase_order) is None:
+            errors.append(_phase_defect(e, phase_order))
+            continue
+        if _lookup_slot(context, e.driver_path) in (None, ""):
             errors.append(diagnostic(
                 code="run_validation",
-                source=phase_order[0] if phase_order else "",
-                field=e.driver_path,
-                message=(
-                    f"{e.driver_path} declares phases {sorted(e.phases)}, none "
-                    f"of which is in the plugin's declared phase order "
-                    f"{list(phase_order)}. It cannot be validated. Add the "
-                    f"phase to get_phases() or correct the entry."
-                ),
-                level="error",
-            ))
-            continue
-        val = _slice_value(run, ph, e.driver_path)
-        if val in (None, ""):
-            errors.append(diagnostic(
-                code="run_validation",
-                source=ph,
+                source=primary_phase(e, phase_order),
                 field=e.driver_path,
                 message=f"{e.driver_path} is required.",
                 level="error",
             ))
 
-    # 2) Enum checks. Skip inapplicable entries for the same reason.
     for e in entry_list:
         if e.value_kind != "enum" or not e.enum_values:
             continue
@@ -374,28 +266,12 @@ def validate_run(
             continue
         ph = primary_phase(e, phase_order)
         if ph is None:
-            # An entry whose phases fall outside the active plugin's declared
-            # order is a catalog defect, not a pass -- report it rather than
-            # silently skipping the check.
-            errors.append(diagnostic(
-                code="run_validation",
-                source=phase_order[0] if phase_order else "",
-                field=e.driver_path,
-                message=(
-                    f"{e.driver_path} declares phases {sorted(e.phases)}, none "
-                    f"of which is in the plugin's declared phase order "
-                    f"{list(phase_order)}. It cannot be validated. Add the "
-                    f"phase to get_phases() or correct the entry."
-                ),
-                level="error",
-            ))
+            errors.append(_phase_defect(e, phase_order))
             continue
-        val = _slice_value(run, ph, e.driver_path)
-        if val is None or val == "":
+        val = _lookup_slot(context, e.driver_path)
+        if val in (None, ""):
             continue
-        normalised_val = _normalise_word(val)
-        normalised_enum_values = tuple(_normalise_word(item) for item in e.enum_values)
-        if normalised_val not in normalised_enum_values:
+        if _normalise_word(val) not in tuple(_normalise_word(item) for item in e.enum_values):
             errors.append(diagnostic(
                 code="run_validation",
                 source=ph,
@@ -404,20 +280,30 @@ def validate_run(
                 level="error",
             ))
 
-    # 3) Structured constraints.
-    # (The ionicModel entry carries forbidden_when={"myocardiumSolver": "eikonalSolver"}
-    # which the section below evaluates programmatically.)
     errors.extend(_evaluate_structured(entry_list, context, phase_order))
-
-    # 4) Domain semantics are a plugin concern.  Core owns only generic
-    # catalog constraints and receives solver-specific diagnostics as data.
     errors.extend(
         driver_context.capabilities.run_semantic_validator.validate(
             RunSemanticValidationRequest(context),
         )
     )
-
     return tuple(errors)
+
+
+def _phase_defect(entry: DictEntry, phase_order: tuple[str, ...]) -> StrictDiagnostic:
+    """An entry whose phases fall outside the plugin's declared order is a
+    catalogue defect, reported rather than skipped."""
+    return diagnostic(
+        code="run_validation",
+        source=phase_order[0] if phase_order else "",
+        field=entry.driver_path,
+        message=(
+            f"{entry.driver_path} declares phases {sorted(entry.phases)}, none "
+            f"of which is in the plugin's declared phase order "
+            f"{list(phase_order)}. It cannot be validated. Add the "
+            f"phase to get_phases() or correct the entry."
+        ),
+        level="error",
+    )
 
 
 def _evaluate_structured(

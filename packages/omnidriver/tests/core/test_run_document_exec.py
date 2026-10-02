@@ -23,10 +23,6 @@ from plugins.minimal_plugin import MinimalTestPlugin
 _CTX = driver_context(MinimalTestPlugin(entrypoint="run-test-case"), source="test:run-document")
 
 
-def _empty_config() -> dict:
-    return {"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}}
-
-
 def _make_runnable_case(root: Path) -> Path:
     """Create a case with this test's explicitly declared entrypoint."""
     case = root / "case"
@@ -40,8 +36,6 @@ def _minimal_doc(**overrides) -> RunDocument:
         id="d1",
         name="doc-one",
         status="planned",
-        config=_empty_config(),
-        configurationSource="document",
         launch={"caseRoot": "/tmp/case", "outputDir": "/tmp/case/output"},
         workflowDag={
             "schema_version": "1",
@@ -74,7 +68,6 @@ class TestLoadRunDocument(unittest.TestCase):
                 "id": "old",
                 "name": "archived",
                 "status": "draft",
-                "config": _empty_config(),
             }
             with tempfile.TemporaryDirectory() as temp:
                 path = Path(temp) / "run.json"
@@ -171,48 +164,6 @@ class TestCaseRootValidation(unittest.TestCase):
             codes = {d.code for d in diagnostics}
             self.assertIn("case_root_missing", codes)
 
-    def test_non_runnable_case_root_is_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as temp:
-            empty = Path(temp) / "empty"
-            empty.mkdir()
-            doc = _minimal_doc(launch={
-                "caseRoot": str(empty),
-                "outputDir": str(empty / "out"),
-            })
-            inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
-            self.assertIsNone(inputs)
-            codes = {d.code for d in diagnostics}
-            self.assertIn("case_root_not_a_runnable_case", codes)
-
-    def test_a_record_run_carrying_its_steps_is_runnable_without_asking_the_adapter_I4(self) -> None:
-        """A tutorial-record run's document carries the record's steps, so the adapter's `is_case_runnable_without_workflow` is never consulted."""
-        with tempfile.TemporaryDirectory() as temp:
-            empty = Path(temp) / "empty"
-            empty.mkdir()
-            launch = {"caseRoot": str(empty), "outputDir": str(empty / "out")}
-            record_doc = _minimal_doc(launch=launch, resolvedEntry={"entry": "toy", "entryKind": "tutorial_record"})
-            with mock.patch(
-                "omnidriver.core.runtime.run_document_exec._case_is_runnable",
-                side_effect=AssertionError("the adapter was asked"),
-            ):
-                _inputs, diagnostics = build_execution_inputs(record_doc, driver_context=_CTX)
-            self.assertNotIn("case_root_not_a_runnable_case", {d.code for d in diagnostics})
-
-    def test_any_other_run_still_asks_the_adapter_I4(self) -> None:
-        """The record exemption does not loosen the gate for anything else, nor for a record document that carries no steps."""
-        with tempfile.TemporaryDirectory() as temp:
-            empty = Path(temp) / "empty"
-            empty.mkdir()
-            launch = {"caseRoot": str(empty), "outputDir": str(empty / "out")}
-            for doc in (
-                _minimal_doc(launch=launch, resolvedEntry={"entry": "x", "entryKind": "case_folder"}),
-                _minimal_doc(launch=launch, resolvedEntry={"entry": "toy", "entryKind": "tutorial_record"},
-                             workflowDag=None),
-            ):
-                inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
-                self.assertIsNone(inputs)
-                self.assertIn("case_root_not_a_runnable_case", {d.code for d in diagnostics})
-
     def test_canonical_paths_are_resolved_and_stored(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             case = _make_runnable_case(Path(temp))
@@ -220,11 +171,7 @@ class TestCaseRootValidation(unittest.TestCase):
                 "caseRoot": str(case),
                 "outputDir": "output",  # relative -> resolves under caseRoot
             })
-            with mock.patch(
-                "omnidriver.core.runtime.run_document_exec.validate_run",
-                return_value=[],
-            ):
-                inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
+            inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNotNone(inputs, diagnostics)
             self.assertEqual(inputs.case_root, case.resolve())
             self.assertEqual(inputs.output_dir, (case.resolve() / "output"))
@@ -241,11 +188,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                 "caseRoot": str(case),
                 "outputDir": str(case / "output"),
             })
-            with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}), \
-                 mock.patch(
-                     "omnidriver.core.runtime.run_document_exec.validate_run",
-                     return_value=[],
-                 ):
+            with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}):
                 inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNone(inputs)
             codes = {d.code for d in diagnostics}
@@ -262,11 +205,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                 "caseRoot": str(case),
                 "outputDir": str(outside_out),
             })
-            with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}), \
-                 mock.patch(
-                     "omnidriver.core.runtime.run_document_exec.validate_run",
-                     return_value=[],
-                 ):
+            with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}):
                 inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNone(inputs)
             codes = {d.code for d in diagnostics}
@@ -280,11 +219,7 @@ class TestAllowedRunsRoot(unittest.TestCase):
                 "caseRoot": str(case),
                 "outputDir": str(case / "output"),
             })
-            with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}), \
-                 mock.patch(
-                     "omnidriver.core.runtime.run_document_exec.validate_run",
-                     return_value=[],
-                 ):
+            with mock.patch.dict(os.environ, {"OMNIDRIVER_ALLOWED_RUNS_ROOT": str(allowed)}):
                 inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNotNone(inputs, diagnostics)
 
@@ -301,70 +236,11 @@ class TestAllowedRunsRoot(unittest.TestCase):
             })
             # patch.dict (clear=False) snapshots + restores os.environ on exit,
             # so popping the var here is safe and does not disturb PATH etc.
-            with mock.patch.dict(os.environ, {}), \
-                 mock.patch(
-                     "omnidriver.core.runtime.run_document_exec.validate_run",
-                     return_value=[],
-                 ):
+            with mock.patch.dict(os.environ, {}):
                 os.environ.pop("OMNIDRIVER_ALLOWED_RUNS_ROOT", None)
                 inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
             self.assertIsNotNone(inputs, diagnostics)
             self.assertEqual(inputs.output_dir, separate_out.resolve())
-
-
-class TestConfigurationSource(unittest.TestCase):
-    """Step 4c: planning and execution agree on where a RunDocument's configuration lives, via the one shared decision (``core.runtime.configuration_source.resolve_configuration_source``)."""
-
-    def test_case_source_skips_document_config_validation(self) -> None:
-        """A "case"-sourced document's config is validated by neither `validate_run` nor the plugin's declared JSON Schema -- the case files it points at already carry (and were already validated against) the real configuration."""
-        with tempfile.TemporaryDirectory() as temp:
-            case = _make_runnable_case(Path(temp))
-            doc = _minimal_doc(
-                configurationSource="case",
-                config={},
-                launch={"caseRoot": str(case), "outputDir": str(case / "output")},
-            )
-            with mock.patch(
-                "omnidriver.core.runtime.run_document_exec.validate_run",
-            ) as mock_validate_run:
-                inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
-        mock_validate_run.assert_not_called()
-        codes = {d.code for d in diagnostics}
-        self.assertNotIn("plugin_config_schema_violation", codes)
-        self.assertNotIn("run_validation", codes)
-        self.assertIsNotNone(inputs, diagnostics)
-
-    def test_case_source_with_non_empty_config_is_refused(self) -> None:
-        """A "case"-sourced document must not also carry document config -- two claimed sources for one fact is a contradiction, refused by name, not merged or silently ignored (and not smuggled past the plugin schema check by claiming "case")."""
-        doc = _minimal_doc(
-            configurationSource="case",
-            config={"solver": {"endTime": "1"}},
-        )
-        inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
-        self.assertIsNone(inputs)
-        codes = {d.code for d in diagnostics}
-        self.assertIn("case_configuration_source_carries_config", codes)
-
-    def test_case_source_with_empty_shell_config_is_not_refused(self) -> None:
-        """A phase-shell config of entirely empty sub-dicts (what a plugin's own config builder emits for a generic case, e.g. cardiacFoam's `build_config`) is structurally empty, not "non-empty" -- truthy at the top level is not the same as carrying a value."""
-        with tempfile.TemporaryDirectory() as temp:
-            case = _make_runnable_case(Path(temp))
-            doc = _minimal_doc(
-                configurationSource="case",
-                config={"anatomy": {}, "physics": {}, "stimulus": {}, "solver": {}},
-                launch={"caseRoot": str(case), "outputDir": str(case / "output")},
-            )
-            inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
-        codes = {d.code for d in diagnostics}
-        self.assertNotIn("case_configuration_source_carries_config", codes)
-        self.assertIsNotNone(inputs, diagnostics)
-
-    def test_unknown_configuration_source_is_refused(self) -> None:
-        doc = _minimal_doc(configurationSource="somewhere-else")
-        inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
-        self.assertIsNone(inputs)
-        codes = {d.code for d in diagnostics}
-        self.assertIn("unknown_configuration_source", codes)
 
 
 if __name__ == "__main__":

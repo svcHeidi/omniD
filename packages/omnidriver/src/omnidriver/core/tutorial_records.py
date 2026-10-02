@@ -1071,10 +1071,7 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
     Two sources naming the same (document, key) slot are fine when they
     agree on the value -- e.g. a study restates a base default explicitly --
     and refused, by name, naming both sources, when they do not. This is the
-    tutorial-record replacement for an adapter's own pre-existing override-
-    merging convention's "later write wins": that older behaviour is left
-    exactly as it is for old factory tutorials, which never call this
-    function.
+    tutorial-record rule: a later write never silently wins.
 
     "Agree" is checked two ways, both refusing:
 
@@ -1445,3 +1442,46 @@ def build_tutorial_record_catalog(
             )
         catalog[record.name] = record
     return catalog
+
+
+def lookup_record(entry: "str | TutorialRecord", *, driver_context: Any) -> TutorialRecord:
+    """The record ``entry`` names in the composed stack's catalogue (case
+    folded), or ``entry`` itself when it already is one. An unknown name is
+    refused with the catalogue's names."""
+    if isinstance(entry, TutorialRecord):
+        return entry
+    catalog = driver_context.capabilities.tutorial_records.catalog() or {}
+    by_name = {name.casefold(): record for name, record in catalog.items()}
+    record = by_name.get(entry.strip().casefold())
+    if record is None:
+        raise TutorialRecordError(
+            f"unknown tutorial record {entry!r}; the composed stack registers "
+            f"{sorted(catalog) or 'none'}. To run a case folder that is not a "
+            "record, pass it with --case"
+        )
+    return record
+
+
+def case_folder_record(case_dir: str | Path, *, driver_context: Any) -> tuple[TutorialRecord, Path]:
+    """An ad hoc record for a case folder the stack declares an entrypoint for:
+    one step running that entrypoint, no axes. Returns the record and the
+    cases root (the folder's parent) it is staged from."""
+    from .plugin_profile import entrypoint_relpaths
+
+    case = Path(case_dir).expanduser().resolve()
+    if not case.is_dir():
+        raise TutorialRecordError(f"--case {str(case_dir)!r} is not a directory")
+    declared = entrypoint_relpaths(driver_context)
+    if not declared:
+        raise TutorialRecordError(
+            "--case runs a folder's entrypoint, and the composed stack declares none "
+            "(case_entrypoints)"
+        )
+    entrypoint = declared[0]
+    if not (case / entrypoint).is_file():
+        raise TutorialRecordError(f"--case {str(case)!r} has no {entrypoint!r} to run")
+    record = TutorialRecord(
+        name=case.name, native_case_relpath=case.name,
+        workflow_steps=(WorkflowStep(step_id="run", command=(entrypoint,)),),
+    )
+    return record, case.parent

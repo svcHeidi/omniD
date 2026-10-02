@@ -182,7 +182,7 @@ def test_describe_needs_no_scratch_and_writes_nothing(tmp_path, capsys):
         "--cases-root", str(cases_root),
     ])
     assert exit_code == 0, capsys.readouterr().out
-    assert json.loads(capsys.readouterr().out)["resolution"] == "tutorial_record"
+    assert json.loads(capsys.readouterr().out)["entry"]["entry_name"] == "toyTutorial"
     assert _tree(cases_root) == before
 
 
@@ -233,67 +233,3 @@ def test_a_sweep_output_dir_wins_and_needs_no_scratch(tmp_path):
             "--output-dir", str(tmp_path / "out"),
         ]) == 0
     assert [Path(c.kwargs["output_dir"]) for c in runner.call_args_list] == [tmp_path / "out"] * 2
-
-
-# --- the CLI: staging a case-folder entry out of this checkout --------------
-
-
-def _stage_from_checkout(tmp_path: Path, capsys, *, scratch_dir):
-    """Drive ``cli._context_from_entry``'s run staging (only a case whose source lies inside the checkout is staged) with the checkout pinned to a tmp tree; ``_stage_entry_case`` is recorded, not run."""
-    from types import SimpleNamespace
-    from unittest import mock
-
-    from omnidriver import cli
-
-    checkout = tmp_path / "checkout"
-    cases_root = checkout / "cases"
-    (cases_root / "someCase").mkdir(parents=True)
-    report = SimpleNamespace(
-        status="ok", environment_diagnostics=(), simulation_audit=(),
-        workflow_dag={"steps": []}, workflow_state=SimpleNamespace(),
-        launch={
-            "case_root": str(cases_root / "someCase"),
-            "output_dir": str(cases_root / "someCase" / "out"),
-            "setup_root": str(cases_root / "someCase"),
-        },
-        expected_artifacts=(),
-    )
-    context = SimpleNamespace(capabilities=SimpleNamespace(
-        environment_preflight=SimpleNamespace(load=lambda **_kwargs: {}),
-    ))
-    with mock.patch.object(cli, "strict_plan", return_value=report), \
-         mock.patch.object(cli, "is_launchable", return_value=SimpleNamespace(structural_ok=True)), \
-         mock.patch.object(cli, "repo_root_or_none", return_value=checkout), \
-         mock.patch.object(cli, "_stage_entry_case") as stage:
-        execution, code = cli._context_from_entry(
-            selected_entry="someCase", entry_kind=None,
-            overrides={"cases_root": str(cases_root)}, config_path=None,
-            environment_source=None, driver_context=context,
-            stage_for_execution=True, scratch_dir=scratch_dir,
-        )
-    return execution, code, stage, cases_root, capsys.readouterr().out
-
-
-def test_run_staging_with_no_scratch_is_refused_as_json_and_stages_nothing(tmp_path, capsys):
-    execution, code, stage, _cases_root, out = _stage_from_checkout(tmp_path, capsys, scratch_dir=None)
-    assert (execution, code) == (None, 1)
-    assert "--scratch-dir" in json.loads(out)["error"]
-    stage.assert_not_called()
-
-
-def test_run_staging_goes_under_the_supplied_scratch_dir(tmp_path, capsys):
-    execution, code, stage, cases_root, _out = _stage_from_checkout(
-        tmp_path, capsys, scratch_dir=str(tmp_path / "scratch"),
-    )
-    assert code == 0 and execution is not None
-    [(args, _kwargs)] = stage.call_args_list
-    assert args == ((cases_root / "someCase").resolve(), tmp_path / "scratch" / "runs" / "someCase")
-
-
-def test_run_staging_refuses_a_scratch_dir_inside_the_cases_root(tmp_path, capsys):
-    scratch = tmp_path / "checkout" / "cases" / "scratch"
-    execution, code, stage, cases_root, out = _stage_from_checkout(tmp_path, capsys, scratch_dir=str(scratch))
-    assert (execution, code) == (None, 1)
-    error = json.loads(out)["error"]
-    assert str(scratch) in error and str(cases_root) in error
-    stage.assert_not_called()

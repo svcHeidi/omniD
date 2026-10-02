@@ -1,6 +1,9 @@
 # openCARP through omniD
 
 Study keys are `<file>.par:<parameter>`, e.g. `nversion.par:gregion[0].g_il`.
+A study goes in a sweep spec (`sweep-plan`/`sweep-run --spec`, whose `base`
+names `entry` and `cases_root`; a one-case study is a one-value axis). A
+single `plan`/`run` takes the native case as it is, plus `--parallel`.
 
 `plan`/`run` stage the record's case under a scratch root you supply:
 `--scratch-dir <dir>` (or `OMNIDRIVER_SCRATCH_DIR`), a writable directory

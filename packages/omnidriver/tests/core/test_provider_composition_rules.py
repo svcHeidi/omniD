@@ -93,38 +93,31 @@ def test_single_values_fall_through_a_none():
 
 
 def test_diagnostics_concatenate_in_stack_order():
-    env = _Provider(
-        "org.env",
-        get_base_mesh_geometry_diagnostics=lambda case_root: ("env-diag",),
-    )
+    env = _Provider("org.env", get_plan_diagnostics=lambda case_root, **kw: ("env-diag",))
     solver = _Provider(
         "org.solver", requires=("org.env",),
-        get_base_mesh_geometry_diagnostics=lambda case_root: ("solver-diag",),
+        get_plan_diagnostics=lambda case_root, **kw: ("solver-diag",),
     )
     composed = _compose(env, solver)
-    assert composed.mesh_diagnostic_policy.base_geometry_diagnostics(None) == (
-        "env-diag", "solver-diag",
-    )
+    assert composed.plan_diagnostics.diagnostics(
+        None, workflow_dag=None, env={}, scratch_root=None, driver_context=None,
+    ) == ("env-diag", "solver-diag")
 
 
-def test_two_providers_implementing_a_refusing_hook_is_an_error():
-    a = _Provider("org.a", materialize_sweep_case=lambda **kw: None,
-                  route_sweep_case_values=lambda **kw: {})
+def test_a_stack_with_no_plan_diagnostics_adds_none():
+    assert _compose(_Provider("org.only")).plan_diagnostics.diagnostics(
+        None, workflow_dag=None, env={}, scratch_root=None, driver_context=None,
+    ) == ()
+
+
+def test_two_providers_implementing_an_exclusive_hook_is_an_error():
+    a = _Provider("org.a", apply_overrides=lambda *a, **k: (),
+                  get_override_target_paths=lambda *a, **k: ())
     b = _Provider("org.b", requires=("org.a",),
-                  materialize_sweep_case=lambda **kw: None,
-                  route_sweep_case_values=lambda **kw: {})
-    with pytest.raises(ValueError, match="materialize_sweep_case"):
+                  apply_overrides=lambda *a, **k: (),
+                  get_override_target_paths=lambda *a, **k: ())
+    with pytest.raises(ValueError, match="apply_overrides"):
         _compose(a, b)
-
-
-def test_zero_providers_implementing_a_refusing_hook_still_refuses_by_name():
-    from omnidriver.core.sweep.sweep_expansion import SweepValidationError
-
-    only = _Provider("org.only")
-    with pytest.raises(SweepValidationError, match="materialize_sweep_case"):
-        _compose(only).sweep_materializer.materialize(
-            case_dir=None, routed={},
-        )
 
 
 def test_apply_and_target_paths_must_come_from_one_provider():

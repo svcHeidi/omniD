@@ -8,9 +8,7 @@ import pytest
 from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.core.plugin_capabilities import (
     ArtifactPredictionRequest,
-    CaseCompatibilityRequest,
     ConfigurationValidationRequest,
-    RunDocumentConfigurationRequest,
     RunSemanticValidationRequest,
 )
 from omnidriver.core.plugin_interface import DriverContext, driver_context
@@ -22,9 +20,7 @@ def _spec(tmp_path: Path) -> TutorialSpec:
     return TutorialSpec(
         name="minimal",
         case_root=tmp_path,
-        case_mutation=None,
         metadata={
-            "generic_case": True,
             "setup_root": str(tmp_path),
             "output_dir": str(tmp_path / "postProcessing"),
         },
@@ -39,7 +35,6 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     spec = _spec(tmp_path)
 
     assert context.providers == (plugin,)
-    assert context.capabilities.generic_case_factory.factory() is None
     assert context.capabilities.dictionaries.entries() == ()
     # Builds the expected manifest the same way core does, from the composed
     # capability reads, rather than comparing against the plugin's own
@@ -72,26 +67,12 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
     assert context.capabilities.artifacts.predict(
         ArtifactPredictionRequest(tmp_path, spec),
     ) == ()
-    config, diagnostics = context.capabilities.run_document_configuration.build(
-        RunDocumentConfigurationRequest(spec),
-    )
-    # A non-cardiac plugin with no build_run_document_config() hook now gets
-    # an empty config rather than the cardiac phase vocabulary. Those four
-    # phase names are exactly what RunDocument v3 removed from core, where
-    # `config` is an open object with no fixed phases (schemas/run-document.json),
-    # so handing them to a plugin that never declared them contradicted the
-    # schema. Matches absent_run_document_config_schema, which already handed
-    # non-cardiac plugins a fully open schema.
-    assert config == {}
-    assert diagnostics == ()
-
     # Existing callers that constructed DriverContext(providers, identity)
     # directly retain the same constructor shape -- now a one-provider stack.
     # This is the same property the pre-composition test proved of `.plugin`:
     # the context does not hide the provider behind the capability adapters.
     reconstructed = DriverContext((plugin,), context.identity)
     assert reconstructed.providers == (plugin,)
-    assert reconstructed.capabilities.generic_case_factory.factory() is None
     # 2026-09-24: `plugin_selector` added deliberately -- the `--plugin` value
     # a child process needs to rebuild this context (sweep_run's per-case
     # subprocess). It is optional and trailing, so the positional
@@ -101,31 +82,6 @@ def test_context_exposes_focused_adapters_without_replacing_public_plugin(
         "providers", "identity", "plugin_selector",
     ]
     assert reconstructed.plugin_selector is None
-
-
-def test_non_cardiac_plugin_does_not_inherit_cardiac_case_evidence(
-    tmp_path: Path,
-) -> None:
-    """Same rule as :func:`test_report_catalog_is_empty_for_non_cardiac_plugin`, applied to case compatibility."""
-    plugin = MinimalTestPlugin()
-    context = driver_context(plugin, source="test")
-    case_root = tmp_path / "case"
-    for relative in (
-        "constant/electroProperties.variant",
-        "constant/physicsProperties",
-        "system/controlDict",
-        "system/fvSchemes",
-        "system/fvSolution",
-    ):
-        path = case_root / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("")
-
-    request = CaseCompatibilityRequest(case_root)
-    assert not context.capabilities.case_compatibility.has_case_marker(request)
-    assert not context.capabilities.case_compatibility.is_runnable_without_workflow(
-        request
-    )
 
 
 def test_report_catalog_is_empty_for_non_cardiac_plugin() -> None:

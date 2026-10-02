@@ -524,23 +524,15 @@ def commit_record_case(
     )
 
 
-# ---------------------------------------------------------------------------
-# Running a committed record case's workflow through the same workflow-DAG
-# shape and the same planning/run machinery a factory tutorial uses -- no
-# second runner.
-# ---------------------------------------------------------------------------
-
-
 def _workflow_dag_for_record(
     record: TutorialRecord,
     *,
     workflow_step_ids: tuple[str, ...],
     command_arguments: Mapping[str, tuple[str, ...]],
 ) -> dict[str, Any]:
-    """The record's selected steps, in the exact ``{"steps": [...]}`` shape
-    ``generic_case._workflow_dag_for`` already produces for factory
-    tutorials: one entry per step, ``command``/``args`` split, chained by
-    ``depends_on`` in declaration order -- core knows neither tool by name.
+    """The record's selected steps as the ``{"steps": [...]}`` DAG the planner
+    and runner read: one entry per step, ``command``/``args`` split, chained
+    by ``depends_on`` in declaration order -- core knows neither tool by name.
 
     An axis's command arguments for a step (``AxisResult.command_arguments``,
     already merged and conflict-checked by ``resolve_case_patches``) are
@@ -779,16 +771,9 @@ def commit_and_build_record_spec(
     requested_by: str = "tutorial_record",
     inputs: Mapping[str, str | Path] | None = None,
 ) -> tuple[RecordCommitResult, Any]:
-    """Stage, commit, and build the ``TutorialSpec`` for one record case --
-    the spec that maps the committed case onto the factory-tutorial
-    workflow shape (``record_case_spec``).
-
-    This is the one "stage + commit + spec" sequence a record case needs
-    before it can be planned/run through ``strict_planning
-    ._strict_plan_for_spec`` -- both ``sweep_runner`` (one case out of a
-    sweep) and ``strict_planning.strict_plan`` (a single ``plan --strict
-    --entry <record>`` invocation) call this, never each keeping its own
-    copy.
+    """Stage and commit one record case and build its ``TutorialSpec``: the
+    one sequence both ``sweep_runner`` (a case of a sweep) and
+    ``strict_planning.strict_plan`` (a single plan) run before planning.
     """
     commit_result = commit_record_case(
         record, cases_root=cases_root, staged_case_root=staged_case_root,
@@ -817,20 +802,9 @@ def record_case_spec(
     resolved_inputs: tuple[ResolvedInput, ...] = (),
     driver_context: "DriverContext | None" = None,
 ) -> Any:
-    """Build the ``TutorialSpec`` a committed record case's workflow runs
-    through -- the same ``strict_planning._strict_plan_for_spec``/run-
-    document/workflow-runner pipeline a factory tutorial's ``case_folder``
-    spec runs through, so there is no second runner.
-
-    The case's content was already written by ``commit_record_case`` before
-    this is ever called, so this spec's own ``case_mutation`` is a genuine
-    no-op, never a second write.
-
-    ``metadata["generic_case"] = True`` matches ``generic_case.make_spec``'s
-    own convention for a spec with no solver-specific config to validate --
-    correct here for the same reason: a tutorial record is core-owned data,
-    not a solver's config vocabulary, so there is no plugin config schema to
-    validate a record spec's (empty) ``config`` against.
+    """Build the ``TutorialSpec`` a committed record case's workflow plans and
+    runs through. The case's content was written by ``commit_record_case``
+    before this is called.
 
     A ``parallel_request`` (``RecordCommitResult``'s) rewrites the solve
     step into the stack's parallel form, reading the committed case; it
@@ -864,18 +838,12 @@ def record_case_spec(
     return TutorialSpec(
         name=case_id,
         case_root=case_root,
-        case_mutation=lambda root: None,
         metadata={
             "entry_name": record.name,
-            "entry_kind": "tutorial_record",
             "entry_path": record.native_case_relpath,
-            "source_type": "tutorial_record",
-            "workflow_family": None,
-            "resolution": "tutorial_record",
             "workflow_dag": workflow_dag,
             "setup_root": str(case_root),
             "output_dir": str(case_root),
-            "generic_case": True,
             "expected_artifacts": record_step_artifacts(record, workflow_step_ids),
             **metadata,
         },
