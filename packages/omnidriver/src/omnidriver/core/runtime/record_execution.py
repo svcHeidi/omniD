@@ -28,7 +28,6 @@ from ..tutorial_records import (
     TutorialRecord,
     TutorialRecordError,
     _strictly_equal,
-    check_variant_constraints,
     patches_to_parameters,
     record_input_destinations,
     resolve_case_patches,
@@ -265,15 +264,13 @@ def _resolve_and_split(
         study_by_source, reserved_names=_reserved_study_names(record),
     )
     workflow_step_ids, workflow_variant = _resolve_workflow_route(record, reserved_values)
-    if workflow_variant is not None:
-        # Must run before any axis runs or any patch is proposed.
-        check_variant_constraints(record, workflow_variant["selected"], study_by_source)
     parallel_request = _parallel_request(record, reserved_values)
     combined, command_arguments = resolve_case_patches(
         record,
         study_by_source=study_by_source,
         staged_case_root=staged_case_root,
         direct_key_validator=validator,
+        workflow_step_ids=workflow_step_ids,
     )
     to_write, unchanged = split_unchanged(
         combined,

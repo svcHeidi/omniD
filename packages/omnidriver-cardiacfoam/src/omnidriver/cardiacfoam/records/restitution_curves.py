@@ -26,11 +26,12 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
+from omnidriver.core.tutorial_records import TutorialRecord
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
 
-from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS
+from .case_outputs import ELECTRO_PROPERTIES
 from .ionic_model_axis import ionic_model_axis
+from .routes import block_mesh_step, solve_step
 from .s1_s2_protocol_axis import s1_s2_protocol_axis
 
 #: This tutorial always addresses `myocardiumSolver singleCellSolver`'s own
@@ -121,18 +122,7 @@ RECORD = TutorialRecord(
     native_case_relpath="electrophysiologyProtocols/restitutionCurves_s1s2Protocol",
     axes=AXES,
     workflow_steps=(
-        WorkflowStep(
-            step_id="mesh", command=("blockMesh",),
-            consumes=(_BLOCK_MESH_DICT_DOCUMENT, "system/controlDict"),
-            produces=POLY_MESH_OUTPUTS,
-        ),
-        WorkflowStep(
-            step_id="solve", command=("cardiacFoam",),
-            consumes=(
-                "system/controlDict", "system/fvSchemes", "system/fvSolution",
-                "constant/physicsProperties", ELECTRO_PROPERTIES,
-            ),
-            produces=("postProcessing/*.txt",),
-        ),
+        block_mesh_step((_BLOCK_MESH_DICT_DOCUMENT, "system/controlDict")),
+        solve_step(("postProcessing/*.txt",)),
     ),
 )

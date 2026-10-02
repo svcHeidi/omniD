@@ -30,7 +30,8 @@ from omnidriver.openfoam.case_planning import read_nested_entry
 from omnidriver.openfoam.literals import parse_scalar_list_literal, parse_vector3_list_literal
 
 from .cable_axes import cable_dx_axis
-from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS, WITH_DEFAULT_VALUES
+from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
+from .routes import block_mesh_step, solve_step
 
 #: This tutorial always addresses `myocardiumSolver monodomainSolver`'s own
 #: `monodomainSolverCoeffs` scope -- never varied (the native case already
@@ -202,18 +203,9 @@ RECORD = TutorialRecord(
     native_case_relpath="electrophysiologyProtocols/cableProtocol/monodomain1DCableCV",
     axes=AXES,
     workflow_steps=(
-        WorkflowStep(
-            step_id="mesh", command=("blockMesh",),
-            consumes=("system/blockMeshDict", _CONTROL_DICT_DOCUMENT),
-            produces=POLY_MESH_OUTPUTS,
-        ),
-        WorkflowStep(
-            step_id="solve", command=("cardiacFoam",),
-            consumes=(
-                _CONTROL_DICT_DOCUMENT, "system/fvSchemes", "system/fvSolution",
-                "constant/physicsProperties", ELECTRO_PROPERTIES, "system/cableProbes",
-            ),
-            produces=(WITH_DEFAULT_VALUES, "postProcessing/cableProbes/*/Vm"),
+        block_mesh_step(("system/blockMeshDict", _CONTROL_DICT_DOCUMENT)),
+        solve_step(
+            (WITH_DEFAULT_VALUES, "postProcessing/cableProbes/*/Vm"), consumes=("system/cableProbes",),
         ),
         WorkflowStep(
             step_id=POSTPROCESS_STEP_ID,

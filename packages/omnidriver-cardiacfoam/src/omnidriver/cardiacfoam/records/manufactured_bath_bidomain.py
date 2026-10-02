@@ -50,13 +50,13 @@ it does not exist when the case is planned and fingerprinted.
 
 from __future__ import annotations
 
-from omnidriver.core.tutorial_records import DefaultArgument, TutorialRecord, WorkflowStep
+from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 
-from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS, WITH_DEFAULT_VALUES, gmsh_to_foam_outputs
+from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
 from .manufactured_solution_axes import (
-    BLOCK_MESH_DICT_DOCUMENTS, MESH_DICT_KEY, TET_DIMENSIONS,
-    dimension_axis, hex_number_cells_axis, tet_number_cells_axis,
+    BLOCK_MESH_DICT_DOCUMENTS, dimension_axis, hex_number_cells_axis, tet_number_cells_axis,
 )
+from .routes import block_mesh_step, gmsh_route, solve_step
 
 _TET_TEMPLATE = "setup/studies/tetConvergence/three_domain_box.geo.template"
 _TET_MESH = "three_domain_box.msh"
@@ -75,13 +75,8 @@ RECORD = TutorialRecord(
     native_case_relpath="manufacturedSolutions/bathBidomain",
     axes=AXES,
     workflow_steps=(
-        WorkflowStep(
-            step_id="mesh", command=("blockMesh",),
-            default_arguments=(
-                DefaultArgument(key=MESH_DICT_KEY, values=("system/blockMeshDict.1D",)),
-            ),
-            consumes=BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",),
-            produces=POLY_MESH_OUTPUTS,
+        block_mesh_step(
+            BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",), default_dict="system/blockMeshDict.1D",
         ),
         WorkflowStep(
             # BB1: the cellZones file and the four sets topoSetDict names.
@@ -95,20 +90,9 @@ RECORD = TutorialRecord(
                 "constant/polyMesh/sets/myocardiumCells",
             ),
         ),
-        WorkflowStep(
-            step_id="gmsh",
-            command=("gmsh", "-3", _TET_TEMPLATE, "-o", _TET_MESH, "-format", "msh2"),
-            consumes=(_TET_TEMPLATE,),
-            produces=(_TET_MESH,),
-        ),
-        WorkflowStep(
-            # BB2: the template's two Physical Volumes become two cellZones
-            # and two cellSets beside the five mesh files.
-            step_id="gmshToFoam", command=("gmshToFoam", _TET_MESH),
-            consumes=(_TET_MESH,),
-            produces=gmsh_to_foam_outputs("myocardium", "bath"),
-        ),
-        WorkflowStep(step_id="checkMesh", command=("checkMesh",)),
+        # BB2: the template's two Physical Volumes become two cellZones and
+        # two cellSets beside the five mesh files.
+        *gmsh_route(_TET_TEMPLATE, _TET_MESH, "myocardium", "bath"),
         WorkflowStep(
             # BB1/BB2: the one field it writes, and the `0/` it creates to
             # hold it (the native case has no `0/`).
@@ -116,17 +100,10 @@ RECORD = TutorialRecord(
             consumes=("system/setTorsoOrganConductivityFieldDict",),
             produces=("0", "0/bodyAndOrgansConductivity"),
         ),
-        WorkflowStep(
-            step_id="solve", command=("cardiacFoam",),
-            consumes=(
-                "system/controlDict", "system/fvSchemes", "system/fvSolution",
-                "constant/physicsProperties", ELECTRO_PROPERTIES,
-            ),
-            # BB1/BB2: `electroModel::end`'s dictionary, and the verifier's
-            # `<dim>_<N>_cells.dat`, whose N the verifier derives from the
-            # resolved mesh (`3D_17_cells.dat` at tet lc=0.1).
-            produces=(WITH_DEFAULT_VALUES, "postProcessing/*_cells.dat"),
-        ),
+        # BB1/BB2: `electroModel::end`'s dictionary, and the verifier's
+        # `<dim>_<N>_cells.dat`, whose N the verifier derives from the
+        # resolved mesh (`3D_17_cells.dat` at tet lc=0.1).
+        solve_step((WITH_DEFAULT_VALUES, "postProcessing/*_cells.dat")),
         WorkflowStep(
             step_id="interfaceMetrics",
             command=("bathBidomainInterfaceMetrics", "-latestTime"),
@@ -139,5 +116,4 @@ RECORD = TutorialRecord(
     },
     variant_selector="mesh",
     default_variant="hex",
-    variant_constraints={"tet": {"dimension": TET_DIMENSIONS}},
 )

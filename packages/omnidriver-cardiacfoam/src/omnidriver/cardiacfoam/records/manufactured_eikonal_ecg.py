@@ -52,13 +52,13 @@ copy of the run case made ``cardiacFoam`` fail with
 
 from __future__ import annotations
 
-from omnidriver.core.tutorial_records import DefaultArgument, TutorialRecord, WorkflowStep
+from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 
-from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS, WITH_DEFAULT_VALUES, gmsh_to_foam_outputs
+from .case_outputs import WITH_DEFAULT_VALUES
 from .manufactured_solution_axes import (
-    BLOCK_MESH_DICT_DOCUMENTS, MESH_DICT_KEY, TET_DIMENSIONS,
-    dimension_axis, hex_number_cells_axis, tet_number_cells_axis,
+    BLOCK_MESH_DICT_DOCUMENTS, dimension_axis, hex_number_cells_axis, tet_number_cells_axis,
 )
+from .routes import block_mesh_step, gmsh_route, solve_step
 
 _TET_TEMPLATE_RELPATH = "setup/studies/tetConvergence/box.geo.template"
 _TET_MESH = "box.msh"
@@ -85,40 +85,10 @@ _SOLVE_OUTPUTS = (
     "postProcessing/manufacturedEikonalECGSummary_ECG.dat",
 )
 
-_MESH_STEP = WorkflowStep(
-    step_id="mesh", command=("blockMesh",),
-    default_arguments=(
-        DefaultArgument(key=MESH_DICT_KEY, values=("system/blockMeshDict.3D",)),
-    ),
-    consumes=BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",),
-    produces=POLY_MESH_OUTPUTS,
+_MESH_STEP = block_mesh_step(
+    BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",), default_dict="system/blockMeshDict.3D",
 )
-_SOLVE_STEP = WorkflowStep(
-    step_id="solve", command=("cardiacFoam",),
-    consumes=(
-        "system/controlDict", "system/fvSchemes", "system/fvSolution",
-        ELECTRO_PROPERTIES, "constant/physicsProperties", "0/activationTime",
-    ),
-    produces=_SOLVE_OUTPUTS,
-)
-#: No default ``-setnumber lc``: with no ``tetNumberCells`` gmsh uses the
-#: template's own ``DefineConstant`` default. ``box.msh`` is declared on both
-#: sides, and ``gmshToFoam``'s full output set, from the real run through
-#: this record logged in ``docs/solver-learning/cardiacfoam.md``: it includes
-#: the three zone files and ``sets/internal``, not just the plain
-#: ``constant/polyMesh`` files blockMesh writes.
-_GMSH_STEP = WorkflowStep(
-    step_id="gmsh",
-    command=("gmsh", "-3", _TET_TEMPLATE_RELPATH, "-o", _TET_MESH, "-format", "msh2"),
-    consumes=(_TET_TEMPLATE_RELPATH,),
-    produces=(_TET_MESH,),
-)
-_GMSH_TO_FOAM_STEP = WorkflowStep(
-    step_id="gmshToFoam", command=("gmshToFoam", _TET_MESH),
-    consumes=(_TET_MESH,),
-    produces=gmsh_to_foam_outputs("internal"),
-)
-_CHECK_MESH_STEP = WorkflowStep(step_id="checkMesh", command=("checkMesh",))
+_SOLVE_STEP = solve_step(_SOLVE_OUTPUTS, consumes=("0/activationTime",))
 _WRITE_CELL_CENTRES_STEP = WorkflowStep(
     step_id="writeCellCentres",
     command=("postProcess", "-func", "writeCellCentres", "-latestTime"),
@@ -137,7 +107,7 @@ RECORD = TutorialRecord(
     native_case_relpath="manufacturedSolutions/eikonalECG",
     axes=AXES,
     workflow_steps=(
-        _MESH_STEP, _SOLVE_STEP, _GMSH_STEP, _GMSH_TO_FOAM_STEP, _CHECK_MESH_STEP,
+        _MESH_STEP, _SOLVE_STEP, *gmsh_route(_TET_TEMPLATE_RELPATH, _TET_MESH, "internal"),
         _WRITE_CELL_CENTRES_STEP, _GRADIENT_RECONSTRUCTION_STEP,
     ),
     variant_selector="mesh",
@@ -149,11 +119,5 @@ RECORD = TutorialRecord(
         "tet-gradientReconstruction": (
             "gmsh", "gmshToFoam", "checkMesh", "solve", "gradientReconstructionOrder",
         ),
-    },
-    # A tet route's template is the 3D unit cube, so a 1D/2D `dimension` is
-    # refused rather than silently ignored.
-    variant_constraints={
-        variant: {"dimension": TET_DIMENSIONS}
-        for variant in ("tet", "tet-errorLocalisation", "tet-gradientReconstruction")
     },
 )

@@ -17,11 +17,12 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.core.tutorial_records import (
-    AxisContract, AxisPatch, AxisResult, DefaultArgument, TutorialRecord, WorkflowStep,
+    AxisContract, AxisPatch, AxisResult, TutorialRecord, WorkflowStep,
 )
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
 
-from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS, WITH_DEFAULT_VALUES
+from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
+from .routes import block_mesh_step
 
 GRAPH_FILE_AXIS_NAME = "graphFile"
 NUMBER_CELLS_AXIS_NAME = "numberCells"
@@ -126,13 +127,8 @@ RECORD = TutorialRecord(
     native_case_relpath="manufacturedSolutions/monodomain1D3D",
     axes=AXES,
     workflow_steps=(
-        WorkflowStep(
-            step_id="mesh", command=("blockMesh",),
-            default_arguments=(
-                DefaultArgument(key=("-dict",), values=(_BLOCK_MESH_DICT_DOCUMENT,)),
-            ),
-            consumes=(_BLOCK_MESH_DICT_DOCUMENT, _CONTROL_DICT_DOCUMENT),
-            produces=POLY_MESH_OUTPUTS,
+        block_mesh_step(
+            (_BLOCK_MESH_DICT_DOCUMENT, _CONTROL_DICT_DOCUMENT), default_dict=_BLOCK_MESH_DICT_DOCUMENT,
         ),
         WorkflowStep(
             step_id=COUPLED_SOLVE_STEP_ID, command=("cardiacFoam",),
