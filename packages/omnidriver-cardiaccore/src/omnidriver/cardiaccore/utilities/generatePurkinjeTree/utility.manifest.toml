@@ -1,0 +1,72 @@
+name = "generatePurkinjeTree"
+description = "Generate explicit LV/RV endocardial Purkinje trees and inspection VTKs."
+category = "field-setup"
+
+purpose = "Declared from cardiacCore's native bivCase wrapper and utility documentation."
+inputs = [
+  "system/generatePurkinjeTreeDict",
+  "system/coordinatesConventionDict",
+  "0/transmural",
+  "0/intraventricular",
+  "0/apicobasal",
+]
+requires_mesh = true
+example = "generatePurkinjeTree -case <case>"
+
+[[produces]]
+artifact_id = "lv_endo_faces"
+path_pattern = "constant/polyMesh/sets/LVEndoFaces"
+format = "openfoam_face_set"
+description = "Generated LV endocardial face set"
+produced_by = "generatePurkinjeTree"
+
+[[produces]]
+artifact_id = "rv_endo_faces"
+path_pattern = "constant/polyMesh/sets/RVEndoFaces"
+format = "openfoam_face_set"
+description = "Generated RV endocardial face set"
+produced_by = "generatePurkinjeTree"
+
+[[produces]]
+artifact_id = "epi_faces"
+path_pattern = "constant/polyMesh/sets/EpiFaces"
+format = "openfoam_face_set"
+description = "Generated epicardial face set"
+produced_by = "generatePurkinjeTree"
+
+# Built only under coordinateSystem uvc (RV-facing septal recovery); a cobiveco case never constructs it.
+[[produces]]
+artifact_id = "rv_septal_endo_faces"
+path_pattern = "constant/polyMesh/sets/RVSeptalEndoFaces"
+format = "openfoam_face_set"
+description = "Generated RV septal-recovery face set (uvc only)"
+produced_by = "generatePurkinjeTree"
+optional = true
+
+[[produces]]
+artifact_id = "purkinje_vtk"
+path_pattern = "postProcessing/generatePurkinjeTree/purkinje.vtk"
+format = "vtk_polydata"
+description = "Glued solver-facing Purkinje tree"
+produced_by = "generatePurkinjeTree"
+
+[[produces]]
+artifact_id = "lv_purkinje_vtk"
+path_pattern = "postProcessing/generatePurkinjeTree/lv-purkinje.vtk"
+format = "vtk_polydata"
+description = "LV inspection tree"
+produced_by = "generatePurkinjeTree"
+
+[[produces]]
+artifact_id = "rv_purkinje_vtk"
+path_pattern = "postProcessing/generatePurkinjeTree/rv-purkinje.vtk"
+format = "vtk_polydata"
+description = "RV inspection tree"
+produced_by = "generatePurkinjeTree"
+
+[[produces]]
+artifact_id = "purkinje_generation_parameters"
+path_pattern = "postProcessing/generatePurkinjeTree/generation_params.txt"
+format = "text"
+description = "Effective native tree-generation parameters"
+produced_by = "generatePurkinjeTree"

@@ -20,7 +20,12 @@ cardiaccore = "omnidriver.cardiaccore.plugin:CardiacCorePlugin"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"omnidriver.cardiaccore" = ["plugin.yaml", "dict_key_allowlist.json", "agent_guidance/*.md", "agent_guidance/*.yaml"]
+"omnidriver.cardiaccore" = [
+    "plugin.yaml",
+    "dict_key_allowlist.json",
+    "guidance.md",
+    "utilities/*/utility.manifest.toml",
+]
 
 [tool.pytest.ini_options]
 # Duplicated from the root pyproject.toml on purpose: a per-package run

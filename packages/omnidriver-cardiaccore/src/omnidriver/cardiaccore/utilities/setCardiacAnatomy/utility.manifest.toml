@@ -1,0 +1,41 @@
+name = "setCardiacAnatomy"
+description = "Assign AHA segment labels and their short-axis angle."
+category = "field-setup"
+
+purpose = "Declared from cardiacCore's native bivCase wrapper and utility documentation."
+inputs = [
+  "system/setCardiacAnatomyDict",
+  "0/apicobasal",
+  "0/intraventricular",
+]
+requires_mesh = true
+example = "setCardiacAnatomy -case <case>"
+
+[[produces]]
+artifact_id = "aha_segment"
+path_pattern = "0/AHA_Segment"
+format = "openfoam_field"
+description = "AHA segment label"
+produced_by = "setCardiacAnatomy"
+
+[[produces]]
+artifact_id = "aha_angle"
+path_pattern = "0/aha_angle"
+format = "openfoam_field"
+description = "Short-axis polar angle"
+produced_by = "setCardiacAnatomy"
+
+# setCardiacAnatomy.C writes phiRV and groove_interface too; omitting them fails a record's restage validation.
+[[produces]]
+artifact_id = "phi_rv"
+path_pattern = "0/phiRV"
+format = "openfoam_field"
+description = "RV-relative circumferential angle"
+produced_by = "setCardiacAnatomy"
+
+[[produces]]
+artifact_id = "groove_interface"
+path_pattern = "0/groove_interface"
+format = "openfoam_field"
+description = "Interventricular groove marker"
+produced_by = "setCardiacAnatomy"
