@@ -11,12 +11,9 @@ expressed here as ``applicable_when``/``required_when``/``forbidden_when``/
 ``is_required_in_context`` / ``_predicate_matches`` for how these are
 evaluated.
 
-Declaring a key here gives an agent knowledge of it, not mutability: every
-declared key is routable (``workflows/overrides.py`` resolves any path in
-this catalog), but a value becomes overridable in a given workflow only once
-it is also named in that workflow's ``active_input_paths``.
-``generatePurkinjeTree``'s entries are staged this way, through
-``workflows/preprocessing.py``'s ``PURKINJE_TREE_INPUT_PATHS``.
+A study sets a declared key as ``system/<utility>Dict:key``
+(``record_key_validation``); a key this catalogue lacks is accepted when the
+C++ reads it.
 ``setCardiacScar``, ``setPurkinjeScar`` and ``coordinatesConvention`` remain
 declared-only: no workflow yet schedules those utilities (see
 ``catalogs/support_boundary.py``'s ``SUPPORT_BOUNDARY["pending"]``).
@@ -251,8 +248,7 @@ SLAB_ENTRIES: Final[tuple[DictEntry, ...]] = (
 # setPurkinjeMorphometryDict has no reviewed x-values other than
 # subendocardialWeight: groove detection is unconditional native behaviour,
 # never a dictionary input. subendocardialWeight is declared, optional, and
-# not routed through `_TARGETS` (see workflows/overrides.py), matching the
-# SLAB_ENTRIES precedent above.
+# matching the SLAB_ENTRIES precedent above.
 MORPHOMETRY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$PURKINJE_MORPHOMETRY.subendocardialWeight",
@@ -715,14 +711,7 @@ VENT_KEYS: Final[tuple[str, ...]] = ("lv", "rv")
 
 # --- generatePurkinjeTreeDict -------------------------------------------------
 #
-# CRITICAL: these tree parameters are the ones workflows/preprocessing.py
-# deliberately keeps frozen (`PURKINJE_TREE_INPUT_PATHS` covers only the
-# conductivity/anatomy paths above). Declaring them here documents the native
-# contract; it must NOT be paired with a `_TARGETS` row or an
-# `active_input_paths` change (see workflows/overrides.py and
-# workflows/preprocessing.py's `_apply_human_tree_case` / `_apply_pig_purkinje_case`,
-# both of which reject any override outside `PURKINJE_TREE_INPUT_PATHS`
-# regardless of what this catalog declares).
+# These tree parameters document the native contract.
 #: Not per-ventricle: no <ventKey> placeholder, dynamic_path=False. Kept out
 #: of the build_group below, which would otherwise fill allowed_bindings on
 #: an entry with no placeholder to bind -- DictEntry.__post_init__ refuses

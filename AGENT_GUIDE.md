@@ -566,28 +566,26 @@ per-ODE stability limit is the anchor: around `1e-6` s for biophysical
 (Hodgkin-Huxley-style) ionic models and around `2e-5` s for phenomenological
 models.
 
-To apply a chosen fix mechanically, write an overrides file
-(`[{"driver_path": "...", "value": "..."}]`) and run:
+To apply a chosen fix mechanically, write the same `document:key` patches a
+study takes, as one JSON object, and run it against the staged case the plan
+wrote (`--apply` needs `--run-document`, because `--entry` re-stages the case):
 
 ```
-omnidriver step --strict --step <id> --apply overrides.json
+omnidriver plan --strict --entry <record> --cases-root <native> --scratch-dir <scratch>
+echo '{"constant/electroProperties:singleCellSolverCoeffs.tissue": "epicardialCells"}' > patches.json
+omnidriver step --run-document <scratch>/records/<record>/run_document.json --step <id> --apply patches.json
 ```
 
-This validates each override for *applyability*, applies it via the dict mutators
-(resolving `$ELECTRO_MODEL_COEFFS.*` to the case's solver-specific coeffs block),
-reruns the step (`attempt++`), and appends one record to `remediation_history.jsonl`
-under the output directory. The driver accepts three forms of overrides:
-
-1. `$ELECTRO_MODEL_COEFFS.*`: Catalog-addressable entries. For a `dynamic_path`,
-   replace each template placeholder with the concrete instance name in the
-   `driver_path` (for example,
-   `$ELECTRO_MODEL_COEFFS.ionicConstantOverrides.global.scale.myChannel`). The
-   concrete key must already exist in the generated dictionary.
-2. `system/path/to/dict:entry_path`: Explicit overrides for any OpenFOAM dictionary (e.g., `system/fvSolution:solvers/V/tolerance`). The file path must be strictly inside `system/`. If the case uses multiple regions (e.g., electromechanics), check `constant/physicsProperties` to determine if you need to target `system/electro/fvSolution` or the top-level `system/fvSolution`.
-   - **Note on entry paths**: `/` traverses nested blocks. OpenFOAM lets a sub-dictionary be keyed by a quoted regex instead of a literal name (e.g. a solver block declared as `"Vm|VmFinal|u|uFinal"`); mutators.py resolves an ordinary member name (`solvers/Vm/tolerance`) against such a pattern automatically, so you do **not** need to know the pattern or spell it out in quotes — just use the field name you actually mean (e.g. `system/electro/fvSolution:solvers/Vm/tolerance`). An exact literal key always wins over a pattern match if both exist.
-3. Flat string paths (e.g., `deltaT`): Routed to `system/controlDict` for backward compatibility.
-
-Invalid overrides are rejected **before** any mutation or rerun.
+Each patch goes through the record's own key validator and typed comparison,
+so a key the catalogue lacks is accepted exactly when the C++ reads it, a
+patch that changes nothing is reported `unchanged` and writes nothing, and the
+whole set commits in one journaled `commit_case_write` that rolls back its own
+failure. A name that is not a `document:key` (an axis or reserved name)
+changes the plan, so it is refused: plan again with it. The step then reruns
+(`attempt++`), the JSON carries `applied_patches`, and one record per attempt is
+appended to `remediation_history.jsonl` under the output directory. If the
+process dies mid-edit, the next `step`/`run` refuses until
+`omnidriver recover --case-root <case>` restores the before-images.
 
 **Derived constants are not overridable.** Some models expose constants that are
 *computed* from other (user-facing) constants at `initConsts` — e.g. the

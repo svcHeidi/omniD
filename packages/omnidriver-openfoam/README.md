@@ -13,25 +13,15 @@ preserves quoted strings, ignores comments, and never follows includes,
 expands substitutions, or evaluates directives. It is suitable for inspecting
 and applying known, catalogue-addressed edits without making a runtime claim.
 
-Effective OpenFOAM resolution is a separate native operation. The conformance
-fixtures use `foamDictionary` from a **discovered** OpenFOAM installation as
-the oracle for includes, substitutions, duplicate-key precedence, nested
-dictionaries, dimensions, lists, comments, quoted strings, and multiline
-values. That evidence is only as good as whichever installation was found; it
-does not claim support for other OpenFOAM versions or distributions, and the
-fixtures report what they resolved against rather than assuming one.
+`inspect_effective_foam_configuration(...)` reads the files a dictionary
+depends on without running anything: it follows only quoted local includes it
+can inspect, records environment variables used to resolve quoted include
+paths, preserves OpenFOAM's missing-optional-include behavior, and returns an
+explicit unresolved status for an executable directive, an unset variable or a
+runtime-dependent include form.
 
-`resolve_effective_foam_entry(...)` exposes that native operation explicitly.
-It reports the parser/runtime identity and inspected local files, follows only
-quoted local includes it can inspect, records environment variables used to
-resolve quoted include paths, preserves OpenFOAM's missing-optional-include
-behavior, and returns explicit unresolved status for an unset variable or
-runtime-dependent include form. Executable directives require
-`allow_executable_directives=True`.
-
-Mutation is transactional within one `apply_overrides` batch: a failed edit
-restores the original bytes of every target dictionary. It is not a
-crash-recovery or concurrent-writer lock. Directive-shaped override values are
-rejected. In particular, `#calc` and `#codeStream` are never evaluated by
-lexical inspection or mutation; executing a dictionary directive is an
-explicit native execution capability, not a parsing side effect.
+Mutation is transactional within one case write (`commit_case_write`): a failed
+edit restores the original bytes of every target dictionary, and an
+interrupted one is restored by `omnidriver recover`. Directive-shaped values
+are rejected. In particular, `#calc` and `#codeStream` are never evaluated by
+inspection or mutation.

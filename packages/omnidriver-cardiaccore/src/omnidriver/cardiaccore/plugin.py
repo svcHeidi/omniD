@@ -201,10 +201,9 @@ class CardiacCorePlugin:
         return frozenset({"clone_and_patch"})
 
     def resolve_case_mutation(self, request: Any, *, driver_context: Any) -> Any:
-        """Delegate to ``workflows.overrides``, this package's one semantic
-        owner of a case mutation."""
-        from .workflows.overrides import resolve_patch_mutation
+        """The shared OpenFOAM layer resolves every edit to an existing case."""
+        from omnidriver.openfoam.case_rendering import patch_mutation
 
         del driver_context
-        return resolve_patch_mutation(request)
+        return patch_mutation(request, owner_id=self.plugin_id)
 

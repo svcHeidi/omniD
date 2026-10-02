@@ -96,8 +96,6 @@ with two members missing from this table: `get_environment_commands` and
 | `is_nondimensional_case(spec)` | `False` (diagnostics on) | Skip SI mesh checks |
 | `get_mesh_geometry_diagnostics(case_root)` | `()` | Custom geometry checks |
 | `build_run_document_config(spec)` | `({}, ())` | RunDocument config builder |
-| `get_override_scopes()` | `()` | `--apply` patch overrides |
-| `get_regeneration_scopes()` | `()` | `--apply` regenerating overrides |
 | `get_report_catalog()` | `()` | Post-run report listing |
 | `get_named_catalogs()` | `{}` | `describe` plugin catalogs |
 

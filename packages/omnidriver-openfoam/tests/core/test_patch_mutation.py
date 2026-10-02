@@ -1,18 +1,23 @@
-"""``overrides._target_for_parameter`` reads ``expected_blocks`` off the parameter's
-key path (``case_planning.hex_cell_counts_expected_blocks``), so a multi-block
-blockMeshDict gets the block count its record declared instead of 1.
+"""``case_rendering.patch_mutation``, the one ``clone_and_patch`` resolver every
+OpenFOAM-based plugin uses. It reads ``expected_blocks`` off a hex-cell-counts
+parameter's key path, so a multi-block blockMeshDict gets the block count its
+record declared instead of 1, and it renders typed container values as
+OpenFOAM text.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from omnidriver.core.case_write import CaseMutationRequest, ParameterAssignment
-from omnidriver.cardiacfoam.overrides import PLUGIN_ID, _target_for_parameter, resolve_patch_mutation
 from omnidriver.openfoam import case_rendering
+from omnidriver.openfoam.case_rendering import _target_for_parameter, patch_mutation
 from omnidriver.openfoam.case_planning import HEX_CELL_COUNTS_KEY_PATH
+
+OWNER = "org.test"
 
 _THREE_HEX_BLOCK_DICT = (
     "FoamFile\n{\n    object blockMeshDict;\n}\n"
@@ -27,7 +32,7 @@ _THREE_HEX_BLOCK_DICT = (
 def _hex_cell_counts_parameter(*, key_path, value=(20, 20, 20)) -> ParameterAssignment:
     return ParameterAssignment(
         qualified_id="hex_cell_counts",
-        owner=PLUGIN_ID,
+        owner=OWNER,
         document="system/blockMeshDict.3D",
         key_path=key_path,
         binding={},
@@ -37,7 +42,7 @@ def _hex_cell_counts_parameter(*, key_path, value=(20, 20, 20)) -> ParameterAssi
     )
 
 
-def test_target_for_parameter_defaults_to_one_block_for_the_bare_key_path():
+def test_a_hex_target_defaults_to_one_block_for_the_bare_key_path():
     parameter = _hex_cell_counts_parameter(key_path=HEX_CELL_COUNTS_KEY_PATH)
 
     target = _target_for_parameter(parameter)
@@ -46,7 +51,7 @@ def test_target_for_parameter_defaults_to_one_block_for_the_bare_key_path():
     assert target["hex_cell_counts"] == "20 20 20"
 
 
-def test_target_for_parameter_honours_an_explicit_block_count_from_the_key_path():
+def test_a_hex_target_honours_an_explicit_block_count_from_the_key_path():
     parameter = _hex_cell_counts_parameter(key_path=("hex_cell_counts", "3"))
 
     target = _target_for_parameter(parameter)
@@ -55,7 +60,7 @@ def test_target_for_parameter_honours_an_explicit_block_count_from_the_key_path(
     assert target["hex_cell_counts"] == "20 20 20"
 
 
-def test_resolve_patch_mutation_and_render_a_real_three_block_document(tmp_path: Path):
+def test_patch_mutation_and_render_a_real_three_block_document(tmp_path: Path):
     """A key path declaring `expected_blocks=3` rewrites all three blocks."""
     case_root = tmp_path / "case"
     (case_root / "system").mkdir(parents=True)
@@ -63,7 +68,7 @@ def test_resolve_patch_mutation_and_render_a_real_three_block_document(tmp_path:
 
     parameter = ParameterAssignment(
         qualified_id="hex_cell_counts",
-        owner=PLUGIN_ID,
+        owner=OWNER,
         document="system/blockMeshDict.3D",
         key_path=("hex_cell_counts", "3"),
         binding={},
@@ -72,11 +77,11 @@ def test_resolve_patch_mutation_and_render_a_real_three_block_document(tmp_path:
         source="case",
     )
     request = CaseMutationRequest(
-        mode="clone_and_patch", case_root=case_root, adapter_id=PLUGIN_ID,
+        mode="clone_and_patch", case_root=case_root, adapter_id=OWNER,
         workflow="test", source_artifacts=(), parameters=(parameter,), requested_by="test",
     )
 
-    resolved = resolve_patch_mutation(request)
+    resolved = patch_mutation(request, owner_id=OWNER)
     rendered = case_rendering.render_patch_case_files(
         resolved, snapshot_root=tmp_path / "scratch", driver_context=None,
         execution_env=None, renderer_id="test",
@@ -87,7 +92,7 @@ def test_resolve_patch_mutation_and_render_a_real_three_block_document(tmp_path:
     assert file.content.decode().count("(20 20 20) simpleGrading") == 3
 
 
-def test_resolve_patch_mutation_refuses_a_wrongly_declared_block_count(tmp_path: Path):
+def test_patch_mutation_refuses_a_wrongly_declared_block_count(tmp_path: Path):
     """`expected_blocks=1` against a three-block document still refuses."""
     case_root = tmp_path / "case"
     (case_root / "system").mkdir(parents=True)
@@ -95,13 +100,45 @@ def test_resolve_patch_mutation_refuses_a_wrongly_declared_block_count(tmp_path:
 
     parameter = _hex_cell_counts_parameter(key_path=HEX_CELL_COUNTS_KEY_PATH)
     request = CaseMutationRequest(
-        mode="clone_and_patch", case_root=case_root, adapter_id=PLUGIN_ID,
+        mode="clone_and_patch", case_root=case_root, adapter_id=OWNER,
         workflow="test", source_artifacts=(), parameters=(parameter,), requested_by="test",
     )
 
-    resolved = resolve_patch_mutation(request)
+    resolved = patch_mutation(request, owner_id=OWNER)
     with pytest.raises(KeyError, match="Expected to update 1 hex blocks"):
         case_rendering.render_patch_case_files(
             resolved, snapshot_root=tmp_path / "scratch", driver_context=None,
             execution_env=None, renderer_id="test",
         )
+
+
+@pytest.mark.parametrize("value_kind, value, rendered", [
+    ("vector3", (1, 2.5, 3), "(1 2.5 3)"),
+    ("word_list", ("a", "b"), "(a b)"),
+    ("dimensioned_scalar", {"value": 75000, "dimensions": (0, -3, 0, 0, 0, 1, 0)}, "[0 -3 0 0 0 1 0] 75000"),
+    ("boolean", True, True),
+    ("scalar", 0.5, 0.5),
+])
+def test_a_typed_value_is_rendered_as_the_text_openfoam_reads(value_kind, value, rendered):
+    parameter = ParameterAssignment(
+        qualified_id="k", owner=OWNER, document="system/d", key_path=("k",), binding={},
+        value=value, value_kind=value_kind, source="case",
+    )
+
+    assert _target_for_parameter(parameter)["value"] == rendered
+
+
+def test_a_remove_carries_no_value_and_another_mode_is_refused(tmp_path: Path):
+    removal = ParameterAssignment(
+        qualified_id="k", owner=OWNER, document="system/d", key_path=("k",), binding={},
+        value=None, value_kind="word", source="case", operation="remove",
+    )
+    request = CaseMutationRequest(
+        mode="clone_and_patch", case_root=tmp_path, adapter_id=OWNER,
+        workflow="test", source_artifacts=(), parameters=(removal,), requested_by="test",
+    )
+
+    (target,) = patch_mutation(request, owner_id=OWNER).targets
+    assert target["operation"] == "remove" and "value" not in target
+    with pytest.raises(ValueError, match="clone_and_patch"):
+        patch_mutation(SimpleNamespace(mode="synthesize"), owner_id=OWNER)

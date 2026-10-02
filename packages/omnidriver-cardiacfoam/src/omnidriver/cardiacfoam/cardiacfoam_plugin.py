@@ -231,24 +231,20 @@ class CardiacFoamPlugin:
 
     # -- CaseWriterCapability --------------------------------------------
     def get_supported_mutation_modes(self) -> "frozenset[str]":
-        #: ``clone_and_patch``: a tutorial that patches an already-rendered
-        #: case builds a `CaseMutationRequest` in this mode, resolved by
-        #: ``overrides.resolve_patch_mutation`` below.
         return frozenset({"synthesize", "clone_and_patch"})
 
     def resolve_case_mutation(self, request, *, driver_context):
-        """Delegate to this package's semantic owner for the request's mode:
-        ``dict_builder`` for a from-scratch case synthesis, ``overrides``
-        for an edit to a case that already exists."""
+        """``dict_builder`` resolves a from-scratch case synthesis; the shared
+        OpenFOAM layer resolves an edit to a case that already exists."""
         del driver_context
         if request.mode == "synthesize":
             from omnidriver.cardiacfoam.dict_builder import resolve_synthesis_mutation
 
             return resolve_synthesis_mutation(request)
         if request.mode == "clone_and_patch":
-            from omnidriver.cardiacfoam.overrides import resolve_patch_mutation
+            from omnidriver.openfoam.case_rendering import patch_mutation
 
-            return resolve_patch_mutation(request)
+            return patch_mutation(request, owner_id=self.plugin_id)
         raise ValueError(
             f"cardiacFoam resolves synthesize and clone_and_patch requests "
             f"only, not {request.mode!r}"

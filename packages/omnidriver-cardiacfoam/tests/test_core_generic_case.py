@@ -19,9 +19,9 @@
 #     test_core_generic_case
 #
 # Description
-#     Proves cardiacFoam's generic-case factory applies the cardiac
-#     dictionary mutation and addresses electroProperties/physicsProperties
-#     by default; core supplies neither default.
+#     Proves cardiacFoam's generic-case factory addresses
+#     electroProperties/physicsProperties by default; core supplies neither
+#     default.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
@@ -36,22 +36,6 @@ def _spec(tmp_path: Path, **kwargs):
     from omnidriver.cardiacfoam.generic_case import make_spec
 
     return make_spec(cases_root=tmp_path, case_dir_name="aCase", **kwargs)
-
-
-def test_bare_make_spec_still_applies_the_cardiac_mutation(tmp_path: Path) -> None:
-    """A caller naming no mutation callback gets the cardiac one, and no compatibility fallback fires."""
-    from omnidriver.core import compatibility
-
-    case_root = tmp_path / "aCase"
-    (case_root / "constant").mkdir(parents=True)
-    (case_root / "constant" / "physicsProperties").write_text("type electroModel;\n")
-
-    spec = _spec(tmp_path, dict_file_overrides={"physics": {"type": "electroMechanicalModel"}})
-    with compatibility.track_fallback_calls() as calls:
-        spec.case_mutation(spec.case_root)
-
-    assert calls == []
-    assert "electroMechanicalModel" in (case_root / "constant" / "physicsProperties").read_text()
 
 
 def test_the_cardiac_dict_file_relpaths_default_comes_from_the_plugin(

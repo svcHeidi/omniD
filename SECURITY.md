@@ -88,7 +88,7 @@ results directory — it is not forced under `caseRoot`.
   `#codeStream` / `#calc` / coded-function-object value can no longer reach a
   dict file through `update_foam_entry` to be compiled and executed by the
   solver at run time. This guard covers `update_foam_entry` specifically —
-  see the dict-regeneration gap noted below, which it does not cover.
+  see the dict synthesis gap noted below, which it does not cover.
 
 ## Explicitly NOT mitigated
 
@@ -100,11 +100,8 @@ results directory — it is not forced under `caseRoot`.
   invokes it directly with an unvalidated `case_root` / `log_dir` / `state_path`
   / command bypasses path and command validation. Untrusted document content
   never reaches the runner except through validated ingestion.
-- The dict-regeneration/synthesis path is not screened for injection. When an
-  override targets a selector key (e.g. `myocardiumSolver`),
-  `omnidriver/openfoam/apply_overrides.py` routes sibling `$TOKEN.`-scoped override values
-  in the same call to `RegenerationScope.regenerate`, which serializes them
-  via `specs/dict_builder._openfoam_value_token` /
+- The dict synthesis path is not screened for injection. `synthesize`
+  requests serialize their values via `specs/dict_builder._openfoam_value_token` /
   `_serialize_block` in `omnidriver/cardiacfoam/dict_builder.py`. That path
   performs no injection screening at all — a `#codeStream` payload routed
   through it reaches the written dict file unrejected. Only

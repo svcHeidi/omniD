@@ -1,4 +1,4 @@
-"""Parse and render OpenFOAM's dimensioned-, vector- and list-literal text.
+"""Parse and render OpenFOAM's vector- and list-literal text, and compare values.
 
 OpenFOAM owns this syntax; core must never learn it. This is the one place in
 the monorepo that parses or renders it.
@@ -10,21 +10,14 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-_DIMENSIONED_RE = re.compile(r"^\[(?P<dims>[^\]]*)\]\s*(?P<magnitude>.+)$")
-_PAREN_SEQUENCE_RE = re.compile(r"^\((?P<body>.*)\)$")
 _VECTOR3_RE = re.compile(r"^\(\s*(\S+)\s+(\S+)\s+(\S+)\s*\)$")
-
-#: OpenFOAM's dimension set always names exactly seven exponents (mass,
-#: length, time, temperature, quantity, current, luminous intensity).
-_DIMENSION_COUNT = 7
-
 
 def _parse_number(token: str, *, what: str, original: str) -> float:
     try:
         return float(token)
     except ValueError as exc:
         raise ValueError(
-            f"{original!r} is not a valid dimensioned literal: {what} "
+            f"{original!r} is not a valid literal: {what} "
             f"{token!r} is not a number"
         ) from exc
 
@@ -45,56 +38,6 @@ def _format_number(value: Any) -> str:
     return repr(number)
 
 
-def parse_dimensioned_literal(text: str) -> dict[str, Any]:
-    """Parse ``"[d0 d1 d2 d3 d4 d5 d6] magnitude"`` into the typed shape
-    `validate_value_shape` requires for a ``dimensioned_scalar``/
-    ``dimensioned_tensor`` entry: ``{"value": <float or tuple of float>,
-    "dimensions": <tuple of seven float>}``.
-
-    Handles both magnitude shapes the real catalog declares: a bare scalar
-    (``stimulusIntensity``: ``"[0 -3 0 0 0 1 0] 75000"``) and a
-    parenthesised tensor (``conductivity``:
-    ``"[-1 -3 3 0 0 2 0] (0.2 0 0 0.03 0 0.03)"``).
-
-    Refuses (``ValueError``), never guesses, a literal that: is not
-    bracket-delimited, does not declare exactly seven dimension exponents,
-    or whose magnitude is neither a bare number nor a parenthesised,
-    non-empty sequence of numbers.
-    """
-    stripped = text.strip()
-    match = _DIMENSIONED_RE.match(stripped)
-    if match is None:
-        raise ValueError(
-            f"{text!r} is not a dimensioned literal; expected "
-            f"'[d0 d1 d2 d3 d4 d5 d6] magnitude'"
-        )
-    dim_tokens = match.group("dims").split()
-    if len(dim_tokens) != _DIMENSION_COUNT:
-        raise ValueError(
-            f"{text!r} declares {len(dim_tokens)} dimension exponent(s), not "
-            f"the seven ({_DIMENSION_COUNT}) OpenFOAM's dimension set requires"
-        )
-    dimensions = tuple(
-        _parse_number(token, what="dimension exponent", original=text)
-        for token in dim_tokens
-    )
-
-    magnitude_text = match.group("magnitude").strip()
-    paren = _PAREN_SEQUENCE_RE.match(magnitude_text)
-    if paren is not None:
-        components = paren.group("body").split()
-        if not components:
-            raise ValueError(f"{text!r} declares an empty tensor magnitude")
-        magnitude: Any = tuple(
-            _parse_number(token, what="tensor component", original=text)
-            for token in components
-        )
-    else:
-        magnitude = _parse_number(magnitude_text, what="scalar magnitude", original=text)
-
-    return {"value": magnitude, "dimensions": dimensions}
-
-
 def format_dimensioned_literal(value: Mapping[str, Any]) -> str:
     """Render typed dimensioned data back into OpenFOAM literal text.
 
@@ -112,12 +55,7 @@ def format_dimensioned_literal(value: Mapping[str, Any]) -> str:
 
 
 def parse_vector3_literal(text: str) -> tuple[float, float, float]:
-    """Parse ``"(x y z)"`` into three floats.
-
-    Re-implemented rather than shared with ``cardiaccore.workflows.overrides``'s
-    own parser: ``omnidriver.cardiaccore`` and ``omnidriver.cardiacfoam`` must
-    not depend on each other, and this is OpenFOAM vector syntax, owned here.
-    """
+    """Parse ``"(x y z)"`` into three floats."""
     match = _VECTOR3_RE.match(text.strip())
     if match is None:
         raise ValueError(f"{text!r} is not a '(x y z)' vector literal")
@@ -130,37 +68,6 @@ def parse_vector3_literal(text: str) -> tuple[float, float, float]:
 def format_vector3_literal(value: Sequence[Any]) -> str:
     """The inverse of `parse_vector3_literal`."""
     return "(" + " ".join(_format_number(component) for component in value) + ")"
-
-
-#: OpenFOAM's ``Switch`` class accepts several case-insensitive spellings per
-#: boolean state (``Switch.C``'s own ``names`` table: false/true, no/yes,
-#: off/on, none/any, n/y, f/t, and the bare digits 0/1).
-_SWITCH_TRUE = frozenset({"true", "yes", "on", "y", "t", "1"})
-_SWITCH_FALSE = frozenset({"false", "no", "off", "n", "f", "0"})
-
-
-def parse_boolean_literal(text: str) -> bool:
-    """Parse an OpenFOAM ``Switch`` spelling (``"true"``/``"false"``,
-    ``"yes"``/``"no"``, ``"on"``/``"off"``, ...) into a Python `bool`.
-    """
-    normalized = text.strip().lower()
-    if normalized in _SWITCH_TRUE:
-        return True
-    if normalized in _SWITCH_FALSE:
-        return False
-    raise ValueError(
-        f"{text!r} is not a recognised OpenFOAM Switch spelling "
-        f"(expected one of {sorted(_SWITCH_TRUE | _SWITCH_FALSE)})"
-    )
-
-
-def format_boolean_literal(value: bool) -> str:
-    """The inverse of `parse_boolean_literal`. Canonical spelling only
-    (``"true"``/``"false"``) -- rendering every accepted synonym back to
-    its own spelling is not this function's job; the caller's original
-    spelling, when it must be preserved exactly, is kept as evidence by
-    that caller instead (see ``omnidriver.cardiacfoam.overrides``)."""
-    return "true" if value else "false"
 
 
 def _split_top_level_tokens(text: str) -> list[str]:
@@ -194,11 +101,6 @@ def _split_top_level_tokens(text: str) -> list[str]:
     return tokens
 
 
-def parse_word_list_literal(text: str) -> tuple[str, ...]:
-    """Parse ``"(alpha beta)"`` into ``("alpha", "beta")``."""
-    return tuple(_split_top_level_tokens(text))
-
-
 def format_word_list_literal(value: Sequence[str]) -> str:
     return "(" + " ".join(str(item) for item in value) + ")"
 
@@ -213,19 +115,6 @@ def parse_scalar_list_literal(text: str) -> tuple[float, ...]:
 
 def format_scalar_list_literal(value: Sequence[Any]) -> str:
     return "(" + " ".join(_format_number(item) for item in value) + ")"
-
-
-def parse_integer_list_literal(text: str) -> tuple[int, ...]:
-    """Parse ``"(6 12 24 48)"`` into ``(6, 12, 24, 48)``."""
-    values = []
-    for token in _split_top_level_tokens(text):
-        number = _parse_number(token, what="integer list element", original=text)
-        if not float(number).is_integer():
-            raise ValueError(
-                f"{text!r} element {token!r} is not an integer"
-            )
-        values.append(int(number))
-    return tuple(values)
 
 
 def format_integer_list_literal(value: Sequence[Any]) -> str:
@@ -314,6 +203,19 @@ def values_agree(requested: Any, current: str | None) -> bool:
     if isinstance(left, bool) != isinstance(right, bool):
         return False
     return left == right
+
+
+#: Typed container value -> OpenFOAM text, per ``value_kind``. ``boolean`` is
+#: absent on purpose: ``_format_value`` already renders a Python ``bool``.
+CONTAINER_FORMATTERS = {
+    "dimensioned_scalar": format_dimensioned_literal,
+    "dimensioned_tensor": format_dimensioned_literal,
+    "vector3": format_vector3_literal,
+    "word_list": format_word_list_literal,
+    "scalar_list": format_scalar_list_literal,
+    "integer_list": format_integer_list_literal,
+    "vector3_list": format_vector3_list_literal,
+}
 
 
 # Kept out of `mutators` (which writes live case files) because the

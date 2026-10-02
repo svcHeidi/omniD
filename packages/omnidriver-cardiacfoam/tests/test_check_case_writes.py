@@ -102,33 +102,6 @@ def test_refuses_importing_anything_from_foam_backend(tmp_path):
     assert violations
 
 
-def test_refuses_importing_apply_electro_property_overrides(tmp_path):
-    violations = _violations_for(
-        tmp_path,
-        "from omnidriver.cardiacfoam.dict_builder import "
-        "apply_electro_property_overrides\n",
-    )
-    assert violations
-
-
-def test_refuses_importing_apply_physics_property_overrides(tmp_path):
-    violations = _violations_for(
-        tmp_path,
-        "from omnidriver.cardiacfoam.dict_builder import "
-        "apply_physics_property_overrides\n",
-    )
-    assert violations
-
-
-def test_refuses_calling_apply_electro_property_overrides(tmp_path):
-    violations = _violations_for(
-        tmp_path,
-        "def f(overrides):\n"
-        "    apply_electro_property_overrides(overrides)\n",
-    )
-    assert violations
-
-
 def test_refuses_importing_shutil(tmp_path):
     violations = _violations_for(tmp_path, "import shutil\n")
     assert violations

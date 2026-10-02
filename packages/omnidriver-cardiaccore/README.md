@@ -76,7 +76,6 @@ identified prerequisite first.
 | `catalogs/operations.py` | Canonical callable usage contracts |
 | `catalogs/purkinje.py` | Shared method constants and named baseline categories |
 | `catalogs/support_boundary.py` | Field context and workflow support boundary |
-| `workflows/` | Workflow order, allowed overrides and RunDocument configuration |
 | `operations/` | Python transformations, proposals and observations |
 | `guidance.md` | Packaged agent guidance |
 
