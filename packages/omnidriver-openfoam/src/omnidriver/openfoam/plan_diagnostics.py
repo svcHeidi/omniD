@@ -101,6 +101,20 @@ def _owned_dict_relpaths(case_root: Path, driver_context: Any) -> tuple[str, ...
     return tuple(relpaths)
 
 
+def _describe_uncatalogued(item: dict) -> str:
+    """One scanned read the catalogue lacks, as a sentence an agent can act on."""
+    if item.get("kind") != "key":
+        return f"the C++ reads {json.dumps(item, sort_keys=True)}, which the catalogue lacks"
+    how = "with no default, so it is required" if item["required"] else (
+        f"with default {item['default']}" if item.get("default") is not None else "optionally"
+    )
+    return (
+        f"the C++ reads {item['path']!r} as {item['method']}<{item['type'] or 'an unresolved type'}> {how}, at "
+        f"{item['source']} ({item['function']}), and the catalogue lacks it; the scan fills "
+        f"{json.dumps(item['entry'], sort_keys=True)}"
+    )
+
+
 def _report(driver_context: Any, mapping: Any, source_root: Path | None, scratch_root: Path | None) -> dict | None:
     if mapping is None or source_root is None or not source_root.is_dir():
         return None
@@ -158,10 +172,9 @@ def _catalog_diagnostics(
     )
     notes = tuple(
         diagnostic(
-            "info", "plugin_catalog_uncatalogued",
-            f"the C++ reads {json.dumps(item, sort_keys=True)}, which the catalogue lacks "
-            "(omnidriver catalog --uncatalogued lists every one)",
-            source=source,
+            "info", "plugin_catalog_uncatalogued", _describe_uncatalogued(item) +
+            " (omnidriver catalog --uncatalogued lists every one)",
+            source=source, field=item.get("path", ""),
         )
         for item in report.get("uncatalogued", ())
     )

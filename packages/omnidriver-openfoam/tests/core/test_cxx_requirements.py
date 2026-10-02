@@ -201,7 +201,7 @@ def test_only_a_read_without_a_default_that_nothing_tests_first_is_required():
 
 def _facts(monkeypatch, reads, *, built=None):
     path = ("$S", "sealedHeartBoundary")
-    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: ({path: reads}, {}, built or {}))
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: ({path: reads}, {}, built or {}, set()))
     return lambda context: rule_diagnostics((), context, document="constant/electroProperties", mapping=object())
 
 
@@ -234,8 +234,22 @@ def test_a_class_no_table_registers_is_judged_only_when_the_plugin_says_the_case
 def test_each_instance_of_a_block_the_case_holds_must_set_the_key(monkeypatch):
     path = ("$S", "domains", "<name>", "depth")
     monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: (
-        {path: [_read("depth", selected_as=(("kind", "deep"),))]}, {}, {},
+        {path: [_read("depth", selected_as=(("kind", "deep"),))]}, {}, {}, set(),
     ))
     context = {"domains.a.kind": "deep", "domains.a.depth": 3, "domains.b.kind": "deep"}
     assert [item.field for item in rule_diagnostics((), context, document="doc", mapping=object())] == ["domains.b.depth"]
     assert rule_diagnostics((), {}, document="doc", mapping=object()) == []
+
+
+def test_a_catalogued_required_key_the_cxx_no_longer_reads_is_not_demanded_of_a_case(tmp_path, monkeypatch):
+    from omnidriver.core.plugin_profile import CxxMapping
+
+    root = tmp_path / "tree" / "src"
+    root.mkdir(parents=True)
+    (root / "monodomainSolver.C").write_text(MONODOMAIN_SOLVER)
+    (tmp_path / "reviewed.json").write_text("{}")
+    monkeypatch.setenv("TREE", str(tmp_path / "tree"))
+    mapping = CxxMapping(source_root_variable="TREE", source_root_relative="src", allowlist_path=tmp_path / "reviewed.json")
+    retired = _entry("$S.retiredKey", required=True)
+    assert [item.field for item in rule_diagnostics((retired,), {}, document="doc")] == ["retiredKey"]
+    assert rule_diagnostics((retired,), {}, document="doc", mapping=mapping) == []

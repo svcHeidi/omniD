@@ -153,17 +153,20 @@ def _scan_facts(mapping: Any, entries: tuple[Any, ...], document: str):
     requires that ``entries`` lack, the classes that build them, and the names
     its selection tables register for each enum. Nothing when the source is
     not supplied."""
-    from .dict_keys_scanner import built_when, cached_scan, registered_menus, required_reads, scan_cache_root
+    from .dict_keys_scanner import (
+        built_when, cached_scan, registered_menus, required_reads, scan_cache_root, unread_entries,
+    )
 
     root = mapping.source_root(os.environ) if mapping is not None else None
     if root is None or not root.is_dir():
-        return {}, {}, {}
+        return {}, {}, {}, set()
     scan = cached_scan(root, cache_root=scan_cache_root())
     reviewed = json.loads(Path(mapping.allowlist_path).read_text())
     return (
         required_reads(scan, entries, document=document.rsplit("/", 1)[-1]),
         registered_menus(reviewed, scan, entries),
         built_when(reviewed, scan),
+        {entry.driver_path for entry in unread_entries(scan, entries, reviewed)},
     )
 
 
@@ -228,7 +231,7 @@ def rule_diagnostics(
     the C++ registers for the enum when its source is supplied and maps it to a
     selection table, the catalogue's otherwise."""
     entries = tuple(entries)
-    requirements, registered, built = _scan_facts(mapping, entries, document)
+    requirements, registered, built, unread = _scan_facts(mapping, entries, document)
     templates = {
         key[: match.end()]
         for entry in entries if entry.dynamic_path
@@ -266,7 +269,7 @@ def rule_diagnostics(
                 violated(concrete, f"{concrete} is forbidden when {_format(forbidden)}.")
             if not instance.applies(entry):
                 continue
-            if instance.requires(entry) and not set_here:
+            if instance.requires(entry) and not set_here and entry.driver_path not in unread:
                 condition = f" when {_format(entry.required_when)}" if entry.required_when else ""
                 violated(concrete, f"{concrete} is required{condition}.")
             if not set_here:

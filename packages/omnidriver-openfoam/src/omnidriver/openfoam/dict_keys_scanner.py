@@ -1135,6 +1135,19 @@ class CatalogReport:
         return asdict(self)
 
 
+def unread_entries(scan: Scan, entries: Iterable, reviewed: dict) -> list:
+    """The ``entries`` whose key the scanned C++ reads nowhere: catalogued, and
+    no longer read. A path ``reviewed`` lists under ``unseen_reads`` is read
+    where the scan cannot see, and a placeholder leaf names no key."""
+    unseen = {path for paths in reviewed.get("unseen_reads", {}).values() for path in paths}
+    read_keys = {read.key for read in scan.reads if read.key is not None}
+    return [
+        entry for entry in entries
+        if not _PLACEHOLDER.fullmatch(slot_key(entry.driver_path).split(".")[-1])
+        and entry.driver_path not in unseen and slot_key(entry.driver_path).split(".")[-1] not in read_keys
+    ]
+
+
 def _guards(scan: Scan) -> set[tuple]:
     """``(file, function, root, scope, key)`` of every key some read tests or
     reads only if present: a ``get`` of it in the same function is optional."""
@@ -1195,17 +1208,17 @@ def catalog_report(
     guarded = _guards(scan)
 
     disagreements: list[str] = []
-    unread: list[dict] = []
-    read_keys = {read.key for read in scan.reads if read.key is not None}
+    gone = unread_entries(scan, entries, reviewed)
+    unread = [
+        {
+            "driver_path": entry.driver_path, "value_kind": entry.value_kind, "required": entry.required,
+            "description": entry.description, "source_refs": list(entry.source_refs),
+            "note": "catalogued; the supplied C++ no longer reads it",
+        }
+        for entry in gone
+    ]
     for entry, path in catalogue:
-        if _PLACEHOLDER.fullmatch(path[-1]) or entry.driver_path in unseen:
-            continue
-        if path[-1] not in read_keys:
-            unread.append({
-                "driver_path": entry.driver_path, "value_kind": entry.value_kind, "required": entry.required,
-                "description": entry.description, "source_refs": list(entry.source_refs),
-                "note": "catalogued; the supplied C++ no longer reads it",
-            })
+        if _PLACEHOLDER.fullmatch(path[-1]) or entry.driver_path in unseen or entry in gone:
             continue
         reads = [
             read for read in scan.reads

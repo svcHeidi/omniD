@@ -79,7 +79,11 @@ def test_what_the_cxx_disagrees_with_never_fails_the_plan(tmp_path):
     report = {
         "disagreements": ["a.c: catalogue value_kind 'word'; the C++ reads scalar (x.C:3)"],
         "unread": [{"driver_path": "$S.a.b", "note": "catalogued; the supplied C++ no longer reads it"}],
-        "uncatalogued": [{"kind": "key", "key": "c"}], "unresolved": [{"key": "d"}],
+        "uncatalogued": [{
+            "kind": "key", "key": "c", "path": "c", "required": True, "method": "get", "type": "word", "default": None,
+            "source": "x.C:3", "function": "f", "entry": {"driver_path": None},
+        }],
+        "unresolved": [{"key": "d"}],
     }
     context, scans = _context(_mapping(tmp_path), report=report)
     diagnostics = _diagnose(context, tmp_path, {"TOY_NATIVE_TREE": str(tmp_path / "tree")})
@@ -89,6 +93,7 @@ def test_what_the_cxx_disagrees_with_never_fails_the_plan(tmp_path):
         ("info", "plugin_catalog_uncatalogued"),
     ]
     assert "no longer reads it" in diagnostics[1].message and "has no effect" in diagnostics[1].message
+    assert "'c' as get<word> with no default, so it is required, at x.C:3 (f)" in diagnostics[2].message
 
 
 def test_a_stack_without_a_cxx_mapping_adds_no_catalogue_diagnostics(tmp_path):
