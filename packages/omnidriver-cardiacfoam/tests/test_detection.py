@@ -1,31 +1,4 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_detection_and_overrides
-#
-# Description
-#     Tests the cardiacFoam plugin's electroProperties detection helpers and
-#     the electro/physics-property override appliers on top of them, including
-#     the plugin-local `$ELECTRO_MODEL_COEFFS` scope token.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""The electroProperties detection helpers and the electro/physics override appliers, including the ``$ELECTRO_MODEL_COEFFS`` scope token."""
 
 from __future__ import annotations
 

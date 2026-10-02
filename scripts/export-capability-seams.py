@@ -1,37 +1,5 @@
 #!/usr/bin/env python3
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Script
-#     export-capability-seams
-#
-# Description
-#     Renders the plugin capability seam table into ARCHITECTURE.md.
-#
-#     Thin CLI over omnidriver.core.capability_seams, which owns the
-#     parsing and rendering: the conformance tests import that module
-#     directly, so there is exactly one parser.
-#
-#     Run with --check to verify the committed ARCHITECTURE.md table matches a
-#     fresh render; the conformance test uses that mode.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""Render the plugin capability seam table into ARCHITECTURE.md; ``--check`` verifies the committed table against a fresh render."""
 
 from __future__ import annotations
 
