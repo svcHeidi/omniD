@@ -225,8 +225,9 @@ catalog by hand (added 2026-09-16, after the cardiacCore adapter re-typed keys
 the scanner already finds):
 
 - `openfoam.dict_keys_scanner.scan_source(src_root)` lists every dictionary
-  read with its key, method, type, default, required flag, sub-dictionary
-  scope (`None` when unresolved) and file and line. It is the inventory to
+  read with its key, method, type, default, root, sub-dictionary scope
+  (`None` when unresolved) and file and line; `locate` places each root in
+  a document from the catalogue. It is the inventory to
   start from, not an accepted catalog. `omnidriver catalog --plugin P
   --uncatalogued` lists the reads a catalog lacks.
 - `openfoam.dict_keys_scanner.catalog_report(src_root, allowlist_path=,

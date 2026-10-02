@@ -9,10 +9,10 @@ enforces; none is new. The last section is about the mesh.
 
 - **Two documents are catalogued**: `constant/electroProperties` and
   `constant/physicsProperties`. A key in either must be in the catalogue, or
-  read by the supplied C++ source: then it is `uncatalogued`, accepted, and
-  checked against the type the C++ reads it as
-  (`omnidriver catalog --uncatalogued` lists them). Any other key is refused
-  by name, never written.
+  read by the supplied C++ source at exactly that path: then it is
+  `uncatalogued`, accepted (and added if the case lacks it), and checked
+  against the type the C++ reads it as (`omnidriver catalog --uncatalogued`
+  lists them). Any other key is refused by name, with where the C++ reads it.
 - **Write the active solver's scope.** Coefficients live under
   `<myocardiumSolver>Coeffs`: for `myocardiumSolver singleCellSolver;`, write
   `singleCellSolverCoeffs.tissue`. `describe` lists the case's own scope. A

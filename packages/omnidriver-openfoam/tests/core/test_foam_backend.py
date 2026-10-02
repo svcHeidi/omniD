@@ -1,5 +1,7 @@
 import pytest
 
+from foamlib import FoamFile
+
 from omnidriver.openfoam import foam_backend
 
 
@@ -162,11 +164,12 @@ def test_update_entry_creates_key_when_add_if_missing(tmp_path):
     assert "purgeWrite    0;" in path.read_text()
 
 
-def test_update_entry_add_if_missing_requires_scope(tmp_path):
-    """Mirrors tier 1's ``mutators.update_foam_entry`` guard so the two tiers agree."""
+def test_update_entry_add_if_missing_adds_at_the_top_and_in_new_sub_dictionaries(tmp_path):
     path = _dict(tmp_path, "endTime 0.3;\n")
-    with pytest.raises(ValueError, match="add_if_missing requires a scope"):
-        foam_backend.update_entry(path, "purgeWrite", "0", add_if_missing=True)
+    foam_backend.update_entry(path, "purgeWrite", 0, add_if_missing=True)
+    foam_backend.update_entry(path, "deep", 4.0, scope=("coeffs", "newSub"), add_if_missing=True)
+    parsed = FoamFile(path)
+    assert (parsed["purgeWrite"], parsed["coeffs"]["newSub"]["deep"]) == (0, 4.0)
 
 
 def test_update_entry_handles_brace_inside_quoted_string(tmp_path):

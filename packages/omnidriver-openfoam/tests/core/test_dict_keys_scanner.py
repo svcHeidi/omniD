@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 
 from omnidriver.core.contracts.dictionary import DictEntry
-from omnidriver.openfoam.dict_keys_scanner import cached_scan, catalog_report, scan_source
+from omnidriver.openfoam.dict_keys_scanner import cached_scan, catalog_report, scan_source, source_digest
 from omnidriver.openfoam.record_key_validation import scanned_key
 
-# cardiacCore src/setPurkinjeSlab/setPurkinjeSlab.C, lines 1-45 and the close.
+# cardiacCore src/setPurkinjeSlab/setPurkinjeSlab.C: main, up to its two reads.
 SET_PURKINJE_SLAB = '''#include "fvCFD.H"
 #include "coordinatesConvention.H"
 
@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 }
 '''
 
-# cardiacCore src/coordinatesConvention/coordinatesConvention.H, lines 88-111.
+# cardiacCore src/coordinatesConvention/coordinatesConvention.H: readCoordinatesConvention.
 READ_COORDINATES_CONVENTION = '''inline CoordinatesConvention readCoordinatesConvention
 (
     const dictionary& conventionDict
@@ -88,8 +88,8 @@ READ_COORDINATES_CONVENTION = '''inline CoordinatesConvention readCoordinatesCon
 }
 '''
 
-# cardiacFOAM src/genericWriter/stimulusIO.C, lines 1-37 (licence header
-# shortened to its first three lines, which keeps it a block comment).
+# cardiacFOAM src/genericWriter/stimulusIO.C: its head and singleCellStimulusDict
+# (the licence block shortened to its first lines, still a block comment).
 STIMULUS_IO = '''/*---------------------------------------------------------------------------*\\
 License
     This file is part of cardiacFoam.
@@ -117,7 +117,7 @@ const dictionary* singleCellStimulusDict(const dictionary& dict)
 }
 '''
 
-# cardiacFOAM src/genericWriter/conductivityFieldIO.C, lines 173-196.
+# cardiacFOAM src/genericWriter/conductivityFieldIO.C: readConductivityField, to its first read.
 READ_CONDUCTIVITY_FIELD = '''tmp<volTensorField> readConductivityField
 (
     const fvMesh& solverMesh,
@@ -144,8 +144,8 @@ READ_CONDUCTIVITY_FIELD = '''tmp<volTensorField> readConductivityField
 }
 '''
 
-# cardiacCore src/generatePurkinjeTree/generatePurkinjeTree.C, lines 1411-1419
-# and 1550-1557, inside main.
+# cardiacCore src/generatePurkinjeTree/generatePurkinjeTree.C: main's treeDict and
+# two reads of readVentParams.
 READ_VENT_PARAMS = '''int main(int argc, char *argv[])
 {
     IOdictionary treeDict
@@ -174,8 +174,8 @@ READ_VENT_PARAMS = '''int main(int argc, char *argv[])
 }
 '''
 
-# cardiacFOAM src/ionicModels/ionicModel/configuredBatchedIonicModel.H,
-# lines 147-157, in its class body.
+# cardiacFOAM src/ionicModels/ionicModel/configuredBatchedIonicModel.H:
+# configureIonicHeterogeneity, in its class body.
 CONFIGURE_HETEROGENEITY = '''class configuredBatchedIonicModel
 {
 public:
@@ -196,6 +196,23 @@ public:
 '''
 
 
+# cardiacCore src/coordinatesConvention/coordinatesConvention.H: readTransmuralConvention.
+READ_TRANSMURAL_CONVENTION = '''inline TransmuralConvention readTransmuralConvention
+(
+    const dictionary& conventionDict
+)
+{
+    const dictionary& transmural = conventionDict.subDict("transmural");
+
+    return TransmuralConvention
+    {
+        transmural.get<scalar>("endocardium"),
+        transmural.get<scalar>("epicardium")
+    };
+}
+'''
+
+
 def _tree(tmp_path: Path, **files: str) -> Path:
     root = tmp_path / "src"
     for name, text in files.items():
@@ -213,37 +230,35 @@ def _read(scan, key, method=None):
 def test_a_literal_iodictionary_is_the_document_and_a_default_is_recorded(tmp_path):
     scan = scan_source(_tree(tmp_path, **{"setPurkinjeSlab.C": SET_PURKINJE_SLAB}))
     thickness = _read(scan, "thickness")
-    assert (thickness.method, thickness.type, thickness.default, thickness.required) == (
-        "getOrDefault", "scalar", "0.1", False,
-    )
+    assert (thickness.method, thickness.type, thickness.default) == ("getOrDefault", "scalar", "0.1")
     assert (thickness.root, thickness.scope, thickness.line) == ("document:setPurkinjeSlabDict", (), 44)
 
 
 def test_a_local_alias_carries_its_subdictionary_scope(tmp_path):
     scan = scan_source(_tree(tmp_path, **{"coordinatesConvention.H": READ_COORDINATES_CONVENTION}))
     field = _read(scan, "transmuralField")
-    assert (field.root, field.scope, field.type) == ("conventionDict", ("coordinates",), "word")
+    assert (field.root, field.scope, field.type) == (
+        "param:readCoordinatesConvention:conventionDict", ("coordinates",), "word",
+    )
     assert _read(scan, "coordinates").method == "subOrEmptyDict"
 
 
-def test_line_numbers_survive_a_block_comment_and_a_guarded_subdict_is_optional(tmp_path):
+def test_line_numbers_survive_a_block_comment(tmp_path):
     scan = scan_source(_tree(tmp_path, **{"stimulusIO.C": STIMULUS_IO}))
     subdict = _read(scan, "singleCellStimulus", "subDict")
-    assert (subdict.line, subdict.required) == (22, False)
-    assert subdict.function == "singleCellStimulusDict"
+    assert (subdict.line, subdict.function) == (22, "singleCellStimulusDict")
 
 
-def test_a_found_guard_makes_a_read_optional_and_a_wrapper_gives_its_type(tmp_path):
+def test_a_wrapper_gives_a_lookup_its_type(tmp_path):
     scan = scan_source(_tree(tmp_path, **{"conductivityFieldIO.C": READ_CONDUCTIVITY_FIELD}))
     source = _read(scan, "conductivitySource", "lookup")
-    assert (source.type, source.required, source.root) == ("word", False, "coefficients")
+    assert (source.type, source.root) == ("word", "param:readConductivityField:coefficients")
 
 
-def test_a_fatal_absence_branch_keeps_a_read_required_and_a_dynamic_segment_is_any(tmp_path):
+def test_a_subdictionary_named_by_an_expression_is_any_segment(tmp_path):
     scan = scan_source(_tree(tmp_path, **{"generatePurkinjeTree.C": READ_VENT_PARAMS}))
     count = _read(scan, "terminalCount", "get")
-    assert (count.required, count.type, count.scope) == (True, "label", ("*",))
-    assert count.root == "document:generatePurkinjeTreeDict"
+    assert (count.type, count.scope, count.root) == ("label", ("*",), "document:generatePurkinjeTreeDict")
 
 
 def test_a_receiver_declared_as_another_type_is_not_a_dictionary_read(tmp_path):
@@ -251,24 +266,47 @@ def test_a_receiver_declared_as_another_type_is_not_a_dictionary_read(tmp_path):
     assert scan.reads == ()
 
 
-def test_the_scan_is_cached_by_content_digest(tmp_path):
+def test_the_scan_is_cached_by_the_source_and_the_scanner(tmp_path, monkeypatch):
+    from omnidriver.openfoam import rtst_scanner
+
     root = _tree(tmp_path, **{"setPurkinjeSlab.C": SET_PURKINJE_SLAB})
     cache = tmp_path / "scratch"
     first = cached_scan(root, cache_root=cache)
-    assert (cache / "cxx-scan" / f"{first.digest}.json").is_file()
+    cache_file = cache / "cxx-scan" / f"{first.digest}.json"
+    assert cache_file.is_file()
     assert cached_scan(root, cache_root=cache) is first
     (root / "setPurkinjeSlab.C").write_text(SET_PURKINJE_SLAB.replace('"multiplier"', '"slabMultiplier"'))
     second = cached_scan(root, cache_root=cache)
     assert second.digest != first.digest
     assert any(read.key == "slabMultiplier" for read in second.reads)
+    scanner = tmp_path / "rtst_scanner.py"
+    scanner.write_text(Path(rtst_scanner.__file__).read_text() + "\n# changed\n")
+    monkeypatch.setattr(rtst_scanner, "__file__", str(scanner))
+    assert source_digest(root) != second.digest
+
+
+def test_an_unreadable_or_altered_cache_is_rescanned(tmp_path):
+    from omnidriver.openfoam import dict_keys_scanner
+
+    root = _tree(tmp_path, **{"setPurkinjeSlab.C": SET_PURKINJE_SLAB})
+    cache = tmp_path / "scratch"
+    scan = cached_scan(root, cache_root=cache)
+    cache_file = cache / "cxx-scan" / f"{scan.digest}.json"
+    payload = json.loads(cache_file.read_text())
+    payload["reads"] = payload["reads"][1:]
+    for damaged in (json.dumps(payload), cache_file.read_text()[:100]):
+        cache_file.write_text(damaged)
+        dict_keys_scanner._MEMO.clear()
+        assert len(cached_scan(root, cache_root=cache).reads) == len(scan.reads)
+    assert not list(cache_file.parent.glob("*.tmp"))
 
 
 def _entry(path: str, kind: str = "scalar", **fields) -> DictEntry:
     return DictEntry(driver_path=path, description="", value_kind=kind, **fields)
 
 
-def _report(tmp_path, entries, reviewed=None):
-    root = _tree(tmp_path, **{"setPurkinjeSlab.C": SET_PURKINJE_SLAB})
+def _report(tmp_path, entries, reviewed=None, **files):
+    root = _tree(tmp_path, **(files or {"setPurkinjeSlab.C": SET_PURKINJE_SLAB}))
     allowlist = tmp_path / "reviewed.json"
     allowlist.write_text(json.dumps(reviewed or {}))
     return catalog_report(root, allowlist_path=allowlist, entries=entries).to_json()
@@ -284,17 +322,30 @@ def test_a_read_the_catalogue_lacks_is_uncatalogued_never_a_contradiction(tmp_pa
 
 
 def test_each_catalogue_claim_the_cxx_refutes_is_a_contradiction(tmp_path):
+    cited = ("src/setPurkinjeSlab/setPurkinjeSlab.C",)
     report = _report(tmp_path, (
-        _entry("$PURKINJE_SLAB.thickness", "integer"),
-        _entry("$PURKINJE_SLAB.multiplier", "word"),
+        _entry("$PURKINJE_SLAB.thickness", "integer", source_refs=cited),
+        _entry("$PURKINJE_SLAB.multiplier", "word", source_refs=cited),
         _entry("$PURKINJE_SLAB.depth", required=True),
-    ))
+    ), **{"setPurkinjeSlab__setPurkinjeSlab.C": SET_PURKINJE_SLAB})
     assert report["status"] == "failed"
     assert [item.split(":")[0] for item in report["contradictions"]] == [
         "$PURKINJE_SLAB.multiplier", "$PURKINJE_SLAB.depth",
     ]
-    report = _report(tmp_path, (_entry("$PURKINJE_SLAB.thickness", required=True),))
+    report = _report(tmp_path, (_entry("$PURKINJE_SLAB.thickness", required=True, source_refs=cited),),
+                     **{"setPurkinjeSlab__setPurkinjeSlab.C": SET_PURKINJE_SLAB})
     assert "the C++ gives it a default (0.1" in report["contradictions"][0]
+
+
+def test_a_same_named_read_elsewhere_contradicts_nothing(tmp_path):
+    entries = (_entry("$PURKINJE_SLAB.thickness", "integer", required=True),)
+    assert _report(tmp_path, entries)["contradictions"] == []
+    nested = (_entry("$CONVENTION.coordinates.transmuralField", "scalar"),)
+    report = _report(tmp_path, nested, **{"coordinatesConvention.H": READ_COORDINATES_CONVENTION})
+    assert report["contradictions"] == [
+        "$CONVENTION.coordinates.transmuralField: catalogue value_kind 'scalar'; the C++ reads word "
+        "(coordinatesConvention.H:11)",
+    ]
 
 
 def test_an_unseen_read_is_reviewed_and_a_stale_review_is_a_contradiction(tmp_path):
@@ -305,19 +356,45 @@ def test_an_unseen_read_is_reviewed_and_a_stale_review_is_a_contradiction(tmp_pa
     ]
 
 
-def test_a_study_may_set_an_uncatalogued_key_the_cxx_reads(tmp_path, monkeypatch):
-    root = _tree(tmp_path, **{"setPurkinjeSlab.C": SET_PURKINJE_SLAB})
-    monkeypatch.setenv("SLAB_TREE", str(root.parent))
+def _mapping(tmp_path, monkeypatch, **files):
     from omnidriver.core.plugin_profile import CxxMapping
 
-    mapping = CxxMapping(source_root_variable="SLAB_TREE", source_root_relative="src", allowlist_path=tmp_path)
-    catalogued = (_entry("$PURKINJE_SLAB.thickness"),)
-    document = "system/setPurkinjeSlabDict"
-    assert scanned_key(document, ("multiplier",), 2.5, mapping=mapping, entries=catalogued) == ("scalar", True)
-    with pytest.raises(ValueError, match="reads it as scalar"):
-        scanned_key(document, ("multiplier",), "high", mapping=mapping, entries=catalogued)
-    assert scanned_key(document, ("multiplyer",), 2.5, mapping=mapping, entries=catalogued) is None
-    assert scanned_key("system/otherDict", ("multiplier",), 2.5, mapping=mapping, entries=catalogued) is None
-    assert scanned_key(document, ("deep", "thickness"), 2.5, mapping=mapping, entries=catalogued) is None
-    monkeypatch.delenv("SLAB_TREE")
-    assert scanned_key(document, ("multiplier",), 2.5, mapping=mapping, entries=catalogued) is None
+    root = _tree(tmp_path, **files)
+    monkeypatch.setenv("SCANNED_TREE", str(root.parent))
+    return CxxMapping(source_root_variable="SCANNED_TREE", source_root_relative="src", allowlist_path=tmp_path)
+
+
+def test_a_study_may_set_an_uncatalogued_key_the_cxx_reads_at_that_path(tmp_path, monkeypatch):
+    mapping = _mapping(tmp_path, monkeypatch, **{"generatePurkinjeTree.C": READ_VENT_PARAMS})
+    catalogued = (_entry(
+        "$PURKINJE_TREE.<ventKey>.seed", "vector3", dynamic_path=True, source_refs=("src/generatePurkinjeTree.C",),
+    ),)
+    document = "system/generatePurkinjeTreeDict"
+    found = scanned_key(document, ("$PURKINJE_TREE", "lv", "terminalCount"), 3, mapping=mapping, entries=catalogued)
+    assert found == ("integer", True)
+    with pytest.raises(ValueError, match="read by the C\\+\\+ as label"):
+        scanned_key(document, ("$PURKINJE_TREE", "lv", "terminalCount"), 2.5, mapping=mapping, entries=catalogued)
+    with pytest.raises(KeyError, match=r"reads 'terminalCount' at \$PURKINJE_TREE\.\*\.terminalCount, not at"):
+        scanned_key(document, ("$PURKINJE_TREE", "terminalCount"), 3, mapping=mapping, entries=catalogued)
+    with pytest.raises(KeyError, match="reads no key named 'terminalCont'"):
+        scanned_key(document, ("$PURKINJE_TREE", "lv", "terminalCont"), 3, mapping=mapping, entries=catalogued)
+    with pytest.raises(KeyError, match="cannot place"):
+        scanned_key(document, ("$PURKINJE_TREE", "lv", "terminalCount"), 3, mapping=mapping, entries=())
+    monkeypatch.delenv("SCANNED_TREE")
+    with pytest.raises(KeyError, match="not supplied"):
+        scanned_key(document, ("$PURKINJE_TREE", "lv", "terminalCount"), 3, mapping=mapping, entries=catalogued)
+
+
+def test_a_parameter_is_placed_through_the_calls_that_pass_it_a_dictionary(tmp_path, monkeypatch):
+    mapping = _mapping(tmp_path, monkeypatch, **{
+        "setPurkinjeSlab.C": SET_PURKINJE_SLAB,
+        "coordinatesConvention.H": READ_COORDINATES_CONVENTION + READ_TRANSMURAL_CONVENTION,
+    })
+    catalogued = (_entry("$CONVENTION.transmural.endocardium"),)
+    document = "system/coordinatesConventionDict"
+    assert scanned_key(
+        document, ("$CONVENTION", "coordinates", "transmuralField"), "uvc_transmural",
+        mapping=mapping, entries=catalogued,
+    ) == ("word", True)
+    with pytest.raises(KeyError, match="not at"):
+        scanned_key(document, ("$CONVENTION", "transmuralField"), "uvc_transmural", mapping=mapping, entries=catalogued)

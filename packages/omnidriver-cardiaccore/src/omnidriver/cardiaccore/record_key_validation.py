@@ -85,17 +85,18 @@ def record_key_validator(document: str, key_path: "tuple[str, ...]", value: Any)
         if entry is None:
             from .plugin import CardiacCorePlugin
 
-            scanned = scanned_key(
-                document, key_path, value, mapping=CardiacCorePlugin.get_profile().cxx_mapping,
-                entries=_ENTRIES_BY_DOCUMENT[document].values(),
-            )
-            if scanned is not None:
-                return scanned
-            raise KeyError(
-                f"{document}:{dotted} is not declared by its cardiacCore key catalog, and "
-                "the supplied C++ source reads no such key (omnidriver catalog "
-                "--uncatalogued lists what it reads)"
-            )
+            entries = tuple(_ENTRIES_BY_DOCUMENT[document].values())
+            token = entries[0].driver_path.partition(".")[0]
+            try:
+                return scanned_key(
+                    document, (token,) + tuple(key_path), value,
+                    mapping=CardiacCorePlugin.get_profile().cxx_mapping, entries=entries,
+                )
+            except KeyError as exc:
+                raise KeyError(
+                    f"{document}:{dotted} is not declared by its cardiacCore key catalog, and "
+                    f"{exc.args[0]} (omnidriver catalog --uncatalogued lists what it reads)"
+                ) from None
         reasons = validate_value_shape(entry.value_kind, value)
         if reasons:
             raise ValueError(

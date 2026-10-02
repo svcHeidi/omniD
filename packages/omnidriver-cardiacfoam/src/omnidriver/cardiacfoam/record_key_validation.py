@@ -177,17 +177,17 @@ def _declares_members(document: str, key_path: "tuple[str, ...]") -> bool:
 _infer_unvalidated_value_kind = infer_unvalidated_value_kind
 
 
-def _scanned(document: str, key_path: "tuple[str, ...]", value: Any):
-    """A key the catalogue lacks and the C++ reads (the shared OpenFOAM
-    rule), under a ``<solver>Coeffs`` block the catalogue allows or at the
-    document's top level."""
+def _scanned(document: str, key_path: "tuple[str, ...]", value: Any) -> "tuple[str, bool]":
+    """A key the catalogue lacks that the C++ reads at exactly this path
+    (the shared OpenFOAM rule). A ``<solver>Coeffs`` first segment the
+    catalogue's menu allows is spelled as the catalogue's own token."""
     from .cardiacfoam_plugin import CardiacFoamPlugin
 
-    if len(key_path) > 1 and document == _ELECTRO_DOCUMENT and key_path[0] not in _myocardium_solver_coeffs_names():
-        return None
+    if document == _ELECTRO_DOCUMENT and len(key_path) > 1 and key_path[0] in _myocardium_solver_coeffs_names():
+        key_path = (_COEFFS_TOKEN,) + tuple(key_path[1:])
     entries = (_ELECTRO_ENTRIES_BY_PATH if document == _ELECTRO_DOCUMENT else _PHYSICS_ENTRIES_BY_PATH).values()
     return scanned_key(
-        document, key_path, value, mapping=CardiacFoamPlugin.get_profile().cxx_mapping, entries=entries,
+        document, tuple(key_path), value, mapping=CardiacFoamPlugin.get_profile().cxx_mapping, entries=entries,
     )
 
 
@@ -212,17 +212,14 @@ def record_key_validator(
                 record_key_validator(document, key_path + (str(member),), member_value)
             return "mapping", True
         if match is None:
-            scanned = _scanned(document, key_path, value)
-            if scanned is not None:
-                return scanned
-            catalog_name = (
-                "electroProperties" if document == _ELECTRO_DOCUMENT else "physicsProperties"
-            )
-            raise KeyError(
-                f"{document}:{dotted} is not declared by the {catalog_name} "
-                "key catalog, and the supplied C++ source reads no such key "
-                "(omnidriver catalog --uncatalogued lists what it reads)"
-            )
+            try:
+                return _scanned(document, key_path, value)
+            except KeyError as exc:
+                catalog_name = "electroProperties" if document == _ELECTRO_DOCUMENT else "physicsProperties"
+                raise KeyError(
+                    f"{document}:{dotted} is not declared by the {catalog_name} key catalog, and "
+                    f"{exc.args[0]} (omnidriver catalog --uncatalogued lists what it reads)"
+                ) from None
         entry, binding = match
         for placeholder, bound_value in binding.items():
             _validate_dynamic_binding(entry, placeholder, bound_value)

@@ -1340,9 +1340,13 @@ def _scan_or_uncatalogued(args, driver_context) -> int:
 
     try:
         cache_root = resolve_scratch_root(args.scratch_dir)
-    except TutorialRecordError as exc:
+    except TutorialRecordError:
         if args.action == "scan":
-            print(json.dumps({"status": "failed", "action": "scan", "error": str(exc)}, indent=2))
+            print(json.dumps({
+                "status": "failed", "action": "scan",
+                "error": "no scratch root was supplied: scan writes its cache there; pass "
+                         "--scratch-dir <dir> or set OMNIDRIVER_SCRATCH_DIR",
+            }, indent=2))
             return 1
         cache_root = None
     if args.action == "catalog":

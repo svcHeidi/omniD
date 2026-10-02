@@ -26,15 +26,13 @@ def test_the_cardiaccore_catalog_agrees_with_its_cxx() -> None:
     report = catalog_report(
         _source_root(), allowlist_path=mapping.allowlist_path, entries=CardiacCorePlugin().get_dict_entries(),
     )
-    assert report.contradictions == (), "\n".join(report.contradictions)
+    assert report.contradictions == [], "\n".join(report.contradictions)
 
 
 def test_a_utility_dict_read_names_its_document() -> None:
     scan = scan_source(_source_root())
     bands = next(read for read in scan.reads if read.key == "rvLocalBands")
-    assert (bands.root, bands.type, bands.default, bands.required) == (
-        "document:setCardiacAnatomyDict", "label", "10", False,
-    )
+    assert (bands.root, bands.type, bands.default) == ("document:setCardiacAnatomyDict", "label", "10")
 
 
 def test_a_key_added_to_a_utility_is_accepted_by_its_scanned_type(tmp_path, monkeypatch) -> None:
@@ -49,7 +47,9 @@ def test_a_key_added_to_a_utility_is_accepted_by_its_scanned_type(tmp_path, monk
     ))
     monkeypatch.setenv("OMNIDRIVER_CARDIACCORE_TREE", str(tmp_path))
     assert record_key_validator("system/setPurkinjeSlabDict", ("omnidriverProbe",), 4) == ("integer", True)
-    with pytest.raises(ValueError, match="reads it as label"):
+    with pytest.raises(ValueError, match="read by the C\\+\\+ as label"):
         record_key_validator("system/setPurkinjeSlabDict", ("omnidriverProbe",), 4.5)
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError, match="reads no key named 'omnidriverProbe'"):
         record_key_validator("system/setCardiacAnatomyDict", ("omnidriverProbe",), 4)
+    with pytest.raises(KeyError, match=r"at \$PURKINJE_SLAB\.omnidriverProbe, not at"):
+        record_key_validator("system/setPurkinjeSlabDict", ("deeper", "omnidriverProbe"), 4)

@@ -475,11 +475,8 @@ def update_foam_entry(
         file_path.write_text("".join(lines))
 
     if not replaced:
-        if add_if_missing:
-            if scope is None:
-                raise ValueError("add_if_missing requires a scope")
-            if search_end >= len(virtual):
-                raise KeyError(f"Scope '{scope}' not found in {file_path}")
+        own_line = search_end < len(virtual) and not lines[virtual[search_end][1]][: virtual[search_end][2]].strip()
+        if add_if_missing and scope is not None and own_line:
             insert_before_index = virtual[search_end][1]
             indent = "    "
             for idx in _iter_direct_child_lines(
