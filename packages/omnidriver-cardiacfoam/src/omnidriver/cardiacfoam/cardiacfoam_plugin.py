@@ -410,12 +410,20 @@ class CardiacFoamPlugin:
             except KeyError:
                 ionic_model = None
             
+            from omnidriver.openfoam.dict_keys_scanner import registered_menu
+
             capabilities = self.get_capabilities()
-            if ionic_model is not None and ionic_model not in capabilities.get("ionic_models", {}):
+            # A model the scanned selection table registers but the catalogue
+            # lacks is accepted; the plan reports it as uncatalogued.
+            if (
+                ionic_model is not None and ionic_model not in capabilities.get("ionic_models", {})
+                and ionic_model not in registered_menu(self.get_profile().cxx_mapping, "$ELECTRO_MODEL_COEFFS.ionicModel")
+            ):
                 diagnostics.append(_diagnostic(
                     "error",
                     "unknown_ionic_model",
-                    f"Ionic model {ionic_model!r} is not supported by the active plugin..",
+                    f"Ionic model {ionic_model!r} is neither catalogued nor registered by a "
+                    "scanned ionicModel selection table",
                     source=str(electro_path),
                     field="ionicModel",
                 ))

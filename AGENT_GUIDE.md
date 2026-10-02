@@ -914,22 +914,35 @@ generated from the binary.
 
 The scan (`omnidriver.openfoam.dict_keys_scanner`) reads every dictionary
 read in the C++: the key, the method (`get<T>`, `lookupOrDefault`, `found`,
-`subDict`, ...), the type, the default, whether it is required (a guarding
-`found` makes it optional unless the key-absent branch raises), the
-sub-dictionary scope where it resolves, and the selection-table names of the
-class that reads it. A read whose receiver it cannot show to be a dictionary
-is listed as unresolved, never guessed. The scan is cached under the scratch
-root, keyed by a digest of the `*.C`/`*.H` files: every plan recomputes the
-digest and rescans only when the source changed.
+`subDict`, ...), the type, the default, the sub-dictionary scope below the
+dictionary it starts from (a parameter, a member, `this` or a literal
+`IOdictionary` document), and the selection-table names of the class that
+reads it. It also records which dictionary each call passes to which
+parameter. A read whose receiver it cannot show to be a dictionary is listed
+as unresolved, never guessed. The scan is cached under the scratch root,
+keyed by a digest of the `*.C`/`*.H` files and of the scanner itself: every
+plan recomputes the digest and rescans only when either changed, and an
+unreadable or altered cache file is rescanned.
 
 The catalogues stay the source of truth. A plan compares them with the scan:
-- a key, sub-dictionary or menu value the C++ reads and the catalogue lacks
-  is a `plugin_catalog_uncatalogued` note, never a failure. A study may set
-  such a key, and its value is checked against the scanned type;
+- a key, sub-dictionary, menu value or selection table the C++ reads and the
+  catalogue lacks is a `plugin_catalog_uncatalogued` note, never a failure;
 - a catalogue claim the C++ refutes fails the plan as
   `plugin_catalog_contradiction`, naming both sides: a type the C++ cannot
   read, a menu value no table registers, a required key the C++ gives a
-  default, or a catalogued key the C++ no longer reads.
+  default, or a catalogued key the C++ no longer reads. A read counts
+  against an entry only when it agrees with the entry beyond the final name,
+  or is in a file the entry cites, so a same-named key elsewhere fails
+  nothing.
+
+A study may set an uncatalogued key at exactly the path where the C++ reads
+it, even when the case does not hold it yet: a validated key is written with
+an upsert. The scan places a dictionary from the catalogued keys read on it
+and from the calls that pass it along; a key at another path, or read only
+through a dictionary the scan cannot place, is refused, and the refusal says
+where the C++ does read it. The value is checked against the scanned type.
+A model a scanned selection table registers but the catalogue's menu lacks
+(a new `ionicModel`, say) is accepted the same way.
 
 ```bash
 omnidriver scan --plugin cardiacfoam --scratch-dir <dir>        # rescan, print a summary

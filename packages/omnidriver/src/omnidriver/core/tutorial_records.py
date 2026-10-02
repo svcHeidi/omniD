@@ -1380,7 +1380,9 @@ def patches_to_parameters(
     ``source="case"`` for every assignment: each one is a genuine per-case
     choice (a direct study key, or an axis's derived value), the same
     reasoning an adapter's own override-resolution path uses for its own
-    ``source="case"`` assignments.
+    ``source="case"`` assignments. A validated key is written whether or not
+    the case already holds it (``"ensure"``); an unvalidated one only
+    replaces a key the case holds (``"set"``), so a typo cannot add a key.
     """
     from .case_write import ParameterAssignment
 
@@ -1395,6 +1397,7 @@ def patches_to_parameters(
             value_kind=sourced.patch.value_kind,
             source="case",
             validated=sourced.validated,
+            operation="ensure" if sourced.validated else "set",
         )
         for sourced in patches
     )

@@ -153,15 +153,10 @@ def update_entry(
     scope: ScopeArg = None,
     add_if_missing: bool = False,
 ) -> None:
-    """Set ``key`` within ``scope``, failing closed when the key is absent.
-
-    ``add_if_missing`` with no ``scope`` is rejected here too (mirroring
-    ``mutators.update_foam_entry``): without a scope there is no
-    well-defined insertion point.
-    """
+    """Set ``key`` within ``scope``, failing closed when the key is absent
+    unless ``add_if_missing``, which also creates missing sub-dictionaries
+    of ``scope``."""
     _require_file(file_path)
-    if add_if_missing and scope is None:
-        raise ValueError("add_if_missing requires a scope")
     _reject_directive_shaped(value)
     path = tuple(_normalize_scope(scope)) + (key,)
 
@@ -174,14 +169,14 @@ def update_entry(
         # Splice the original, already-valid override string in verbatim
         # instead. Local import to avoid a cycle: mutators imports this
         # module at its own top level.
-        if add_if_missing:
-            raise NotImplementedError(
-                "add_if_missing is not supported for a multi-component "
-                "dimensioned override; the entry must already exist"
-            )
         from omnidriver.openfoam.mutators import splice_raw_entry_text
 
         if not splice_raw_entry_text(file_path, key, str(value).strip(), scope=scope):
+            if add_if_missing:
+                raise NotImplementedError(
+                    "add_if_missing is not supported for a multi-component "
+                    "dimensioned override; the entry must already exist"
+                )
             raise ValueError(
                 f"cannot write multi-component dimensioned value {value!r} to "
                 f"{key!r}: not found as a single-line scalar entry in "
@@ -204,6 +199,12 @@ def update_entry(
                         if scope is not None
                         else f"Key '{key}' not found in {file_path}"
                     ) from exc
+            else:
+                for depth in range(1, len(path)):
+                    try:
+                        foam_file[path[:depth]]
+                    except KeyError:
+                        foam_file[path[:depth]] = {}
             foam_file[path] = coerced
         except KeyError:
             raise

@@ -200,12 +200,7 @@ def validate_overrides(overrides: Any, *, driver_context: "DriverContext") -> No
             if dp in regen_scope_by_key:
                 # A regeneration selector is enum-checked exactly like any
                 # other entry; only the application differs.
-                entry = scoped_entries.get(dp)
-                enum_values = getattr(entry, "enum_values", None)
-                if enum_values and ov["value"] not in enum_values:
-                    raise OverrideError(
-                        f"override {dp!r} value {ov['value']!r} not in enum {tuple(enum_values)}"
-                    )
+                _check_menu(scoped_entries.get(dp), dp, ov["value"], driver_context)
                 continue
             # Must be a real controlDict key: foamDictionary auto-creates a
             # missing key on `-set`, so an unchecked one would silently write
@@ -239,11 +234,23 @@ def validate_overrides(overrides: Any, *, driver_context: "DriverContext") -> No
                 raise OverrideError(
                     f"override driver_path {dp!r} is not catalog-addressable / applyable"
                 )
-        enum_values = getattr(entry, "enum_values", None)
-        if enum_values and ov["value"] not in enum_values:
-            raise OverrideError(
-                f"override {dp!r} value {ov['value']!r} not in enum {tuple(enum_values)}"
-            )
+        _check_menu(entry, dp, ov["value"], driver_context)
+
+
+def _check_menu(entry: Any, driver_path: str, value: Any, driver_context: "DriverContext") -> None:
+    """A menu value is the catalogue's, or one the scanned selection table
+    behind the entry registers (``dict_keys_scanner.registered_menu``)."""
+    from .dict_keys_scanner import registered_menu
+
+    enum_values = getattr(entry, "enum_values", None)
+    if not enum_values or value in enum_values:
+        return
+    mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
+    if value not in registered_menu(mapping, getattr(entry, "driver_path", driver_path)):
+        raise OverrideError(
+            f"override {driver_path!r} value {value!r} is neither in the catalogue's menu "
+            f"{tuple(enum_values)} nor registered by a scanned selection table"
+        )
 
 
 def apply_overrides(

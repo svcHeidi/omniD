@@ -713,7 +713,6 @@ bidomainSolverCoeffs
         {
             ecgSolver              torsoECG;   // RTS type — reads phiE from bath
             // torsoSurface           "constant/triSurface/torso.stl"; // needed by torsoECG
-            reportElectrodeLookup  true;           // Switch — log nearest-cell fallback
 
             // Optional per-domain override of the shared electrodePositions:
             // electrodePositions { v6 ( 0.05 -0.05 0.0 ); }

@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 from typing import Any, Iterable
 
-from omnidriver.core.contracts.catalogue_paths import catalogued_paths
 from omnidriver.core.contracts.dictionary import validate_value_shape
 
 
@@ -52,39 +51,57 @@ def listed_entry(document: str, key: str, entry: Any) -> dict[str, Any]:
 
 
 def scanned_key(
-    document: str, key_path: "tuple[str, ...]", value: Any, *, mapping: Any, entries: Iterable[Any],
-) -> "tuple[str, bool] | None":
-    """``(value_kind, validated)`` for a key ``document``'s catalogue
-    (``entries``) lacks but the plugin's supplied C++ reads at a compatible
-    scope: an ``uncatalogued`` key a study may set, validated by the scanned
-    C++ type. ``None`` when the source is not supplied, the catalogue lists
-    the key's name at another path (the catalogue says where it lives), or
-    no read matches. Raises ``ValueError`` when the value does not fit the
-    scanned type."""
-    from .dict_keys_scanner import _PROBES, _path_matches, cached_scan, value_kind_of
+    document: str, catalog_path: "tuple[str, ...]", value: Any, *, mapping: Any, entries: Iterable[Any],
+) -> "tuple[str, bool]":
+    """``(value_kind, True)`` for a key the catalogue lacks that the
+    plugin's supplied C++ reads at exactly ``catalog_path``: a read whose
+    root ``dict_keys_scanner.locate`` places in ``document`` (catalogued by
+    ``entries``) so that place, its scope and its key spell that path.
+    ``catalog_path`` is in the catalogue's spelling (a ``$TOKEN`` first
+    segment for a scoped block). Raises ``KeyError`` saying why when no read
+    matches, and ``ValueError`` when the value does not fit the scanned
+    type."""
+    from .dict_keys_scanner import _segment_matches, cached_scan, locate, value_kind_of
 
     root = mapping.source_root(os.environ) if mapping is not None else None
     if root is None or not root.is_dir():
-        return None
-    if any(path.split(".")[-1] == key_path[-1] for path in catalogued_paths(tuple(entries))):
-        return None
+        variable = mapping.source_root_variable if mapping is not None else "the source root"
+        raise KeyError(f"the C++ source is not supplied ({variable}), so no uncatalogued key can be checked")
+    scan = cached_scan(root, cache_root=None)
     name = document.rsplit("/", 1)[-1]
     reads = [
-        read for read in cached_scan(root, cache_root=None).reads
-        if read.key == key_path[-1] and read.scope is not None and not read.subdict
-        and read.method not in _PROBES and _path_matches(read.scope + (read.key,), key_path)
+        read for read in scan.reads
+        if read.value_read and read.key == catalog_path[-1]
         and (not read.root.startswith("document:") or read.root == f"document:{name}")
     ]
     if not reads:
-        return None
-    kinds = {value_kind_of(read.type) for read in reads} - {None}
+        raise KeyError(f"the supplied C++ reads no key named {catalog_path[-1]!r}")
+    placed = locate(scan, entries, document=name)
+    spelled = [
+        (read, place + read.scope + (read.key,)) for read in reads for place in placed.get(read.root, ())
+    ]
+    matching = [
+        read for read, path in spelled
+        if len(path) == len(catalog_path) and all(_segment_matches(key, listed) for listed, key in zip(path, catalog_path))
+    ]
+    if not matching:
+        if spelled:
+            raise KeyError(
+                f"the supplied C++ reads {catalog_path[-1]!r} at "
+                f"{', '.join(sorted({'.'.join(path) for _read, path in spelled}))}, not at {'.'.join(catalog_path)}"
+            )
+        raise KeyError(
+            f"the supplied C++ reads {catalog_path[-1]!r} only through dictionaries the scan cannot place ("
+            + ", ".join(sorted({f"{read.file}:{read.line}" for read in reads})) + ")"
+        )
+    kinds = {value_kind_of(read.type) for read in matching} - {None}
     if len(kinds) != 1:
-        return infer_unvalidated_value_kind(value), False
+        return infer_unvalidated_value_kind(value), True
     (kind,) = kinds
     reasons = validate_value_shape(kind, value)
     if reasons:
         raise ValueError(
-            f"{document}:{'.'.join(key_path)} is uncatalogued; the C++ reads it as "
-            f"{reads[0].type} ({reads[0].file}:{reads[0].line}): {'; '.join(reasons)}"
+            f"this uncatalogued key is read by the C++ as "
+            f"{matching[0].type} ({matching[0].file}:{matching[0].line}): {'; '.join(reasons)}"
         )
     return kind, True
