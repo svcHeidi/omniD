@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
@@ -7,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Mapping
 if TYPE_CHECKING:
     from .plugin_interface import DriverContext
 
+from .scripts import list_scripts
 from .tutorial_records import TutorialRecord, TutorialRecordError, lookup_record
 
 
@@ -57,7 +59,10 @@ def describe_entry(
     stack's key catalogue for the native case, the stack's agent guidance, and
     the case's own ``case.documentation`` files. ``record_preview`` is each
     patch's document, key, value, status and validated flag, plus the command
-    arguments per workflow step.
+    arguments per workflow step. ``scripts`` lists the helper scripts of the
+    supplied repository (``OMNIDRIVER_SCRIPTS_DIR``) with their usage lines,
+    beside ``records``: a record step may run one, and an agent may run one
+    by hand.
     """
     from .runtime.record_execution import preview_record_case
     from .runtime.record_surface import record_surface
@@ -89,6 +94,7 @@ def describe_entry(
     return {
         "entry": {"entry_name": record.name, "entry_path": record.native_case_relpath},
         "records": sorted(driver_context.capabilities.tutorial_records.catalog() or {}),
+        "scripts": list_scripts(os.environ),
         "plugin_catalogs": _plugin_catalogs(driver_context),
         "record_preview": preview,
         "record_surface": surface,

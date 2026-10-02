@@ -24,6 +24,7 @@ from .core.case_transaction import CaseTransactionError, pending_transaction, re
 from .core.runtime.sweep_runner import sweep_plan, sweep_run
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.planning_types import diagnostic
+from omnidriver.core.scripts import SCRIPTS_ENV_VAR
 from omnidriver.core.provider_identity import stack_identity_mismatch
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR, default_sweep_output_dir, resolve_scratch_root
 from omnidriver.core.strict_planning import _utility_produces_by_command, strict_plan
@@ -1214,7 +1215,8 @@ def _select_stack(parser: argparse.ArgumentParser, args):
     Its ``omnidriver.toml`` names the plugin; ``--plugin`` alone names it for
     a solver with no repository, and when both are given they must select the
     same stack. The repository's C++ source is supplied to the stack through
-    the variable its profile declares."""
+    the variable its profile declares, and its scripts folder through
+    ``OMNIDRIVER_SCRIPTS_DIR``."""
     from .core.plugin_interface import load_plugin_context
     from .core.provider_identity import stack_identity_mismatch
     from .core.repository import RepositoryError, read_repository, repository_of_cases_root
@@ -1265,6 +1267,13 @@ def _select_stack(parser: argparse.ArgumentParser, args):
                     f"folder {repository.tutorials} that {repository.root / 'omnidriver.toml'} declares"
                 )
             os.environ[mapping.source_root_variable] = str(repository.tutorials)
+        supplied_scripts = os.environ.get(SCRIPTS_ENV_VAR)
+        if supplied_scripts and Path(supplied_scripts).expanduser().resolve() != repository.scripts:
+            parser.error(
+                f"{SCRIPTS_ENV_VAR}={supplied_scripts} disagrees with the scripts folder "
+                f"{repository.scripts} that {repository.root / 'omnidriver.toml'} declares"
+            )
+        os.environ[SCRIPTS_ENV_VAR] = str(repository.scripts)
     return context, repository
 
 
@@ -1273,16 +1282,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     _validate_args(parser, args)
     previous = os.environ.get(SCRATCH_ENV_VAR)
+    previous_scripts = os.environ.get(SCRIPTS_ENV_VAR)
     if args.scratch_dir and args.action != "recover":
         # The one supplied scratch root, for the layers that cache a scan there.
         os.environ[SCRATCH_ENV_VAR] = str(Path(args.scratch_dir).expanduser())
     try:
         return _dispatch(parser, args)
     finally:
-        if previous is None:
-            os.environ.pop(SCRATCH_ENV_VAR, None)
-        else:
-            os.environ[SCRATCH_ENV_VAR] = previous
+        for name, value in ((SCRATCH_ENV_VAR, previous), (SCRIPTS_ENV_VAR, previous_scripts)):
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def _dispatch(parser: argparse.ArgumentParser, args) -> int:

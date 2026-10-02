@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from ..plugin_profile import replica_directory_globs
+from ..scripts import find_script, script_argv
 from .workflow import case_script_commands
 from .attempt_lease import (
     AttemptLeaseError,
@@ -160,6 +161,10 @@ def _argv_for_execution(
     restoring that idiom. No-op whenever the command isn't a case script or
     there are no DYLD_* values to preserve.
     """
+    step_env = os.environ if env is None else env
+    script = find_script(command, step_env)
+    if script is not None:
+        return (*script_argv(script, step_env), *args)
     if command not in case_script_commands(driver_context) or not env:
         return (executable, *args)
     exports = [f"export {name}={shlex.quote(env[name])}" for name in _DYLD_VAR_NAMES if env.get(name)]
