@@ -1194,8 +1194,7 @@ tier 1 cannot locate the target -- most commonly a brace inside a quoted value,
 which defeats brace counting. foamlib parses in process and never evaluates
 `#calc` or `#codeStream`.
 
-Reads never reach tier 2: `read_foam_entry` and `read_foam_dict_block` return
-verbatim source text, and foamlib returns typed values.
+Reads never reach tier 2: `read_foam_entry` returns verbatim source text, and foamlib returns typed values.
 
 omnidriver does not shell out to the `foamDictionary` binary, and its
 behaviour does not depend on whether OpenFOAM is sourced. If you are writing
@@ -1349,7 +1348,7 @@ neutral value (`False`, `{}`, `()`) when the plugin omits them
 (`capability_seams.members_by_tier()["optional-neutral"]`); a small set
 instead raises, naming the missing hook
 (`...["optional-refusing"]`, e.g. `render_case_files`,
-`apply_overrides`). A representative sample a solver plugin commonly
+`resolve_case_mutation`). A representative sample a solver plugin commonly
 implements:
 
 ```python
@@ -1361,7 +1360,6 @@ get_utility_manifests()         # dict[str, Any]
 get_utility_roots()             # tuple[Path, ...]
 resolve_case_models(case_root)  # dict — best-effort, never raise
 get_samplable_fields(resolved)  # dict[str, tuple[str, ...]] — by region
-get_override_schema(tutorial, info) -> dict
 get_run_document_config_schema() -> dict  # JSON Schema
 get_dict_entry_catalog()        # dict — entries by document name (unserialized)
 get_solve_step_commands()       # frozenset[str]
@@ -1400,8 +1398,6 @@ Two have no neutral fallback — sweeps fail if they are absent:
 | `has_case_marker(case_root)` | `False` |
 | `is_nondimensional_case(spec)` | `False` (SI mesh checks on) |
 | `build_run_document_config(spec)` | `({}, ())` |
-| `get_override_scopes()` | `()` |
-| `get_regeneration_scopes()` | `()` |
 | `get_report_catalog()` | `()` |
 | `get_named_catalogs()` | `{}` |
 | `get_parallel_steps(step, *, request, read_value, allocation)` | a run asking for `parallel` is refused by name; serial runs never call it |

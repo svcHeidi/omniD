@@ -206,18 +206,16 @@ nine:
 | `map` | merge in stack order; a duplicate key is an error unless the more specific entry carries `overrides: <provider id>` naming whose declaration it replaces | `get_dict_groups`, `get_named_catalogs` |
 | `catalog` | the `map` rule applied to a `DictionaryCatalog`'s `documents`, then rebuilt into a catalog — core owns that type, so a provider cannot merge it itself | `get_dictionary_catalog` |
 | `tutorial_catalog` | unions `registered_tutorials`, merges `spec_factories` by tutorial name (a duplicate name is an error), and keeps only the most-specific value for any other key | `get_tutorial_catalog` |
-| `sequence` | concatenate every implementer's result, in stack order | `get_phases`, `validate_configuration`, `get_override_scopes` |
+| `sequence` | concatenate every implementer's result, in stack order | `get_phases`, `validate_configuration`, `get_record_key_catalog` |
 | `single` | first non-`None` answer, most-specific provider first | `get_capabilities`, `get_config_value_reader`, `get_case_runtime_conventions` |
 | `chain` | thread the first argument through every implementer, in stack order | `get_configured_environment` |
-| `exclusive` | exactly one provider may implement; two implementers is an error, zero leaves the member absent so the capability's declared fallback refuses by name | `apply_overrides`, `materialize_sweep_case` |
+| `exclusive` | exactly one provider may implement; two implementers is an error, zero leaves the member absent so the capability's declared fallback refuses by name | `materialize_sweep_case`, `route_sweep_case_values` |
 | `profile` | the declarative profile itself: `case_files` concatenated (see the single-declarer rule below), `provides` unioned, everything else from the most specific provider | `get_profile` |
 
-`exclusive` also carries one cross-member constraint (`_CROSS_MEMBER_PAIRS`):
-whichever provider wins `apply_overrides` must also be the one that wins
-`get_override_target_paths`. A mutator that doesn't declare what it touched
-is a data-loss risk, and splitting the pair across two providers would
-reintroduce that risk even though each member on its own still satisfies
-"exactly one".
+One cross-member constraint (`_CROSS_MEMBER_PAIRS`): whichever provider wins
+`resolve_case_mutation` must also be the one that wins
+`get_supported_mutation_modes`, or a resolver would be handed a mode it never
+claimed to accept.
 
 ### `provides:` / `requires:`
 

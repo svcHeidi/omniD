@@ -78,7 +78,6 @@ with two members missing from this table: `get_environment_commands` and
 | `get_utility_roots()` | `tuple[Path, ...]` — utility source dirs |
 | `resolve_case_models(case_root)` | `dict` — best-effort, never raise |
 | `get_samplable_fields(resolved)` | `dict[str, tuple[str, ...]]` — by region |
-| `get_override_schema(tutorial, info)` | `dict` — `--config` vocabulary |
 | `get_run_document_config_schema()` | `dict` — JSON Schema for `RunDocument.config` |
 | `get_dict_entry_catalog()` | `dict` — entries by document name (unserialized) |
 | `get_solve_step_commands()` | `frozenset[str]` — for telemetry attribution |

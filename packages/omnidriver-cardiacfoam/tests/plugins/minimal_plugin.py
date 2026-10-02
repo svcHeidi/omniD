@@ -78,13 +78,6 @@ class MinimalOpenFOAMPlugin:
         del resolved
         return {}
 
-    def get_override_schema(self, tutorial_name, make_spec_info):
-        del tutorial_name, make_spec_info
-        return {}
-
-    def get_dict_entry_catalog(self):
-        return {}
-
     def get_solve_step_commands(self) -> frozenset:
         return frozenset()
 

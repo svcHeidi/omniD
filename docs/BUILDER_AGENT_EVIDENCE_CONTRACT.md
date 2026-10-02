@@ -216,9 +216,9 @@ OpenFOAM dictionary entry.  Reuse the established layers:
   concrete dictionary path and scope;
 - `openfoam.effective_dictionary` when native include/substitution resolution
   is required;
-- `openfoam.apply_overrides` and `update_foam_entry` only after the solver
-  adapter has declared valid target scopes, transaction targets, and semantic
-  constraints.
+- a study's `document:key` patches (`step --apply` takes the same), and
+  `update_foam_entry` only through the case writer, after the solver adapter's
+  validator has accepted the key.
 
 Discover and guard dictionary keys with the same layers before writing a
 catalog by hand (added 2026-09-16, after the cardiacCore adapter re-typed keys
