@@ -373,7 +373,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             "diagnostics": [asdict(d) for d in diagnostics],
         }, indent=2))
         return None
-    record = (driver_context.stack.call("get_tutorial_records")).get(run_doc.name)
+    record = driver_context.stack.call("get_tutorial_records").get(run_doc.name)
     if record is not None and args.apply is None:
         from .core.runtime.record_execution import refuse_a_case_that_breaks_a_rule
 
