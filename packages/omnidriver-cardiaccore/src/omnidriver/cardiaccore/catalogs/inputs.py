@@ -6,10 +6,8 @@ Every ``DictEntry`` is backed by a native ``.get``/``.getOrDefault``/
 ``src`` (see ``docs/BUILDER_AGENT_EVIDENCE_CONTRACT.md``).
 Conditionality the native source expresses as an ``if``/``found`` branch is
 expressed here as ``applicable_when``/``required_when``/``forbidden_when``/
-``mutually_exclusive_with`` rather than prose -- see
-``omnidriver.core.specs.validation.entry_is_applicable`` /
-``is_required_in_context`` / ``_predicate_matches`` for how these are
-evaluated.
+``mutually_exclusive_with`` rather than prose; every resolved record case
+is judged against them (``omnidriver.openfoam.case_rules``).
 
 Declaring a key here gives an agent knowledge of it, not mutability: every
 declared key is routable (``workflows/overrides.py`` resolves any path in

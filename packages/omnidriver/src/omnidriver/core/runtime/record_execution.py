@@ -432,6 +432,28 @@ def _refusal_as_record_error(
         ) from exc
 
 
+def _refuse_a_case_that_breaks_a_rule(
+    record: TutorialRecord, case_root: Path, driver_context: "DriverContext",
+) -> None:
+    """Refuse the resolved case by name, with each rule's own message, when
+    the stack's catalogue relations or cross-field rules find an error in it:
+    the one check every plan, run and sweep case passes before anything
+    executes."""
+    from ..plugin_capabilities import RunSemanticValidationRequest
+
+    broken = [
+        item for item in driver_context.capabilities.run_semantic_validator.validate(
+            RunSemanticValidationRequest(case_root),
+        ) if item.level == "error"
+    ]
+    if broken:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r}: the resolved case breaks "
+            f"{len(broken)} rule(s): "
+            + "; ".join(f"{item.field or item.source}: {item.message}" for item in broken)
+        )
+
+
 def commit_record_case(
     record: TutorialRecord,
     *,
@@ -468,6 +490,7 @@ def commit_record_case(
         staged_case_root=staged_case_root, driver_context=driver_context,
     )
     if not to_write:
+        _refuse_a_case_that_breaks_a_rule(record, staged_case_root, driver_context)
         return RecordCommitResult(
             write_record=None, unchanged=unchanged, command_arguments=command_arguments,
             workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,
@@ -514,6 +537,7 @@ def commit_record_case(
     record_ = commit_case_write(
         plan, driver_context=driver_context, execution_env=execution_env,
     )
+    _refuse_a_case_that_breaks_a_rule(record, staged_case_root, driver_context)
     return RecordCommitResult(
         write_record=record_, unchanged=unchanged, command_arguments=command_arguments,
         workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,

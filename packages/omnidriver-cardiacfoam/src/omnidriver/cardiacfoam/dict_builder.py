@@ -67,6 +67,7 @@ from omnidriver.core.specs.validation import (
 )
 
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from .validation import cross_field_diagnostics
 
 #: This adapter's identity on every synthesis request and resolution it
 #: produces.
@@ -312,6 +313,11 @@ def build_electro_properties(
         populated, entries, context_.capabilities.dictionaries.phases(),
     )
     errors = [e for e in validate_run(run, entries=entries, driver_context=context_) if e.level == "error"]
+    values = {
+        key: value for slice_ in run.config.values() for key, value in slice_.items()
+        if value not in (None, "")
+    }
+    errors += [e for e in cross_field_diagnostics(values) if e.level == "error"]
     if errors:
         raise ValueError(
             "build_electro_properties: validator rejected synthesised dict:\n  - "

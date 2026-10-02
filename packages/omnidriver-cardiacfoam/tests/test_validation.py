@@ -44,11 +44,29 @@ from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.core.planning_types import StrictDiagnostic
 from omnidriver.core.runtime.run_model import RunDocument
+from omnidriver.cardiacfoam.validation import cross_field_diagnostics
 from omnidriver.core.specs.validation import slot_key, validate_run
 
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:validation")
 
 _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
+
+
+def _cross_field(run):
+    return cross_field_diagnostics({
+        key: value for slice_ in run.config.values() for key, value in slice_.items()
+        if value not in (None, "")
+    })
+
+
+def _catalogue_rules(run):
+    from omnidriver.cardiacfoam.overrides import _ELECTRO_ENTRIES_BY_PATH
+    from omnidriver.openfoam.case_rules import rule_diagnostics
+
+    return rule_diagnostics(_ELECTRO_ENTRIES_BY_PATH.values(), {
+        key: value for slice_ in run.config.values() for key, value in slice_.items()
+        if value not in (None, "")
+    }, document="constant/electroProperties")
 
 
 def _all_entries():
@@ -182,7 +200,7 @@ def test_personalized_templates_rejects_manufactured_ecg_before_execution():
     }
     errors = _evaluate_personalized_templates(context)
     assert any("cannot be combined" in error.message for error in errors)
-    diagnostics = CardiacFoamPlugin().validate_run_semantics(context)
+    diagnostics = cross_field_diagnostics(context)
     assert any("cannot be combined" in error.message for error in diagnostics)
 
 
@@ -271,7 +289,7 @@ def test_ecg_anisotropic_matches_anisotropic_tissue_verifier_passes(tmp_path):
         anisotropic="yes",
     )
     assert _evaluate_ecg_anisotropic_consistency(context) == []
-    assert CardiacFoamPlugin().validate_run_semantics(context) == ()
+    assert cross_field_diagnostics(context) == []
 
 
 def test_ecg_anisotropic_matches_isotropic_tissue_verifier_passes(tmp_path):
@@ -283,7 +301,7 @@ def test_ecg_anisotropic_matches_isotropic_tissue_verifier_passes(tmp_path):
         anisotropic="no",
     )
     assert _evaluate_ecg_anisotropic_consistency(context) == []
-    assert CardiacFoamPlugin().validate_run_semantics(context) == ()
+    assert cross_field_diagnostics(context) == []
 
 
 def test_ecg_anisotropic_no_rejected_when_tissue_verifier_is_anisotropic(tmp_path):
@@ -300,7 +318,7 @@ def test_ecg_anisotropic_no_rejected_when_tissue_verifier_is_anisotropic(tmp_pat
     assert errors[0].field == "ecgDomains.ECG.verificationModel.anisotropic"
     assert "must be yes" in errors[0].message
 
-    diagnostics = CardiacFoamPlugin().validate_run_semantics(context)
+    diagnostics = cross_field_diagnostics(context)
     assert any("must be yes" in d.message for d in diagnostics)
 
 
@@ -317,7 +335,7 @@ def test_ecg_anisotropic_yes_rejected_when_tissue_verifier_is_not_anisotropic(tm
     assert errors[0].field == "ecgDomains.ECG.verificationModel.anisotropic"
     assert "must match the tissue verifier" in errors[0].message
 
-    diagnostics = CardiacFoamPlugin().validate_run_semantics(context)
+    diagnostics = cross_field_diagnostics(context)
     assert any("must match the tissue verifier" in d.message for d in diagnostics)
 
 
@@ -330,7 +348,7 @@ def test_batched_integrator_does_not_constrain_active_tension_model():
         "LandNiedererTWorldBatched",
         "NashPanfilovBatched",
     ):
-        diagnostics = CardiacFoamPlugin().validate_run_semantics({
+        diagnostics = cross_field_diagnostics({
             "activeTensionModel": model,
             "batchedIntegrator": "rushLarsen",
         })
@@ -613,7 +631,7 @@ def _coupling_run(myocardium: str, *,
 
 def test_solver_coupling_silent_when_no_purkinje_pairing():
     run = _coupling_run("monodomainSolver")
-    errors = validate_run(run, entries=[], driver_context=_CTX)
+    errors = _cross_field(run)
     coupling_errors = [
         e for e in errors
         if "coupling" in e.message.lower() or "coupler" in e.message.lower()
@@ -628,7 +646,7 @@ def test_solver_coupling_valid_monodomain_pair_silent():
         purkinje="monodomain1DSolver",
         coupler="reactionDiffusionPvjCoupler",
     )
-    errors = validate_run(run, entries=[], driver_context=_CTX)
+    errors = _cross_field(run)
     coupling_errors = [
         e for e in errors
         if "incompatible" in e.message.lower()
@@ -645,7 +663,7 @@ def test_solver_coupling_flags_incompatible_mono_eikonal_pair():
         purkinje="eikonalSolver",
         coupler="reactionDiffusionPvjCoupler",
     )
-    errors = validate_run(run, entries=[], driver_context=_CTX)
+    errors = _cross_field(run)
     incompat = [e for e in errors if "incompatible" in e.message.lower()]
     assert len(incompat) >= 1, (
         f"expected incompatible-pair error, got: {[e.message for e in errors]}"
@@ -658,7 +676,7 @@ def test_solver_coupling_allows_bidomain_with_monodomain1D():
         purkinje="monodomain1DSolver",
         coupler="reactionDiffusionPvjCoupler",
     )
-    errors = validate_run(run, entries=[], driver_context=_CTX)
+    errors = _cross_field(run)
     bidomain_errors = [
         e for e in errors
         if "bidomain" in e.message.lower() and "purkinje" in e.message.lower()
@@ -673,7 +691,7 @@ def test_solver_coupling_flags_wrong_coupler_for_valid_pair():
         purkinje="monodomain1DSolver",
         coupler="eikonalPvjCoupler",   # wrong; should be reactionDiffusionPvjCoupler
     )
-    errors = validate_run(run, entries=[], driver_context=_CTX)
+    errors = _cross_field(run)
     coupler_errors = [
         e for e in errors
         if "reactiondiffusionpvjcoupler" in e.message.lower()
@@ -723,7 +741,7 @@ def test_solver_coupling_uncovered_pair_is_explicit_warning_through_validate_run
         coupler="reactionDiffusionPvjCoupler",
     )
     warnings = [
-        item for item in validate_run(run, entries=[], driver_context=_CTX)
+        item for item in _cross_field(run)
         if "compatibility is unknown" in item.message
     ]
     assert len(warnings) == 1
@@ -781,7 +799,7 @@ def test_solver_coupling_does_not_infer_missing_or_dangling_network_reference():
 
 def test_block_reference_silent_when_no_couplings():
     run = _coupling_run("monodomainSolver")
-    errors = validate_run(run, entries=[], driver_context=_CTX)
+    errors = _cross_field(run)
     ref_errors = [e for e in errors if "reference" in e.message.lower()]
     assert ref_errors == []
 
@@ -795,7 +813,7 @@ def test_block_reference_silent_when_target_block_declared():
         network_name="purkinjeNet",
         coupling_name="lvCoupling",
     )
-    errors = validate_run(run, entries=[], driver_context=_CTX)
+    errors = _cross_field(run)
     dangling_errors = [
         e for e in errors
         if "reference" in e.message.lower()
@@ -814,7 +832,7 @@ def test_block_reference_flags_dangling_target():
     ] = "ghostNet"   # never declared under conductionNetworkDomains.ghostNet.*
     run = RunDocument(id="r1", name="r", status="draft", config=config, configurationSource="document")
 
-    errors = validate_run(run, entries=[], driver_context=_CTX)
+    errors = _cross_field(run)
     dangling = [
         e for e in errors
         if "ghostNet" in e.message
@@ -845,7 +863,7 @@ def test_dynamic_required_field_flags_missing_value_scoped_to_its_own_network():
     # networkB never needs purkinjeCV under this solver.
     run = RunDocument(id="r1", name="r", status="draft", config=config, configurationSource="document")
 
-    errors = validate_run(run, entries=[], driver_context=_CTX)
+    errors = _catalogue_rules(run)
     cv_errors = [e for e in errors if "purkinjeCV" in e.message]
 
     assert any("networkA" in e.message for e in cv_errors), (
@@ -914,6 +932,7 @@ from omnidriver.cardiacfoam.common_dict_entries import (
     PHYSICS_PROPERTY_ENTRIES,
 )
 from omnidriver.core.runtime.run_model import RunDocument
+from omnidriver.cardiacfoam.validation import cross_field_diagnostics
 from omnidriver.core.specs.validation import slot_key, validate_run
 
 _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
@@ -931,7 +950,7 @@ def _filled_run_for_solver(myocardium_solver: str, **extra_config) -> RunDocumen
     config: dict[str, dict] = {
         "anatomy": {}, "physics": {}, "stimulus": {}, "solver": {},
     }
-    solver_context = {"myocardiumSolver": myocardium_solver}
+    solver_context = {"myocardiumSolver": myocardium_solver, **extra_config.get("physics", {})}
     for e in _all_entries():
         is_unconditionally_required = e.required and not e.required_when
         is_conditionally_required = e.required_when and any(
@@ -1056,9 +1075,14 @@ def test_representative_run_has_no_validator_errors(spec_label: str, run: RunDoc
 #
 # reactionDiffusionPvjCoupler uses the graph's non-empty "pvjResistances" list
 # when present and never reads rPvj; otherwise it calls dict.get<scalar>("rPvj"),
-# a FatalError when absent. The check needs the materialized graph, so
-# _evaluate_pvj_resistance_requirement runs from validate_configuration (the
-# `omnidriver run --strict` pre-flight), not validate_run_semantics.
+# a FatalError when absent. The check needs the materialized graph, so it
+# runs from case_diagnostics, which reads the case's files.
+
+def _pvj_diagnostics(case_root):
+    from omnidriver.cardiacfoam.validation import case_diagnostics
+
+    return tuple(d for d in case_diagnostics(case_root) if d.code == "missing_rpvj")
+
 
 def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
                      myocardium_solver="monodomainSolver",
@@ -1124,45 +1148,33 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
 
 def test_pvj_resistance_silent_when_rpvj_explicitly_set(tmp_path):
     """rPvj supplied directly -- valid regardless of graph/resistance state."""
-    from omnidriver.cardiacfoam.validation import (
-        _evaluate_pvj_resistance_requirement,
-    )
     electro_path = _build_pvj_case(tmp_path, set_rpvj=True, graph_present=False)
-    diagnostics = _evaluate_pvj_resistance_requirement(tmp_path, electro_path)
+    diagnostics = _pvj_diagnostics(tmp_path)
     assert diagnostics == ()
 
 
 def test_pvj_resistance_defers_when_graph_not_yet_materialized(tmp_path):
     """cardiacCore generates the graph later, so a missing graph defers rather than errors."""
-    from omnidriver.cardiacfoam.validation import (
-        _evaluate_pvj_resistance_requirement,
-    )
     electro_path = _build_pvj_case(tmp_path, set_rpvj=False, graph_present=False)
-    diagnostics = _evaluate_pvj_resistance_requirement(tmp_path, electro_path)
+    diagnostics = _pvj_diagnostics(tmp_path)
     assert diagnostics == ()
 
 
 def test_pvj_resistance_silent_when_graph_provides_terminal_resistances(tmp_path):
     """The graph's pvjResistances take precedence over rPvj, as in reactionDiffusionPvjCoupler::terminalResistances."""
-    from omnidriver.cardiacfoam.validation import (
-        _evaluate_pvj_resistance_requirement,
-    )
     electro_path = _build_pvj_case(
         tmp_path, set_rpvj=False, graph_present=True, graph_has_resistances=True,
     )
-    diagnostics = _evaluate_pvj_resistance_requirement(tmp_path, electro_path)
+    diagnostics = _pvj_diagnostics(tmp_path)
     assert diagnostics == ()
 
 
 def test_pvj_resistance_errors_when_graph_materialized_without_resistances_and_no_rpvj(tmp_path):
     """With neither source, reactionDiffusionPvjCoupler's dict.get<scalar>("rPvj") would FatalError."""
-    from omnidriver.cardiacfoam.validation import (
-        _evaluate_pvj_resistance_requirement,
-    )
     electro_path = _build_pvj_case(
         tmp_path, set_rpvj=False, graph_present=True, graph_has_resistances=False,
     )
-    diagnostics = _evaluate_pvj_resistance_requirement(tmp_path, electro_path)
+    diagnostics = _pvj_diagnostics(tmp_path)
     assert len(diagnostics) == 1
     assert diagnostics[0].level == "error"
     assert "rPvj" in diagnostics[0].message
@@ -1171,13 +1183,10 @@ def test_pvj_resistance_errors_when_graph_materialized_without_resistances_and_n
 
 def test_pvj_resistance_irrelevant_for_a_different_coupler(tmp_path):
     """eikonalPvjCoupler never reads rPvj, so the check never fires for it."""
-    from omnidriver.cardiacfoam.validation import (
-        _evaluate_pvj_resistance_requirement,
-    )
     electro_path = _build_pvj_case(
         tmp_path, coupler="eikonalPvjCoupler",
         myocardium_solver="eikonalSolver", conduction_solver="eikonalSolver1D",
         set_rpvj=False, graph_present=False,
     )
-    diagnostics = _evaluate_pvj_resistance_requirement(tmp_path, electro_path)
+    diagnostics = _pvj_diagnostics(tmp_path)
     assert diagnostics == ()

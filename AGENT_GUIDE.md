@@ -1013,19 +1013,29 @@ just blocks at the `workflow_preparation` stage with a generic "workflow DAG
 is missing or invalid" error and no pointer to the actual cause
 (`sweep_materialize.py` writes both files for exactly this reason).
 
-## What the validator catches
+## What the rules catch
 
-`validate_run(run)` runs seven families of checks:
+Every record case passes the stack's rules once its study is written and
+before anything runs: `plan --strict`, `run` and each case of a sweep. A rule
+that finds an error refuses the case by name (`tutorial record 'X': the
+resolved case breaks N rule(s): <field>: <message>`), with the rule's own
+message. The rules read the resolved case's files, so a direct key, an axis
+and the native case all count.
 
-- **Required fields** — every `required` entry has a value.
-- **Enum membership** — values for enum-typed entries are in `enum_values`.
-- **Structured constraints** — `applicable_when` / `forbidden_when` / `required_when` / `mutually_exclusive_with`.
+- **Catalogue relations** (cardiacFOAM's `electroProperties`, each cardiacCore
+  utility dictionary) — `applicable_when` / `required_when` / `forbidden_when` /
+  `mutually_exclusive_with` / `co_required_with`, once per instance of a
+  `<name>` block. Menus and value types are not judged here: the C++ owns them.
 - **Solver coupling** — pairings like (`singleCellSolver`, any Purkinje) reject with the table's stated reason.
 - **Block references** — `domainCouplings.<name>.conductionNetworkDomain` must point at a declared block.
-- **Tissue heterogeneity** — `ionicHeterogeneity` requires a supported `ionicModel` and `endoMInterface < mEpiInterface`.
+- **Tissue heterogeneity** — `ionicHeterogeneity` requires a supported `ionicModel` and well-formed regions and gradient axes.
 - **Tissue compatibility** — `tissue` must be in the `ionicModel`'s `compatible_tissues`.
+- **ECG consistency** — `personalizedTemplates` and the pseudo-ECG `anisotropic` switch must agree with the verifier and solver they sit beside.
+- **Purkinje resistance** — `reactionDiffusionPvjCoupler` needs `rPvj` unless its materialized graph carries `pvjResistances`.
 
-If the dict builder rejects your input with `ValueError`, the message lists every violation. Fix the selectors or overrides and call again.
+A rule refuses a combination it knows is wrong, never a name it does not know:
+an ionic model, tissue or verifier the catalogue lacks (reported `uncatalogued`
+by the scan) passes every rule.
 
 ## Function objects (probes, sampling, sets, …)
 
@@ -1342,7 +1352,7 @@ get_profile()           # PluginProfile from load_plugin_profile("plugin.yaml")
 get_capabilities()      # CapabilityManifest via build_capability_manifest()
 get_tutorial_catalog()  # dict with spec_factories, registered_tutorials
 validate_configuration(spec)   # tuple[StrictDiagnostic, ...]
-validate_run_semantics(context) # tuple[...]
+validate_run_semantics(case_root) # tuple[StrictDiagnostic, ...]: the resolved case's rules
 predict_data_artifacts(case_root, spec) # tuple[DataArtifact, ...]
 ```
 

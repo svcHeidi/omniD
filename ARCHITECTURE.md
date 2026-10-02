@@ -358,7 +358,7 @@ capability, which does name `absent_phases`).
 | `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dictionary_catalog`, `get_phases` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/cardiacfoam/sweep.py`, `omnidriver/openfoam/apply_overrides.py`, `omnidriver/openfoam/dict_builder.py`, `omnidriver/core/specs/validation.py`, `omnidriver/core/strict_planning.py` | `absent_phases` | optional-neutral |
 | `manifest` | `CapabilityManifestCapability` | `get_capabilities` | `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/core/introspection.py`, `omnidriver/core/strict_planning.py` | none | required |
 | `configuration_validator` | `ConfigurationValidatorCapability` | `validate_configuration` | `omnidriver/core/strict_planning.py` | none | required |
-| `run_semantic_validator` | `RunSemanticValidatorCapability` | `validate_run_semantics` | `omnidriver/core/specs/validation.py` | none | required |
+| `run_semantic_validator` | `RunSemanticValidatorCapability` | `validate_run_semantics` | `omnidriver/core/runtime/record_execution.py` | none | required |
 | `artifacts` | `ArtifactPredictorCapability` | `predict_data_artifacts` | `omnidriver/core/runtime/artifacts.py` | none | required |
 | `run_document_configuration` | `RunDocumentConfigurationCapability` | `build_run_document_config`, `get_run_document_config_schema` | `omnidriver/core/runtime/run_document_adapter.py`, `omnidriver/core/runtime/run_document_exec.py` | `absent_run_document_config`, `absent_run_document_config_schema` | optional-neutral |
 | `cxx_mapping` | `CxxMappingCapability` | `get_profile` | `omnidriver/core/strict_planning.py` | none | required |

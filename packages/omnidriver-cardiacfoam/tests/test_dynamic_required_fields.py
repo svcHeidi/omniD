@@ -1,13 +1,16 @@
-"""Required-field enforcement for every configured dynamic block. The generic pass
-skips ``dynamic_path`` entries, and ``domainCouplings.<name>`` leaves have no
-``typical_value``, so a configured block can reach the solver missing a key.
-"""
+"""Required-field enforcement for every configured dynamic block: a configured
+``domainCouplings.<name>`` block can otherwise reach the solver missing a key."""
 
 from __future__ import annotations
 
-from omnidriver.cardiacfoam.validation import (
-    _evaluate_dynamic_required_fields,
-)
+from omnidriver.cardiacfoam.overrides import _ELECTRO_ENTRIES_BY_PATH
+from omnidriver.openfoam.case_rules import rule_diagnostics
+
+
+def _evaluate_dynamic_required_fields(context):
+    """The violations inside a block (a partial context also lacks static required keys, which these tests are not about)."""
+    found = rule_diagnostics(_ELECTRO_ENTRIES_BY_PATH.values(), context, document="constant/electroProperties")
+    return [item for item in found if "." in item.field]
 
 
 def _fields(errors) -> list[str]:

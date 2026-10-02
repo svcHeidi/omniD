@@ -301,8 +301,6 @@ def validate_run(
     error-level diagnostics and short-circuits the remaining checks (see
     :func:`_non_mapping_phase_errors`).
     """
-    from omnidriver.core.plugin_capabilities import RunSemanticValidationRequest
-
     # 0) Shape guard. Every later step indexes phase slices as mappings;
     #    bail out with diagnostics rather than crashing on a malformed one.
     phase_order = driver_context.capabilities.dictionaries.phases()
@@ -332,11 +330,7 @@ def validate_run(
             # "conductionNetworkDomains.<name>.*"); this generic pass has
             # no way to discover which concrete <name> instances a given
             # run configures, so it cannot check their required leaves.
-            # That is left to section 4 below (a plugin's own
-            # run_semantic_validator), if the active plugin implements it
-            # for this template family -- see e.g. the cardiacfoam
-            # plugin's _evaluate_dynamic_required_fields. Not every
-            # dynamic-path template is guaranteed such a check.
+            # That is the resolved-case check's (`run_semantic_validator`).
             continue
         ph = primary_phase(e, phase_order)
         if ph is None:
@@ -408,14 +402,6 @@ def validate_run(
     # (The ionicModel entry carries forbidden_when={"myocardiumSolver": "eikonalSolver"}
     # which the section below evaluates programmatically.)
     errors.extend(_evaluate_structured(entry_list, context, phase_order))
-
-    # 4) Domain semantics are a plugin concern.  Core owns only generic
-    # catalog constraints and receives solver-specific diagnostics as data.
-    errors.extend(
-        driver_context.capabilities.run_semantic_validator.validate(
-            RunSemanticValidationRequest(context),
-        )
-    )
 
     return tuple(errors)
 

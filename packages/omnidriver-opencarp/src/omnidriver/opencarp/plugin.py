@@ -40,7 +40,7 @@ class OpenCARPPlugin:
     def validate_configuration(self, spec):
         return ()
 
-    def validate_run_semantics(self, context):
+    def validate_run_semantics(self, case_root):
         return ()
 
     def predict_data_artifacts(self, case_root, spec):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES
@@ -18,24 +19,21 @@ def _diagnostic_from_phase(phase: str, field: str, message: str, level: str) -> 
     return diagnostic(level, "run_validation", message, source=phase, field=field)
 
 
+def _catalogued(driver_path: str, value: Any) -> bool:
+    """Whether the catalogue lists ``value`` in ``driver_path``'s menu. A rule
+    that compares a name refuses only a name it knows: one the catalogue
+    lacks may be a model the scan registered, and is never refused here."""
+    from .overrides import _ELECTRO_ENTRIES_BY_PATH
+
+    entry = _ELECTRO_ENTRIES_BY_PATH.get(driver_path)
+    return entry is not None and value in entry.enum_values
+
+
 _CONDUCTION_SOLVER_SUFFIX = ".purkinjeGraphModelCoeffs.conductionSystemSolver"
 _COUPLER_SUFFIX = ".electroDomainCoupler"
 _NETWORK_REF_SUFFIX = ".conductionNetworkDomain"
-import re as _re
-
-# A dynamic-path placeholder segment, e.g. <name> / <region_name> / <patch>.
-_PLACEHOLDER_RE = _re.compile(r"<[^>]+>")
-
 _CONDUCTION_NET_PREFIX = "conductionNetworkDomains."
 _DOMAIN_COUPLINGS_PREFIX = "domainCouplings."
-
-
-def _is_template_slot_key(key: str) -> bool:
-    """Slot keys carrying an un-substituted dynamic-path placeholder
-    (e.g. ``domainCouplings.<name>.conductionNetworkDomain``) are template
-    forms that ``_filled_run`` synthesises for required-field coverage but
-    do not represent a real run-time coupling."""
-    return "<" in key or ">" in key
 
 
 def _evaluate_solver_coupling(context: dict[str, Any]) -> list["StrictDiagnostic"]:
@@ -53,8 +51,7 @@ def _evaluate_solver_coupling(context: dict[str, Any]) -> list["StrictDiagnostic
     coupling_blocks = sorted({
         key.rsplit(".", 1)[0]
         for key in context
-        if not _is_template_slot_key(key)
-        and key.startswith(_DOMAIN_COUPLINGS_PREFIX)
+        if key.startswith(_DOMAIN_COUPLINGS_PREFIX)
         and key.endswith((_NETWORK_REF_SUFFIX, _COUPLER_SUFFIX))
     })
     declared_networks = _declared_conduction_networks(context)
@@ -143,12 +140,9 @@ def _evaluate_solver_coupling(context: dict[str, Any]) -> list["StrictDiagnostic
 
 def _declared_conduction_networks(context: dict[str, Any]) -> set[str]:
     """Names of every conductionNetworkDomains.<name> block that has at
-    least one sub-key present in context (i.e. is actually configured, not
-    just a template slot)."""
+    least one sub-key present in context."""
     declared_networks: set[str] = set()
     for key in context:
-        if _is_template_slot_key(key):
-            continue
         if not key.startswith(_CONDUCTION_NET_PREFIX):
             continue
         rest = key[len(_CONDUCTION_NET_PREFIX):]
@@ -165,8 +159,6 @@ def _evaluate_block_references(
     declared_networks = _declared_conduction_networks(context)
 
     for key, val in context.items():
-        if _is_template_slot_key(key):
-            continue
         if not (
             key.startswith(_DOMAIN_COUPLINGS_PREFIX)
             and key.endswith(_NETWORK_REF_SUFFIX)
@@ -184,194 +176,6 @@ def _evaluate_block_references(
                 ),
                 level="error",
             ))
-
-    return errors
-
-
-def _value_matches_scoped(actual: Any, expected: str | tuple) -> bool:
-    """Scalar equality / tuple membership for a single instance's own value.
-
-    Deliberately does not reuse ``specs.validation._predicate_matches``:
-    that helper treats an un-substituted ``<name>`` placeholder as a
-    wildcard matching ANY configured instance, which is correct for its
-    once-per-catalog-entry call site but wrong here -- this function is
-    called once per declared network specifically so one network's value
-    can never satisfy another network's requirement.
-    """
-    if isinstance(expected, tuple):
-        return actual in expected
-    return actual == expected
-
-
-def _dynamic_block_templates() -> dict[str, list[Any]]:
-    """Group every dynamic catalogue entry by its block template.
-
-    A template is the slot key truncated through its FIRST placeholder --
-    ``domainCouplings.<name>``, ``ecgDomains.<name>``,
-    ``ionicHeterogeneity.regions.<region_name>``. Entries sharing a template
-    are the leaves that one configured instance of that block may carry.
-    """
-    from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
-    from omnidriver.core.specs.validation import slot_key
-    from omnidriver.cardiacfoam.own_context import own_driver_context
-
-    templates: dict[str, list[Any]] = {}
-    for group in get_electro_property_entry_groups(own_driver_context()).values():
-        for entry in group:
-            if not entry.dynamic_path:
-                continue
-            key = slot_key(entry.driver_path)
-            match = _PLACEHOLDER_RE.search(key)
-            if not match:
-                continue
-            templates.setdefault(key[: match.end()], []).append(entry)
-    return templates
-
-
-def _literal_segments_at(position: int, templates: dict[str, list[Any]]) -> set[str]:
-    """Literal (non-placeholder) segments any template uses at ``position``.
-
-    ``ecgDomains.<name>`` and ``ecgDomains.electrodePositions.<electrode>``
-    share a prefix, so a naive instance scan would read the literal
-    ``electrodePositions`` as an ECG domain called "electrodePositions".
-    Excluding segments the catalogue itself uses literally at that depth
-    keeps the two apart without hardcoding either name.
-    """
-    literals: set[str] = set()
-    for template in templates:
-        segments = template.split(".")
-        if len(segments) > position and not _PLACEHOLDER_RE.fullmatch(segments[position]):
-            literals.add(segments[position])
-    return literals
-
-
-def _declared_instances(
-    context: dict[str, Any], template: str, templates: dict[str, list[Any]]
-) -> set[str]:
-    """Names of every ``<template>`` block with at least one key in context."""
-    prefix_segments = template.split(".")[:-1]
-    prefix = ".".join(prefix_segments) + "."
-    position = len(prefix_segments)
-    reserved = _literal_segments_at(position, templates)
-
-    instances: set[str] = set()
-    for key in context:
-        if _is_template_slot_key(key) or not key.startswith(prefix):
-            continue
-        remainder = key[len(prefix):].split(".")
-        if len(remainder) < 2:
-            # The block's own leaf must sit BELOW the instance name.
-            continue
-        name = remainder[0]
-        if name and name not in reserved:
-            instances.add(name)
-    return instances
-
-
-def _instance_applicable(
-    entry: Any,
-    context: dict[str, Any],
-    template_prefix: str,
-    instance_prefix: str,
-) -> bool:
-    """Is ``entry`` applicable for this concrete instance?
-
-    Scoped exactly like ``required_when``: a predicate naming a sibling leaf
-    inside the same block is resolved against THIS instance's keys, so one
-    instance's configuration can never make another instance's leaf
-    applicable. Predicates pointing outside the block are left to the generic
-    pass and treated as satisfied here.
-    """
-    from omnidriver.core.specs.validation import slot_key
-
-    if not entry.applicable_when:
-        return True
-    for pred_template, expected in entry.applicable_when.items():
-        pred_slot = slot_key(pred_template)
-        if not pred_slot.startswith(template_prefix):
-            continue
-        actual = context.get(instance_prefix + pred_slot[len(template_prefix):])
-        if actual is None or not _value_matches_scoped(actual, expected):
-            return False
-    return True
-
-
-def _evaluate_dynamic_required_fields(context: dict[str, Any]) -> list["StrictDiagnostic"]:
-    """Required-field checks for every configured dynamic block.
-
-    ``validate_run``'s generic required-field pass (``specs/validation.py``)
-    skips every ``dynamic_path`` entry outright: "concrete required leaves
-    are the user's responsibility when those blocks are actually
-    configured." This is where that responsibility is discharged.
-
-    Each declared instance gets its own scoped substitution of the catalogue
-    template, built from only that instance's own keys, so a sibling's value
-    can never satisfy this instance's requirement (and vice versa).
-
-    This was previously hardcoded to ``conductionNetworkDomains.<name>.*``,
-    which left the other dynamic blocks unenforced -- notably
-    ``domainCouplings.<name>``, whose leaves all carry an empty
-    ``typical_value`` and so are not silently filled by the builder the way
-    ``ecgDomains.<name>.sampling.*`` are. The blocks are now discovered from
-    the catalogue instead of named here, so a new dynamic block is covered
-    the moment it is catalogued.
-    """
-    from omnidriver.core.specs.validation import slot_key
-
-    errors: list["StrictDiagnostic"] = []
-    templates = _dynamic_block_templates()
-
-    for template, entries in sorted(templates.items()):
-        template_prefix = f"{template}."
-        for instance in sorted(_declared_instances(context, template, templates)):
-            instance_prefix = ".".join(template.split(".")[:-1] + [instance]) + "."
-            for entry in entries:
-                suffix = slot_key(entry.driver_path)[len(template_prefix):]
-                if not suffix:
-                    continue
-                concrete_key = instance_prefix + suffix
-
-                required = entry.required
-                if entry.required_when:
-                    required = False
-                    for pred_template, expected in entry.required_when.items():
-                        pred_slot = slot_key(pred_template)
-                        if not pred_slot.startswith(template_prefix):
-                            # Predicate references something outside this
-                            # instance's own block (e.g. a top-level
-                            # selector); out of scope for this per-instance
-                            # pass.
-                            continue
-                        pred_suffix = pred_slot[len(template_prefix):]
-                        actual = context.get(instance_prefix + pred_suffix)
-                        if actual is None:
-                            continue
-                        if _value_matches_scoped(actual, expected):
-                            required = True
-                            break
-
-                if not required:
-                    continue
-                if not _instance_applicable(entry, context, template_prefix, instance_prefix):
-                    # Required only WHERE APPLICABLE. The three
-                    # ecgDomains.<name>.sampling.* leaves are gated on
-                    # ecgSolver == eikonalECG; an ECG domain using any other
-                    # solver never emits them, so demanding them there is a
-                    # false error. Every other dynamic required entry has an
-                    # empty applicable_when, so this narrows nothing else.
-                    continue
-                if concrete_key in context and context[concrete_key] not in (None, ""):
-                    continue
-                block = template.split(".")[:-1]
-                errors.append(_diagnostic_from_phase(
-                    phase="physics",
-                    field=concrete_key,
-                    message=(
-                        f"{concrete_key} is required for "
-                        f"{'.'.join(block)}.{instance} but has no value."
-                    ),
-                    level="error",
-                ))
 
     return errors
 
@@ -569,6 +373,8 @@ def _evaluate_tissue_compatibility(context: dict[str, Any]) -> list["StrictDiagn
     entry = IONIC_MODEL_CATALOG.get(model)
     if entry is None or not entry.compatible_tissues:
         return errors
+    if not any(tissue in known.compatible_tissues for known in IONIC_MODEL_CATALOG.values()):
+        return errors
     if "manufactured" in entry.compatible_tissues:
         return errors
     if tissue not in entry.compatible_tissues:
@@ -608,13 +414,15 @@ def _evaluate_personalized_templates(context: dict[str, Any]) -> list["StrictDia
         for key in context
         if key.startswith(_ECG_DOMAIN_PREFIX)
         and _PERSONALIZED_TEMPLATES_SUFFIX in key
-        and not _is_template_slot_key(key)
     }
     for domain in sorted(domains):
         prefix = f"{_ECG_DOMAIN_PREFIX}{domain}."
         template_prefix = prefix + "personalizedTemplates."
         field = prefix + "personalizedTemplates"
-        if context.get(prefix + "ecgSolver") != "eikonalECG":
+        ecg_solver = context.get(prefix + "ecgSolver")
+        if ecg_solver != "eikonalECG":
+            if not _catalogued("$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver", ecg_solver):
+                continue
             errors.append(_diagnostic_from_phase(
                 phase="physics", field=field,
                 message="personalizedTemplates is supported only by ecgSolver=eikonalECG.",
@@ -726,13 +534,17 @@ def _evaluate_ecg_anisotropic_consistency(context: dict[str, Any]) -> list["Stri
     ``applicable_when``.
     """
     errors: list["StrictDiagnostic"] = []
-    tissue_is_anisotropic = context.get("verificationModel.type") == _TISSUE_ANISOTROPIC_VERIFIER
+    tissue_verifier = context.get("verificationModel.type")
+    if tissue_verifier is not None and not _catalogued(
+        "$ELECTRO_MODEL_COEFFS.verificationModel.type", tissue_verifier,
+    ):
+        return errors
+    tissue_is_anisotropic = tissue_verifier == _TISSUE_ANISOTROPIC_VERIFIER
 
     domains = {
         key[len(_ECG_DOMAIN_PREFIX):].split(".", 1)[0]
         for key in context
         if key.startswith(_ECG_DOMAIN_PREFIX)
-        and not _is_template_slot_key(key)
     }
     for domain in sorted(domains):
         prefix = f"{_ECG_DOMAIN_PREFIX}{domain}."
@@ -768,20 +580,11 @@ _RPVJ_COUPLER = "reactionDiffusionPvjCoupler"
 
 
 def _graph_has_terminal_resistances(graph_path: Any) -> bool:
-    """Read-only, structural check of a materialized Purkinje graph file for
-    a non-empty top-level ``pvjResistances`` list.
-
-    Mirrors ``conductionGraph::readFromDict`` (src/electroModels/
-    electroDomains/conductionSystemDomain/conductionGraph.H): that C++ side
-    reads ``pvjResistances`` as an optional top-level scalar list and, if
-    present, ``conductionSystemDomain::terminalResistances()`` (conductionSystemDomain.H)
-    returns it whenever non-empty. Uses foamlib rather than the line-based
-    scanner in core/runtime/mutators.py because this is a pure existence/
-    shape check on a file this module did not write and never needs
-    verbatim values from -- foamlib parses in-process without evaluating
-    ``#calc``/``#codeStream`` (see core/runtime/foam_backend.py's header
-    comment), so it is safe to point at an arbitrary materialized file.
-    """
+    """Whether a materialized Purkinje graph file carries a non-empty
+    top-level ``pvjResistances`` list (``conductionGraph::readFromDict``
+    reads it as an optional scalar list). foamlib parses without evaluating
+    ``#calc``/``#codeStream``, so it is safe on a file this module did not
+    write."""
     from foamlib import FoamFile
 
     try:
@@ -797,115 +600,84 @@ def _graph_has_terminal_resistances(graph_path: Any) -> bool:
 
 
 def _evaluate_pvj_resistance_requirement(
-    case_root: Any, electro_path: Any,
-) -> tuple["StrictDiagnostic", ...]:
-    """Graph-aware requiredness check for ``reactionDiffusionPvjCoupler``'s
-    ``rPvj``.
-
-    ``reactionDiffusionPvjCoupler.C`` (src/electroModels/electroCouplers/
-    pvjCoupler/reactionDiffusion/reactionDiffusionPvjCoupler.C:120-134)
-    only reads ``dict.get<scalar>("rPvj")`` -- a hard ``FatalError`` if
-    absent -- when the graph's own ``terminalResistances()`` is null (i.e.
-    the graph file provides no ``pvjResistances``). The generic catalog has
-    no ``required_when`` predicate that can express "required unless a
-    FILE says otherwise", so this is a plugin-specific semantic check
-    rather than a ``DictEntry`` field, consumed by ``validate_configuration``
-    (the strict pre-flight check gating ``omnidriver run --strict``, which has
-    filesystem access to the materialized case) rather than
-    ``validate_run_semantics`` (which only ever sees an abstract run
-    document, never a real graph file on disk).
-
-    Three-way outcome per ``reactionDiffusionPvjCoupler``-coupled network:
-
-    - The graph file is not yet materialized on disk: DEFER (no
-      diagnostic). cardiacCore may still generate it in a later step; a
-      later ``--strict`` re-check (e.g. the one immediately before launch)
-      will see the materialized file and correctly resolve this.
-    - The graph IS materialized and provides ``pvjResistances``, OR
-      ``rPvj`` is set directly: silent (either source is sufficient, same
-      as the C++ precedence).
-    - The graph IS materialized, provides no ``pvjResistances``, and
-      ``rPvj`` is absent: ERROR -- neither source exists, which is exactly
-      what the C++ side would hard-FatalError on at runtime.
-    """
-    from pathlib import Path as _Path
-
-    from omnidriver.core.planning_types import diagnostic as _diagnostic
-    from omnidriver.cardiacfoam.dict_builder import parse_electro_properties
-    from omnidriver.core.specs.validation import slot_key
-
-    case_root = _Path(case_root)
-    electro_path = _Path(electro_path)
-    if not electro_path.exists():
-        return ()
-
-    overrides = parse_electro_properties(electro_path)["overrides"]
-
-    couplings: dict[str, dict[str, str]] = {}
-    for k, v in overrides.items():
-        sk = slot_key(k)
-        if not sk.startswith(_DOMAIN_COUPLINGS_PREFIX):
+    case_root: Path, context: dict[str, Any], electro_path: Path,
+) -> list["StrictDiagnostic"]:
+    """``reactionDiffusionPvjCoupler`` reads ``rPvj`` only when its graph's
+    ``terminalResistances()`` is null (``reactionDiffusionPvjCoupler.C``), so
+    the catalogue cannot state it as a ``required_when``: it depends on a
+    file. A graph not yet materialized defers the check; a materialized one
+    with no ``pvjResistances`` and no ``rPvj`` is an error."""
+    found: list["StrictDiagnostic"] = []
+    for key, coupler in context.items():
+        if not (key.startswith(_DOMAIN_COUPLINGS_PREFIX) and key.endswith(_COUPLER_SUFFIX)) or coupler != _RPVJ_COUPLER:
             continue
-        rest = sk[len(_DOMAIN_COUPLINGS_PREFIX):]
-        if rest.endswith(_COUPLER_SUFFIX):
-            name = rest[: -len(_COUPLER_SUFFIX)]
-            couplings.setdefault(name, {})["coupler"] = v
-        elif rest.endswith(_NETWORK_REF_SUFFIX):
-            name = rest[: -len(_NETWORK_REF_SUFFIX)]
-            couplings.setdefault(name, {})["network"] = v
-
-    diagnostics: list["StrictDiagnostic"] = []
-    for coupling_name, info in couplings.items():
-        if info.get("coupler") != _RPVJ_COUPLER:
+        block = key[: -len(_COUPLER_SUFFIX)]
+        network = context.get(block + _NETWORK_REF_SUFFIX)
+        rpvj_key = f"{block}.rPvj"
+        if network is None or rpvj_key in context:
             continue
-        network = info.get("network")
-        if network is None:
-            # Dangling/absent reference is _evaluate_block_references's
-            # concern, not this function's.
-            continue
-
-        # rPvj lives on the COUPLER's own dict block (domainCouplings.<name>),
-        # not on the network's purkinjeGraphModelCoeffs -- it's the argument
-        # reactionDiffusionPvjCoupler's own constructor reads via
-        # dict.get<scalar>("rPvj") on the dictionary it was constructed
-        # with, which is the coupler dict, confirmed against the catalog
-        # entry ($ELECTRO_MODEL_COEFFS.domainCouplings.<name>.rPvj) and the
-        # real purkinjeRestitution2D/monodomain1D3D tutorial fixtures.
-        rpvj_key = f"$ELECTRO_MODEL_COEFFS.{_DOMAIN_COUPLINGS_PREFIX}{coupling_name}.rPvj"
-        if rpvj_key in overrides:
-            continue
-
-        graph_key = (
-            f"$ELECTRO_MODEL_COEFFS.{_CONDUCTION_NET_PREFIX}{network}"
-            f".purkinjeGraphModelCoeffs.graphFile"
+        graph_name = context.get(
+            f"{_CONDUCTION_NET_PREFIX}{network}.purkinjeGraphModelCoeffs.graphFile"
         )
-        graph_name = overrides.get(graph_key)
         if graph_name is None:
-            # No graph reference at all -- required-field checks own
-            # flagging a missing graphFile; not this function's concern.
             continue
-
-        graph_path = case_root / "constant" / graph_name
-        if not graph_path.exists():
-            continue  # DEFER: not yet materialized.
-
-        if _graph_has_terminal_resistances(graph_path):
+        graph_path = case_root / "constant" / str(graph_name)
+        if not graph_path.exists() or _graph_has_terminal_resistances(graph_path):
             continue
-
-        diagnostics.append(_diagnostic(
-            "error",
-            "missing_rpvj",
+        found.append(diagnostic(
+            "error", "missing_rpvj",
             (
-                f"conductionNetworkDomains.{network} is coupled via "
-                f"{_RPVJ_COUPLER} (domainCouplings.{coupling_name}) but "
-                f"neither rPvj nor a graph-provided pvjResistances list is "
-                f"available -- the materialized graph file {graph_name!r} "
-                f"has no pvjResistances, and rPvj is not set. "
-                f"reactionDiffusionPvjCoupler.C will FatalError on "
-                f"dict.get<scalar>(\"rPvj\") at runtime."
+                f"conductionNetworkDomains.{network} is coupled via {_RPVJ_COUPLER} ({block}) "
+                f"but neither rPvj nor a graph-provided pvjResistances list is available: the "
+                f"materialized graph file {graph_name!r} has no pvjResistances, and rPvj is not "
+                f"set. reactionDiffusionPvjCoupler.C will FatalError on dict.get<scalar>(\"rPvj\")."
             ),
-            source=str(electro_path),
-            field=rpvj_key,
+            source=str(electro_path), field=rpvj_key,
         ))
+    return found
 
-    return tuple(diagnostics)
+
+def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]:
+    """The rules between values that no single catalogue entry states.
+    ``context`` is the active ``<solver>Coeffs`` block's leaves, keyed by
+    dotted path, plus ``myocardiumSolver``."""
+    return (
+        _evaluate_solver_coupling(context)
+        + _evaluate_block_references(context)
+        + _evaluate_heterogeneity(context)
+        + _evaluate_personalized_templates(context)
+        + _evaluate_tissue_compatibility(context)
+        + _evaluate_ecg_anisotropic_consistency(context)
+    )
+
+
+def case_diagnostics(case_root: Path) -> tuple["StrictDiagnostic", ...]:
+    """Every rule the resolved case at ``case_root`` violates. A case with no
+    ``electroProperties`` violates none."""
+    from foamlib import FoamFile
+
+    from omnidriver.openfoam.case_rules import flatten, rule_diagnostics
+
+    from .overrides import _ELECTRO_ENTRIES_BY_PATH
+    from .physics_layout import region_document
+
+    case_root = Path(case_root)
+    electro_path = region_document(case_root, "electro", "electroProperties")
+    if electro_path is None:
+        return ()
+    try:
+        parsed = FoamFile(electro_path)
+        solver = parsed.get("myocardiumSolver")
+        context = {"myocardiumSolver": str(solver), **flatten(parsed[f"{solver}Coeffs"])}
+    except (OSError, ValueError, KeyError) as exc:
+        return (diagnostic(
+            "error", "missing_solver",
+            f"{electro_path} names no myocardiumSolver whose <solver>Coeffs block it holds: {exc!r}",
+            source=str(electro_path), field="myocardiumSolver",
+        ),)
+    document = electro_path.relative_to(case_root).as_posix()
+    return tuple(
+        rule_diagnostics(_ELECTRO_ENTRIES_BY_PATH.values(), context, document=document)
+        + cross_field_diagnostics(context)
+        + _evaluate_pvj_resistance_requirement(case_root, context, electro_path)
+    )

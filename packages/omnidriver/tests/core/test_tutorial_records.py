@@ -9,6 +9,7 @@ import pytest
 
 from omnidriver.core import compatibility
 from omnidriver.core.case_write import ParameterAssignment, ResolvedMutation, RenderedFile, _digest_bytes
+from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime import record_execution, registry
 from omnidriver.core.sweep import sweep_expansion
@@ -1327,6 +1328,71 @@ def test_the_refusal_comes_before_a_commit_writes_anything(tmp_path):
         )
     staged_mesh = tmp_path / "staged" / "constant" / "mesh.json"
     assert not staged_mesh.exists() or json.loads(staged_mesh.read_text()) == {"cells": "5"}
+
+
+# ---------------------------------------------------------------------------
+# The resolved case passes the stack's rules before anything runs.
+# ---------------------------------------------------------------------------
+
+
+class _RuleCheckingPlugin(_RecordCaseWriterPlugin):
+    """A stack whose one rule says a case holds at most 10 cells, and warns above 5."""
+
+    def validate_run_semantics(self, case_root):
+        cells = json.loads((Path(case_root) / "constant" / "mesh.json").read_text())["cells"]
+        found = []
+        if int(cells) > 10:
+            found.append(diagnostic("error", "too_many_cells", f"{cells} cells exceed 10", field="cells"))
+        if int(cells) > 5:
+            found.append(diagnostic("warning", "many_cells", f"{cells} cells", field="cells"))
+        return tuple(found)
+
+
+def _commit(tmp_path, cells):
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": str(cells)}})
+    return record_execution.commit_record_case(
+        _record(), cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+        study_by_source={"base": {"number_cells": 7}},
+        driver_context=driver_context(
+            _RuleCheckingPlugin(tutorial_records={}, record_key_validator=_known_catalog_validator),
+            source="test:rules",
+        ),
+    )
+
+
+def test_a_resolved_case_that_breaks_a_rule_is_refused_with_the_rules_own_message(tmp_path):
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
+    with pytest.raises(TutorialRecordError) as exc:
+        record_execution.commit_record_case(
+            _record(), cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+            study_by_source={"base": {"number_cells": 12}},
+            driver_context=driver_context(
+                _RuleCheckingPlugin(tutorial_records={}, record_key_validator=_known_catalog_validator),
+                source="test:rules",
+            ),
+        )
+    message = str(exc.value)
+    for fragment in ("'toyTutorial'", "cells: 12 cells exceed 10"):
+        assert fragment in message, (fragment, message)
+    assert "many_cells" not in message
+
+
+def test_a_warning_does_not_refuse_the_case(tmp_path):
+    assert _commit(tmp_path, 5).status == "committed"
+
+
+def test_an_unchanged_case_is_checked_too(tmp_path):
+    """A case that needs no patch is the native case as it stands, and the rules judge it all the same."""
+    _native_case(tmp_path, {"constant/mesh.json": {"cells": "12"}})
+    with pytest.raises(TutorialRecordError, match="12 cells exceed 10"):
+        record_execution.commit_record_case(
+            _record(), cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+            study_by_source={"base": {}},
+            driver_context=driver_context(
+                _RuleCheckingPlugin(tutorial_records={}, record_key_validator=_known_catalog_validator),
+                source="test:rules",
+            ),
+        )
 
 
 def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(tmp_path):

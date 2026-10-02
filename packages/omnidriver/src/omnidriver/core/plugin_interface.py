@@ -188,8 +188,8 @@ class SolverPlugin(Protocol):
         """
         ...
 
-    def validate_run_semantics(self, context: dict[str, Any]) -> tuple[StrictDiagnostic, ...]:
-        """Return solver-specific validation errors for a flattened config."""
+    def validate_run_semantics(self, case_root: Path) -> tuple[StrictDiagnostic, ...]:
+        """Return the rules the resolved case at ``case_root`` violates."""
         ...
 
     def predict_data_artifacts(self, case_root: Path, spec: TutorialSpec) -> tuple[DataArtifact, ...]:
