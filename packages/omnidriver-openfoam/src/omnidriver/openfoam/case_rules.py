@@ -8,7 +8,8 @@ needs beside it (``forbidden_when``, ``mutually_exclusive_with``,
 the values a case holds, once per concrete instance for an entry under a
 ``<name>`` block, and names every violated one. The same pass names a key the
 supplied C++ reads without a default that the catalogue lacks and the case
-does not set. Menus and value types are not judged here: the C++ owns them.
+does not set, and each enum value outside the menu the C++ registers (the
+catalogue's, when it registers none). Value types are the C++'s to judge.
 """
 
 from __future__ import annotations
@@ -178,46 +179,71 @@ def _scan_requirement(
     case that a class the case builds reads it from. A class is built when a
     selection table registers it under a name the case selects, or when the
     scan or the plugin's reviewed ``built_when`` ties it to a selector value
-    the case holds. A class nothing ties to the case is noted, not judged."""
+    the case holds; inside a ``<name>`` block only that block's own values
+    and those outside every block of its family count. A class nothing ties to
+    the case, and a read that runs only under a branch of its function, are
+    noted, not judged."""
     from .dict_keys_scanner import owner_of
-
-    selected = {str(_word(value)) for value in context.values()}
 
     def ties(read: Any) -> frozenset[str] | None:
         if read.selected_as:
             return frozenset(name for _base, name in read.selected_as)
         return built.get(owner_of(read))
 
-    judged = [read for read in reads if (names := ties(read)) is not None and names & selected]
-    unjudged = [read for read in reads if ties(read) is None]
     segments = path[1:] if path[0].startswith("$") else path
     block, key = segments[:-1], segments[-1]
-    pattern = re.compile(r"\.".join(r"[^.]+" if PLACEHOLDER.fullmatch(s) or s == "*" else re.escape(s) for s in block))
+    wild = [PLACEHOLDER.fullmatch(s) is not None or s == "*" for s in block]
+    pattern = re.compile(r"\.".join(r"[^.]+" if w else re.escape(s) for s, w in zip(block, wild)))
     blocks = sorted({
         ".".join(name.split(".")[:len(block)]) for name in context
         if len(name.split(".")) > len(block) and pattern.fullmatch(".".join(name.split(".")[:len(block)]))
     }) if block else [""]
+    first = wild.index(True) if True in wild else None
+    family = ".".join(block[:first]) + "." if first else ""
+    reasons = {
+        "not_tied": "the scan cannot tell whether this case builds the class that reads it",
+        "branch": "the C++ reads it only under a condition of its own function",
+    }
     found = []
     for scope in blocks:
         concrete = f"{scope}.{key}" if scope else key
         if _present(context.get(concrete)) or any(name.startswith(concrete + ".") for name in context):
             continue
-        for level, code, group, how in (
-            ("error", "cxx_required_key", judged, "this case builds the class that reads it"),
-            ("info", "cxx_required_key_unjudged", unjudged, "the scan cannot tell whether this case builds the class that reads it"),
-        ):
+        if first is not None:
+            instance = ".".join(scope.split(".")[:first + 1]) + "."
+            values = [v for k, v in context.items() if k.startswith(instance) or not k.startswith(family)]
+        else:
+            values = list(context.values())
+        selected = {str(_word(value)) for value in values}
+        groups: dict[str, list[Any]] = {"judged": [], "branch": [], "not_tied": []}
+        for read in reads:
+            names = ties(read)
+            if names is None:
+                groups["not_tied"].append(read)
+            elif names & selected:
+                groups["branch" if read.conditional else "judged"].append(read)
+        for name, group in groups.items():
             if not group:
                 continue
             sources = ", ".join(sorted({f"{read.file}:{read.line} ({read.function})" for read in group}))
-            found.append(diagnostic(
-                level, code,
-                f"{concrete} is read as {group[0].method}<{group[0].type or 'an unresolved type'}> with no default at "
+            lead = group[0]
+            head = (
+                f"{concrete} is read as {lead.method}<{lead.type or 'an unresolved type'}> with no default at "
                 f"{sources}, and the catalogue does not list it (omnidriver catalog --uncatalogued describes it); "
-                + (f"{how}, so set {concrete} in {document}"
-                   if level == "error" else f"{how}; if it does, set {concrete} in {document}")
-                + (f" (below {path[0]})" if path[0].startswith("$") else "") + ".",
-                source=document, field=concrete,
-            ))
+            )
+            tail = f" (below {path[0]})" if path[0].startswith("$") else ""
+            if name == "judged":
+                found.append(diagnostic(
+                    "error", "cxx_required_key",
+                    head + f"this case builds the class that reads it, so set {concrete} in {document}{tail}.",
+                    source=document, field=concrete,
+                ))
+            else:
+                found.append(diagnostic(
+                    "info", "cxx_required_key_unjudged",
+                    head + f"{reasons[name]}; if it applies, set {concrete} in {document}{tail}.",
+                    source=document, field=concrete,
+                ))
     return found
 
 

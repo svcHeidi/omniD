@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.openfoam import case_rules
 from omnidriver.openfoam.case_rules import rule_diagnostics
-from omnidriver.openfoam.dict_keys_scanner import DictRead, Scan, _guards, required_reads, scan_source
+from omnidriver.openfoam.dict_keys_scanner import DictRead, Scan, _conditional, _guards, required_reads, scan_source
 
 # cardiacFOAM src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C:
 # the registration and the constructor.
@@ -145,6 +145,46 @@ bool Foam::ionicModel::utilitiesMode() const
 }
 '''
 
+# cardiacFOAM src/electroModels/ecgModels/pseudoECGSolver/pseudoECGSolver.C: the registration
+# and the constructor, whose reads of the sampling block run only when the block is there.
+PSEUDO_ECG_SOLVER = '''defineTypeNameWithName(pseudoECGSolver, "pseudoECG");
+defineDebugSwitch(pseudoECGSolver, 0);
+addToRunTimeSelectionTable(ecgSolver, pseudoECGSolver, dictionary);
+
+
+pseudoECGSolver::pseudoECGSolver(const dictionary& dict)
+:
+    sigmaE_(dict.lookupOrDefault<scalar>("sigmaExtracellular", 0.0)),
+    reportedConductivitySource_(false),
+    leadVectorsCalculated_(false),
+    hasOwnSampling_(false),
+    startTime_(0.0),
+    endTime_(0.0),
+    deltaT_(0.0),
+    nextSampleTime_(0.0),
+    outputPtr_()
+{
+    if (const dictionary* samplingDictPtr = dict.findDict("sampling"))
+    {
+        hasOwnSampling_ = true;
+
+        const dictionary& samplingDict = *samplingDictPtr;
+        startTime_ = samplingDict.get<scalar>("start");
+        endTime_ = samplingDict.get<scalar>("end");
+        deltaT_ = samplingDict.get<scalar>("deltaT");
+
+        if (deltaT_ <= 0.0)
+        {
+            FatalErrorInFunction
+                << "pseudoECG sampling.deltaT must be positive."
+                << exit(FatalError);
+        }
+
+        nextSampleTime_ = startTime_;
+    }
+}
+'''
+
 ROOT = "param:Solver::Solver:electroProperties"
 
 
@@ -152,10 +192,10 @@ def _entry(path, **fields):
     return DictEntry(driver_path=path, description="d", **{"value_kind": "word", **fields})
 
 
-def _read(key, method="get", *, function="Solver::Solver", root=ROOT, selected_as=()):
+def _read(key, method="get", *, function="Solver::Solver", root=ROOT, selected_as=(), conditional=False):
     return DictRead(
         key=key, method=method, type="word", default=None, scope=(), root=root,
-        file="Solver.C", line=3, function=function, selected_as=selected_as,
+        file="Solver.C", line=3, function=function, selected_as=selected_as, conditional=conditional,
     )
 
 
@@ -253,3 +293,54 @@ def test_a_catalogued_required_key_the_cxx_no_longer_reads_is_not_demanded_of_a_
     retired = _entry("$S.retiredKey", required=True)
     assert [item.field for item in rule_diagnostics((retired,), {}, document="doc")] == ["retiredKey"]
     assert rule_diagnostics((retired,), {}, document="doc", mapping=mapping) == []
+
+
+def test_a_read_inside_an_if_is_conditional_and_a_read_in_the_constructor_body_is_not(tmp_path):
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "pseudoECGSolver.C").write_text(PSEUDO_ECG_SOLVER)
+    (root / "monodomainSolver.C").write_text(MONODOMAIN_SOLVER)
+    reads = {r.key: r for r in scan_source(root).reads if r.method in ("get", "lookupOrDefault")}
+    assert [reads[k].conditional for k in ("start", "end", "deltaT")] == [True, True, True]
+    assert not reads["sigmaExtracellular"].conditional
+    assert not reads["sealedHeartBoundary"].conditional
+
+
+def test_what_runs_only_under_a_condition_of_its_function_is_conditional():
+    def conditional(code, marker="X"):
+        return _conditional(code, code.index(marker), 0)
+
+    assert conditional("{ if (a) { X } }")
+    assert conditional("{ if (a) { } else { X } }")
+    assert conditional("{ if (a) { } else if (X) { } }")
+    assert conditional("{ if (a) X; }")
+    assert conditional("{ switch (a) { case 1: X } }")
+    assert conditional("{ for (;;) { X } }")
+    assert conditional("{ v = a ? X : 1; }")
+    assert conditional("{ ok = a && X; }")
+    assert not conditional("{ if (X) { } }")
+    assert not conditional("{ if (a) { } X; }")
+    assert not conditional("{ { X } }")
+
+
+def test_a_read_that_runs_only_under_a_branch_is_noted_never_judged_an_error(monkeypatch):
+    judge = _facts(monkeypatch, [
+        _read("sealedHeartBoundary", selected_as=(("myocardiumSolver", "monodomainSolver"),), conditional=True),
+    ])
+    (note,) = judge({"myocardiumSolver": "monodomainSolver"})
+    assert (note.level, note.code, note.field) == ("info", "cxx_required_key_unjudged", "sealedHeartBoundary")
+    assert "only under a condition" in note.message
+    assert judge({"myocardiumSolver": "monodomainSolver", "sealedHeartBoundary": "no"}) == []
+
+
+def test_a_block_builds_a_class_from_its_own_values_not_from_a_sibling_blocks(monkeypatch):
+    path = ("$S", "ecgDomains", "<name>", "nBeats")
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: (
+        {path: [_read("nBeats", selected_as=(("ecgSolver", "eikonalECG"),))]}, {}, {}, set(),
+    ))
+    judge = lambda context: [i.field for i in rule_diagnostics((), context, document="doc", mapping=object())]
+    both = {"ecgDomains.a.type": "eikonalECG", "ecgDomains.b.type": "pseudoECG"}
+    assert judge(both) == ["ecgDomains.a.nBeats"]
+    assert judge({"ecgDomains.b.type": "pseudoECG"}) == []
+    assert judge({**both, "ecgDomains.a.nBeats": 3}) == []
+    assert judge({"ecgDomains.a.type": "pseudoECG", "ecgDomains.b.type": "eikonalECG", "ecgDomains.b.nBeats": 3}) == []

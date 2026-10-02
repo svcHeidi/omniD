@@ -205,6 +205,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='scalar',
             allowed_bindings={"<axis_name>": None},
             applicable_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver")},
+            required=True,
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.<axis_name>.scalingMin',
@@ -214,6 +215,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             constraints=('Must be > 0.', 'Must be <= scalingMax.'),
             allowed_bindings={"<axis_name>": None},
             applicable_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver")},
+            required=True,
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.<axis_name>.scalingMax',
@@ -223,6 +225,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             constraints=('Must be > 0.', 'Must be >= scalingMin.'),
             allowed_bindings={"<axis_name>": None},
             applicable_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver")},
+            required=True,
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.<axis_name>.variables',
@@ -232,6 +235,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             constraints=('Must not be empty.',),
             allowed_bindings={"<axis_name>": None},
             applicable_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver")},
+            required=True,
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode',
@@ -1412,6 +1416,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             allowed_bindings={"<name>": None},
             unit='1/m',
             typical_value='140000',
+            required=True,
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.cm',
@@ -1422,6 +1427,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             allowed_bindings={"<name>": None},
             unit='F/m²',
             typical_value='0.01',
+            required=True,
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.vm1DRest',

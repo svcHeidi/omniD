@@ -1,5 +1,10 @@
 {
-  "description": "Reviewed facts the C++ scan cannot establish for cardiacFOAM's catalogue (omnidriver.openfoam.dict_keys_scanner.catalog_report). unseen_reads: catalogued paths whose read the scan cannot see, grouped by why. runtime_selection: the table each enum's menu comes from, and built_when: the selector values that build a class no table registers, where the code does not show it.",
+  "description": "Reviewed facts the C++ scan cannot establish for cardiacFOAM's catalogue (omnidriver.openfoam.dict_keys_scanner.catalog_report). unseen_reads: catalogued paths whose read the scan cannot see, grouped by why. caller_guarded: catalogued optional paths the C++ reads without a default in a function every caller reaches only after testing the key. runtime_selection: the table each enum's menu comes from, and built_when: the selector values that build a class no table registers, where the code does not show it.",
+  "caller_guarded": {
+    "singleCellSolver builds the model only when electroProperties.found(\"activeTensionModel\")": [
+      "$ELECTRO_MODEL_COEFFS.activeTensionModel"
+    ]
+  },
   "unseen_reads": {
     "read by upstream OpenFOAM's Foam::Time from system/controlDict, not by cardiacFOAM's source": [
       "endTime",

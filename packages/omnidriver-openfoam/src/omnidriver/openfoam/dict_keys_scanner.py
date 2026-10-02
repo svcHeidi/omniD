@@ -110,6 +110,9 @@ class DictRead:
     line: int
     function: str | None
     selected_as: tuple[tuple[str, str], ...] = ()
+    #: The read runs only under a branch, loop, ``?:`` or short-circuit of its
+    #: own function, so the case cannot be judged to need its key.
+    conditional: bool = False
 
     @property
     def subdict(self) -> bool:
@@ -858,7 +861,7 @@ def _reads_in(
                     if enum_scope is not None and enum_scope is not NOT_A_DICTIONARY:
                         scope, value_type = enum_scope, "word"
                         default = args[2] if method.endswith("OrDefault") and len(args) > 2 else None
-                        yield _read(key, method, value_type, default, scope, text, position, function, relative, selected_as)
+                        yield _read(key, method, value_type, default, scope, text, position, function, relative, selected_as, structure)
                         continue
                 if scope is NOT_A_DICTIONARY:
                     continue
@@ -870,14 +873,52 @@ def _reads_in(
             default = args[1] if len(args) > 1 and method.endswith(("OrDefault", "OrAdd")) else None
             if method == "lookup" and value_type is None:
                 value_type = _wrapping_type(structure, start, function.start)
-        yield _read(key, method, value_type, default, scope, text, position, function, relative, selected_as)
+        yield _read(key, method, value_type, default, scope, text, position, function, relative, selected_as, structure)
 
 
-def _read(key, method, value_type, default, scope, text, position, function, relative, selected_as) -> DictRead:
+_BRANCH_HEAD = re.compile(r"\b(?:if|while|for|switch)\s*$")
+
+
+def _conditional(structure: str, position: int, floor: int) -> bool:
+    """Whether the code at ``position`` runs only under a condition of its
+    function: inside the braces of an ``if``/``else``/loop/``switch``, in the
+    braceless body of one, or after a ``?``, ``&&`` or ``||`` of its
+    statement. An ``if`` condition is evaluated whenever the ``if`` is, so a
+    read there is not conditional, but the condition of an ``else if`` is."""
+    depth = 0
+    for index in range(position - 1, floor - 1, -1):
+        char = structure[index]
+        if char == "}":
+            depth += 1
+        elif char == "{":
+            if depth:
+                depth -= 1
+                continue
+            head = structure[floor:index].rstrip()
+            if head.endswith(")"):
+                open_at = _open_before(structure, floor + len(head) - 1, floor)
+                if open_at >= 0 and _BRANCH_HEAD.search(structure[floor:open_at]):
+                    return True
+            elif re.search(r"\b(?:else|do)$", head):
+                return True
+    start = max(structure.rfind(mark, floor, position) for mark in ";{}") + 1
+    start = max(start, floor)
+    prefix = structure[start:position]
+    if re.search(r"\?|&&|\|\||\belse\b|\bcase\b", prefix):
+        return True
+    for match in re.finditer(r"\b(?:if|while|for|switch)\s*\(", prefix):
+        close = _close(structure, start + match.end() - 1)
+        if close < 0 or close < position:
+            return True
+    return False
+
+
+def _read(key, method, value_type, default, scope, text, position, function, relative, selected_as, structure) -> DictRead:
     return DictRead(
         key=key, method=method, type=value_type, default=default,
         scope=scope.path if scope is not None else None, root=scope.root if scope is not None else None,
         file=relative, line=_line(text, position), function=function.name, selected_as=selected_as,
+        conditional=_conditional(structure, position, function.start),
     )
 
 
@@ -1090,7 +1131,8 @@ def required_reads(scan: Scan, entries: Iterable, *, document: str) -> dict[tupl
     ``$TOKEN`` first segment kept), each with the reads that require it. A
     read whose dictionary ``locate`` cannot place in ``document`` is not
     here: its path is unknown. A key the same function tests first
-    (``found``, ``isDict``) or reads only if present is optional."""
+    (``found``, ``isDict``) or reads only if present is optional; a read
+    under a branch is here with ``conditional`` set."""
     entries = tuple(entries)
     placed = locate(scan, entries, document=document)
     guarded = _guards(scan)
@@ -1148,6 +1190,15 @@ def unread_entries(scan: Scan, entries: Iterable, reviewed: dict) -> list:
     ]
 
 
+def _unconditional(read: DictRead, guarded: set[tuple]) -> bool:
+    """Whether the read fails whenever it runs and always runs: no default, no
+    test of its key in the same function, and no branch around it."""
+    return (
+        read.method in _REQUIRED_METHODS and not read.conditional
+        and (read.file, read.function, read.root, read.scope, read.key) not in guarded
+    )
+
+
 def _guards(scan: Scan) -> set[tuple]:
     """``(file, function, root, scope, key)`` of every key some read tests or
     reads only if present: a ``get`` of it in the same function is optional."""
@@ -1193,14 +1244,17 @@ def catalog_report(
 
     ``allowlist_path`` is the plugin's reviewed file: ``unseen_reads``
     (why -> catalogued paths whose read the scan cannot see: read outside
-    this source, or by a non-literal key) and ``runtime_selection`` (which
-    selection table each enum draws its menu from). A read counts against an
+    this source, or by a non-literal key), ``caller_guarded`` (why ->
+    optional paths read without a default where every caller tests the key
+    first) and ``runtime_selection`` (which selection table each enum draws
+    its menu from). A read counts against an
     entry's type or required flag only when it is anchored to it
     (``_anchored``), so a same-named key elsewhere never counts."""
     from .rtst_scanner import runtime_selection_report
 
     scan = cached_scan(source_root, cache_root=cache_root, force=force)
     reviewed = json.loads(Path(allowlist_path).read_text())
+    caller_guarded = {path for paths in reviewed.get("caller_guarded", {}).values() for path in paths}
     unseen = {path: why for why, paths in reviewed.get("unseen_reads", {}).items() for path in paths}
     entries = tuple(entries)
     catalogue = [(entry, tuple(path.split("."))) for entry, path in zip(entries, catalogued_paths(entries))]
@@ -1237,11 +1291,9 @@ def catalog_report(
                 + ", ".join(sorted({f"{read.default} at {read.file}:{read.line}" for read in reads})) + ")"
             )
         if (
-            not entry.required and not entry.required_when and reads
+            not entry.required and not entry.required_when and reads and entry.driver_path not in caller_guarded
             and all(
-                read.method in _REQUIRED_METHODS
-                and (read.file, read.function, read.root, read.scope, read.key) not in guarded
-                for read in reads
+                _unconditional(read, guarded) for read in reads
             )
         ):
             disagreements.append(
@@ -1268,10 +1320,7 @@ def catalog_report(
         if any(_path_matches(read_path, path) for path in listed) or (read.root, read_path, read.method) in seen:
             continue
         seen.add((read.root, read_path, read.method))
-        required = (
-            read.method in _REQUIRED_METHODS
-            and (read.file, read.function, read.root, read.scope, read.key) not in guarded
-        )
+        required = _unconditional(read, guarded)
         places = placed.get(read.root, ())
         driver_path = ".".join(next(iter(places)) + read_path) if len(places) == 1 else None
         uncatalogued.append({
