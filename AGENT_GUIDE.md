@@ -864,6 +864,13 @@ keyed by a digest of the `*.C`/`*.H` files and of the scanner itself: every
 plan recomputes the digest and rescans only when either changed, and an
 unreadable or altered cache file is rescanned.
 
+Preflight links the binary to this source: a user-compiled solver under
+`$FOAM_USER_APPBIN`, or a library under `$FOAM_USER_LIBBIN` that a
+`Make/files` below the source root builds, that is older than the sources it
+is built from gets a `stale_build` warning naming it, the number of newer
+source files and the newest of them. The plan and the scan read that source,
+so they describe a state the binary was not built from.
+
 The catalogues stay the source of truth, and a key that appears in or
 disappears from the C++ never fails a plan. A plan compares them with the scan:
 - a key, sub-dictionary, menu value or selection table the C++ reads and the

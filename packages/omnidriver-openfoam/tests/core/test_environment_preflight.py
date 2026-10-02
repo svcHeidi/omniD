@@ -162,6 +162,55 @@ def test_build_staleness_ignores_binaries_outside_user_appbin(tmp_path):
     assert diags == ()
 
 
+def test_a_stale_build_names_the_binary_and_the_newest_source_file(tmp_path):
+    import os
+
+    from omnidriver.openfoam.environment_preflight import _build_staleness_diagnostics
+
+    src_root = tmp_path / "src"
+    (src_root / "models").mkdir(parents=True)
+    for name, stamp in (("old.C", 1500), ("new.C", 3000), ("newer.H", 2000)):
+        (src_root / "models" / name).write_text("// code")
+        os.utime(src_root / "models" / name, (stamp, stamp))
+    appbin = tmp_path / "appbin"
+    appbin.mkdir()
+    _make_exec(appbin / "myFoam")
+    os.utime(appbin / "myFoam", (1000, 1000))
+
+    env = {"PATH": str(appbin), "FOAM_USER_APPBIN": str(appbin)}
+    (diagnostic,) = _build_staleness_diagnostics(_dag("myFoam"), env, src_root=src_root)
+    for fragment in ("myFoam", str(appbin / "myFoam"), "3 source file(s)", "models/new.C", "a state this binary was not built from"):
+        assert fragment in diagnostic.message, (fragment, diagnostic.message)
+
+
+def test_a_library_a_make_files_builds_is_stale_against_its_own_sources_only(tmp_path):
+    import os
+
+    from omnidriver.openfoam.environment_preflight import _build_staleness_diagnostics
+
+    src_root = tmp_path / "src"
+    for directory, stamp in (("electroModels", 3000), ("ionicModels", 500)):
+        (src_root / directory / "Make").mkdir(parents=True)
+        (src_root / directory / "Make" / "files").write_text(
+            f"model.C\n\nLIB = $(FOAM_USER_LIBBIN)/lib{directory}\n"
+        )
+        (src_root / directory / "model.C").write_text("// code")
+        os.utime(src_root / directory / "model.C", (stamp, stamp))
+    appbin, libbin = tmp_path / "appbin", tmp_path / "lib"
+    appbin.mkdir()
+    libbin.mkdir()
+    _make_exec(appbin / "myFoam")
+    os.utime(appbin / "myFoam", (4000, 4000))
+    for directory in ("electroModels", "ionicModels"):
+        (libbin / f"lib{directory}.dylib").write_text("lib")
+        os.utime(libbin / f"lib{directory}.dylib", (1000, 1000))
+
+    env = {"PATH": str(appbin), "FOAM_USER_APPBIN": str(appbin), "FOAM_USER_LIBBIN": str(libbin)}
+    (diagnostic,) = _build_staleness_diagnostics(_dag("myFoam"), env, src_root=src_root)
+    assert (diagnostic.code, diagnostic.field) == ("stale_build", "libelectroModels")
+    assert "electroModels/model.C" in diagnostic.message
+
+
 def test_build_staleness_no_src_root_is_silent(tmp_path):
     from omnidriver.openfoam.environment_preflight import (
         _build_staleness_diagnostics,

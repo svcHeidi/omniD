@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import shutil
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -86,17 +88,44 @@ def _supplied_src_root(driver_context: Any | None) -> Path | None:
     return mapping.source_root(os.environ) if mapping is not None else None
 
 
-def _newest_source_mtime(src_root: Path) -> float | None:
-    """Return the mtime of the most recently modified C++/CUDA source under
-    ``src_root``, or ``None`` if there are no source files."""
-    newest: float | None = None
-    for dirpath, _dirnames, filenames in os.walk(src_root):
+#: A wmake library rule: the library a ``Make/files`` builds from the sources
+#: beside its ``Make`` directory.
+_LIB_RULE = re.compile(r"^\s*LIB\s*=\s*\$\(FOAM_USER_LIBBIN\)/(\S+)", re.MULTILINE)
+
+
+def _sources(directory: Path) -> list[tuple[float, Path]]:
+    """Every C++/CUDA source under ``directory`` with its mtime; wmake's own
+    ``Make`` and ``lnInclude`` are not source."""
+    found: list[tuple[float, Path]] = []
+    for dirpath, dirnames, filenames in os.walk(directory):
+        dirnames[:] = [name for name in dirnames if name not in {"Make", "lnInclude"}]
         for name in filenames:
             if os.path.splitext(name)[1] in _SOURCE_SUFFIXES:
-                mtime = os.path.getmtime(os.path.join(dirpath, name))
-                if newest is None or mtime > newest:
-                    newest = mtime
-    return newest
+                path = Path(dirpath, name)
+                found.append((os.path.getmtime(path), path))
+    return found
+
+
+def _stale_build(name: str, built: Path, sources: list[tuple[float, Path]], root: Path) -> StrictDiagnostic | None:
+    """A warning naming ``built`` when sources under ``root`` are newer than it."""
+    newer = [(mtime, path) for mtime, path in sources if mtime > os.path.getmtime(built)]
+    if not newer:
+        return None
+    newest_mtime, newest = max(newer)
+
+    def when(stamp: float) -> str:
+        return datetime.fromtimestamp(stamp).strftime("%Y-%m-%d %H:%M:%S")
+
+    return diagnostic(
+        "warning",
+        "stale_build",
+        f"{name} ({built}, built {when(os.path.getmtime(built))}) is older than {len(newer)} source "
+        f"file(s) under {root}, the newest {newest.relative_to(root)} ({when(newest_mtime)}): the plan and "
+        "the scan read that source, so they describe a state this binary was not built from; "
+        "rebuild (e.g. wmake / wmake libso) before running.",
+        source="environment",
+        field=name,
+    )
 
 
 def _build_staleness_diagnostics(
@@ -106,10 +135,11 @@ def _build_staleness_diagnostics(
     src_root: Path | str | None,
     driver_context: Any | None = None,
 ) -> tuple[StrictDiagnostic, ...]:
-    """Warn (never block) when a user-compiled utility under
-    ``$FOAM_USER_APPBIN`` is older than the newest source under ``src_root``
-    -- the classic stale-``libso`` footgun; core OpenFOAM apps are never
-    flagged."""
+    """Warn (never block) by name when a user-compiled utility under
+    ``$FOAM_USER_APPBIN``, or a library under ``$FOAM_USER_LIBBIN`` that a
+    ``Make/files`` under ``src_root`` builds, is older than the sources it
+    is built from -- the classic stale-``libso`` footgun; core OpenFOAM apps
+    are never flagged."""
     if src_root is None:
         return ()
     src_root = Path(src_root)
@@ -138,22 +168,19 @@ def _build_staleness_diagnostics(
     if not candidates:
         return ()
 
-    newest_source = _newest_source_mtime(src_root)
-    if newest_source is None:
-        return ()
-
-    diagnostics: list[StrictDiagnostic] = []
-    for executable, resolved in candidates:
-        if os.path.getmtime(resolved) < newest_source:
-            diagnostics.append(diagnostic(
-                "warning",
-                "stale_build",
-                f"{executable} is older than the newest source under {src_root}; "
-                "rebuild (e.g. wmake / wmake libso) before running.",
-                source="environment",
-                field=executable,
-            ))
-    return tuple(diagnostics)
+    sources = _sources(src_root)
+    built = [(executable, Path(resolved), sources) for executable, resolved in candidates]
+    libbin = checked_env.get("FOAM_USER_LIBBIN")
+    if libbin:
+        for make_files in sorted(src_root.rglob("Make/files")):
+            for lib in _LIB_RULE.findall(make_files.read_text(errors="replace")):
+                path = next((p for p in Path(libbin).glob(f"{lib}.*") if p.suffix in {".so", ".dylib"}), None)
+                if path is not None:
+                    built.append((lib, path, _sources(make_files.parent.parent)))
+    return tuple(
+        found for name, path, own in built
+        if (found := _stale_build(name, path, own, src_root)) is not None
+    )
 
 
 #: ``WM_MPLIB`` (set by OpenFOAM's bashrc) -> words ``mpirun --version``
