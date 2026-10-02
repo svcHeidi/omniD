@@ -5,17 +5,18 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
+from ..contracts.catalogue_paths import PLACEHOLDER
+
 DOCUMENTATION_ROLE = "case.documentation"
 
 #: The key of a document-level entry: every key of its document.
 ANY_KEY = "<any>"
 
 _INDEX = re.escape("[Int]")
-_NAMED_SEGMENT = re.compile(r"<[A-Za-z_][A-Za-z0-9_]*>")
 
 
 def _segment_pattern(segment: str) -> str:
-    if _NAMED_SEGMENT.fullmatch(segment):
+    if PLACEHOLDER.fullmatch(segment):
         return r"[^.]+"
     return re.escape(segment).replace(_INDEX, r"\[\d+\]")
 

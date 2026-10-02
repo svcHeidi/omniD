@@ -8,10 +8,10 @@ from typing import Any
 
 from foamlib import Dimensioned, FoamFile
 
+from .literals import BOOLEAN_WORDS
+
 ScopeArg = str | list[str] | tuple[str, ...] | None
 
-_TRUE_TOKENS = {"yes", "true", "on"}
-_FALSE_TOKENS = {"no", "false", "off"}
 
 
 def _normalize_scope(scope: ScopeArg) -> tuple[str, ...]:
@@ -47,10 +47,8 @@ def coerce_value(value: Any) -> Any:
 
     token = value.strip()
     lowered = token.lower()
-    if lowered in _TRUE_TOKENS:
-        return True
-    if lowered in _FALSE_TOKENS:
-        return False
+    if lowered in BOOLEAN_WORDS:
+        return BOOLEAN_WORDS[lowered]
 
     try:
         return int(token)

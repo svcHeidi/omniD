@@ -14,7 +14,6 @@ module's:
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,7 +22,7 @@ from typing import Any, Iterable
 from omnidriver.core.contracts.dictionary import validate_value_shape
 from omnidriver.core.runtime.record_surface import ANY_KEY
 
-from .dict_keys_scanner import cxx_value_kind
+from .dict_keys_scanner import cxx_value_kind, supplied_scan
 
 from .mutators import check_dictionary_word_is_safe
 
@@ -82,14 +81,6 @@ def listed_entry(document: str, key: str, entry: Any) -> dict[str, Any]:
     return {**listing, **{name: value for name, value in extras.items() if value}}
 
 
-def _supplied_scan(mapping: Any):
-    """The scan of the plugin's supplied C++ source, or ``None``."""
-    from .dict_keys_scanner import cached_scan, scan_cache_root
-
-    root = mapping.source_root(os.environ) if mapping is not None else None
-    return cached_scan(root, cache_root=scan_cache_root()) if root is not None and root.is_dir() else None
-
-
 def scanned_key(
     document: str, catalog_path: "tuple[str, ...]", value: Any, *, mapping: Any, entries: Iterable[Any],
 ) -> "tuple[str, bool]":
@@ -103,7 +94,7 @@ def scanned_key(
     type."""
     from .dict_keys_scanner import _segment_matches, locate, value_kind_of
 
-    scan = _supplied_scan(mapping)
+    scan = supplied_scan(mapping)
     if scan is None:
         variable = mapping.source_root_variable if mapping is not None else "the source root"
         raise KeyError(f"the C++ source is not supplied ({variable}), so no uncatalogued key can be checked")
@@ -221,7 +212,7 @@ def make_validator(
             entry, binding = match
             for placeholder, bound_value in binding.items():
                 check_binding(entry, placeholder, bound_value)
-            scan = _supplied_scan(mapping())
+            scan = supplied_scan(mapping())
             kind = (scan is not None and cxx_value_kind(scan, entry)) or entry.value_kind
             reasons = validate_value_shape(kind, value)
             if reasons:

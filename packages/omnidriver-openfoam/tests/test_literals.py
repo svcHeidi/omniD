@@ -55,3 +55,17 @@ def test_every_container_kind_has_a_formatter_and_boolean_has_none():
         "dimensioned_scalar", "dimensioned_tensor", "vector3", "word_list", "scalar_list",
         "integer_list", "vector3_list",
     }
+
+
+def test_switch_reads_exactly_the_spellings_switch_c_parses():
+    from omnidriver.openfoam.literals import BOOLEAN_WORDS, switch_value
+
+    for word in ("true", "yes", "on", "any", "t", "y", "1"):
+        assert switch_value(word) is True, word
+    for word in ("false", "no", "off", "none", "f", "n", "0"):
+        assert switch_value(word) is False, word
+    for word in ("True", "YES", "maybe", "", "2"):
+        assert switch_value(word) is None, word
+    assert switch_value('"yes"') is True and switch_value(0) is False and switch_value(3) is True
+    assert switch_value(True) is True and switch_value(None) is None
+    assert set(BOOLEAN_WORDS) == {"true", "false", "yes", "no", "on", "off"}

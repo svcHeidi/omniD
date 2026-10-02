@@ -15,7 +15,6 @@ catalogue's, when it registers none). Value types are the C++'s to judge.
 from __future__ import annotations
 
 import json
-import os
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -24,10 +23,7 @@ from typing import Any
 from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
-_SWITCH = {
-    "true": True, "yes": True, "on": True, "y": True, "t": True,
-    "false": False, "no": False, "off": False, "n": False, "f": False,
-}
+from .literals import switch_value
 
 
 def flatten(node: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
@@ -70,7 +66,7 @@ def _matches(actual: Any, expected: str | bool | tuple) -> bool:
     options = expected if isinstance(expected, tuple) else (expected,)
     actual = _word(actual)
     if isinstance(actual, bool):
-        return any(_SWITCH.get(str(_word(option)).lower()) is actual for option in options)
+        return any(switch_value(option) is actual for option in options)
     return actual in tuple(_word(option) for option in options)
 
 
@@ -154,14 +150,11 @@ def _scan_facts(mapping: Any, entries: tuple[Any, ...], document: str):
     requires that ``entries`` lack, the classes that build them, and the names
     its selection tables register for each enum. Nothing when the source is
     not supplied."""
-    from .dict_keys_scanner import (
-        built_when, cached_scan, registered_menus, required_reads, scan_cache_root, unread_entries,
-    )
+    from .dict_keys_scanner import built_when, registered_menus, required_reads, supplied_scan, unread_entries
 
-    root = mapping.source_root(os.environ) if mapping is not None else None
-    if root is None or not root.is_dir():
+    scan = supplied_scan(mapping)
+    if scan is None:
         return {}, {}, {}, set()
-    scan = cached_scan(root, cache_root=scan_cache_root())
     reviewed = json.loads(Path(mapping.allowlist_path).read_text())
     return (
         required_reads(scan, entries, document=document.rsplit("/", 1)[-1]),

@@ -8,9 +8,8 @@ import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 
+from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
-
-_WILDCARD = re.compile(r"<[^>]+>")
 
 # OpenFOAM's runtime-selection convention: a model selected by <key> reads its
 # settings from a sibling <modelName>Coeffs sub-dictionary, which belongs to
@@ -45,7 +44,7 @@ def _matches(trail: tuple[str, ...], known: set[tuple[str, ...]]) -> bool:
         if len(candidate) != len(trail):
             continue
         if all(
-            _WILDCARD.fullmatch(c) or c == t
+            PLACEHOLDER.fullmatch(c) or c == t
             for c, t in zip(candidate, trail)
         ):
             return True

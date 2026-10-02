@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES
 from omnidriver.core.planning_types import diagnostic
+from omnidriver.openfoam.literals import switch_value
 
 if TYPE_CHECKING:
     from omnidriver.core.planning_types import StrictDiagnostic
@@ -517,12 +518,7 @@ def _as_switch_bool(value: Any) -> bool:
     (``manufacturedPseudoECGVerifier.C:420``,
     ``cfg.lookupOrDefault<Switch>("anisotropic", false)``).
     """
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return False
-    text = str(value).strip().strip('"').lower()
-    return text in {"yes", "true", "on", "y", "t", "1"}
+    return bool(switch_value(value))
 
 
 def _evaluate_ecg_anisotropic_consistency(context: dict[str, Any]) -> list["StrictDiagnostic"]:

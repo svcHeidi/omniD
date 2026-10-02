@@ -28,7 +28,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Iterator
 
-from omnidriver.core.contracts.catalogue_paths import catalogued_paths, slot_key
+from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, catalogued_paths, slot_key
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR
 
 from . import rtst_scanner
@@ -203,6 +203,13 @@ def scan_cache_root() -> Path | None:
     supplied = os.environ.get(SCRATCH_ENV_VAR)
     return Path(supplied) if supplied else None
 
+
+
+def supplied_scan(mapping) -> "Scan | None":
+    """The scan of the plugin's supplied C++ source (``mapping.source_root``),
+    or ``None`` when none is supplied."""
+    root = mapping.source_root(os.environ) if mapping is not None else None
+    return cached_scan(root, cache_root=scan_cache_root()) if root is not None and root.is_dir() else None
 
 
 def cached_scan(source_root: Path, *, cache_root: Path | None, force: bool = False) -> Scan:
@@ -1011,11 +1018,13 @@ def value_kind_of(cxx_type: str | None) -> str | None:
     return sorted(kinds)[0]
 
 
-_PLACEHOLDER = re.compile(r"<[^>]+>|\[Int\]")
+def _is_placeholder(segment: str) -> bool:
+    """A ``<name>`` instance label or a list index in a catalogue path."""
+    return PLACEHOLDER.fullmatch(segment) is not None or segment == "[Int]"
 
 
 def _segment_matches(read: str, listed: str) -> bool:
-    return read == listed or read == ANY_SEGMENT or listed == ANY_SEGMENT or bool(_PLACEHOLDER.fullmatch(listed))
+    return read == listed or read == ANY_SEGMENT or listed == ANY_SEGMENT or _is_placeholder(listed)
 
 
 def _path_matches(read_path: tuple[str, ...], catalogue: tuple[str, ...]) -> bool:
@@ -1032,7 +1041,7 @@ def _anchored(read: DictRead, catalogue: tuple[str, ...], entry) -> bool:
     same-named key elsewhere: it agrees beyond the final name, or it is read
     in a file the entry cites."""
     pairs = list(zip(reversed(read.scope + (read.key,)), reversed(catalogue)))[1:]
-    return any(r == listed and not _PLACEHOLDER.fullmatch(listed) for r, listed in pairs) or any(
+    return any(r == listed and not _is_placeholder(listed) for r, listed in pairs) or any(
         ref == read.file or ref.endswith("/" + read.file) for ref in entry.source_refs
     )
 
@@ -1185,7 +1194,7 @@ def unread_entries(scan: Scan, entries: Iterable, reviewed: dict) -> list:
     read_keys = {read.key for read in scan.reads if read.key is not None}
     return [
         entry for entry in entries
-        if not _PLACEHOLDER.fullmatch(slot_key(entry.driver_path).split(".")[-1])
+        if not _is_placeholder(slot_key(entry.driver_path).split(".")[-1])
         and entry.driver_path not in unseen and slot_key(entry.driver_path).split(".")[-1] not in read_keys
     ]
 
@@ -1272,7 +1281,7 @@ def catalog_report(
         for entry in gone
     ]
     for entry, path in catalogue:
-        if _PLACEHOLDER.fullmatch(path[-1]) or entry.driver_path in unseen or entry in gone:
+        if _is_placeholder(path[-1]) or entry.driver_path in unseen or entry in gone:
             continue
         reads = [
             read for read in scan.reads

@@ -299,15 +299,7 @@ class CardiacFoamPlugin:
 
         if electro_path.exists():
             try:
-                solver = detect_myocardium_solver_name(electro_path)
-                if solver not in {"singleCellSolver", "monodomainSolver", "bidomainSolver", "eikonalSolver"}:
-                    diagnostics.append(_diagnostic(
-                        "error",
-                        "unknown_solver",
-                        f"No strict artifact handler is registered for myocardiumSolver {solver!r}.",
-                        source=str(electro_path),
-                        field="myocardiumSolver",
-                    ))
+                detect_myocardium_solver_name(electro_path)
             except KeyError as exc:
                 diagnostics.append(_diagnostic("error", "missing_solver", str(exc), source=str(electro_path)))
 

@@ -12,6 +12,32 @@ from typing import Any
 
 _VECTOR3_RE = re.compile(r"^\(\s*(\S+)\s+(\S+)\s+(\S+)\s*\)$")
 
+#: Every spelling ``Foam::Switch::parse`` (OpenFOAM v2412, ``Switch.C``) reads,
+#: case-sensitively: ``none`` is false and ``any`` is true.
+SWITCH_VALUES: dict[str, bool] = {
+    "false": False, "no": False, "off": False, "none": False, "f": False, "n": False, "0": False,
+    "true": True, "yes": True, "on": True, "any": True, "t": True, "y": True, "1": True,
+}
+
+#: The spellings of a Switch that cannot be anything else in untyped text,
+#: where ``t``, ``n``, ``none`` and ``any`` are ordinary words.
+BOOLEAN_WORDS: dict[str, bool] = {
+    word: SWITCH_VALUES[word] for word in ("true", "false", "yes", "no", "on", "off")
+}
+
+
+def switch_value(value: Any) -> bool | None:
+    """The bool a ``Switch`` reads ``value`` as: a bool, a nonzero label, or a
+    word (possibly quoted) ``Switch.C`` accepts. ``None`` for anything else."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if value is None:
+        return None
+    return SWITCH_VALUES.get(str(value).strip().strip("\"'"))
+
+
 def _parse_number(token: str, *, what: str, original: str) -> float:
     try:
         return float(token)
@@ -140,10 +166,8 @@ def _as_comparable_text(text: str):
     stripped = text.strip().rstrip(";").strip()
     if not stripped:
         return None
-    if stripped in {"true", "yes", "on"}:
-        return True
-    if stripped in {"false", "no", "off"}:
-        return False
+    if stripped in BOOLEAN_WORDS:
+        return BOOLEAN_WORDS[stripped]
     if stripped.startswith("(") and stripped.endswith(")"):
         parts = stripped[1:-1].split()
         try:
