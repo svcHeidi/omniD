@@ -3,6 +3,7 @@ committed verbatim as a fixture: it plans clean, and a study that breaks a rule 
 with the rule's own message, before anything executes."""
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -47,3 +48,17 @@ def test_a_study_that_breaks_a_rule_is_refused_before_it_runs(study, fragments, 
     assert "tutorial record 'singleCell': the resolved case breaks" in message
     for fragment in fragments:
         assert fragment in message, (fragment, message)
+
+
+def test_a_misspelled_key_is_a_warning_and_never_fails_the_plan(tmp_path):
+    cases_root = tmp_path / "tutorials"
+    shutil.copytree(TUTORIALS, cases_root)
+    ep = cases_root / "electrophysiologyProtocols" / "singleCell" / "constant" / "electroProperties"
+    ep.write_text(ep.read_text().replace("writeFrequency  0.001;", "writeFrequenc  0.001;"))
+    report = strict_plan(
+        "singleCell", overrides={"cases_root": str(cases_root)},
+        scratch_root=tmp_path / "scratch", driver_context=load_plugin_context("cardiacfoam"),
+    )
+    assert report.status == "ok"
+    warnings = [d for d in report.plugin_diagnostics if d.code == "uncatalogued_case_dict_key"]
+    assert [(d.field, d.level) for d in warnings] == [("writeFrequenc", "warning")]
