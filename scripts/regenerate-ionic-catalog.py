@@ -1,31 +1,4 @@
 #!/usr/bin/env python3
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Script
-#     regenerate-ionic-catalog
-#
-# Description
-#     Regenerates state and algebraic properties in the ionic catalog.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
-
 """Regenerate `states`, `algebraic`, `constants` tuples in ionic_model_catalog.py
 from each model's `*_Names.H` header. All other catalogue fields (descriptions,
 aliases, recommended_*, model_type, ...) are preserved untouched.
@@ -52,9 +25,8 @@ from omnidriver.cardiacfoam.names_parser import (
     parse_names_header,
 )
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
-from omnidriver.core.specs.paths import repo_root_default
 
-REPO_ROOT = repo_root_default()
+REPO_ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = (
     REPO_ROOT
     / "packages" / "omnidriver-cardiacfoam" / "src" / "omnidriver" / "cardiacfoam"

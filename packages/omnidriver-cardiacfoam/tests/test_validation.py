@@ -1,30 +1,3 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_validation
-#
-# Description
-#     Tests validation logic and specification contracts.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
-
 """Tests for the catalogue relations (``case_rules``) and the cross-field rules over a flat context.
 
 ``_filled_run`` supplies every required ``$ELECTRO_MODEL_COEFFS.*`` leaf so a test isolates validator behaviour."""
@@ -910,33 +883,6 @@ def test_dynamic_required_field_flags_missing_value_scoped_to_its_own_network():
         f"eikonalSolver1D: {[e.message for e in errors]}"
     )
 
-
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_validation_fixtures
-#
-# Description
-#     Tests validation fixtures logic and specification contracts.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
 
 """Cross-fixture regression guard for validate_context.
 

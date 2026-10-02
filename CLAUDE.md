@@ -65,10 +65,7 @@ VIRTUAL_ENV=/tmp/wheelenv uv pip install -q "/tmp/wheeltest/omnidriver-*.whl[pos
 **No pytest test runs a solver.** The only tests that meet an OpenFOAM install
 are six probes of omnidriver's own dictionary reader against `foamDictionary` and
 `foamEtcFile`, which run when a bashrc is sourced and say nothing of any solver.
-Thirteen older files read real tutorials when this checkout sits inside the
-native repository (`skip_without_monorepo`) and skip otherwise; they are not
-part of any gate. The
-solvers are in development: their authors add required keys, rename models and
+The solvers are in development: their authors add required keys, rename models and
 rebuild on purpose, and a test pinned to their current state would fail for
 doing so. Pytest tests omnidriver itself: unit tests, the toy conformance
 target, and the scanner on verbatim snippets of the native C++ committed as
@@ -121,7 +118,7 @@ A skip here hides exactly what the guard exists to find.
 |---|---|
 | core imports nothing cardiac | `scripts/check-import-boundaries.py` (empty waiver list) |
 | core declares no solver vocabulary | `test_core_declares_no_phase_vocabulary`, `test_core_exports_no_phase_vocabulary` |
-| core never invents a filesystem root | `test_core_never_invents_a_filesystem_root`; for the scratch root, `test_the_scratch_resolver_invents_no_default` and `test_nothing_rebuilds_a_dot_omnidriver_scratch_default` |
+| core never invents a filesystem root | for the scratch root, `test_the_scratch_resolver_invents_no_default` and `test_nothing_rebuilds_a_dot_omnidriver_scratch_default` |
 | core threads its `DriverContext` through the public edge | `test_core_threads_its_context_through_the_public_edge` |
 | every plugin contract member is optional: `provider_stack.MEMBERS` gives each its composition and its answer when no provider implements it, and an operation that needs one refuses by name; a provider's public callable that names no member is refused | `test_plugin_contract.py` |
 | no fallback reaches cardiac code: the stack's only fallbacks are the member table's absent answers, which take no argument and sit in a module importing nothing outside core | `test_no_fallback_reaches_cardiac_code_at_all` |
@@ -161,15 +158,15 @@ stages.
 
 **`from conftest import X` is unreliable.** Both packages' `tests` directories
 are reachable when the whole repo is collected, and **core's conftest wins**.
-The existing `from conftest import monorepo_root` in the cardiac tree only
-works because core's conftest happens to define the same name. For a
-package-specific helper, use a uniquely named module inside an importable
-package — see `packages/omnidriver-cardiacfoam/tests/regression_equivalence/tutorials_tree.py`.
+A `from conftest import X` in the cardiac tree only works because core's
+conftest happens to define the same name
+(`test_conftest_imports_are_unambiguous` enforces it). For a package-specific
+helper, use a uniquely named module inside an importable package.
 
 **A test module that calls a raising function at import time cannot be
 skipped.** It errors during collection, before any marker applies. Use
-`conftest`'s `repo_root` / `skip_without_repo` (non-raising) rather than
-`repo_root_default()` at module scope.
+`conftest`'s `repo_root` / `skip_without_repo` (non-raising) rather than a
+lookup that raises at module scope.
 
 **"No Python imports" does not mean unused.** `gmsh` is declared for the
 **binary** its wheel installs, which cardiac tutorials invoke as a workflow

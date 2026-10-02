@@ -13,11 +13,9 @@ Why this is not covered by the test suite: an editable install leaves the
 repository on the path, so a module that reads repo-relative state at import
 time still works and the defect stays invisible.
 
-Deliberately does NOT run the core pytest suite. Eight of its modules call
-``repo_root_default()`` at import time and so error during collection outside a
-checkout; they test repository tooling (documentation contracts, the CLI),
-not the shipped library. Running them here would fail
-for the wrong reason. Making them skip cleanly is worth doing separately.
+Deliberately does NOT run the core pytest suite: some of its modules test
+repository tooling and need a checkout, so running them here would fail for
+the wrong reason.
 """
 from __future__ import annotations
 

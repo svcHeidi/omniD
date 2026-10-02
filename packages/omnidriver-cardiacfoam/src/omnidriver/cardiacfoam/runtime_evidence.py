@@ -1,35 +1,4 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     runtime_evidence
-#
-# Description
-#     Where cardiacFoam's runtime evidence lives: which steps actually solve,
-#     where their logs land, what extra inputs belong in a provenance
-#     snapshot, and how to read values out of solver-specific artifacts.
-#     ``solve_step_commands``/``telemetry_source_globs``/
-#     ``artifact_value_reader`` stay declaration-only for later use;
-#     ``extra_provenance_paths`` is already consumed by the provenance
-#     snapshot.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""Where cardiacFoam's runtime evidence lives: solve steps, log locations, extra provenance inputs and artifact readers."""
 
 from __future__ import annotations
 

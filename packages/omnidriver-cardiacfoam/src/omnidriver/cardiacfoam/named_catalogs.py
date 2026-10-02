@@ -1,35 +1,4 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     named_catalogs
-#
-# Description
-#     cardiacFoam's own named catalogs (ionic models, active-tension models),
-#     exposed through the plugin's ``get_named_catalogs()`` hook and namespaced
-#     generically under introspection's ``plugin_catalogs`` key -- core no
-#     longer hardcodes the field names ``ionic_model_catalog``/
-#     ``active_tension_catalog``. Kept as a plain function, not a method, so
-#     both the plugin's real hook and the v1-compatibility fallback in
-#     ``core/compatibility.py`` share one authored shape.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""cardiacFoam's named catalogs (ionic and active-tension models), exposed through ``get_named_catalogs()``."""
 
 from __future__ import annotations
 

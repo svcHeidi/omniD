@@ -1,30 +1,3 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_utility_catalog_export
-#
-# Description
-#     Tests utility catalog export logic and manifest coverage contracts.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
-
 """The utility-catalog exporter: every ``UtilityManifest`` field, including
 ``positional_args``, ``flags`` and ``produces``, reaches the JSON a caller uses
 to build a valid utility invocation.
@@ -39,11 +12,10 @@ import sys
 from pathlib import Path
 
 from omnidriver.cardiacfoam.command_authorization import utility_manifests
-from omnidriver.core.specs.paths import repo_root_default
 
 UTILITY_CATALOG = utility_manifests()
 
-REPO = repo_root_default()
+REPO = Path(__file__).resolve().parents[3]
 SCRIPT = REPO / "scripts" / "export-utility-catalog.py"
 
 

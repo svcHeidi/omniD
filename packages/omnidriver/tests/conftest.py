@@ -11,17 +11,12 @@ def _toy_plugins_are_importable(monkeypatch):
     ))
 
 
-from omnidriver.core.specs.paths import repo_root_default
-
-
 def _repo_root_or_none() -> Path | None:
     """The repository root, or ``None`` outside a checkout (e.g. an installed wheel)."""
-    # A module that calls repo_root_default() at import time would turn "no
-    # checkout" into an uncatchable collection error; see check-wheel-artifact.py.
-    try:
-        return repo_root_default()
-    except RuntimeError:
-        return None
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "packages").is_dir() and (parent / "ARCHITECTURE.md").is_file():
+            return parent
+    return None
 
 
 #: The repository root, resolved once at collection time; ``None`` outside a checkout.
@@ -31,38 +26,13 @@ repo_root: Path | None = _repo_root_or_none()
 #: without a checkout; never read, since ``skip_without_repo`` skips first.
 NO_REPO_ROOT = Path("/nonexistent-no-repository-checkout")
 
-#: Apply to any test module that reads files out of the repository itself --
-#: schemas, scripts, ARCHITECTURE.md, the tutorials tree. Distinct from
-#: ``skip_without_monorepo``, which asks for the cardiacFoam tree specifically.
+#: Apply to any test module that reads files out of the omnidriver repository
+#: itself -- schemas, scripts, ARCHITECTURE.md.
 skip_without_repo = pytest.mark.skipif(
     repo_root is None,
     reason=(
         "Requires a repository checkout (this module reads files from it). "
         "Not available when running against an installed distribution."
-    ),
-)
-
-def _cardiacfoam_monorepo_root() -> Path | None:
-    """The cardiacFoam monorepo root, if this checkout sits inside one."""
-    # Local copy, not an import of omnidriver-cardiacfoam: core tests must
-    # not import cardiac vocabulary (scripts/check-import-boundaries.py).
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "tutorials").exists() and (parent / "applications").exists():
-            return parent
-    return None
-
-
-#: The monorepo root resolved once at collection time.  ``None`` in standalone.
-monorepo_root: Path | None = _cardiacfoam_monorepo_root()
-
-#: Apply this decorator to any test class/function that reads real tutorial
-#: case directories from the monorepo ``tutorials/`` tree.  The test is
-#: automatically skipped in standalone clones and CI environments.
-skip_without_monorepo = pytest.mark.skipif(
-    monorepo_root is None,
-    reason=(
-        "Requires the full cardiacFoam monorepo tree (tutorials/ + applications/). "
-        "Clone the full repository or run with --cases-root to enable this test."
     ),
 )
 

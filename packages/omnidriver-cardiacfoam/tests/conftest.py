@@ -1,30 +1,3 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     conftest
-#
-# Description
-#     Configures shared pytest fixtures and runtime dependencies.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
-
 import re
 import pytest
 from pathlib import Path
@@ -34,26 +7,6 @@ def _environment_preflight_is_stubbed(monkeypatch):
     from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
     monkeypatch.setattr(OpenFOAMEnvironmentPlugin, "get_environment_diagnostics", lambda *args, **kwargs: ())
-
-
-def _cardiacfoam_monorepo_root() -> Path | None:
-    """First ancestor holding ``tutorials/`` and ``applications/`` (checkout inside the native repo)."""
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "tutorials").exists() and (parent / "applications").exists():
-            return parent
-    return None
-
-
-monorepo_root: Path | None = _cardiacfoam_monorepo_root()
-
-#: Skips a test that reads real tutorial cases from the monorepo ``tutorials/`` tree.
-skip_without_monorepo = pytest.mark.skipif(
-    monorepo_root is None,
-    reason=(
-        "Requires the full cardiacFoam monorepo tree (tutorials/ + applications/). "
-        "Clone the full repository or run with --cases-root to enable this test."
-    ),
-)
 
 
 def _foam_tokens(value: str) -> list[str]:

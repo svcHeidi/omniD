@@ -1,33 +1,4 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     case_introspection
-#
-# Description
-#     Cardiac-specific case-model resolution and the field names each
-#     resolved model exposes for sampling. Reads a case's
-#     constant/electroProperties and unions the fixed solver fields with the
-#     resolved ionic / active-tension catalog entries. Owned by the plugin so
-#     core (capability_manifest.py) holds no solver knowledge.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
+"""Case-model resolution and the sampling field names each resolved ionic and active-tension model exposes."""
 
 from __future__ import annotations
 

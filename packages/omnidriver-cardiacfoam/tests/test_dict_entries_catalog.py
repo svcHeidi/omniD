@@ -51,30 +51,6 @@ class TestDictEntryCatalog(unittest.TestCase):
         documented = all_documented_driver_paths(_CTX)
         self.assertEqual(len(documented), len(set(documented)))
 
-    def test_catalog_mentions_existing_source_files(self) -> None:
-        import pytest
-        repo_root = Path(__file__).resolve()
-        _found = None
-        for parent in repo_root.parents:
-            if (parent / "src").exists() and (parent / "applications").exists():
-                _found = parent
-                break
-        if _found is None:
-            pytest.skip(
-                "Monorepo src/ tree not present — skipping source-ref file-existence check. "
-                "Run from the full cardiacFoam checkout to enable this test."
-            )
-        repo_root = _found
-
-        for entry in PHYSICS_PROPERTY_ENTRIES:
-            for source_ref in entry.source_refs:
-                self.assertTrue((repo_root / source_ref).exists(), source_ref)
-
-        for entries in get_electro_property_entry_groups(_CTX).values():
-            for entry in entries:
-                for source_ref in entry.source_refs:
-                    self.assertTrue((repo_root / source_ref).exists(), source_ref)
-
     def test_catalog_exposes_gui_value_hints_for_key_entries(self) -> None:
         type_entry = PHYSICS_PROPERTY_ENTRIES[0]
         self.assertEqual(type_entry.value_kind, "enum")

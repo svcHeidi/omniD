@@ -1,30 +1,3 @@
-#----------------------------------------------------------------------------#
-# License
-#     This file is part of cardiacFoam.
-#
-#     cardiacFoam is free software: you can redistribute it and/or modify it
-#     under the terms of the GNU General Public License as published by the
-#     Free Software Foundation, either version 3 of the License, or (at your
-#     option) any later version.
-#
-#     cardiacFoam is distributed in the hope that it will be useful, but
-#     WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#     General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Module
-#     test_export_dict_catalog
-#
-# Description
-#     Tests export dict catalog logic and specification contracts.
-#
-# Author
-#     Simao Nieto de Castro, UCD.
-#----------------------------------------------------------------------------#
-
 """Tests for the dict-catalog exporter.
 
 It fans each ``DictEntry`` into one record per declared phase, stamped with that bucket's ``phase`` plus the full ``phases`` list."""
@@ -36,9 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from omnidriver.core.specs.paths import repo_root_default
 
-REPO = repo_root_default()
+REPO = Path(__file__).resolve().parents[3]
 SCRIPT = REPO / "scripts" / "export-dict-catalog.py"
 # The exporter runs in a child interpreter that cannot be handed a DriverContext,
 # and with several adapters installed there is no ambient default, so name it.

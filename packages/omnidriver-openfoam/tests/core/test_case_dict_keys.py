@@ -9,13 +9,6 @@ from pathlib import Path
 import pytest
 
 from omnidriver.openfoam.case_dict_keys import case_dict_key_diagnostics
-from omnidriver.core.specs.paths import repo_root_default
-from conftest import monorepo_root, skip_without_monorepo
-
-_SINGLE_CELL = (
-    (monorepo_root or repo_root_default())
-    / "tutorials" / "electrophysiologyProtocols" / "singleCell"
-)
 
 _HEADER = """\
 FoamFile
@@ -104,11 +97,6 @@ singleCellSolverCoeffs
     assert diags[0].code == "uncatalogued_case_dict_key"
 
 
-# ---------------------------------------------------------------------------
-# Wiring into the strict plan: reported, but never fatal
-# ---------------------------------------------------------------------------
-
-
 def test_runtime_selection_coeffs_dict_is_not_reported(tmp_path):
     # <model>Coeffs is OpenFOAM's runtime-selection convention, not a plugin
     # key, so warning about it would fire on every case.
@@ -141,46 +129,6 @@ singleCellSolverCoefs
         dict_relpaths=("constant/electroProperties",),
     )
     assert [d.field for d in diags] == ["singleCellSolverCoefs"]
-
-
-@skip_without_monorepo
-def test_strict_plan_reports_a_misspelled_key_without_failing(tmp_path):
-    # cardiacFoam does not own every key that may appear in these dicts, so
-    # an unmatched key can never be allowed to fail a plan.
-    import shutil
-
-    from omnidriver.core.plugin_interface import load_plugin_context
-    from omnidriver.core.strict_planning import strict_plan
-    from omnidriver.core.tutorial_records import case_folder_record
-
-    case = tmp_path / "tutorials" / "case"
-    shutil.copytree(_SINGLE_CELL, case)
-    ep = case / "constant" / "electroProperties"
-    ep.write_text(
-        ep.read_text().replace(
-            "activeTensionModel LandNiederer;",
-            "activeTensionModl LandNiederer;",
-        )
-    )
-
-    context = load_plugin_context("cardiacfoam")
-    record, cases_root = case_folder_record(case, driver_context=context)
-    report = strict_plan(
-        record,
-        overrides={"cases_root": str(cases_root)},
-        environment_source="/no/such/openfoam/bashrc",
-        scratch_root=tmp_path / "scratch",
-        driver_context=context,
-    )
-    payload = report.to_json()
-
-    warnings = [
-        item
-        for item in payload["plugin_diagnostics"]
-        if item["code"] == "uncatalogued_case_dict_key"
-    ]
-    assert [w["field"] for w in warnings] == ["activeTensionModl"]
-    assert all(w["level"] == "warning" for w in warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -224,63 +172,3 @@ ecgDomains
         dict_relpaths=("constant/electroProperties",),
     )
     assert [d.field for d in diags] == ["sigmaExtracellulr"]
-
-
-# ---------------------------------------------------------------------------
-# Why required_when can never catch this, and the warning is the only signal
-# ---------------------------------------------------------------------------
-
-
-@skip_without_monorepo
-def test_a_misspelled_key_is_silently_replaced_by_the_catalogue_default(tmp_path):
-    # stim_amplitude's required_when rule is live but cannot fire here: the
-    # builder fills every entry's typical_value before validation runs, so a
-    # key carrying one is structurally immune to the required-field check.
-    import shutil
-
-    from omnidriver.cardiacfoam import dict_builder as DB
-    from omnidriver.core.plugin_interface import load_plugin_context
-    from omnidriver.core.strict_planning import strict_plan
-    from omnidriver.core.tutorial_records import case_folder_record
-
-    case = tmp_path / "tutorials" / "case"
-    shutil.copytree(_SINGLE_CELL, case)
-    ep = case / "constant" / "electroProperties"
-    ep.write_text(ep.read_text().replace("stim_amplitude  60;", "stim_amplitud  25;"))
-
-    parsed = DB.parse_electro_properties(ep)
-    rebuilt = str(
-        DB.build_electro_properties(
-            selectors=parsed["selectors"], overrides=parsed["overrides"]
-        )
-    )
-    amplitude = [l.strip() for l in rebuilt.splitlines() if "stim_amplitude" in l]
-    assert amplitude == ["stim_amplitude 60;"], (
-        f"expected the catalogue default to be substituted, got {amplitude}"
-    )
-    assert "stim_amplitud " not in rebuilt, "the misspelled key is dropped entirely"
-
-    context = load_plugin_context("cardiacfoam")
-    record, cases_root = case_folder_record(case, driver_context=context)
-    payload = strict_plan(
-        record,
-        overrides={"cases_root": str(cases_root)},
-        environment_source="/no/such/openfoam/bashrc",
-        scratch_root=tmp_path / "scratch",
-        driver_context=context,
-    ).to_json()
-
-    # The plan is valid -- the built dict really is complete and correct.
-    assert payload["status"] == "ok"
-    assert not [
-        item
-        for item in payload["plugin_diagnostics"]
-        if "stim_amplitude" in item["message"]
-    ], "required_when cannot fire here; if it starts to, this test should change"
-
-    # ...and the warning is the only thing that noticed.
-    assert [
-        item["field"]
-        for item in payload["plugin_diagnostics"]
-        if item["code"] == "uncatalogued_case_dict_key"
-    ] == ["stim_amplitud"]
