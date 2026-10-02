@@ -39,7 +39,7 @@ markers = [
     # purpose -- see packages/omnidriver-cardiacfoam/pyproject.toml's comment
     # on why: a per-package run resolves this file, a whole-repo run resolves
     # the root one.
-    "native: needs OMNIDRIVER_NATIVE_TUTORIALS; fails (not skips) if unset",
+    "slow: builds a wheel in a throwaway venv; minutes, not seconds",
 ]
 
 [tool.setuptools.packages.find]

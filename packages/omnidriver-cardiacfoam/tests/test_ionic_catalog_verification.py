@@ -22,8 +22,7 @@
 #     Unit tests for the ionic_catalog_verification report parser and
 #     diff logic. No OpenFOAM dependency -- exercises parse_report_text /
 #     diff_report against hand-written synthetic report text only. The
-#     live, solver-backed check lives in
-#     test_ionic_catalog_live_verification.py.
+#     solver-backed check is `omnidriver check --record singleCell`.
 #
 # Author
 #     Simao Nieto de Castro, UCD.
@@ -44,6 +43,7 @@ import pytest
 from omnidriver.cardiacfoam.ionic_catalog_verification import (
     ModelVerificationResult,
     VerificationResult,
+    catalogue_probe,
     diff_report,
     find_listCellModelsVariables_binary,
     parse_report_text,
@@ -220,6 +220,27 @@ def test_verify_ionic_catalog_all_models_skipped_when_utility_absent(monkeypatch
 
     assert set(result.results) == set(IONIC_MODEL_CATALOG)
     assert all(r.status == "skipped" for r in result.results.values())
+
+
+def test_the_probe_fails_naming_the_shell_when_the_utility_is_absent_and_names_the_drift_otherwise(monkeypatch):
+    import omnidriver.cardiacfoam.ionic_catalog_verification as mod
+
+    monkeypatch.setattr(mod, "find_listCellModelsVariables_binary", lambda: None)
+    passed, detail = catalogue_probe()
+    assert not passed and "solver's shell" in detail
+
+    def drifted(model=None, **_):
+        return VerificationResult(utility_available=True, results={
+            "TNNP": ModelVerificationResult(model="TNNP", status="match"),
+            "TWorld": ModelVerificationResult(model="TWorld", status="mismatch", reason="a constant is missing"),
+        })
+
+    monkeypatch.setattr(mod, "verify_ionic_catalog", drifted)
+    assert catalogue_probe() == (False, "the catalogue disagrees with the built solver for {'TWorld': 'a constant is missing'}")
+    monkeypatch.setattr(mod, "verify_ionic_catalog", lambda: VerificationResult(
+        utility_available=True, results={"TNNP": ModelVerificationResult(model="TNNP", status="match")},
+    ))
+    assert catalogue_probe() == (True, "1 ionic models match the built solver")
 
 
 def test_verify_ionic_catalog_rejects_unknown_model():

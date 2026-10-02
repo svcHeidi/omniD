@@ -63,6 +63,15 @@ def _regression(script: Path, native_case: Path, work: Path, timeout_s: float) -
     }
 
 
+def _probe(probe: Any) -> dict[str, Any]:
+    started = time.monotonic()
+    try:
+        passed, detail = probe()
+    except Exception as exc:
+        passed, detail = False, f"{type(exc).__name__}: {exc}"
+    return {"passed": passed, "detail": detail, "seconds": round(time.monotonic() - started, 1)}
+
+
 def _target(
     plugin: str, record: Any, cases_root: Path, scratch_root: Path, inputs: Mapping[str, str], benchmarks: Path | None,
 ) -> tuple[ConformanceTarget, str | None]:
@@ -128,7 +137,11 @@ def check_report(
                 "check": check_id, "passed": passed, "detail": detail, "seconds": round(time.monotonic() - started, 1),
             })
         entry["checks"] = verdicts
-        entry["status"] = "passed" if all(v["passed"] for v in verdicts) else "failed"
+        passed = all(v["passed"] for v in verdicts)
+        if not check_ids and record.conformance.probes:
+            entry["probes"] = {name: _probe(probe) for name, probe in record.conformance.probes.items()}
+            passed = passed and all(item["passed"] for item in entry["probes"].values())
+        entry["status"] = "passed" if passed else "failed"
         if regression:
             native_case = cases_root / record.native_case_relpath
             script = regression_script(driver_context, native_case)

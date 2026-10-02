@@ -539,3 +539,32 @@ class RuleCheckingPlugin(E2ERecordPlugin):
         if cells <= TOY_CELL_LIMIT:
             return ()
         return (diagnostic("error", "too_many_cells", f"{cells} cells exceed {TOY_CELL_LIMIT}", field="cells"),)
+
+
+PROBING_PLUGIN = "plugins.conformance_toy:ProbingPlugin"
+
+
+def _catalogue_matches():
+    return True, "3 models match"
+
+
+def _catalogue_drifted():
+    return False, "model A has a constant the solver lacks"
+
+
+def _catalogue_unreadable():
+    raise OSError("the utility is not built")
+
+
+class ProbingPlugin(E2ERecordPlugin):
+    """Its record declares three probes of its catalogue: one matching, one drifted, one that cannot run."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        import dataclasses
+
+        record = self._tutorial_records["toyTutorial"]
+        study = dataclasses.replace(record.conformance, probes={
+            "matches": _catalogue_matches, "drifted": _catalogue_drifted, "unreadable": _catalogue_unreadable,
+        })
+        self._tutorial_records = {"toyTutorial": dataclasses.replace(record, conformance=study)}

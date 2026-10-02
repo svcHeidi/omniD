@@ -6,7 +6,6 @@ requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: tests requiring a real cardiacFoam binary (skipped by default in CI)",
     # Duplicated in packages/omnidriver/pyproject.toml on purpose: a whole-repo
     # run (`pytest packages/`) resolves its config here, a per-package run
     # (`pytest packages/omnidriver/tests`, what CI's test-core job does)

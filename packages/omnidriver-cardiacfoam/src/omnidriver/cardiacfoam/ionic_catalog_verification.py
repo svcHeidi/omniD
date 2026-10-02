@@ -61,12 +61,10 @@ matcher at ``src/ionicModels/ionicModel/ionicModel.C:98``. The utility's output
 
 Running it
 ----------
-The live check needs OpenFOAM sourced and the utility built::
+``omnidriver check --plugin cardiacfoam --record singleCell`` runs it as a
+probe, from the shell ``omnidriver env`` prepares, with the utility built::
 
-    source /path/to/OpenFOAM/etc/bashrc
     (cd applications/utilities/listCellModelsVariables && wmake)
-    uv run pytest \\
-        packages/omnidriver-cardiacfoam/tests/test_ionic_catalog_live_verification.py -v
 
 Without the utility on ``PATH`` every model reports ``skipped`` and
 ``all_match`` is ``False``. **A skip is never a pass.**
@@ -388,3 +386,15 @@ def verify_ionic_catalog(
             }
 
     return VerificationResult(utility_available=True, results=results)
+
+
+def catalogue_probe() -> tuple[bool, str]:
+    """``omnidriver check``'s probe: every catalogued ionic model against the
+    built solver, as (all matched, what was compared or what differs)."""
+    result = verify_ionic_catalog()
+    if not result.utility_available:
+        return False, f"{_UTILITY} is not on PATH; run from the solver's shell"
+    differ = {name: model.reason or model.status for name, model in sorted(result.results.items()) if model.status != "match"}
+    if differ:
+        return False, f"the catalogue disagrees with the built solver for {differ}"
+    return True, f"{len(result.results)} ionic models match the built solver"

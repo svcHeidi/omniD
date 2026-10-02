@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.cardiacfoam.activation_probes import ACTIVATION_PROBES_FORMAT
+from omnidriver.cardiacfoam.ionic_catalog_verification import catalogue_probe
 from omnidriver.core.conformance_study import ConformanceStudy, QuantityTarget
 
 #: The benchmark C13 and C14 compare against, found under ``--benchmarks``.
@@ -48,7 +49,8 @@ STUDIES: dict[str, ConformanceStudy] = {
     ),
     "singleCell": ConformanceStudy(
         # endTime 0.05 s, not the native 2 s (2e6 steps, ~25 s per real run).
-        requires=_COMMANDS,
+        requires=(*_COMMANDS, "listCellModelsVariables"),
+        probes={"ionic_catalogue_matches_built_solver": catalogue_probe},
         base_study={"system/controlDict:endTime": 0.05},
         patch=("constant/electroProperties:singleCellSolverCoeffs.tissue", "epicardialCells"),
         untouched=("constant/electroProperties", ("singleCellSolverCoeffs", "ionicModel")),

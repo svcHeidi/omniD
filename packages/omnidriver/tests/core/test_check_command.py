@@ -6,15 +6,15 @@ import json
 import pytest
 
 from omnidriver.cli import main
-from plugins.conformance_toy import TOY_PLUGIN, write_toy_native_case
+from plugins.conformance_toy import PROBING_PLUGIN, TOY_PLUGIN, write_toy_native_case
 
 
-def _check(tmp_path, capsys, *extra, prepare=None):
+def _check(tmp_path, capsys, *extra, prepare=None, plugin=TOY_PLUGIN):
     native = write_toy_native_case(tmp_path / "native")
     if prepare is not None:
         prepare(native)
     code = main([
-        "check", "--plugin", TOY_PLUGIN, "--cases-root", str(tmp_path / "native"),
+        "check", "--plugin", plugin, "--cases-root", str(tmp_path / "native"),
         "--scratch-dir", str(tmp_path / "scratch"), *extra,
     ])
     return code, json.loads(capsys.readouterr().out)
@@ -65,3 +65,19 @@ def test_check_needs_a_scratch_root_and_takes_no_entry(tmp_path, capsys, monkeyp
     assert "scratch" in json.loads(capsys.readouterr().out)["error"].lower()
     with pytest.raises(SystemExit):
         main(["check", "--plugin", TOY_PLUGIN, "--scratch-dir", str(tmp_path / "s"), "--entry", "toyTutorial"])
+
+
+def test_a_probe_of_the_record_reports_beside_the_checks_and_a_drifted_one_fails_the_record(tmp_path, capsys):
+    code, report = _check(tmp_path, capsys, "--record", "toyTutorial", "--checks", "C1", plugin=PROBING_PLUGIN)
+    (record,) = report["records"]
+    assert "probes" not in record, "a probe runs with the full set of checks, not a selection"
+
+    code, report = _check(tmp_path / "all", capsys, "--record", "toyTutorial", plugin=PROBING_PLUGIN)
+    (record,) = report["records"]
+    probes = {name: (item["passed"], item["detail"]) for name, item in record["probes"].items()}
+    assert code == 0 and probes == {
+        "matches": (True, "3 models match"),
+        "drifted": (False, "model A has a constant the solver lacks"),
+        "unreadable": (False, "OSError: the utility is not built"),
+    }
+    assert all(item["passed"] for item in record["checks"]) and record["status"] == "failed"

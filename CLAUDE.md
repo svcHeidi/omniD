@@ -62,7 +62,10 @@ VIRTUAL_ENV=/tmp/wheelenv uv pip install -q "/tmp/wheeltest/omnidriver-*.whl[pos
 /tmp/wheelenv/bin/python -m pytest packages/omnidriver/tests -q   # 0 failed
 ```
 
-**No pytest test runs a real solver or reads a solver's native tree.** The
+**No pytest test runs a solver or reads a solver's native tree.** The only
+test that meets an OpenFOAM install is the six `native`-skipped probes of
+omnidriver's own dictionary reader against `foamDictionary` and `foamEtcFile`,
+which run when a bashrc is sourced and say nothing of any solver. The
 solvers are in development: their authors add required keys, rename models and
 rebuild on purpose, and a test pinned to their current state would fail for
 doing so. Pytest tests omnidriver itself: unit tests, the toy conformance
@@ -81,7 +84,7 @@ export `DYLD_LIBRARY_PATH`, which macOS strips when bash starts).
 ```bash
 omnidriver check --repo <cardiacFOAM> --scratch-dir <scratch> --record singleCell --benchmarks <omnidriver>/benchmarks
 omnidriver check --plugin opencarp --cases-root <opencarp>/share/tutorials --scratch-dir <scratch> --benchmarks <omnidriver>/benchmarks
-omnidriver check --plugin cardiaccore --cases-root <cardiacCore>/cases --scratch-dir <scratch> --input anatomy=<humanSlab bundle>
+omnidriver check --plugin cardiaccore --cases-root <cardiacCore> --scratch-dir <scratch> --input anatomy=<humanSlab bundle>
 ```
 
 The tree under check should be clean (a `git archive` of the branch), since C11
