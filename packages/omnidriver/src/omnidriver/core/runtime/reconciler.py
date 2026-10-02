@@ -48,7 +48,9 @@ def declared_instance_names(case_root: Path, *, driver_context) -> tuple[str, ..
     """The case's instance directories, only when the environment declares their form."""
     if driver_context is None:
         return ()
-    conventions = driver_context.capabilities.case_runtime_conventions.conventions()
+    from ..runtime_records import case_runtime_conventions
+
+    conventions = case_runtime_conventions(driver_context)
     if conventions.instance_directory_pattern is None:
         return ()
     pattern = re.compile(conventions.instance_directory_pattern)

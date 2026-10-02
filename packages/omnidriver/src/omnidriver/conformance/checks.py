@@ -18,6 +18,7 @@ from typing import Any, Callable, Mapping
 
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.plugin_interface import load_plugin_context
+from omnidriver.core.provider_stack import MemberAbsent
 from omnidriver.core.experiments import inspect_sweep_experiment
 from omnidriver.core.quantities import (
     Quantity, ReadRequest, ReaderDeclarationError, check_reader, convert, experiment_comparisons, read_quantities,
@@ -51,7 +52,7 @@ def _context(target: ConformanceTarget):
 
 
 def _record(ctx, name: str):
-    records = ctx.capabilities.tutorial_records.catalog() or {}
+    records = ctx.stack.call("get_tutorial_records")
     if name not in records:
         raise LookupError(f"{name!r} is not a tutorial record of this stack; it has {sorted(records)}")
     return records[name]
@@ -142,11 +143,12 @@ def check_patch_preserves(target: ConformanceTarget) -> CheckVerdict:
     ctx = _context(target)
     record = _record(ctx, target.record)
     staged = _stage(target, record, "C4")
-    reader = ctx.capabilities.config_value.reader()
-    comparator = ctx.capabilities.case_value_comparison.comparator()
-    validator = ctx.capabilities.record_key_validation.validator()
-    if reader is None or comparator is None or validator is None:
-        return _verdict("C4", False, "the stack lacks a config reader, comparator or key validator")
+    try:
+        reader = ctx.stack.call("get_config_value_reader")
+        comparator = ctx.stack.call("get_case_value_comparator")
+        validator = ctx.stack.call("get_record_key_validator")
+    except MemberAbsent as exc:
+        return _verdict("C4", False, str(exc))
     untouched_doc, untouched_key = target.untouched
     before = reader(staged / untouched_doc, untouched_key)
     if before is None:
@@ -378,12 +380,15 @@ def check_environment(target: ConformanceTarget) -> CheckVerdict:
     report = _plan(target, ctx)
     if report.workflow_dag is None:
         return _verdict("C9", False, f"cannot check: plan failed: {_plan_errors(report)}")
-    preflight = ctx.capabilities.environment_preflight
+    def preflight(env):
+        found = ctx.stack.call("get_environment_diagnostics", report.workflow_dag, env=env, driver_context=ctx)
+        return [m for level, m in _levels(found) if level == "error"]
+
     env = _child_env(target)
-    clean = [m for level, m in _levels(preflight.diagnostics(report.workflow_dag, env=env, driver_context=ctx)) if level == "error"]
+    clean = preflight(env)
     empty = target.scratch_root / "conformance" / "C9-empty-path"
     empty.mkdir(parents=True, exist_ok=True)
-    broken = [m for level, m in _levels(preflight.diagnostics(report.workflow_dag, env={**env, "PATH": str(empty)}, driver_context=ctx)) if level == "error"]
+    broken = preflight({**env, "PATH": str(empty)})
     programs = _planned_programs(report.workflow_dag)
     problems = []
     if clean:
@@ -548,7 +553,7 @@ def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:
         return _verdict("C12", True, "no output declares a format, so there is nothing to read")
     problems = []
     for artifact_format in formats:
-        reader = ctx.capabilities.runtime_evidence.artifact_value_reader(artifact_format)
+        reader = ctx.stack.call("get_artifact_value_reader", artifact_format)
         if reader is None:
             problems.append(f"no reader for format {artifact_format!r}")
             continue
@@ -566,7 +571,7 @@ def _artifact_and_quantities(target: ConformanceTarget, ctx, report) -> tuple[di
     artifact = data_artifact_from_json(
         next(raw for raw in document["expectedArtifacts"] if raw["format"] == declared.artifact_format)
     )
-    reader = ctx.capabilities.runtime_evidence.artifact_value_reader(declared.artifact_format)
+    reader = ctx.stack.call("get_artifact_value_reader", declared.artifact_format)
     points = {}
     if reader.takes_points:
         points = {

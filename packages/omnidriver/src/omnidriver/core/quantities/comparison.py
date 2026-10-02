@@ -292,7 +292,7 @@ def _resolve_run(name: str, raw: Mapping[str, Any], *, base: Path, reference_uni
             f"case {case.case_id!r} was planned with"
         )
     artifact = _artifact(name, document, raw["artifact_id"])
-    reader = ctx.capabilities.runtime_evidence.artifact_value_reader(artifact.format)
+    reader = ctx.stack.call("get_artifact_value_reader", artifact.format)
     points: Mapping[str, Point] = {}
     max_offset = None
     if reader is None:

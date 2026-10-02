@@ -39,32 +39,15 @@ import shutil
 from collections.abc import Mapping
 from pathlib import Path
 
-from omnidriver.core.plugin_capabilities import RuntimeDependency
+from omnidriver.core.plugin_interface import RuntimeDependency
 
 # Commands that run the solver. Deliberately excludes
 # bathBidomainInterfaceMetrics, which is authorized to run but post-processes
 # rather than solves -- expecting solver telemetry from it would be wrong.
 _SOLVE_STEP_COMMANDS = frozenset({"cardiacFoam"})
 
-# OpenFOAM's runApplication redirects solver output to log.<app>, so a step
-# that runs an Allrun script produces no parseable driver-captured stdout.
-# The telemetry collector uses these globs to find the real log.
-_TELEMETRY_GLOBS: dict[str, tuple[str, ...]] = {
-    "Allrun": ("log.cardiacFoam", "log.*"),
-    "Allrun.pre": ("log.*",),
-    "Allrun.post": ("log.*",),
-    "cardiacFoam": (),
-}
-
-
 def solve_step_commands() -> frozenset[str]:
     return _SOLVE_STEP_COMMANDS
-
-
-def telemetry_source_globs(command: str) -> tuple[str, ...]:
-    """Case-relative globs where ``command``'s solver log may land, beyond
-    driver-captured stdout. Empty for commands that write no solver log."""
-    return _TELEMETRY_GLOBS.get(command, ())
 
 
 # Libraries cardiacFoam links or loads, and whether their absence is

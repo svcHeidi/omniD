@@ -1387,7 +1387,7 @@ def lookup_record(entry: "str | TutorialRecord", *, driver_context: Any) -> Tuto
     refused with the catalogue's names."""
     if isinstance(entry, TutorialRecord):
         return entry
-    catalog = driver_context.capabilities.tutorial_records.catalog() or {}
+    catalog = driver_context.stack.call("get_tutorial_records")
     by_name = {name.casefold(): record for name, record in catalog.items()}
     record = by_name.get(entry.strip().casefold())
     if record is None:

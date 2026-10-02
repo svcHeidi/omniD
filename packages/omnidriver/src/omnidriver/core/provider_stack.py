@@ -1,63 +1,153 @@
-"""Compose N providers into one capability view.
+"""Compose N providers into one stack, and answer a contract member over it.
 
-Core owns composition; a provider never embeds another provider.
-``PluginProfile.provides`` is the supplied intent; :func:`check_provides`
-compares it with what the provider object exposes.
+Core owns composition; a provider never embeds another provider. Every
+contract member is optional: :data:`MEMBERS` says how a stack composes the
+providers that implement it, and what the stack answers when none does.
 """
 
 from __future__ import annotations
 
-from graphlib import TopologicalSorter
+import hashlib
+import json
+import os
+from dataclasses import dataclass
+from graphlib import CycleError, TopologicalSorter
 from typing import Any
 
-from .capability_seams import adapts_members, collect_seams
+
+@dataclass(frozen=True)
+class Needed:
+    """Absence refuses by name: no neutral answer is right for ``operation``."""
+
+    operation: str
 
 
-def capability_members() -> dict[str, frozenset[str]]:
-    """Map each capability name to the contract members it adapts.
-
-    Reuses :func:`capability_seams.adapts_members`, the single parser for a
-    seam's ``:adapts:`` field -- this does not re-split the text itself.
-    """
-    return {seam.field: adapts_members(seam) for seam in collect_seams()}
+class MemberAbsent(ValueError):
+    """No provider in the stack implements a member an operation needs."""
 
 
-def check_provides(provider: Any) -> list[str]:
-    """Return one problem per capability declared but not fully implemented.
+def _no_environment_validation() -> tuple:
+    from .planning_types import diagnostic
 
-    Declared-but-absent is the error this catches -- it is how a misspelled
-    hook name becomes visible instead of silently routing to a fallback.
-    Implemented-but-undeclared is NOT an error: a provider may implement a
-    member for its own use without offering it to the stack.
-    """
-    declared = provider.get_profile().provides
-    members = capability_members()
-    problems: list[str] = []
-    for capability in sorted(declared):
-        missing = sorted(
-            member
-            for member in members.get(capability, ())
-            if not callable(getattr(provider, member, None))
-        )
-        if missing:
-            problems.append(
-                f"provider declares provides: {capability!r} but does not "
-                f"implement {missing}"
-            )
-    return problems
+    return (diagnostic(
+        "error", "environment_capability_unavailable",
+        "The selected adapter does not declare environment validation.",
+        source="adapter",
+    ),)
+
+
+def _no_conventions():
+    from .plugin_interface import CaseRuntimeConventions
+
+    return CaseRuntimeConventions()
+
+
+_RECORD = Needed("running a record case")
+_WRITE = Needed("writing a case")
+
+#: member -> (shape, absent).
+#:
+#: Shapes, over the providers that implement the member, least specific first:
+#: ``set`` unions; ``map`` merges, refusing a duplicate key unless the more
+#: specific entry carries ``overrides: <provider id>`` naming whose entry it
+#: replaces; ``catalog`` is ``map`` over a ``DictionaryCatalog``'s documents;
+#: ``sequence`` concatenates; ``single`` is the most specific non-``None``
+#: answer; ``chain`` threads the first argument through each; ``profile``
+#: composes every provider's declarative profile.
+#:
+#: Absent, when no provider implements the member: ``None`` answers the
+#: shape's empty value (``chain`` returns its first argument); a function
+#: answers what it returns; :class:`Needed` refuses by name.
+MEMBERS: dict[str, tuple[str, Any]] = {
+    "get_profile": ("profile", None),
+    "get_capabilities": ("map", None),
+    "get_named_catalogs": ("map", None),
+    # dictionary vocabulary
+    "get_dict_entries": ("sequence", None),
+    "get_dictionary_catalog": ("catalog", None),
+    "get_dict_groups": ("map", None),
+    "get_dict_entry_catalog": ("map", None),
+    "get_dict_key_scanner": ("single", None),
+    # commands
+    "get_solver_commands": ("set", None),
+    "get_auxiliary_commands": ("set", None),
+    "get_environment_commands": ("set", None),
+    "is_installed_environment_command": ("single", None),
+    "get_utility_manifests": ("map", None),
+    "get_solve_step_commands": ("set", None),
+    # planning and validation
+    "validate_configuration": ("sequence", None),
+    "validate_run_semantics": ("sequence", None),
+    "predict_data_artifacts": ("sequence", None),
+    "get_plan_diagnostics": ("sequence", None),
+    "explain_step_failure": ("sequence", None),
+    "inspect_effective_configuration": ("sequence", None),
+    # environment
+    "get_environment_diagnostics": ("sequence", _no_environment_validation),
+    "get_loaded_environment": ("single", lambda: dict(os.environ)),
+    "get_configured_environment": ("chain", None),
+    "get_case_runtime_conventions": ("single", _no_conventions),
+    # provenance
+    "resolve_case_models": ("map", None),
+    "get_samplable_fields": ("map", None),
+    "get_required_inputs": ("sequence", None),
+    "get_generated_output_globs": ("sequence", None),
+    "get_input_roots": ("sequence", None),
+    "get_extra_provenance_paths": ("sequence", None),
+    "get_log_redaction_patterns": ("set", None),
+    "get_artifact_value_reader": ("single", None),
+    # records
+    "get_tutorial_records": ("map", None),
+    "get_record_key_catalog": ("sequence", None),
+    "get_agent_guidance": ("sequence", None),
+    "get_record_key_validator": ("single", _RECORD),
+    "get_case_value_comparator": ("single", _RECORD),
+    "get_config_value_reader": ("single", _RECORD),
+    "get_parallel_steps": ("single", Needed("running a record in parallel")),
+    # case writing
+    "resolve_case_mutation": ("single", _WRITE),
+    "get_supported_mutation_modes": ("single", _WRITE),
+    "render_case_files": ("sequence", _WRITE),
+    "get_rendered_formats": ("set", None),
+}
+
+#: Members a provider implements together or not at all: which modes a
+#: resolver accepts, and which formats a renderer writes, are that provider's
+#: own answers.
+_PAIRS = (
+    ("resolve_case_mutation", "get_supported_mutation_modes"),
+    ("render_case_files", "get_rendered_formats"),
+)
+
+
+def _entry(member: str) -> tuple[str, Any]:
+    try:
+        return MEMBERS[member]
+    except KeyError:
+        raise KeyError(f"{member!r} is not a plugin contract member") from None
+
+
+def provider_profile(provider: Any):
+    """A provider's own profile; one that declares none has no case files,
+    no C++ mapping, no environment connection and requires nothing."""
+    hook = getattr(provider, "get_profile", None)
+    if callable(hook):
+        return hook()
+    from .plugin_profile import PluginProfile
+
+    return PluginProfile(
+        path=None, plugin_id=provider.plugin_id, api_version=provider.plugin_api_version,
+        case_files=(), cxx_mapping=None, payload={},
+    )
 
 
 def order_providers(providers) -> tuple:
-    """Order providers least-specific first, by declared `requires:`.
+    """Order providers least-specific first, by declared ``requires:``.
 
     Stable and hash-independent: every node is registered in sorted-id order
-    before any edge is added, and each node's predecessors are added sorted, so
-    `TopologicalSorter` sees one insertion order regardless of `PYTHONHASHSEED`.
-    Independent providers therefore keep sorted-by-id order. That matters
-    because `build_stack_identity` hashes this order into the stack digest,
-    which a reviewed plan is bound to. (Passing `set(requires)` to
-    `TopologicalSorter` directly is not equivalent: it registers a node in
-    set-iteration order, which varies with `PYTHONHASHSEED`.)
+    before any edge, so independent providers keep sorted-by-id order, which
+    the stack digest hashes. (Passing ``set(requires)`` to
+    ``TopologicalSorter`` would follow ``PYTHONHASHSEED``.)
     """
     providers = tuple(providers)
     seen: dict[str, int] = {}
@@ -68,13 +158,12 @@ def order_providers(providers) -> tuple:
         raise ValueError(
             f"provider identities are not unique: {duplicates}; two "
             f"distributions claiming one id make the answering implementation "
-            f"depend on discovery order, and the stack digest then records an "
-            f"identity that does not identify one implementation"
+            f"depend on discovery order"
         )
     by_id = {provider.plugin_id: provider for provider in providers}
     requirements: dict[str, tuple[str, ...]] = {}
     for plugin_id in sorted(by_id):
-        requires = tuple(by_id[plugin_id].get_profile().requires)
+        requires = tuple(provider_profile(by_id[plugin_id]).requires)
         missing = sorted(set(requires) - set(by_id))
         if missing:
             raise ValueError(
@@ -83,311 +172,121 @@ def order_providers(providers) -> tuple:
             )
         requirements[plugin_id] = tuple(sorted(set(requires)))
     sorter = TopologicalSorter()
-    # Two passes, both in sorted order: registration first, so no node is ever
-    # created by an edge, then the edges themselves.
     for plugin_id in sorted(requirements):
         sorter.add(plugin_id)
     for plugin_id in sorted(requirements):
         sorter.add(plugin_id, *requirements[plugin_id])
     try:
         ordered = tuple(sorter.static_order())
-    except Exception as exc:  # graphlib.CycleError
-        raise ValueError(
-            f"provider requirements form a cycle: {exc}"
-        ) from exc
+    except CycleError as exc:
+        raise ValueError(f"provider requirements form a cycle: {exc}") from exc
     return tuple(by_id[plugin_id] for plugin_id in ordered)
 
 
-# ---------------------------------------------------------------------------
-# Composition (spec §4.3)
-# ---------------------------------------------------------------------------
-
-#: Composition rule per contract member. Spec §4.3 names six shapes; this
-#: table is the complete classification of every member every capability
-#: adapts, because a member absent here is an error at IMPORT
-#: (:func:`_check_classification`) rather than a silent default -- an
-#: unclassified member is how a rule gets chosen by accident.
-#:
-#: ``set``       union of the declared sets.
-#: ``map``       merge in stack order; a duplicate key is an error unless the
-#:               more specific entry carries ``overrides: <provider id>``
-#:               naming whose declaration it replaces, and an ``overrides:``
-#:               naming a provider that declared no such key is also an error.
-#: ``catalog``   the map rule over a :class:`DictionaryCatalog`'s documents,
-#:               rebuilt into a catalog. A catalog is not a mapping, so it
-#:               cannot go through ``map`` directly; core owns the type, so
-#:               merging it is core's to do rather than a provider's.
-#: ``sequence``  concatenate every implementer's result, in stack order.
-#: ``single``    first non-``None``, most-specific provider first.
-#: ``chain``     thread the first argument through every implementer, in
-#:               stack order.
-#: ``profile``   the declarative profile: case-file rules concatenated (with
-#:               §2.1's one-declarer rule enforced at compose time),
-#:               ``provides`` unioned, everything else from the most specific.
-_SHAPE: dict[str, str] = {
-    # -- set ---------------------------------------------------------------
-    "get_solver_commands": "set",
-    "get_auxiliary_commands": "set",
-    "get_environment_commands": "set",
-    "get_solve_step_commands": "set",
-    "get_log_redaction_patterns": "set",
-    "get_rendered_formats": "set",
-    # -- map ---------------------------------------------------------------
-    "get_dict_groups": "map",
-    "get_utility_manifests": "map",
-    "get_named_catalogs": "map",
-    "get_dict_entry_catalog": "map",
-    "get_samplable_fields": "map",
-    "resolve_case_models": "map",
-    "get_tutorial_records": "map",
-    # -- catalog -----------------------------------------------------------
-    "get_dictionary_catalog": "catalog",
-    # -- sequence ----------------------------------------------------------
-    "get_dict_entries": "sequence",
-    "validate_configuration": "sequence",
-    "validate_run_semantics": "sequence",
-    "predict_data_artifacts": "sequence",
-    "get_environment_diagnostics": "sequence",
-    "get_plan_diagnostics": "sequence",
-    "explain_step_failure": "sequence",
-    "get_utility_roots": "sequence",
-    "get_extra_provenance_paths": "sequence",
-    "get_telemetry_source_globs": "sequence",
-    "get_required_inputs": "sequence",
-    "get_generated_output_globs": "sequence",
-    "get_input_roots": "sequence",
-    "get_report_catalog": "sequence",
-    "inspect_effective_configuration": "sequence",
-    "render_case_files": "sequence",
-    "get_record_key_catalog": "sequence",
-    "get_agent_guidance": "sequence",
-    # -- single ------------------------------------------------------------
-    "get_capabilities": "single",
-    "resolve_case_mutation": "single",
-    "get_supported_mutation_modes": "single",
-    "get_config_value_reader": "single",
-    "get_dict_key_scanner": "single",
-    "get_record_key_validator": "single",
-    "get_case_value_comparator": "single",
-    "get_case_runtime_conventions": "single",
-    "get_artifact_value_reader": "single",
-    "get_parallel_steps": "single",
-    "get_loaded_environment": "single",
-    "is_installed_environment_command": "single",
-    # -- chain -------------------------------------------------------------
-    "get_configured_environment": "chain",
-    # -- profile -----------------------------------------------------------
-    "get_profile": "profile",
-}
-
-#: Members that must be answered by the SAME provider, keyed by the member
-#: whose absence the error names. ``get_supported_mutation_modes`` is
-#: ``single``-shaped (not ``set``) to match ``resolve_case_mutation``'s own
-#: shape: were it a union, a stack where one provider declares only
-#: ``synthesize`` support and a different, more specific provider implements
-#: the resolver would compose to the union of both providers' modes, letting
-#: ``resolve()`` pass a mode into a resolver that never claimed to accept it.
-_CROSS_MEMBER_PAIRS: tuple[tuple[str, str], ...] = (
-    ("resolve_case_mutation", "get_supported_mutation_modes"),
-)
+def _union(implementers, member, args, kwargs):
+    merged: set = set()
+    for provider in implementers:
+        merged |= set(getattr(provider, member)(*args, **kwargs))
+    return frozenset(merged)
 
 
-def _check_classification() -> None:
-    """Fail at import if a contract member carries no composition rule.
-
-    Deliberately import-time and deliberately fatal. A member that reaches
-    composition unclassified would have to fall through to some default, and
-    whichever default that is would then be a rule nobody chose.
-    """
-    declared = set(_SHAPE)
-    adapted = set()
-    for members in capability_members().values():
-        adapted |= set(members)
-    unclassified = sorted(adapted - declared)
-    if unclassified:
-        raise ValueError(
-            f"contract members {unclassified} are adapted by a capability but "
-            f"carry no composition rule in provider_stack._SHAPE"
-        )
-    unknown = sorted(declared - adapted)
-    if unknown:
-        raise ValueError(
-            f"provider_stack._SHAPE classifies {unknown}, which no capability "
-            f"adapts; the seam table and the rule table have drifted"
-        )
-
-
-_check_classification()
-
-
-def _implementers(ordered, member):
-    """Providers exposing ``member``, least-specific first."""
-    return tuple(
-        provider for provider in ordered
-        if callable(getattr(provider, member, None))
-    )
-
-
-def _union(ordered, implementers, member):
-    if not implementers:
-        return None
-
-    def _composed(*args, **kwargs):
-        merged: set = set()
-        for provider in implementers:
-            merged |= set(getattr(provider, member)(*args, **kwargs))
-        return frozenset(merged)
-
-    return _composed
-
-
-def _concat(ordered, implementers, member):
-    if not implementers:
-        return None
-
-    def _composed(*args, **kwargs):
-        collected: list = []
-        for provider in implementers:
-            collected.extend(getattr(provider, member)(*args, **kwargs))
-        return tuple(collected)
-
-    return _composed
+def _concat(implementers, member, args, kwargs):
+    collected: list = []
+    for provider in implementers:
+        collected.extend(getattr(provider, member)(*args, **kwargs))
+    return tuple(collected)
 
 
 def _override_marker(value):
-    """The provider id an entry claims to override, or ``None``.
-
-    Silence must never resolve a collision, so the marker is read only from an
-    entry that actually carries one; anything else is an unmarked duplicate.
-    """
     try:
         return value.get("overrides")
     except AttributeError:
         return None
 
 
-def _merge_with_override(ordered, implementers, member):
-    if not implementers:
-        return None
-
-    def _composed(*args, **kwargs):
-        merged: dict = {}
-        declared_by: dict = {}
-        for provider in implementers:
-            for key, value in dict(getattr(provider, member)(*args, **kwargs)).items():
-                marker = _override_marker(value)
-                if key in merged:
-                    if marker is None:
-                        raise ValueError(
-                            f"providers {declared_by[key]!r} and "
-                            f"{provider.plugin_id!r} both declare {key!r} in "
-                            f"{member}(); the more specific entry must carry "
-                            f"overrides: {declared_by[key]!r} to replace it"
-                        )
-                    if marker != declared_by[key]:
-                        raise ValueError(
-                            f"provider {provider.plugin_id!r} declares {key!r} "
-                            f"in {member}() with overrides: {marker!r}, but "
-                            f"{declared_by[key]!r} is what declared that key"
-                        )
-                elif marker is not None:
+def _merge(implementers, member, args, kwargs):
+    merged: dict = {}
+    declared_by: dict = {}
+    for provider in implementers:
+        for key, value in dict(getattr(provider, member)(*args, **kwargs)).items():
+            marker = _override_marker(value)
+            if key in merged:
+                if marker is None:
+                    raise ValueError(
+                        f"providers {declared_by[key]!r} and {provider.plugin_id!r} "
+                        f"both declare {key!r} in {member}(); the more specific "
+                        f"entry must carry overrides: {declared_by[key]!r} to replace it"
+                    )
+                if marker != declared_by[key]:
                     raise ValueError(
                         f"provider {provider.plugin_id!r} declares {key!r} in "
-                        f"{member}() with overrides: {marker!r}, which declared "
-                        f"no such key; the declaration it shadowed is gone"
+                        f"{member}() with overrides: {marker!r}, but "
+                        f"{declared_by[key]!r} is what declared that key"
                     )
-                merged[key] = value
-                declared_by[key] = provider.plugin_id
-        return merged
-
-    return _composed
-
-
-def _merge_catalog(ordered, implementers, member):
-    if not implementers:
-        return None
-
-    def _composed(*args, **kwargs):
-        from .contracts.dictionary_catalog import DictionaryCatalog
-
-        documents: dict = {}
-        declared_by: dict = {}
-        for provider in implementers:
-            catalog = getattr(provider, member)(*args, **kwargs)
-            for name, entries in dict(catalog.documents).items():
-                if name in documents:
-                    raise ValueError(
-                        f"providers {declared_by[name]!r} and "
-                        f"{provider.plugin_id!r} both declare the dictionary "
-                        f"document {name!r}"
-                    )
-                documents[name] = tuple(entries)
-                declared_by[name] = provider.plugin_id
-        return DictionaryCatalog(documents)
-
-    return _composed
+            elif marker is not None:
+                raise ValueError(
+                    f"provider {provider.plugin_id!r} declares {key!r} in "
+                    f"{member}() with overrides: {marker!r}, which declared no such key"
+                )
+            merged[key] = value
+            declared_by[key] = provider.plugin_id
+    return merged
 
 
-def _first_non_none(ordered, implementers, member):
-    if not implementers:
-        return None
+def _merge_catalog(implementers, member, args, kwargs):
+    from .contracts.dictionary_catalog import DictionaryCatalog
 
-    def _composed(*args, **kwargs):
-        for provider in reversed(implementers):
-            answer = getattr(provider, member)(*args, **kwargs)
-            if answer is not None:
-                return answer
-        return None
-
-    return _composed
-
-
-#: Recorded in place of a winner when no provider in the stack implements any
-#: member of a capability. Naming the most specific provider there would
-#: assert an ownership that does not exist; the capability adapter runs its
-#: declared fallback, which belongs to no provider.
-UNCLAIMED = "<unclaimed>"
+    documents: dict = {}
+    declared_by: dict = {}
+    for provider in implementers:
+        for name, entries in dict(getattr(provider, member)(*args, **kwargs).documents).items():
+            if name in documents:
+                raise ValueError(
+                    f"providers {declared_by[name]!r} and {provider.plugin_id!r} "
+                    f"both declare the dictionary document {name!r}"
+                )
+            documents[name] = tuple(entries)
+            declared_by[name] = provider.plugin_id
+    return DictionaryCatalog(documents)
 
 
-def resolve_with_provenance(ordered, member, *args, **kwargs):
-    """Run the ``single`` rule and report which provider actually answered.
-
-    Returns ``(value, provider_id)``; ``(None, None)`` when every implementer
-    returned ``None``. This is the same traversal :func:`_first_non_none`
-    performs -- most specific first -- so the reported provider is the one whose
-    value a caller would have received, not the one that merely declared the
-    hook.
-    """
-    for provider in reversed(_implementers(tuple(ordered), member)):
+def _first(implementers, member, args, kwargs):
+    for provider in reversed(implementers):
         answer = getattr(provider, member)(*args, **kwargs)
         if answer is not None:
-            return answer, provider.plugin_id
-    return None, None
+            return answer
+    return None
 
 
-def _chain(ordered, implementers, member):
-    if not implementers:
-        return None
+def _chain(implementers, member, args, kwargs):
+    value, *rest = args
+    for provider in implementers:
+        value = getattr(provider, member)(value, *rest, **kwargs)
+    return value
 
-    def _composed(value, *args, **kwargs):
-        current = value
-        for provider in implementers:
-            current = getattr(provider, member)(current, *args, **kwargs)
-        return current
 
-    return _composed
+def _empty_catalog():
+    from .contracts.dictionary_catalog import DictionaryCatalog
+
+    return DictionaryCatalog({})
+
+
+_COMPOSE = {
+    "set": _union, "map": _merge, "catalog": _merge_catalog,
+    "sequence": _concat, "single": _first, "chain": _chain,
+}
+
+_EMPTY = {
+    "set": lambda args: frozenset(), "map": lambda args: {},
+    "catalog": lambda args: _empty_catalog(), "sequence": lambda args: (),
+    "single": lambda args: None, "chain": lambda args: args[0],
+}
 
 
 class _ComposedProfile:
-    """One profile view over N providers' profiles.
-
-    ``case_files`` is the concatenation -- §2.1's one-declarer rule is checked
-    eagerly by :func:`_check_case_file_declarers`, so reaching here means the
-    paths are already known to be disjoint. ``provides`` is the union, because
-    the stack really does provide everything its members provide. Everything
-    else comes from the most specific provider, which is the only honest
-    answer for a single-valued field such as ``plugin_id``.
-    """
+    """Every provider's profile as one: case-file rules concatenated (one
+    declarer per path, checked when the stack is built), ``requires``
+    unioned, everything else from the most specific provider."""
 
     def __init__(self, profiles):
         self._profiles = tuple(profiles)
@@ -395,25 +294,11 @@ class _ComposedProfile:
 
     @property
     def case_files(self):
-        collected: list = []
-        for profile in self._profiles:
-            collected.extend(getattr(profile, "case_files", ()) or ())
-        return tuple(collected)
-
-    @property
-    def provides(self):
-        merged: set = set()
-        for profile in self._profiles:
-            merged |= set(getattr(profile, "provides", ()) or ())
-        return frozenset(merged)
+        return tuple(rule for profile in self._profiles for rule in profile.case_files)
 
     @property
     def digest(self) -> str:
-        import hashlib
-
-        joined = "|".join(
-            str(getattr(profile, "digest", "")) for profile in self._profiles
-        )
+        joined = "|".join(profile.digest for profile in self._profiles)
         return "sha256:" + hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
     def __getattr__(self, name):
@@ -422,231 +307,132 @@ class _ComposedProfile:
         return getattr(self.__dict__["_primary"], name)
 
 
-def _compose_profile(ordered, implementers, member):
-    if not implementers:
-        return None
-
-    def _composed():
-        return _ComposedProfile(
-            tuple(getattr(provider, member)() for provider in implementers)
-        )
-
-    return _composed
-
-
-_COMBINATORS = {
-    "set": _union,
-    "map": _merge_with_override,
-    "catalog": _merge_catalog,
-    "sequence": _concat,
-    "single": _first_non_none,
-    "chain": _chain,
-    "profile": _compose_profile,
-}
-
-
-class _ComposedProvider:
-    """One provider-shaped view over an ordered stack.
-
-    Composition happens here, at the *contract member*, and not at the
-    capability adapter: the adapters in :mod:`plugin_capabilities` already own
-    argument shaping and the declared fallback for every member, and there is
-    no second copy of that knowledge. A member no provider in the stack
-    implements is deliberately ABSENT from this object, so
-    ``adapt_plugin_capabilities`` probes it with ``getattr`` exactly as it does
-    for a single plugin and runs the fallback the seam declares -- including
-    the refusals that must not be neutral.
-    """
+class ProviderStack:
+    """An ordered provider stack, least specific first, that answers every
+    contract member through :meth:`call`."""
 
     def __init__(self, ordered):
-        self._ordered = tuple(ordered)
-        self._primary = self._ordered[-1]
-        self.plugin_id = self._primary.plugin_id
-        for member, shape in _SHAPE.items():
-            composed = _COMBINATORS[shape](
-                self._ordered, _implementers(self._ordered, member), member,
-            )
-            if composed is not None:
-                setattr(self, member, composed)
+        self.providers = tuple(ordered)
+        if not self.providers:
+            raise ValueError("a provider stack needs at least one provider")
+        self._profile = _ComposedProfile(provider_profile(p) for p in self.providers)
+        self._check_case_file_declarers()
+        self._check_format_declarers()
 
     @property
-    def providers(self) -> tuple:
-        return self._ordered
+    def ids(self) -> tuple[str, ...]:
+        return tuple(provider.plugin_id for provider in self.providers)
 
-    def __getattr__(self, name):
-        # A classified member absent from __dict__ was absent from every
-        # provider. Delegating it to the most specific provider would
-        # resurrect a member composition deliberately did not compose.
-        if name.startswith("_") or name in _SHAPE:
-            raise AttributeError(name)
-        return getattr(self.__dict__["_primary"], name)
+    def implementers(self, member: str) -> tuple:
+        """The providers implementing ``member``, least specific first."""
+        _entry(member)
+        return tuple(p for p in self.providers if callable(getattr(p, member, None)))
+
+    def implements(self, member: str) -> bool:
+        return bool(self.implementers(member))
+
+    def call(self, member: str, *args: Any, **kwargs: Any) -> Any:
+        """``member`` composed over the providers that implement it, or the
+        stack's answer for its absence; raises :class:`MemberAbsent` when an
+        operation needs it."""
+        shape, absent = _entry(member)
+        if shape == "profile":
+            return self._profile
+        implementers = self.implementers(member)
+        if implementers:
+            return _COMPOSE[shape](implementers, member, args, kwargs)
+        if isinstance(absent, Needed):
+            raise self.refusal(member)
+        return absent() if absent is not None else _EMPTY[shape](args)
+
+    def refusal(self, member: str) -> MemberAbsent:
+        """The refusal for a needed ``member`` no provider implements."""
+        absent = _entry(member)[1]
+        operation = absent.operation if isinstance(absent, Needed) else "this operation"
+        return MemberAbsent(
+            f"the provider stack {list(self.ids)} implements no {member}(), "
+            f"which {operation} needs"
+        )
+
+    def _check_case_file_declarers(self) -> None:
+        declared_by: dict = {}
+        for provider in self.providers:
+            for rule in provider_profile(provider).case_files:
+                if rule.path in declared_by:
+                    raise ValueError(
+                        f"case file {rule.path!r} is declared by both "
+                        f"{declared_by[rule.path]!r} and {provider.plugin_id!r}; "
+                        f"one fact has one declarer"
+                    )
+                declared_by[rule.path] = provider.plugin_id
+
+    def _check_format_declarers(self) -> None:
+        declared_by: dict[str, str] = {}
+        for provider in self.implementers("get_rendered_formats"):
+            for file_format in provider.get_rendered_formats():
+                if file_format in declared_by:
+                    raise ValueError(
+                        f"format {file_format!r} is rendered by both "
+                        f"{declared_by[file_format]!r} and {provider.plugin_id!r}; "
+                        f"the bytes on disk would depend on composition order"
+                    )
+                declared_by[file_format] = provider.plugin_id
 
 
-def _check_cross_member_pairs(ordered) -> None:
-    """Both halves of a crash-safety pair must come from one provider."""
-    for mutator, declarer in _CROSS_MEMBER_PAIRS:
-        mutators = _implementers(ordered, mutator)
-        declarers = _implementers(ordered, declarer)
-        if not mutators or not declarers:
-            # Zero declarers with a mutator present is the single-plugin case
-            # the capability adapter already refuses, by name, at call time.
+def check_provider_members(provider: Any) -> list[str]:
+    """One problem per malformed member: a public callable the contract does
+    not name (a misspelling would otherwise be ignored), a member that is not
+    callable, or half of a pair in :data:`_PAIRS`."""
+    from .plugin_interface import IDENTITY_MEMBERS
+
+    problems: list[str] = []
+    for name in dir(provider):
+        if name.startswith("_") or name in IDENTITY_MEMBERS:
             continue
-        if mutators[-1] is not declarers[-1]:
-            raise ValueError(
-                f"provider {mutators[-1].plugin_id!r} implements {mutator}() "
-                f"but {declarers[-1].plugin_id!r} implements {declarer}(); "
-                f"both must come from the same provider, or the before-images "
-                f"rollback restores are computed by a different provider than "
-                f"the one mutating"
-            )
+        value = getattr(provider, name, None)
+        if name in MEMBERS:
+            if not callable(value):
+                problems.append(f"{name} must be callable")
+        elif callable(value):
+            problems.append(f"{name} is not a plugin contract member")
+    for first, second in _PAIRS:
+        has = (callable(getattr(provider, first, None)), callable(getattr(provider, second, None)))
+        if has[0] != has[1]:
+            present, missing = (first, second) if has[0] else (second, first)
+            problems.append(f"{present}() needs {missing}() from the same provider")
+    return problems
 
 
-def _check_case_file_declarers(ordered) -> None:
-    """Spec §2.1: exactly one declarer per case-file path, always."""
-    declared_by: dict = {}
-    for provider in ordered:
-        for rule in getattr(provider.get_profile(), "case_files", ()) or ():
-            path = getattr(rule, "path", None)
-            if path in declared_by:
-                raise ValueError(
-                    f"case file {path!r} is declared by both "
-                    f"{declared_by[path]!r} and {provider.plugin_id!r}; one "
-                    f"fact has one declarer, and tolerating two is how two "
-                    f"sources of truth are born"
-                )
-            declared_by[path] = provider.plugin_id
+#: Recorded in place of a winner when no provider implements a member.
+UNCLAIMED = "<unclaimed>"
 
-
-def _check_format_declarers(ordered) -> None:
-    """One declarer per rendered format, always.
-
-    Two providers claiming `openfoam_dictionary` would make the bytes that
-    reach disk depend on composition order -- the same defect
-    `_check_case_file_declarers` refuses for case files.
-    """
-    declared_by: dict[str, str] = {}
-    for provider in ordered:
-        hook = getattr(provider, "get_rendered_formats", None)
-        for file_format in (hook() if callable(hook) else ()):
-            if file_format in declared_by:
-                raise ValueError(
-                    f"format {file_format!r} is rendered by both "
-                    f"{declared_by[file_format]!r} and {provider.plugin_id!r}; "
-                    f"one format has one renderer, and tolerating two makes the "
-                    f"bytes on disk depend on composition order"
-                )
-            declared_by[file_format] = provider.plugin_id
-
-
-def compose(ordered_providers):
-    """Compose an ordered provider stack into one capability bundle.
-
-    ``ordered_providers`` runs least-specific first, as :func:`order_providers`
-    returns it. The result is an ordinary
-    :class:`~omnidriver.core.plugin_capabilities.PluginCapabilities`, so every
-    consumer of a single plugin's capabilities consumes a composed stack
-    unchanged.
-
-    The four checks below are eager because their failure is a packaging
-    error, not a runtime one: it cannot depend on which capability a run
-    happens to touch.
-    """
-    from .plugin_capabilities import adapt_plugin_capabilities
-
-    ordered = tuple(ordered_providers)
-    if not ordered:
-        raise ValueError("compose() requires at least one provider")
-    _check_cross_member_pairs(ordered)
-    _check_case_file_declarers(ordered)
-    _check_format_declarers(ordered)
-    return adapt_plugin_capabilities(_ComposedProvider(ordered))
-
-
-#: Capabilities whose resolved CONTENT is hashed into the stack digest. Spec
-#: §4.4 keeps content digests to the three the single-plugin digest already
-#: covered -- profile, dictionary vocabulary, manifest -- and records only the
-#: resolution decision for the rest, because materializing all 25 at context
-#: construction is what §3.4's uncached re-parsing makes expensive.
-_DIGESTED_CAPABILITIES: dict[str, str] = {
-    "cxx_mapping": "get_profile",
-    "dictionaries": "get_dict_entries",
-    "manifest": "get_capabilities",
-}
-
-#: What a capability carries instead of a content digest. Not an empty string:
-#: a placeholder that reads as a placeholder in a provenance record.
+#: What a member carries instead of a content digest.
 RESOLUTION_PLACEHOLDER = "-"
 
+#: Members whose resolved content is hashed into the stack digest.
+_DIGESTED = ("get_profile", "get_dict_entries", "get_capabilities")
 
-def _content_digest(value) -> str:
-    import hashlib
-    import json
 
-    from .plugin_interface import _identity_jsonable
+def content_digest(value) -> str:
+    from .plugin_interface import identity_jsonable
 
-    encoded = json.dumps(
-        _identity_jsonable(value), sort_keys=True, separators=(",", ":"),
-    ).encode()
+    encoded = json.dumps(identity_jsonable(value), sort_keys=True, separators=(",", ":")).encode()
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
-def resolutions(ordered_providers) -> dict[str, tuple[str, str]]:
-    """capability -> (winning provider id, resolved-content digest).
-
-    The input to :func:`~omnidriver.core.provider_identity.build_stack_identity`,
-    which hashes the composition RESULT rather than merely its inputs.
-
-    For the three capabilities in :data:`_DIGESTED_CAPABILITIES` whose digested
-    member is ``single``-shaped, the winner is the provider whose value the
-    ``single`` rule actually used -- :func:`resolve_with_provenance` runs the
-    same traversal :func:`_first_non_none` does, so "who answered" and "what
-    the composed callable returns" can never disagree. For every other
-    capability the winner remains the most specific declaring implementer: it
-    is the best available claim, not an assertion about content, and the
-    placeholder digest that accompanies it says so. (Using the most specific
-    *declarer* for the digested capabilities too would be wrong: a provider
-    that declares a ``single``-shaped hook and returns ``None`` is not the
-    source of a value ``_first_non_none`` fell through to a less specific
-    provider to find.)
-    """
-    ordered = tuple(ordered_providers)
-    if not ordered:
-        raise ValueError("resolutions() requires at least one provider")
-    composed = _ComposedProvider(ordered)
-    members = capability_members()
+def resolutions(stack: ProviderStack) -> dict[str, tuple[str, str]]:
+    """member -> (most specific implementing provider, content digest), the
+    input to ``provider_identity.build_stack_identity``."""
     resolved: dict[str, tuple[str, str]] = {}
-    for capability in members:
-        implementers = [
-            provider
-            for provider in ordered
-            if any(
-                callable(getattr(provider, member, None))
-                for member in members[capability]
-            )
-        ]
-        digested_member = _DIGESTED_CAPABILITIES.get(capability)
+    for member in MEMBERS:
+        implementers = stack.implementers(member)
         if not implementers:
-            resolved[capability] = (UNCLAIMED, RESOLUTION_PLACEHOLDER)
+            resolved[member] = (UNCLAIMED, RESOLUTION_PLACEHOLDER)
             continue
-        if digested_member is None or not callable(
-            getattr(composed, digested_member, None)
-        ):
-            # Not digested, or digested through a member this stack does not
-            # implement: the declared most-specific implementer is the best
-            # available claim, and the placeholder digest already says the
-            # content behind it is not bound. Recorded, not asserted.
-            resolved[capability] = (implementers[-1].plugin_id, RESOLUTION_PLACEHOLDER)
+        winner = implementers[-1].plugin_id
+        if member not in _DIGESTED:
+            resolved[member] = (winner, RESOLUTION_PLACEHOLDER)
             continue
-        if _SHAPE.get(digested_member) == "single":
-            value, answering_id = resolve_with_provenance(ordered, digested_member)
-            winner = answering_id or UNCLAIMED
-        else:
-            value = getattr(composed, digested_member)()
-            winner = implementers[-1].plugin_id
-        content = (
-            getattr(value, "digest", None)
-            if digested_member == "get_profile"
-            else _content_digest(value)
-        )
-        resolved[capability] = (winner, content or RESOLUTION_PLACEHOLDER)
+        value = stack.call(member)
+        resolved[member] = (winner, value.digest if member == "get_profile" else content_digest(value))
     return resolved

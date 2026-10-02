@@ -30,7 +30,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from functools import lru_cache
 from pathlib import Path
-from omnidriver.core.plugin_interface import SolverPlugin, CapabilityManifest
 
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS, HETEROGENEITY_MODELS
 from omnidriver.cardiacfoam.common_dict_entries import (
@@ -38,11 +37,11 @@ from omnidriver.cardiacfoam.common_dict_entries import (
     PHYSICS_PROPERTY_ENTRIES,
 )
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
-from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
 if TYPE_CHECKING:
+    from omnidriver.core.contracts.dictionary import DictEntry
+    from omnidriver.core.planning_types import StrictDiagnostic
     from omnidriver.core.runtime.models import TutorialSpec, DataArtifact
-    from pathlib import Path
 
 
 class CardiacFoamPlugin:
@@ -93,21 +92,10 @@ class CardiacFoamPlugin:
         return configured_env
 
     def get_dict_groups(self) -> dict[str, tuple[DictEntry, ...]]:
-        """
-        Return the dictionary entries organized by logical group.
-        """
         return ELECTRO_PROPERTY_ENTRY_GROUPS
 
     def get_dict_entries(self) -> tuple[DictEntry, ...]:
-        """
-        Aggregate and return all dictionary entries specific to cardiacFoam.
-
-        Must stay in step with :meth:`get_dictionary_catalog` -- both are
-        ``DictionaryCatalogCapability`` accessors over the same catalogue, so
-        every source folded into the catalog (``PHYSICS_PROPERTY_ENTRIES``,
-        each electro-property group, and ``CONTROL_DICT_ENTRIES``) must be
-        folded in here too.
-        """
+        """The same entries :meth:`get_dictionary_catalog` holds, flat."""
         entries: list[DictEntry] = list(PHYSICS_PROPERTY_ENTRIES)
         entries.extend(CONTROL_DICT_ENTRIES)
         for group in self.get_dict_groups().values():
@@ -126,15 +114,9 @@ class CardiacFoamPlugin:
             "controlDict": CONTROL_DICT_ENTRIES,
         })
 
-    def get_capabilities(self) -> CapabilityManifest:
-        """Return what only cardiacFoam can add to the capability manifest.
-
-        Core builds the base capability manifest itself, composing
-        ``command_authorization``/``case_introspection``/
-        ``case_runtime_conventions`` over the same provider stack. The model
-        catalogues are not here: ``describe`` carries them once, as
-        ``plugin_catalogs`` (:meth:`get_named_catalogs`).
-        """
+    def get_capabilities(self) -> dict:
+        """What only cardiacFoam adds to the capability manifest; the model
+        catalogues reach ``describe`` once, through :meth:`get_named_catalogs`."""
         return {"heterogeneity_models": HETEROGENEITY_MODELS}
 
     def resolve_case_models(self, case_root: Path) -> dict:
@@ -162,14 +144,6 @@ class CardiacFoamPlugin:
 
         return solve_step_commands()
 
-    def get_telemetry_source_globs(self, command: str) -> tuple:
-        """Where this command's solver log lands beyond captured stdout."""
-        from omnidriver.cardiacfoam.runtime_evidence import (
-            telemetry_source_globs,
-        )
-
-        return telemetry_source_globs(command)
-
     def get_extra_provenance_paths(self, case_root) -> tuple:
         """Extra inputs the provenance snapshot must digest beyond system/ and constant/."""
         from omnidriver.cardiacfoam.runtime_evidence import (
@@ -186,7 +160,6 @@ class CardiacFoamPlugin:
 
         return artifact_value_reader(artifact_format)
 
-    # -- CaseWriterCapability --------------------------------------------
     def get_supported_mutation_modes(self) -> "frozenset[str]":
         return frozenset({"synthesize", "clone_and_patch"})
 
@@ -206,15 +179,6 @@ class CardiacFoamPlugin:
             f"cardiacFoam resolves synthesize and clone_and_patch requests "
             f"only, not {request.mode!r}"
         )
-
-    def get_required_inputs(self, case_root, resolved_case) -> tuple:
-        """Model-dependent required inputs (CaseProvenanceCapability). See
-        ``case_provenance.py`` for why this defers to the safe default."""
-        from omnidriver.cardiacfoam.case_provenance import (
-            required_inputs,
-        )
-
-        return required_inputs(case_root, resolved_case)
 
     def get_generated_output_globs(self, case_root, resolved_case) -> tuple:
         """Fixed mesh-diagnostic outputs nothing in src/ or applications/ reads."""
@@ -237,13 +201,6 @@ class CardiacFoamPlugin:
             },
         }
 
-    def get_report_catalog(self) -> tuple:
-        """Post-run reports this plugin offers. Core owns the machinery; the
-        catalog is plugin data."""
-        from omnidriver.cardiacfoam.reports import CARDIAC_REPORTS
-
-        return CARDIAC_REPORTS
-
     def get_named_catalogs(self) -> dict:
         """This plugin's own catalogs -- ionic models and active-tension
         models -- namespaced under introspection's generic
@@ -255,9 +212,7 @@ class CardiacFoamPlugin:
         return named_catalogs()
 
     def get_record_key_validator(self):
-        """This plugin's one ``RecordKeyValidationCapability`` answer for a
-        cardiac stack. See ``record_key_validation.py``'s module docstring
-        for the three rules it implements."""
+        """See ``record_key_validation.py`` for the three rules it implements."""
         from omnidriver.cardiacfoam.record_key_validation import record_key_validator
 
         return record_key_validator
@@ -282,8 +237,6 @@ class CardiacFoamPlugin:
         return ({"title": "cardiacFOAM: how omniD checks a study's keys, and where the mesh comes from", "text": text},)
 
     def get_tutorial_records(self) -> dict:
-        """This plugin's ``TutorialRecordCapability`` answer: every record
-        this package registers, aggregated by ``records/__init__.py``."""
         from omnidriver.cardiacfoam.records import TUTORIAL_RECORDS
 
         return TUTORIAL_RECORDS
@@ -341,11 +294,3 @@ class CardiacFoamPlugin:
         # utility_manifests() is cached and returns a read-only view; copy so a
         # caller mutating what it gets back cannot reach the shared cache.
         return dict(utility_manifests())
-
-    def get_utility_roots(self) -> tuple[Path, ...]:
-        """Roots searched for this plugin's utility manifests."""
-        from omnidriver.cardiacfoam.command_authorization import (
-            utility_roots,
-        )
-
-        return utility_roots()

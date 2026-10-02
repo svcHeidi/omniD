@@ -4,7 +4,7 @@ cardiacFOAM alike."""
 
 from __future__ import annotations
 
-from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+from omnidriver.core.plugin_interface import CaseRuntimeConventions
 
 
 def openfoam_case_runtime_conventions() -> CaseRuntimeConventions:

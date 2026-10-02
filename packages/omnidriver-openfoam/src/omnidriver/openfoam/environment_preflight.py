@@ -84,7 +84,7 @@ def _supplied_src_root(driver_context: Any | None) -> Path | None:
     or ``None`` -- never discovered by walking up from this module."""
     if driver_context is None:
         return None
-    mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
+    mapping = driver_context.stack.call("get_profile").cxx_mapping
     return mapping.source_root(os.environ) if mapping is not None else None
 
 

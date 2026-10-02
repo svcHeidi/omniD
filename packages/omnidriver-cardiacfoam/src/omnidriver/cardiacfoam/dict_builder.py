@@ -845,7 +845,7 @@ def build_case(
     import datetime as _datetime
     import tempfile as _tempfile
 
-    from omnidriver.core.case_write import CaseWritePlan
+    from omnidriver.core.case_write import CaseWritePlan, render_mutation, resolve_mutation
 
     # Made absolute here if it is not already: `CaseMutationRequest` below
     # refuses a relative `case_root` outright -- a relative one would
@@ -933,15 +933,10 @@ def build_case(
     if driver_context is None:
         driver_context = own_driver_context()
 
-    resolved = driver_context.capabilities.case_writer.resolve(
-        request, driver_context=driver_context,
-    )
+    resolved = resolve_mutation(driver_context, request)
     with _tempfile.TemporaryDirectory(prefix="omnidriver-case-render-") as scratch:
         snapshot_root = _Path(scratch)
-        rendered = driver_context.capabilities.case_writer.render(
-            resolved, snapshot_root=snapshot_root, driver_context=driver_context,
-            execution_env=None,
-        )
+        rendered = render_mutation(driver_context, resolved, snapshot_root=snapshot_root)
         identity = getattr(driver_context, "identity", None)
         stack_identity = identity.capability_digest if identity is not None else "0" * 64
         plan = CaseWritePlan(

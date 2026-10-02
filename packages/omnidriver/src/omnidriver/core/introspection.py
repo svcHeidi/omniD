@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Mapping
 if TYPE_CHECKING:
     from .plugin_interface import DriverContext
 
+from .capability_manifest import capability_manifest
 from .tutorial_records import TutorialRecord, TutorialRecordError, lookup_record
 
 
@@ -33,7 +34,7 @@ def _plugin_catalogs(driver_context: "DriverContext") -> dict[str, Any]:
     # cardiac plugin's ionic_model_catalog/active_tension_catalog); core only
     # namespaces the whole mapping under this key and serializes it.
     return _serialize(
-        dict(driver_context.capabilities.named_catalogs.catalogs())
+        dict(driver_context.stack.call("get_named_catalogs"))
     )
 
 
@@ -88,12 +89,12 @@ def describe_entry(
     )
     return {
         "entry": {"entry_name": record.name, "entry_path": record.native_case_relpath},
-        "records": sorted(driver_context.capabilities.tutorial_records.catalog() or {}),
+        "records": sorted(driver_context.stack.call("get_tutorial_records")),
         "plugin_catalogs": _plugin_catalogs(driver_context),
         "record_preview": preview,
         "record_surface": surface,
         "capability_manifest": _serialize({
-            **dict(driver_context.capabilities.manifest.manifest()),
+            **capability_manifest(driver_context),
             "plugin_identity": driver_context.identity.to_json(),
         }),
     }

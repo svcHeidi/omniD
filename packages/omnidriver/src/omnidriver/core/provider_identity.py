@@ -28,7 +28,7 @@ STACK_IDENTITY_COMPARISON_KEYS = ("composition_rule_version", "capability_digest
 #: identically across a semantic change core made -- the one case no other
 #: element of the digest covers. A digest computed under a different version
 #: is not comparable.
-COMPOSITION_RULE_VERSION = "2"
+COMPOSITION_RULE_VERSION = "3"
 
 
 @dataclass(frozen=True)
@@ -55,9 +55,8 @@ class ProviderIdentity:
 class StackIdentity:
     """Identity of a composed stack.
 
-    `resolutions` maps each capability to the provider that answered it. It is
-    what lets a provenance record say WHICH adapter answered -- which the
-    single-plugin identity could not.
+    `resolutions` maps each contract member to the most specific provider
+    implementing it, so a provenance record says which provider answered.
     """
 
     providers: tuple[ProviderIdentity, ...]
@@ -82,13 +81,11 @@ def build_stack_identity(
 ) -> StackIdentity:
     """Hash the composition RESULT, not merely its inputs.
 
-    `resolutions` is capability -> (winning provider id, that capability's
-    resolved-content digest). Only the three capabilities the single-plugin
-    digest already covered carry a real content digest; the rest carry a
-    placeholder and contribute only their winner.
-
-    Known limit: a content change inside a non-digested capability, in an
-    editable install with no version bump, is invisible here. See spec §4.4.
+    `resolutions` is member -> (winning provider id, resolved-content
+    digest). Only the profile, the dictionary entries and the manifest carry
+    a content digest; the rest carry a placeholder and contribute their
+    winner. A content change inside another member, in an editable install
+    with no version bump, is therefore invisible here.
     """
     payload = {
         "composition_rule_version": composition_rule_version,
@@ -96,8 +93,8 @@ def build_stack_identity(
             [p.id, p.version, p.provider_digest] for p in providers
         ],
         "resolutions": [
-            [capability, winner, content]
-            for capability, (winner, content) in sorted(resolutions.items())
+            [member, winner, content]
+            for member, (winner, content) in sorted(resolutions.items())
         ],
     }
     digest = hashlib.sha256(
@@ -108,7 +105,7 @@ def build_stack_identity(
         composition_rule_version=composition_rule_version,
         capability_digest=digest,
         resolutions={
-            capability: winner for capability, (winner, _) in resolutions.items()
+            member: winner for member, (winner, _) in resolutions.items()
         },
     )
 

@@ -1,14 +1,13 @@
 """The files core itself writes into a case, declared once here so any stack
-(including one without the OpenFOAM layer) knows them when staging a case --
-``_CaseRuntimeConventionsAdapter.conventions`` merges this into whatever the
-plugin stack declares.
+(including one without the OpenFOAM layer) knows them when staging a case:
+:func:`case_runtime_conventions` merges them into what the stack declares.
 """
 from __future__ import annotations
 
 from dataclasses import replace
 
 from .case_transaction import _JOURNAL_RELATIVE_PATH
-from .plugin_capabilities import CaseRuntimeConventions
+from .plugin_interface import CaseRuntimeConventions
 from .runtime.attempt_lease import ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME
 from .runtime.postprocess_phase import CASE_RECORD_FILENAME
 from .runtime.run_document_exec import RUN_DOCUMENT_FILENAME
@@ -44,3 +43,15 @@ def with_core_runtime_records(conventions: CaseRuntimeConventions) -> CaseRuntim
         generated_file_names=_union(conventions.generated_file_names, CORE_RUNTIME_RECORDS.generated_file_names),
         generated_case_markers=_union(conventions.generated_case_markers, CORE_RUNTIME_RECORDS.generated_case_markers),
     )
+
+
+def case_runtime_conventions(driver_context) -> CaseRuntimeConventions:
+    """The stack's declared generated paths, plus core's own run records,
+    which a stack declaring none still needs: staging a case a run wrote
+    must not carry core's state into the next stage."""
+    declared = driver_context.stack.call("get_case_runtime_conventions")
+    if not isinstance(declared, CaseRuntimeConventions):
+        raise TypeError(
+            f"get_case_runtime_conventions() must return CaseRuntimeConventions, got {declared!r}"
+        )
+    return with_core_runtime_records(declared)

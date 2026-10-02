@@ -48,7 +48,7 @@ def _predict_from_workflow_utilities(
     steps = dag.get("steps", ())
     if not steps:
         return ()
-    utilities = driver_context.capabilities.command_authorization.utility_manifests()
+    utilities = driver_context.stack.call("get_utility_manifests")
     derived: list[DataArtifact] = []
     for step in steps:
         command = step.get("command")
@@ -118,14 +118,10 @@ def predict_data_artifacts(
     ``spec.metadata['expected_artifacts']`` override. Never raises;
     returns ``()`` when nothing can be derived.
     """
-    from omnidriver.core.plugin_capabilities import ArtifactPredictionRequest
-
     static_override = spec.metadata.get("expected_artifacts", ()) if spec.metadata else ()
     static_tuple = tuple(static_override)
 
-    plugin_derived = driver_context.capabilities.artifacts.predict(
-        ArtifactPredictionRequest(case_root=case_root, spec=spec),
-    )
+    plugin_derived = driver_context.stack.call("predict_data_artifacts", case_root, spec)
     utility_derived = _predict_from_workflow_utilities(spec, driver_context)
     
     derived = _core_artifacts(spec) + plugin_derived + utility_derived

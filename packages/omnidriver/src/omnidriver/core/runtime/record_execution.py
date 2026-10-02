@@ -18,7 +18,8 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence
 
 from ..case_transaction import commit_case_write
-from ..case_write import CaseMutationRequest, CaseWritePlan, CaseWriteRecord
+from ..case_write import CaseMutationRequest, CaseWritePlan, CaseWriteRecord, render_mutation, resolve_mutation
+from ..provider_stack import MemberAbsent
 from ..sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
 from .models import DataArtifact
 from ..tutorial_records import (
@@ -234,32 +235,7 @@ def _resolve_and_split(
     tuple[SourcedPatch, ...], tuple[SourcedPatch, ...],
     dict[str, tuple[str, ...]], tuple[str, ...], dict[str, Any] | None, Any,
 ]:
-    # Neither capability has a compatibility fallback (`:fallback: none`) --
-    # a stack missing a record-key validator or a case-value comparator
-    # cannot run a tutorial-record case at all, and must say so by name
-    # rather than silently accepting every key unchecked or reporting every
-    # no-op patch as "changed" and writing it.
-    validator = driver_context.capabilities.record_key_validation.validator()
-    if validator is None:
-        raise TutorialRecordError(
-            f"tutorial record {record.name!r} cannot run: the composed stack "
-            "declares no record-key validator (get_record_key_validator); a "
-            "record case's keys cannot be checked against any catalog"
-        )
-    comparator = driver_context.capabilities.case_value_comparison.comparator()
-    if comparator is None:
-        raise TutorialRecordError(
-            f"tutorial record {record.name!r} cannot run: the composed stack "
-            "declares no case-value comparator (get_case_value_comparator); "
-            "whether a patch is unchanged cannot be determined"
-        )
-    read_current_value = driver_context.capabilities.config_value.reader()
-    if read_current_value is None:
-        raise TutorialRecordError(
-            f"tutorial record {record.name!r} cannot run: the composed stack "
-            "declares no config-value reader (get_config_value_reader); "
-            "whether a patch is unchanged cannot be determined"
-        )
+    validator, comparator, read_current_value = record_case_members(record, driver_context)
     study_by_source, reserved_values = _extract_reserved_names(
         study_by_source, reserved_names=_reserved_study_names(record),
     )
@@ -432,6 +408,22 @@ def _refusal_as_record_error(
         ) from exc
 
 
+def record_case_members(record: TutorialRecord, driver_context: "DriverContext") -> tuple[Any, Any, Any]:
+    """The stack's record-key validator, case-value comparator and
+    config-value reader, refused by name with the record when one is absent:
+    without them a record case's keys go unchecked and every no-op patch
+    looks like a change."""
+    stack = driver_context.stack
+    try:
+        return (
+            stack.call("get_record_key_validator"),
+            stack.call("get_case_value_comparator"),
+            stack.call("get_config_value_reader"),
+        )
+    except MemberAbsent as exc:
+        raise TutorialRecordError(f"tutorial record {record.name!r} cannot run: {exc}") from exc
+
+
 def refuse_a_case_that_breaks_a_rule(
     record: TutorialRecord, case_root: Path, driver_context: "DriverContext", *, then: str = "",
 ) -> None:
@@ -440,11 +432,7 @@ def refuse_a_case_that_breaks_a_rule(
     an error in it: the one check every plan, run, sweep case, applied edit
     and run document passes before anything executes. ``then`` says what
     stays true after the refusal."""
-    from ..plugin_capabilities import RunSemanticValidationRequest
-
-    found = driver_context.capabilities.run_semantic_validator.validate(
-        RunSemanticValidationRequest(case_root),
-    )
+    found = driver_context.stack.call("validate_run_semantics", case_root)
     broken = [item for item in found if item.level == "error"]
     if broken:
         noted = [item for item in found if item.level != "error"]
@@ -471,11 +459,8 @@ def _commit_patches(
     one ``commit_case_write`` call."""
     import tempfile
 
-    # `identity.resolutions["case_writer"]` names whichever provider in the
-    # composed stack actually answers `case_writer` -- correct even when
-    # that is not the most specific provider.
     identity = driver_context.identity
-    adapter_id = identity.resolutions["case_writer"]
+    adapter_id = identity.resolutions["resolve_case_mutation"]
     parameters = patches_to_parameters(to_write, owner=adapter_id)
     request = CaseMutationRequest(
         mode="clone_and_patch", case_root=staged_case_root, adapter_id=adapter_id,
@@ -484,9 +469,7 @@ def _commit_patches(
     )
     documents = frozenset(parameter.document for parameter in parameters)
     with _refusal_as_record_error(record, documents, "resolving"):
-        resolved = driver_context.capabilities.case_writer.resolve(
-            request, driver_context=driver_context,
-        )
+        resolved = resolve_mutation(driver_context, request)
     # `snapshot_root` must be a directory distinct from `request.case_root`:
     # reusing it makes a real renderer's seeding copy a no-op `shutil.copy2`
     # onto itself, raising `shutil.SameFileError`. `_seed_snapshot_root`
@@ -498,9 +481,8 @@ def _commit_patches(
             snapshot_root, case_root=staged_case_root, documents=documents,
         )
         with _refusal_as_record_error(record, documents, "rendering"):
-            rendered = driver_context.capabilities.case_writer.render(
-                resolved, snapshot_root=snapshot_root, driver_context=driver_context,
-                execution_env=execution_env,
+            rendered = render_mutation(
+                driver_context, resolved, snapshot_root=snapshot_root, execution_env=execution_env,
             )
     plan = CaseWritePlan(
         request=request, files=tuple(rendered),
@@ -700,7 +682,7 @@ def _case_value_reader(
         for sourced in pending
     }
     read = _reader_refusing_as_record_error(
-        record, driver_context.capabilities.config_value.reader(), case_root=case_root,
+        record, record_case_members(record, driver_context)[2], case_root=case_root,
     )
 
     def read_value(document: str, key_path: Sequence[str]) -> Any:
@@ -748,15 +730,14 @@ def _parallel_workflow_dag(
     another step already uses. What the form means -- a decomposition, a
     launcher, a rank count -- is the solver layer's. Every refusal names the
     record."""
-    form = driver_context.capabilities.parallel_execution.steps_for()
-    if form is None:
+    stack = driver_context.stack
+    if not stack.implements("get_parallel_steps"):
         raise TutorialRecordError(
             f"tutorial record {record.name!r}: the run asks for "
-            f"{PARALLEL_STUDY_NAME!r} = {request!r}, but the composed stack declares no "
-            "parallel form (get_parallel_steps), so it runs serial only; omit "
-            f"{PARALLEL_STUDY_NAME!r}, or set it false, to run serial"
+            f"{PARALLEL_STUDY_NAME!r} = {request!r}, but {stack.refusal('get_parallel_steps')}; "
+            f"omit {PARALLEL_STUDY_NAME!r}, or set it false, to run serial"
         )
-    solve_commands = driver_context.capabilities.runtime_evidence.solve_step_commands()
+    solve_commands = stack.call("get_solve_step_commands")
     if not any(step["command"] in solve_commands for step in dag["steps"]):
         raise TutorialRecordError(
             f"tutorial record {record.name!r}: the run asks for {PARALLEL_STUDY_NAME!r}, "
@@ -774,8 +755,8 @@ def _parallel_workflow_dag(
             continue
         try:
             replacement = [
-                dict(entry) for entry in form(
-                    copy.deepcopy(step), request=request, read_value=read_value,
+                dict(entry) for entry in stack.call(
+                    "get_parallel_steps", copy.deepcopy(step), request=request, read_value=read_value,
                     allocation=allocation,
                 )
             ]

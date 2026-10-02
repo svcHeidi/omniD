@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from copy import deepcopy
 from functools import lru_cache
 from importlib import resources
@@ -60,30 +59,11 @@ class CardiacCorePlugin:
     def get_dict_entries(self) -> tuple[Any, ...]:
         return CATALOG.entries
 
-    def get_dict_entries(self) -> tuple[Any, ...]:
-        return CATALOG.entries
-
     def get_dictionary_catalog(self) -> DictionaryCatalog:
         return CATALOG
 
     def get_dict_groups(self) -> dict[str, tuple[Any, ...]]:
         return DOCUMENTS
-
-    def get_capabilities(self) -> dict[str, Any]:
-        """This provider has no domain catalogue core cannot already compose.
-
-        ``plugin_capabilities._CapabilityManifestAdapter.manifest`` computes
-        the capability manifest directly from the composed
-        ``command_authorization``/``case_introspection``/
-        ``case_runtime_conventions`` reads over this provider stack.
-        cardiacCore's own named catalogues (conditional inputs, tree
-        validation, etc.) are exposed through ``get_named_catalogs`` instead.
-        """
-        return {}
-
-    def validate_configuration(self, spec: Any) -> tuple[Any, ...]:
-        del spec
-        return ()
 
     def validate_run_semantics(self, case_root: Path) -> tuple[Any, ...]:
         """The catalogue's relations over each utility dictionary the resolved
@@ -92,29 +72,11 @@ class CardiacCorePlugin:
 
         return case_diagnostics(case_root, mapping=self.get_profile().cxx_mapping)
 
-    def predict_data_artifacts(self, case_root: Path, spec: Any) -> tuple[Any, ...]:
-        del case_root, spec
-        return ()
-
-    def get_solver_commands(self) -> frozenset[str]:
-        return frozenset()
-
     def get_auxiliary_commands(self) -> frozenset[str]:
         return frozenset(_utility_manifests())
 
     def get_utility_manifests(self) -> dict[str, Any]:
         return dict(_utility_manifests())
-
-    def get_utility_roots(self) -> tuple[Path, ...]:
-        return (_UTILITIES_ROOT,)
-
-    def resolve_case_models(self, case_root: Path) -> dict[str, Any]:
-        del case_root
-        return {}
-
-    def get_samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]:
-        del resolved
-        return {}
 
     def get_dict_entry_catalog(self) -> dict[str, Any]:
         return {name: list(entries) for name, entries in DOCUMENTS.items()}
@@ -129,17 +91,6 @@ class CardiacCorePlugin:
             "cardiaccore_support_boundary": SUPPORT_BOUNDARY,
             "cardiaccore_operations": OPERATIONS,
         })
-
-    def get_solve_step_commands(self) -> frozenset[str]:
-        return frozenset()
-
-    def get_telemetry_source_globs(self, command: str) -> tuple[str, ...]:
-        del command
-        return ()
-
-    def get_extra_provenance_paths(self, case_root: Path) -> tuple[Any, ...]:
-        del case_root
-        return ()
 
     def get_generated_output_globs(
         self,
@@ -158,10 +109,6 @@ class CardiacCorePlugin:
             for manifest in _utility_manifests().values()
             for produced in manifest.produces
         }))
-
-    def get_artifact_value_reader(self, artifact_format: str) -> None:
-        del artifact_format
-        return None
 
     # -- Tutorial records -----------------------------------------------------
     def get_tutorial_records(self) -> dict[str, Any]:
@@ -183,7 +130,6 @@ class CardiacCorePlugin:
         text = resources.files(__package__).joinpath("guidance.md").read_text()
         return ({"title": "cardiacCore: records, study keys and coordinate conventions", "text": text},)
 
-    # -- CaseWriterCapability -------------------------------------------------
     def get_supported_mutation_modes(self) -> "frozenset[str]":
         return frozenset({"clone_and_patch"})
 

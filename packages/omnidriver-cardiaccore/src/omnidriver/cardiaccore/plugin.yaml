@@ -4,50 +4,6 @@ plugin:
   api_version: "2"
 requires:
   - org.omnidriver.openfoam.environment
-# provides: lists only capabilities this provider genuinely answers, judged
-# two ways -- neither alone is enough:
-#
-# 1. Presence: a callable member exists for the capability.
-#
-# 2. Realness: the member's body actually computes something rather than
-#    unconditionally ignoring its arguments and returning a constant.
-#    provider_stack.check_provides() only checks callability, so
-#    passing gate 1 does not imply gate 2 -- read every adapted member's
-#    actual body. One hollow member disqualifies the whole capability, the
-#    same standard applied to org.omnidriver.openfoam.environment's
-#    provides: (see its plugin.yaml).
-#
-# Withheld for realness:
-#   - artifacts: predict_data_artifacts unconditionally returns `()`.
-#   - run_semantic_validator: validate_run_semantics unconditionally
-#     returns `()`.
-#   - configuration_validator: validate_configuration unconditionally
-#     returns `()`.
-#   - runtime_evidence: all four adapted members (get_artifact_value_reader,
-#     get_extra_provenance_paths, get_solve_step_commands,
-#     get_telemetry_source_globs) ignore their arguments and return a fixed
-#     empty/`None` value.
-#
-# Realness governs check_provides(); it does not reach resolutions()
-# (provider_stack.py), which picks each capability's winner purely by
-# callable presence and never consults provides: at all. A capability
-# withheld here for realness can still win resolutions() if this provider is
-# the most-specific implementer. See ARCHITECTURE.md's "Provider
-# composition" > "provides: / requires:" section for the full explanation;
-# changing resolutions() would change every capability_digest this codebase
-# has ever computed, so this is not fixed there or here.
-provides:
-  - dictionaries
-  - named_catalogs
-  - cxx_mapping
-  - manifest
-  # get_record_key_validator is the sole member adapting
-  # record_key_validation; it answers for every document a cardiacCore stack
-  # might see (record_key_validation.record_key_validator's own module
-  # docstring states the three rules), never a stub -- the same standard
-  # cardiacFOAM's own plugin.yaml applies to its own record_key_validation
-  # entry.
-  - record_key_validation
 # The C++ source the key scanner reads (one mechanism with cardiacFOAM's,
 # omnidriver-openfoam's dict_keys_scanner): supplied, never discovered. The
 # variable is the native cardiacCore tree;

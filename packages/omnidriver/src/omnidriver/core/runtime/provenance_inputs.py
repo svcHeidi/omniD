@@ -12,10 +12,10 @@ import os
 import shlex
 import shutil
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
-from ..plugin_capabilities import ResolvedInput, RuntimeDependency
+from ..plugin_interface import ResolvedInput, RuntimeDependency
 from .provenance import ProvenanceComponent, component_for_path
 from .provenance_dependencies import (
     component_for_runtime_dependency,
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 def _case_root_dirnames(driver_context: "DriverContext") -> tuple[str, ...]:
     """Top-level case directories the active plugin's declared case files live under, derived from each ``case_files`` rule's first path segment."""
-    rules = driver_context.capabilities.case_files.all_rules()
+    rules = driver_context.stack.call("get_profile").case_files
     segments = {Path(rule.path).parts[0] for rule in rules if rule.path}
     return tuple(sorted(segments))
 
@@ -195,6 +195,21 @@ class _ComponentAdder:
             self._sink[(component.kind, component.path)] = component
 
 
+def _input_roots(stack, case_root: Path, resolved_case, conventions) -> tuple[str, ...]:
+    """The stack's input roots, each a non-empty ``str`` inside the case: a
+    blank root is the whole case tree, and an absolute or escaping one walks
+    outside it."""
+    roots = stack.call("get_input_roots", case_root, resolved_case, conventions=conventions)
+    for root in roots:
+        parts = PurePosixPath(root).parts if isinstance(root, str) else ()
+        if not parts or PurePosixPath(root).is_absolute() or ".." in parts:
+            raise TypeError(
+                f"get_input_roots() must return non-empty case-relative str paths "
+                f"inside the case, got {root!r}"
+            )
+    return roots
+
+
 def enumerate_case_inputs(
     case_root: Path,
     *,
@@ -217,14 +232,15 @@ def enumerate_case_inputs(
     """
     case_root = Path(case_root)
     environment = dict(os.environ) if env is None else dict(env)
-    capabilities = driver_context.capabilities
+    from ..runtime_records import case_runtime_conventions
 
-    resolved_case = capabilities.case_introspection.resolve_case_models(case_root)
-    conventions = capabilities.case_runtime_conventions.conventions()
+    stack = driver_context.stack
+    resolved_case = stack.call("resolve_case_models", case_root)
+    conventions = case_runtime_conventions(driver_context)
 
     consumed_relpaths = _collect_consumed_relpaths(workflow_dag)
-    required_inputs = capabilities.case_provenance.required_inputs(case_root, resolved_case)
-    generated_globs = capabilities.case_provenance.generated_output_globs(case_root, resolved_case)
+    required_inputs = stack.call("get_required_inputs", case_root, resolved_case)
+    generated_globs = stack.call("get_generated_output_globs", case_root, resolved_case)
 
     components: dict[tuple[str, str], ProvenanceComponent] = {}
     add = _ComponentAdder(components)
@@ -237,9 +253,7 @@ def enumerate_case_inputs(
     walk_roots = [case_root / d for d in _case_root_dirnames(driver_context)]
     walk_roots.extend(
         case_root / root
-        for root in capabilities.case_provenance.input_roots(
-            case_root, resolved_case, conventions=conventions,
-        )
+        for root in _input_roots(stack, case_root, resolved_case, conventions)
     )
 
     for root in walk_roots:
@@ -304,16 +318,14 @@ def enumerate_case_inputs(
     # pulls in. Authoritative over the generic PATH-only resolution above --
     # it knows the library search directories and required/optional split a
     # bare PATH lookup cannot.
-    for dependency in capabilities.runtime_evidence.extra_provenance_paths(case_root):
+    for dependency in stack.call("get_extra_provenance_paths", case_root):
         dependencies[dependency.name] = dependency
 
     # An external #include or #includeEtc file is an input even for an
     # untouched case.  Unsupported directive forms become an unavailable
     # witness so a later checkpoint cannot be silently reused as complete.
-    inspection = capabilities.effective_configuration.inspect(
-        case_root=case_root,
-        driver_context=driver_context,
-        execution_env=environment,
+    inspection = stack.call(
+        "inspect_effective_configuration", case_root=case_root, execution_env=environment,
     )
     root_resolved = case_root.resolve()
     verified_optional_absences: set[str] = set()

@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
+from omnidriver.core.environment_connection import load_environment
+
 from .checks import CHECKS, run_check
 from .target import ConformanceTarget
 
@@ -35,7 +37,7 @@ def _tail(text: str) -> str:
 def regression_script(driver_context: "DriverContext", native_case: Path) -> Path | None:
     """The record's native regression script, where the stack's case-file
     rules put it, or ``None``."""
-    for rule in driver_context.capabilities.case_files.all_rules():
+    for rule in driver_context.stack.call("get_profile").case_files:
         if rule.role == REGRESSION_ROLE and (native_case / rule.path).is_file():
             return native_case / rule.path
     return None
@@ -105,7 +107,7 @@ def check_report(
     unknown = [check_id for check_id in check_ids if check_id not in CHECKS]
     if unknown:
         raise KeyError(f"no conformance check {unknown}; known: {sorted(CHECKS)}")
-    catalog = driver_context.capabilities.tutorial_records.catalog() or {}
+    catalog = driver_context.stack.call("get_tutorial_records")
     missing = [name for name in records if name not in catalog]
     if missing:
         raise KeyError(f"not a record of this stack: {missing}; it has {sorted(catalog)}")
@@ -139,9 +141,7 @@ def check_report(
         entry["checks"] = verdicts
         passed = all(v["passed"] for v in verdicts)
         if not check_ids and record.conformance.probes:
-            env = driver_context.capabilities.environment_preflight.load(
-                environment_source=None, driver_context=driver_context,
-            )
+            env = load_environment(driver_context, None)
             entry["probes"] = {name: _probe(probe, env) for name, probe in record.conformance.probes.items()}
             passed = passed and all(item["passed"] for item in entry["probes"].values())
         entry["status"] = "passed" if passed else "failed"

@@ -19,6 +19,7 @@ from .attempt_lease import acquire_case_staging_lease
 from .postprocess_phase import CASE_RECORD_FILENAME, build_sweep_context, run_postprocessing_module
 from .record_execution import (
     commit_and_build_record_spec,
+    record_case_members,
     _reserved_study_names,
     _serialize_sourced_patch,
 )
@@ -126,31 +127,14 @@ def _record_case_study_by_source(
 def _validate_record_sweep_upfront(
     record: Any, sweep_spec: dict[str, Any], *, driver_context: "DriverContext",
 ) -> None:
-    """Refuse a missing capability or a bad study name once, up front, for the
+    """Refuse a missing member or a bad study name once, up front, for the
     whole sweep -- before any case is staged. Both kinds of refusal are the
-    same for every case in one sweep, since the composed stack either has
-    these three capabilities or it does not, and a name's shape (a
+    same for every case in one sweep, since the stack either has the
+    members a record case needs or it does not, and a name's shape (a
     ``document:key`` literal vs an axis) never varies across cases even when
     a swept axis's value does.
     """
-    if driver_context.capabilities.record_key_validation.validator() is None:
-        raise TutorialRecordError(
-            f"tutorial record {record.name!r} cannot run: the composed stack "
-            "declares no record-key validator (get_record_key_validator); a "
-            "record case's keys cannot be checked against any catalog"
-        )
-    if driver_context.capabilities.case_value_comparison.comparator() is None:
-        raise TutorialRecordError(
-            f"tutorial record {record.name!r} cannot run: the composed stack "
-            "declares no case-value comparator (get_case_value_comparator); "
-            "whether a patch is unchanged cannot be determined"
-        )
-    if driver_context.capabilities.config_value.reader() is None:
-        raise TutorialRecordError(
-            f"tutorial record {record.name!r} cannot run: the composed stack "
-            "declares no config-value reader (get_config_value_reader); "
-            "whether a patch is unchanged cannot be determined"
-        )
+    record_case_members(record, driver_context)
 
     reserved = _reserved_study_names(record)
     base = sweep_spec.get("base", {})
@@ -232,9 +216,9 @@ def _record_sweep_run(
     factory-entry sweep's does.
     """
     _validate_record_sweep_upfront(record, sweep_spec, driver_context=driver_context)
-    execution_environment = driver_context.capabilities.environment_preflight.configure(
-        os.environ, driver_context,
-    )
+    execution_environment = dict(driver_context.stack.call(
+        "get_configured_environment", dict(os.environ), driver_context,
+    ))
     output_dir.mkdir(parents=True, exist_ok=True)
     resolved_cases = expand_sweep(sweep_spec, get_derivation=get_derivation)
     base = sweep_spec.get("base", {})
@@ -420,10 +404,11 @@ def _stage_entry_case(
     carries none of core's own records, so every production caller must
     supply a real ``driver_context``.
     """
-    from ..plugin_capabilities import CaseRuntimeConventions
+    from ..plugin_interface import CaseRuntimeConventions
+    from ..runtime_records import case_runtime_conventions
 
     conventions = (
-        driver_context.capabilities.case_runtime_conventions.conventions()
+        case_runtime_conventions(driver_context)
         if driver_context is not None else CaseRuntimeConventions()
     )
     replica_globs = replica_directory_globs(driver_context)

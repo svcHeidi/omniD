@@ -15,6 +15,6 @@ __all__ = ["DictEntry", "all_documented_driver_paths", "build_group"]
 def all_documented_driver_paths(driver_context: "DriverContext") -> tuple[str, ...]:
     paths = [
         entry.driver_path
-        for entry in driver_context.capabilities.dictionaries.entries()
+        for entry in driver_context.stack.call("get_dict_entries")
     ]
     return tuple(dict.fromkeys(paths))

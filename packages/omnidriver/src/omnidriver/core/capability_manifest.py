@@ -48,29 +48,13 @@ def build_capability_manifest(
     active adapter so Core names neither an environment nor a solver here.
     Together with :data:`CORE_NEUTRAL_COMMANDS` the commands reproduce exactly
     what ``validate_workflow_commands`` accepts for that plugin.
-    ``case_script_commands`` defaults to an empty set; adapters declare their
-    case-local command names explicitly (its ``get_capabilities()`` has no
-    ``DriverContext`` to read one from, but does have its own
-    ``get_profile()`` -- see
-    future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md §5).
-
-    Core gathers these arguments itself, from the composed
-    ``command_authorization``/``case_introspection``/
-    ``case_runtime_conventions`` capabilities (see
-    ``plugin_capabilities._CapabilityManifestAdapter.manifest``), and calls
-    this function directly, so the manifest reflects a composed stack rather
-    than only a single plugin's own commands/conventions; a plugin's own
-    ``get_capabilities()`` supplies only what core cannot compose from those
-    reads (a domain catalogue). This keyword-argument shape is also called
-    directly as a pure builder by existing tests (e.g.
-    ``test_case_script_commands_entrypoint_seam.py``,
-    ``omnidriver-cardiacfoam/tests/test_capability_manifest.py``).
+    ``case_script_commands`` defaults to an empty set. Core calls this through
+    :func:`capability_manifest`, from the composed stack.
 
     ``allowed_commands`` names exactly what a workflow DAG step may invoke;
     ``samplable_fields`` names the fields a function object may sample for the
-    resolved model, split by region -- resolving the model and naming its
-    fields is entirely the plugin's ``CaseIntrospectionCapability``, not this
-    module's concern. A caller with nothing resolved passes ``None`` and gets
+    resolved model, split by region (the stack's ``get_samplable_fields``). A
+    caller with nothing resolved passes ``None`` and gets
     an empty field set rather than this function raising.
     """
 
@@ -96,3 +80,25 @@ def build_capability_manifest(
             ),
         },
     }
+
+
+def capability_manifest(driver_context) -> dict[str, Any]:
+    """The stack's accept-surface, plus what only a provider can add
+    (``get_capabilities``, a domain catalogue). Rebuilt on every call, so no
+    caller shares another's dict."""
+    from .runtime_records import case_runtime_conventions
+
+    stack = driver_context.stack
+    conventions = case_runtime_conventions(driver_context)
+    built = build_capability_manifest(
+        environment_commands=stack.call("get_environment_commands"),
+        # Both kinds of authorized command; the solver/auxiliary split only
+        # governs which may be credited with a run's artifacts.
+        plugin_commands=stack.call("get_solver_commands") | stack.call("get_auxiliary_commands"),
+        utility_manifests=stack.call("get_utility_manifests"),
+        # No case is resolved here, so only the model-independent fields.
+        samplable_fields={k: tuple(v) for k, v in stack.call("get_samplable_fields", {}).items()},
+        case_script_commands=frozenset(conventions.case_script_commands) | frozenset(conventions.case_entrypoints),
+    )
+    built.update(stack.call("get_capabilities"))
+    return built

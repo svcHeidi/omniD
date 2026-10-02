@@ -278,7 +278,7 @@ def _explained_by_the_logs(
                 text += handle.read().decode("utf-8", errors="replace") + "\n"
         except OSError:
             continue
-    found = driver_context.capabilities.step_failure.diagnostics(text, case_root, driver_context=driver_context)
+    found = driver_context.stack.call("explain_step_failure", text, case_root, driver_context=driver_context)
     return tuple({**asdict(item), "field": item.field or step_id} for item in found)
 
 
@@ -461,7 +461,7 @@ def run_workflow_step(
                 cancellation_requested=cancellation_requested,
             )
         if driver_context is not None:
-            redact_step_logs((stdout_log, stderr_log), driver_context.capabilities.runtime_evidence.log_redaction_patterns())
+            redact_step_logs((stdout_log, stderr_log), driver_context.stack.call("get_log_redaction_patterns"))
         if stop_reason == "timeout":
             diagnostics = ({
                 "level": "error",

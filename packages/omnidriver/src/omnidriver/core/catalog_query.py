@@ -46,7 +46,7 @@ def cxx_evidence(
     """What the stack's scanner reports for its supplied C++ source, or
     ``None`` for a stack that declares no C++ mapping (openCARP: its catalogue
     is generated from the binary itself)."""
-    mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
+    mapping = driver_context.stack.call("get_profile").cxx_mapping
     if mapping is None:
         return None
     root = mapping.source_root(environ)
@@ -55,13 +55,17 @@ def cxx_evidence(
         "relative": mapping.source_root_relative,
         "root": str(root) if root is not None else None,
     }
-    if root is None or not root.is_dir():
+    scanner = driver_context.stack.call("get_dict_key_scanner")
+    if root is None or not root.is_dir() or scanner is None:
         evidence["scanned"] = False
-        evidence["reason"] = "source root not supplied" if root is None else "not a directory"
+        evidence["reason"] = (
+            "source root not supplied" if root is None
+            else "not a directory" if not root.is_dir() else "the stack has no key scanner"
+        )
         return evidence
-    report = driver_context.capabilities.dict_key_scanner.scan(
+    report = scanner(
         root, allowlist_path=mapping.allowlist_path,
-        entries=driver_context.capabilities.dictionaries.entries(),
+        entries=driver_context.stack.call("get_dict_entries"),
         cache_root=cache_root, force=force,
     ).to_json()
     evidence["scanned"] = True
@@ -117,7 +121,7 @@ def catalog_query(
     cxx = cxx_evidence(driver_context, os.environ)
     values = (cxx or {}).get("selector_values", {})
     entries = []
-    for listed in driver_context.capabilities.record_surface.key_catalog(native_case_root):
+    for listed in driver_context.stack.call("get_record_key_catalog", native_case_root):
         if not _matches(listed, document, key):
             continue
         listed = dict(listed)

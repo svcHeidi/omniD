@@ -11,7 +11,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from omnidriver.core.contracts.catalogue_paths import catalogued_paths, slot_key
-from omnidriver.core.plugin_capabilities import RunSemanticValidationRequest
+from omnidriver.core.capability_manifest import capability_manifest
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
 from .case_dict_keys import case_dict_key_diagnostics
@@ -28,11 +28,11 @@ def plan_diagnostics(
     driver_context: Any,
 ) -> tuple[StrictDiagnostic, ...]:
     del workflow_dag
-    mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
+    mapping = driver_context.stack.call("get_profile").cxx_mapping
     source_root = mapping.source_root(env) if mapping is not None else None
     report = _report(driver_context, mapping, source_root, scratch_root)
     catalog = _catalog_diagnostics(driver_context, mapping, source_root, report)
-    manifest = driver_context.capabilities.manifest.manifest()
+    manifest = capability_manifest(driver_context)
     function_objects = function_object_field_diagnostics(
         case_root, samplable=manifest.get("samplable_fields", {}),
     )
@@ -42,22 +42,21 @@ def plan_diagnostics(
     )
     keys = case_dict_key_diagnostics(
         case_root,
-        catalogued_paths=catalogued_paths(driver_context.capabilities.dictionaries.entries()),
+        catalogued_paths=catalogued_paths(driver_context.stack.call("get_dict_entries")),
         dict_relpaths=_owned_dict_relpaths(case_root, driver_context),
         scanned=scanned,
         unread=[slot_key(item["driver_path"]) for item in (report or {}).get("unread", ())],
     )
     rules = tuple(
-        item for item in driver_context.capabilities.run_semantic_validator.validate(
-            RunSemanticValidationRequest(case_root),
-        ) if item.level != "error"
+        item for item in driver_context.stack.call("validate_run_semantics", case_root)
+        if item.level != "error"
     )
     return catalog + function_objects + keys + rules
 
 
 def _scanned_reader(driver_context: Any, source_root: Path, scratch_root: Path | None):
     scan = cached_scan(source_root, cache_root=scratch_root)
-    catalog = driver_context.capabilities.dictionaries.catalog()
+    catalog = driver_context.stack.call("get_dictionary_catalog")
     placed_by_document: dict[str, Any] = {}
 
     def reads(relpath: str, trail: tuple[str, ...]) -> bool:
@@ -75,8 +74,8 @@ def _owned_dict_relpaths(case_root: Path, driver_context: Any) -> tuple[str, ...
     would be pure noise. Each document the plugin names is matched against
     the profile's declared case-file rules."""
     relpaths: list[str] = []
-    documents = driver_context.capabilities.dictionaries.documents()
-    rules = driver_context.capabilities.case_files.all_rules()
+    documents = driver_context.stack.call("get_dict_entry_catalog")
+    rules = driver_context.stack.call("get_profile").case_files
     for document in documents:
         for rule in rules:
             pattern = str(rule.path)
@@ -116,12 +115,13 @@ def _describe_uncatalogued(item: dict) -> str:
 
 
 def _report(driver_context: Any, mapping: Any, source_root: Path | None, scratch_root: Path | None) -> dict | None:
-    if mapping is None or source_root is None or not source_root.is_dir():
+    scanner = driver_context.stack.call("get_dict_key_scanner")
+    if scanner is None or mapping is None or source_root is None or not source_root.is_dir():
         return None
-    return driver_context.capabilities.dict_key_scanner.scan(
+    return scanner(
         source_root,
         allowlist_path=mapping.allowlist_path,
-        entries=driver_context.capabilities.dictionaries.entries(),
+        entries=driver_context.stack.call("get_dict_entries"),
         cache_root=scratch_root,
     ).to_json()
 
@@ -134,9 +134,7 @@ def _catalog_diagnostics(
     note per uncatalogued read."""
     if mapping is None:
         return ()
-    # `source=` names whichever provider actually answered `cxx_mapping`, per
-    # `resolutions()` -- `StackIdentity` has no singular id to fall back on.
-    cxx_mapping_source = driver_context.identity.resolutions.get("cxx_mapping", "cxx_mapping")
+    cxx_mapping_source = driver_context.identity.resolutions["get_profile"]
     if source_root is None:
         # Supplied, never discovered: an unsupplied root is reported as info,
         # not a warning, so a plan that needs no C++ scanning isn't flagged.

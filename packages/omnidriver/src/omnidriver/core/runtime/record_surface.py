@@ -45,9 +45,9 @@ def record_surface(
         {"name": axis.name, "value_kind": axis.value_kind}
         for axis in sorted(record.axes, key=lambda axis: axis.name)
     ]
-    surface = driver_context.capabilities.record_surface
+    stack = driver_context.stack
     documentation = []
-    for rule in driver_context.capabilities.case_files.all_rules():
+    for rule in stack.call("get_profile").case_files:
         path = Path(native_case_root) / rule.path
         if rule.role == DOCUMENTATION_ROLE and path.is_file():
             documentation.append({"path": rule.path, "text": path.read_text(errors="replace")})
@@ -63,8 +63,8 @@ def record_surface(
     ]
     return {
         "axes": axes,
-        "keys": [dict(entry) for entry in surface.key_catalog(Path(native_case_root))],
-        "guidance": [dict(item) for item in surface.guidance()],
+        "keys": [dict(entry) for entry in stack.call("get_record_key_catalog", Path(native_case_root))],
+        "guidance": [dict(item) for item in stack.call("get_agent_guidance")],
         "case_documentation": documentation,
         "inputs": inputs,
     }

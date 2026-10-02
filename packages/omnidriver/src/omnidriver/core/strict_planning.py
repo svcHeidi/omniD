@@ -117,7 +117,7 @@ def _utility_produces_by_command(
     from omnidriver.core.capability_manifest import utility_produces
 
     return utility_produces(
-        driver_context.capabilities.command_authorization.utility_manifests()
+        driver_context.stack.call("get_utility_manifests")
     )
 
 
@@ -128,15 +128,7 @@ def _artifact_diagnostics(
 ) -> tuple[StrictDiagnostic, ...]:
     diagnostics: list[StrictDiagnostic] = []
 
-    # Defer domain-specific validation to the selected capability while
-    # preserving the public plugin call and diagnostic order.
-    from .plugin_capabilities import ConfigurationValidationRequest
-
-    diagnostics.extend(
-        driver_context.capabilities.configuration_validator.validate(
-            ConfigurationValidationRequest(spec),
-        )
-    )
+    diagnostics.extend(driver_context.stack.call("validate_configuration", spec))
 
     for diagnostic in validate_workflow_commands(
         workflow_dag, driver_context=driver_context,
@@ -343,22 +335,22 @@ def _strict_plan_for_spec(
         driver_context=driver_context,
     )
     artifact_diagnostics = _artifact_diagnostics(spec, workflow_dag, driver_context)
-    env_diagnostics = driver_context.capabilities.environment_preflight.diagnostics(
+    env_diagnostics = driver_context.stack.call(
+        "get_environment_diagnostics",
         workflow_dag,
         environment_source=environment_source,
         driver_context=driver_context,
     )
-    plugin_diagnostics = driver_context.capabilities.plan_diagnostics.diagnostics(
+    plugin_diagnostics = driver_context.stack.call(
+        "get_plan_diagnostics",
         Path(spec.case_root),
         workflow_dag=workflow_dag,
         env=os.environ,
         scratch_root=scratch_root,
         driver_context=driver_context,
     )
-    configuration_evidence = driver_context.capabilities.effective_configuration.inspect(
-        case_root=Path(spec.case_root),
-        driver_context=driver_context,
-        execution_env=dict(os.environ),
+    configuration_evidence = driver_context.stack.call(
+        "inspect_effective_configuration", case_root=Path(spec.case_root), execution_env=dict(os.environ),
     )
     configuration_diagnostics = _configuration_evidence_diagnostics(
         configuration_evidence,
@@ -380,7 +372,9 @@ def _strict_plan_for_spec(
         + plugin_diagnostics
         + configuration_diagnostics
     )
-    raw_capability_manifest = dict(driver_context.capabilities.manifest.manifest())
+    from .capability_manifest import capability_manifest as stack_manifest
+
+    raw_capability_manifest = stack_manifest(driver_context)
     raw_capability_manifest["plugin_identity"] = driver_context.identity.to_json()
     capability_manifest = _jsonable(raw_capability_manifest)
     all_diagnostics = plan_diagnostics + env_diagnostics

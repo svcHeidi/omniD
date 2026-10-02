@@ -10,7 +10,7 @@ provider's, least-specific first; the C++ source-root variable a profile's
 This module renders and checks. It reads values only from the environment it
 is given, sources and exports only what is supplied, and invents no path: an
 unset required variable is refused by name, and nothing is searched for.
-The check is the stack's own preflight (``EnvironmentPreflightCapability``),
+The check is the stack's own preflight (``get_environment_diagnostics``),
 run on the environment the rendered prefix produces, over the stack's solver
 commands and, where a launcher is declared, a parallel solve.
 """
@@ -43,8 +43,10 @@ def stack_connection(driver_context: "DriverContext") -> tuple[EnvironmentConnec
     source: str | None = None
     path_prepend: list[str] = []
     launcher: str | None = None
+    from .provider_stack import provider_profile
+
     for provider in driver_context.providers:
-        profile = provider.get_profile()
+        profile = provider_profile(provider)
         connection = profile.environment or EnvironmentConnection()
         for variable in connection.supplied:
             supplied[variable.name] = variable
@@ -70,6 +72,17 @@ def stack_connection(driver_context: "DriverContext") -> tuple[EnvironmentConnec
         supplied=tuple(supplied.values()), source=source,
         path_prepend=tuple(path_prepend), mpi_launcher=launcher,
     ), declared_by
+
+
+def load_environment(driver_context: "DriverContext", environment_source: str | None) -> dict[str, str]:
+    """The execution environment: sourced by the stack (``get_loaded_environment``,
+    the process environment when none sources one), then every provider's
+    contract applied over it (``get_configured_environment``)."""
+    stack = driver_context.stack
+    sourced = stack.call(
+        "get_loaded_environment", environment_source=environment_source, driver_context=driver_context,
+    )
+    return dict(stack.call("get_configured_environment", dict(sourced), driver_context))
 
 
 def render_prefix(connection: EnvironmentConnection, environ: Mapping[str, str]) -> str:
@@ -160,9 +173,9 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
         report["status"] = "failed"
         return report
 
-    authorization = driver_context.capabilities.command_authorization
-    solvers = sorted(authorization.solver_commands())
-    others = sorted((authorization.auxiliary_commands() | authorization.environment_commands()) - set(solvers))
+    stack = driver_context.stack
+    solvers = sorted(stack.call("get_solver_commands"))
+    others = sorted((stack.call("get_auxiliary_commands") | stack.call("get_environment_commands")) - set(solvers))
     report["commands"] = {
         command: shutil.which(command, path=applied.get("PATH"))
         for command in (*solvers, *others)
@@ -174,8 +187,8 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
             mpi.wrap({"id": f"{command}.parallel", "command": command}, _PROBE_RANKS, connection.mpi_launcher)
             for command in solvers
         ]
-    preflight = driver_context.capabilities.environment_preflight.diagnostics(
-        {"steps": steps}, env=applied, driver_context=driver_context,
+    preflight = stack.call(
+        "get_environment_diagnostics", {"steps": steps}, env=applied, driver_context=driver_context,
     )
     diagnostics += [asdict(item) if not isinstance(item, dict) else dict(item) for item in preflight]
     report["status"] = "failed" if any(item["level"] == "error" for item in diagnostics) else "ok"

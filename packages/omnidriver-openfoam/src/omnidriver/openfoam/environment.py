@@ -76,20 +76,6 @@ class OpenFOAMEnvironmentPlugin:
     def get_profile():
         return load_openfoam_profile(Path(__file__).with_name("openfoam-environment.yaml"))
 
-    def get_capabilities(self):
-        """No domain catalogue beyond what ``_CapabilityManifestAdapter``
-        already composes from this provider's own reads."""
-        return {}
-
-    def validate_configuration(self, spec):
-        return ()
-
-    def validate_run_semantics(self, case_root):
-        return ()
-
-    def predict_data_artifacts(self, case_root, spec):
-        return ()
-
     def get_environment_diagnostics(
         self, workflow_dag, *, env=None, environment_source=None, driver_context=None,
     ):
@@ -198,9 +184,6 @@ class OpenFOAMEnvironmentPlugin:
     def is_installed_environment_command(self, command: str) -> bool:
         return is_installed_openfoam_application(command)
 
-    def get_solve_step_commands(self) -> frozenset:
-        return frozenset()
-
     def get_parallel_steps(self, step, *, request, read_value, allocation):
         """A record's solve step in OpenFOAM's parallel form. The solve
         command is the solver plugin's (``get_solve_step_commands``); how
@@ -208,21 +191,6 @@ class OpenFOAMEnvironmentPlugin:
         from .parallel_execution import parallel_steps_for_record
 
         return parallel_steps_for_record(step, request=request, read_value=read_value, allocation=allocation)
-
-    def get_telemetry_source_globs(self, command: str) -> tuple:
-        del command
-        return ()
-
-    def get_extra_provenance_paths(self, case_root) -> tuple:
-        del case_root
-        return ()
-
-    def get_artifact_value_reader(self, artifact_format: str):
-        del artifact_format
-        return None
-
-    def get_named_catalogs(self):
-        return {}
 
     def get_dict_key_scanner(self):
         from .dict_keys_scanner import catalog_report
@@ -232,7 +200,6 @@ class OpenFOAMEnvironmentPlugin:
     def get_case_runtime_conventions(self):
         return openfoam_case_runtime_conventions()
 
-    # -- CaseWriterCapability: format ownership -------------------------------
     def get_rendered_formats(self) -> "frozenset[str]":
         return frozenset({"openfoam_dictionary"})
 

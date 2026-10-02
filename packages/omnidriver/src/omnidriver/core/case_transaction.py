@@ -377,7 +377,7 @@ def _check_stack_freshness(plan: CaseWritePlan, driver_context: Any) -> None:
     no-op for it; those tests are exercising journal and rollback mechanics,
     not stack binding.
 
-    Known limit: most capabilities contribute a placeholder digest to
+    Known limit: most contract members contribute a placeholder digest to
     ``capability_digest``, so an edited implementation in an editable
     install with no version bump is invisible to this check. It catches a
     changed provider set, version, profile, dictionary vocabulary or

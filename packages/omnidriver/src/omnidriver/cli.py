@@ -21,6 +21,7 @@ from .core.runtime.postprocess_phase import (
 )
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
 from .core.case_transaction import CaseTransactionError, pending_transaction, recover_case_transaction
+from .core.environment_connection import load_environment
 from .core.runtime.sweep_runner import sweep_plan, sweep_run
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.planning_types import diagnostic
@@ -358,10 +359,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
                 "selected_plugin": selected,
             }, indent=2))
             return None
-    execution_env = driver_context.capabilities.environment_preflight.load(
-        environment_source=args.environment_source,
-        driver_context=driver_context,
-    )
+    execution_env = load_environment(driver_context, args.environment_source)
     inputs, diagnostics = build_execution_inputs(
         run_doc,
         utility_produces=_utility_produces_by_command(driver_context),
@@ -375,7 +373,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             "diagnostics": [asdict(d) for d in diagnostics],
         }, indent=2))
         return None
-    record = (driver_context.capabilities.tutorial_records.catalog() or {}).get(run_doc.name)
+    record = (driver_context.stack.call("get_tutorial_records")).get(run_doc.name)
     if record is not None and args.apply is None:
         from .core.runtime.record_execution import refuse_a_case_that_breaks_a_rule
 
@@ -416,7 +414,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
     def apply_study(study: dict) -> tuple[dict, ...]:
         from .core.runtime.record_execution import apply_record_study
 
-        records = driver_context.capabilities.tutorial_records.catalog() or {}
+        records = driver_context.stack.call("get_tutorial_records")
         record = records.get(run_doc.name)
         if record is None:
             raise ValueError(f"run document {run_doc.name!r} is not a tutorial record of this plugin")
@@ -433,7 +431,8 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         output_dir=inputs.output_dir,
         expected_artifacts=inputs.expected_artifacts,
         setup_root=Path(setup_root_raw) if setup_root_raw else None,
-        environment_diagnostics=driver_context.capabilities.environment_preflight.diagnostics(
+        environment_diagnostics=driver_context.stack.call(
+            "get_environment_diagnostics",
             inputs.workflow_dag,
             environment_source=args.environment_source,
             driver_context=driver_context,
@@ -494,10 +493,7 @@ def _context_from_entry(
             "error": "strict plan did not produce workflow_dag and workflow_state",
         }, indent=2))
         return None, 1
-    execution_env = driver_context.capabilities.environment_preflight.load(
-        environment_source=environment_source,
-        driver_context=driver_context,
-    )
+    execution_env = load_environment(driver_context, environment_source)
 
     return (
         _ExecutionContext(

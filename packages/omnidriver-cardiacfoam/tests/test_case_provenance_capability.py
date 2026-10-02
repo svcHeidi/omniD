@@ -1,4 +1,4 @@
-"""CaseProvenanceCapability assertions specific to the cardiac plugin."""
+"""The cardiac plugin's generated-output declaration."""
 
 from __future__ import annotations
 
@@ -17,8 +17,7 @@ def test_cardiac_declares_the_mesh_diagnostic_fields_as_generated_outputs(
     tmp_path: Path,
 ) -> None:
     """Nothing in the native src/ or applications/ reads constant/C, Cx, Cy, Cz or skewness."""
-    cardiac = _CTX.capabilities.case_provenance
-    globs = cardiac.generated_output_globs(tmp_path, {})
+    globs = _CTX.stack.call("get_generated_output_globs", tmp_path, {})
     assert set(globs) == {
         "constant/C",
         "constant/Cx",
@@ -27,8 +26,3 @@ def test_cardiac_declares_the_mesh_diagnostic_fields_as_generated_outputs(
         "constant/skewness",
     }
 
-
-def test_cardiac_required_inputs_defers_to_the_safe_default(tmp_path: Path) -> None:
-    """Returning () is safe: an unclassified file still defaults to required_input upstream."""
-    cardiac = _CTX.capabilities.case_provenance
-    assert cardiac.required_inputs(tmp_path, {}) == ()

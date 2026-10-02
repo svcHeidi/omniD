@@ -2,37 +2,6 @@ schema_version: 1
 plugin:
   id: org.omnidriver.openfoam.environment
   api_version: "2"
-# A capability is declared here only if every member it adapts is a real,
-# non-stub method on this class -- check_provides() (provider_stack.py)
-# enforces that at driver_context() construction, per provider, before
-# composition runs.
-#
-# Not declared, though their members are implemented with stubs still
-# present: command_authorization (only get_environment_commands /
-# is_installed_environment_command are real here), case_introspection. Not
-# implemented at all: case_files -- solver-specific, and cardiacFoam is the only
-# current implementer.
-#
-# get_dict_key_scanner returns dict_keys_scanner.catalog_report
-# unconditionally: a real scanner, not a stub.
-#
-# `provides:` is a realness declaration only -- resolutions()
-# (provider_stack.py) picks each capability's winner purely by which
-# provider has a callable member, never by consulting this list. A
-# capability withheld here for realness can still win resolutions() if this
-# provider is the most-specific implementer. See ARCHITECTURE.md's
-# "Provider composition" section.
-provides:
-  - case_runtime_conventions
-  - environment_preflight
-  - plan_diagnostics
-  - step_failure
-  - effective_configuration
-  - config_value
-  - dict_key_scanner
-  # get_case_value_comparator returns `_case_value_agree`, a real typed
-  # comparison delegating to `literals.values_agree` -- not a stub.
-  - case_value_comparison
 case_profile:
   dictionaries:
     - path: system/controlDict

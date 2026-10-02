@@ -39,7 +39,9 @@ def case_script_commands(driver_context: Any | None) -> frozenset[str]:
     """
     if driver_context is None:
         return frozenset()
-    conventions = driver_context.capabilities.case_runtime_conventions.conventions()
+    from ..runtime_records import case_runtime_conventions
+
+    conventions = case_runtime_conventions(driver_context)
     return frozenset(conventions.case_script_commands) | frozenset(
         entrypoint_relpaths(driver_context)
     )
@@ -397,7 +399,7 @@ def normalize_workflow_dag(
         producer_commands = set(entrypoint_relpaths(driver_context))
         if driver_context is not None:
             producer_commands |= (
-                driver_context.capabilities.command_authorization.solver_commands()
+                driver_context.stack.call("get_solver_commands")
             )
         artifact_producer_steps = [
             step for step in steps if step.command in producer_commands
@@ -454,19 +456,19 @@ def _is_authorized(command: str, driver_context: Any) -> bool:
         return True
     if driver_context is None:
         return False
-    authorization = driver_context.capabilities.command_authorization
-    # Authorization is the union: both kinds of plugin command may run. The
-    # split between solver and auxiliary matters only to the
-    # artifact-producer heuristic in normalize_workflow_dag, not here.
-    if (
-        command in authorization.environment_commands()
-        or command in authorization.solver_commands() | authorization.auxiliary_commands()
+    stack = driver_context.stack
+    # Both kinds of plugin command may run; the solver/auxiliary split
+    # matters only to the artifact-producer heuristic in normalize_workflow_dag.
+    if command in (
+        stack.call("get_environment_commands")
+        | stack.call("get_solver_commands")
+        | stack.call("get_auxiliary_commands")
     ):
         return True
-    manifest = authorization.utility_manifests().get(command)
+    manifest = stack.call("get_utility_manifests").get(command)
     if manifest is not None:
         return bool(manifest.produces)
-    return authorization.is_installed_environment_command(command)
+    return bool(stack.call("is_installed_environment_command", command))
 
 
 def validate_workflow_commands(
@@ -487,7 +489,7 @@ def validate_workflow_commands(
     """
     case_scripts = case_script_commands(driver_context)
     if driver_context is not None:
-        utilities = driver_context.capabilities.command_authorization.utility_manifests()
+        utilities = driver_context.stack.call("get_utility_manifests")
     else:
         utilities = {}
 

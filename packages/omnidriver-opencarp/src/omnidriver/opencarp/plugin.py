@@ -29,22 +29,9 @@ class OpenCARPPlugin:
     plugin_version = "0.1.0"
     plugin_api_version = "2"
 
-    # -- required contract (the dictionary-shaped members are optional, so none are stubbed)
     def get_profile(self):
         with resources.as_file(resources.files(__package__).joinpath("opencarp.yaml")) as path:
             return load_plugin_profile(path)
-
-    def get_capabilities(self):
-        return {}
-
-    def validate_configuration(self, spec):
-        return ()
-
-    def validate_run_semantics(self, case_root):
-        return ()
-
-    def predict_data_artifacts(self, case_root, spec):
-        return ()          # records declare their artifacts through step `produces`
 
     # -- records
     def get_tutorial_records(self):
@@ -130,29 +117,9 @@ class OpenCARPPlugin:
     def get_auxiliary_commands(self):
         return AUXILIARY_COMMANDS
 
-    def get_environment_commands(self):
-        return frozenset()
-
-    def is_installed_environment_command(self, command):
-        return False
-
-    def get_utility_manifests(self):
-        return {}
-
-    def get_utility_roots(self):
-        return ()
-
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
         del environment_source, driver_context      # openCARP needs no environment source
         return opencarp_environment_diagnostics(workflow_dag, env if env is not None else os.environ)
-
-    def get_loaded_environment(self, *, environment_source=None, driver_context=None):
-        del environment_source, driver_context
-        return dict(os.environ)
-
-    def get_configured_environment(self, env, driver_context):
-        del driver_context
-        return dict(env)
 
     # -- parallel
     def get_solve_step_commands(self):

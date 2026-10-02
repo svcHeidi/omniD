@@ -52,7 +52,7 @@ def missing_entry_diagnostics(log_text: str, case_root: Path, driver_context: An
     document, scope = _document_and_scope(match.group("dictionary"), Path(case_root))
     where = f"{'.'.join(scope)} in {document}" if scope else document
     message = f"the solver stopped: {key} is missing from {where}; set it there."
-    mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
+    mapping = driver_context.stack.call("get_profile").cxx_mapping
     source = mapping.source_root(os.environ) if mapping is not None else None
     if source is not None and source.is_dir():
         scan = cached_scan(source, cache_root=scan_cache_root())

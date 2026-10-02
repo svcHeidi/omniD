@@ -1,9 +1,10 @@
 """What a framework-authored case mutation is, before anything is written.
 
 Core owns this vocabulary. A solver adapter fills it with meaning; a format
-owner turns it into bytes; core commits those bytes. Nothing in this module
-touches a filesystem or knows any dictionary syntax -- it is types and
-canonical serialization, and that is what lets it sit in core at all.
+owner turns it into bytes; core commits those bytes. This module is types,
+canonical serialization, and the two calls that ask the stack to resolve and
+render (:func:`resolve_mutation`, :func:`render_mutation`); it knows no
+dictionary syntax.
 
 Two creation modes, kept distinct because their prerequisites differ:
 
@@ -670,3 +671,61 @@ class ResolvedMutation:
         # dataclasses -- so it needs `_freeze`, not just `tuple()`.
         object.__setattr__(self, "targets", tuple(_freeze(target) for target in self.targets))
         object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
+
+
+def resolve_mutation(driver_context: Any, request: CaseMutationRequest) -> "ResolvedMutation":
+    """The stack's resolution of ``request``, refused when its resolver does
+    not accept the mode or changes the case tree.
+
+    Purity is checked by the path names under ``request.case_root`` before
+    and after; an in-place edit, a write outside the case or a read is not
+    caught, and a resolver that reads makes a dry run depend on case state.
+    """
+    stack = driver_context.stack
+    supported = stack.call("get_supported_mutation_modes")
+    if request.mode not in supported:
+        raise ValueError(
+            f"the provider stack {list(stack.ids)} does not support creation "
+            f"mode {request.mode!r}; it supports {sorted(supported)}"
+        )
+    root = Path(request.case_root)
+    before = set(root.rglob("*")) if root.is_dir() else set()
+    resolved = stack.call("resolve_case_mutation", request, driver_context=driver_context)
+    after = set(root.rglob("*")) if root.is_dir() else set()
+    if before != after:
+        raise ValueError(
+            f"resolve_case_mutation() must be pure; {request.adapter_id!r} "
+            f"changed {sorted(str(p) for p in before ^ after)}"
+        )
+    return resolved
+
+
+def render_mutation(
+    driver_context: Any, resolved: "ResolvedMutation", *, snapshot_root: Path, execution_env: Any | None = None,
+) -> tuple[RenderedFile, ...]:
+    """Every renderer's files for ``resolved``, each refused unless its
+    provider declares the file's format and is named as its ``renderer_id``."""
+    stack = driver_context.stack
+    renderers = stack.implementers("render_case_files")
+    if not renderers:
+        raise stack.refusal("render_case_files")
+    rendered: list[RenderedFile] = []
+    for provider in renderers:
+        declared = frozenset(provider.get_rendered_formats())
+        for file in provider.render_case_files(
+            resolved, snapshot_root=snapshot_root, driver_context=driver_context, execution_env=execution_env,
+        ):
+            if file.format not in declared:
+                raise ValueError(
+                    f"provider {provider.plugin_id!r} rendered {file.path!r} claiming "
+                    f"format {file.format!r}, which it does not declare via "
+                    f"get_rendered_formats() (declared: {sorted(declared)})"
+                )
+            if file.renderer_id != provider.plugin_id:
+                raise ValueError(
+                    f"provider {provider.plugin_id!r} rendered {file.path!r} with "
+                    f"renderer_id {file.renderer_id!r}; a rendered file names the "
+                    f"provider that produced it"
+                )
+            rendered.append(file)
+    return tuple(rendered)

@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from ..plugin_capabilities import RuntimeDependency
+from ..plugin_interface import RuntimeDependency
 from .provenance import ProvenanceComponent, component_for_path
 
 

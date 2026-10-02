@@ -1,728 +1,393 @@
-"""Solver-agnostic plugin contract for omnidriver.
+"""The solver plugin contract.
 
-:class:`SolverPlugin` is the plugin contract, enforced in full by
-:func:`validate_plugin`; :class:`SolverPluginOptionalHooks` documents the
-probe-based optional hooks. See ``AGENT_GUIDE.md``, section "Plugin Guide --
-Adding a New Solver".
+A provider must have only its identity. Every other member of
+:class:`SolverPlugin` is optional: ``provider_stack.MEMBERS`` says how a
+stack composes it and what the stack answers when no provider implements it,
+refusing by name where an operation needs it. See ``AGENT_GUIDE.md``,
+"Adding a New Solver".
 """
 
-# REQUIRED, not stylistic. Several annotations below name types imported only
-# under ``if TYPE_CHECKING`` (DictEntry, TutorialSpec, DataArtifact, Path).
-# Without lazy annotations those are evaluated when the
-# class body executes, so importing this module raises
-# ``NameError: name 'DictEntry' is not defined`` on every Python before 3.14 --
-# i.e. on 3.11/3.12, which is exactly this project's CI matrix. Python 3.14's
-# PEP 649 defers annotation evaluation and hides the bug, which is why a 3.14
-# virtualenv shows a green suite while CI cannot collect a single test.
+# Annotations below name types imported only under TYPE_CHECKING; without
+# lazy annotations, importing this module raises NameError before Python 3.14.
 from __future__ import annotations
 
 import hashlib
 import json
 import re
-from dataclasses import asdict, is_dataclass
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
 from functools import cached_property
 from importlib import import_module
-from typing import Any, Mapping, Protocol, Sequence, TYPE_CHECKING, runtime_checkable
+from pathlib import Path
+from typing import Any, Mapping, Protocol, Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from omnidriver.core.plugin_capabilities import PluginCapabilities, RuntimeDependency
     from omnidriver.core.contracts.dictionary import DictEntry
-    from omnidriver.core.quantities.model import ArtifactValueReader
-    from omnidriver.core.runtime.models import TutorialSpec, DataArtifact
     from omnidriver.core.planning_types import StrictDiagnostic
-    from omnidriver.core.plugin_capabilities import ResolvedInput
-    from omnidriver.core.report_catalog import ReportDefinition
-    from omnidriver.core.provider_identity import StackIdentity, ProviderIdentity
-    from pathlib import Path
+    from omnidriver.core.provider_identity import ProviderIdentity, StackIdentity
+    from omnidriver.core.provider_stack import ProviderStack
+    from omnidriver.core.quantities.model import ArtifactValueReader
+    from omnidriver.core.runtime.models import DataArtifact, TutorialSpec
 
 
-class CapabilityManifest(Protocol):
-    """Protocol for a solver's capability manifest."""
-    # This can be expanded based on the solver's specific domain (e.g. models, physics)
-    pass
+@dataclass(frozen=True)
+class ResolvedInput:
+    """One input a case's model resolves to an on-disk path, or fails to.
+    ``consumer`` names the model that resolved it, for diagnostics only."""
+
+    name: str
+    path: Path | None
+    required: bool
+    consumer: str
 
 
-@runtime_checkable
+@dataclass(frozen=True)
+class RuntimeDependency:
+    """Something a run's executable consumes outside the case tree: the
+    solver binary, a library it loads, a case-local shared object. ``path``
+    ``None`` on a required dependency is reported ``unavailable``."""
+
+    name: str
+    path: Path | None
+    required: bool
+
+
+@dataclass(frozen=True)
+class CaseRuntimeConventions:
+    """The paths an environment generates while a case runs.
+
+    Core copies, snapshots and cleans cases; the names are the environment's.
+    The empty declaration removes no authored path from a staged case.
+    """
+
+    generated_directory_names: tuple[str, ...] = ()
+    generated_file_names: tuple[str, ...] = ()
+    generated_file_prefixes: tuple[str, ...] = ()
+    generated_file_suffixes: tuple[str, ...] = ()
+    preserved_file_suffixes: tuple[str, ...] = ()
+    generated_case_markers: tuple[str, ...] = ()
+    case_entrypoints: tuple[str, ...] = ()
+    case_script_commands: tuple[str, ...] = ()
+    #: fnmatch globs naming a directory, at any depth, that holds one replica
+    #: of the case per parallel rank (OpenFOAM: ``processor*``).
+    replica_directory_globs: tuple[str, ...] = ()
+    #: Regex a file or directory name matches when it is one of the solver's
+    #: output instances (OpenFOAM: a time directory); ``None`` declares none.
+    instance_directory_pattern: str | None = None
+    #: Instance names that are authored input and never cleaned (OpenFOAM: ``"0"``).
+    preserved_instance_names: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        # A bare str here would explode into one-character names under tuple().
+        _require_tuple_of_names(self, "replica_directory_globs", noun="glob strings")
+        _require_tuple_of_names(self, "preserved_instance_names", noun="name strings")
+        if self.instance_directory_pattern is not None:
+            if not isinstance(self.instance_directory_pattern, str):
+                raise TypeError(
+                    f"instance_directory_pattern must be a str or None, got "
+                    f"{type(self.instance_directory_pattern).__name__} "
+                    f"{self.instance_directory_pattern!r}"
+                )
+            try:
+                re.compile(self.instance_directory_pattern)
+            except re.error as exc:
+                raise ValueError(
+                    f"instance_directory_pattern {self.instance_directory_pattern!r} "
+                    f"is not a valid regular expression: {exc}"
+                ) from exc
+
+
+def _require_tuple_of_names(conventions: CaseRuntimeConventions, field_name: str, *, noun: str) -> None:
+    value = getattr(conventions, field_name)
+    if not isinstance(value, tuple):
+        raise TypeError(f"{field_name} must be a tuple of {noun}, got {type(value).__name__} {value!r}")
+    for item in value:
+        if not isinstance(item, str) or not item:
+            raise TypeError(
+                f"{field_name} must be a tuple of {noun}, got "
+                f"{type(item).__name__} {item!r} among its items"
+            )
+
+
 class SolverPlugin(Protocol):
-    """Strict contract implemented by an environment or solver adapter.
+    """Every member a provider may implement. Only the four identity
+    properties are required; each other member is composed and defaulted by
+    ``provider_stack.MEMBERS``, which also names the operations that refuse
+    without it."""
 
-    Core owns workflow mechanics; the adapter owns runtime conventions and
-    domain vocabulary. OpenFOAM and cardiacFOAM are concrete implementations,
-    not requirements of this protocol.
-    """
-    
-    @property
-    def plugin_name(self) -> str:
-        """Display name of the adapter or solver plugin."""
-        ...
+    plugin_name: str
+    plugin_id: str
+    plugin_version: str
+    plugin_api_version: str
 
-    @property
-    def plugin_id(self) -> str:
-        """Stable machine identifier, independent of the display name."""
-        ...
-
-    @property
-    def plugin_version(self) -> str:
-        """Version of the plugin semantics used to construct a plan."""
-        ...
-
-    @property
-    def plugin_api_version(self) -> str:
-        """Version of the omnidriver plugin contract implemented by this plugin."""
-        ...
-
-    # -- Command authorization -----------------------------------------------
-    def get_solver_commands(self) -> frozenset[str]:
-        """Binaries that produce a run's artifacts. Core's artifact-producer
-        heuristic consults this set alone, never the auxiliary one."""
-        ...
-
-    def get_auxiliary_commands(self) -> frozenset[str]:
-        """Additionally authorized binaries that produce no artifacts of their
-        own -- meshers, decomposers, reconstructors."""
-        ...
-
-    def get_environment_commands(self) -> frozenset[str]:
-        """Optional static commands supplied by the execution environment.
-
-        An environment adapter declares its meshing, reconstruction, or other
-        runtime tools here. Core does not provide environment command names.
-        """
-        ...
-
-    def is_installed_environment_command(self, command: str) -> bool:
-        """Optional runtime lookup for an environment-provided application."""
-        ...
-
-    def get_utility_manifests(self) -> dict[str, Any]:
-        """Per-utility declarations of what each pre/post-solve utility
-        consumes and produces, so workflow steps can be checked before they
-        run."""
-        ...
-
-    def get_utility_roots(self) -> tuple["Path", ...]:
-        """Directories holding this plugin's utility sources, for provenance
-        fingerprinting."""
-        ...
-
-    # -- Case introspection ---------------------------------------------------
-    def resolve_case_models(self, case_root: "Path") -> dict[str, Any]:
-        """Best-effort read of a case's on-disk model selections. Must never
-        raise: agents call it against partly-written cases."""
-        ...
-
-    def get_samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]:
-        """Fields the resolved model exposes for sampling by function objects,
-        keyed by region."""
-        ...
-
-    # -- Configuration vocabulary --------------------------------------------
-    def get_dict_entry_catalog(self) -> dict[str, Any]:
-        """The plugin's dictionary entries arranged by its own document names,
-        unserialized -- core owns serialization, the plugin owns vocabulary."""
-        ...
-
-    # -- Runtime evidence ------------------------------------------------------
-    def get_solve_step_commands(self) -> frozenset[str]:
-        """Which commands count as the solve step, for telemetry attribution."""
-        ...
-
-    def get_log_redaction_patterns(self) -> tuple[str, ...]:
-        """Regular expressions whose matches are replaced in kept step logs
-        (for example a credential a solver prints in its build header).
-
-        Every match is replaced whole by ``[REDACTED]``; capture groups are
-        not kept. Match only the secret, using lookarounds for any context
-        it needs, e.g. ``(?<=://)[^/\\s@]+(?=@)`` for a URL's credential."""
-        ...
-
-    def get_telemetry_source_globs(self, command: str) -> tuple[str, ...]:
-        """Where a given command writes the logs telemetry is parsed from."""
-        ...
-
-    def get_extra_provenance_paths(self, case_root: "Path") -> tuple["RuntimeDependency", ...]:
-        """Run-time dependencies outside the case tree: the solver binary, a
-        linked library, a case-local shared object.
-
-        Returns ``RuntimeDependency`` rather than bare paths so that "required
-        but not found" is expressible. A tuple of paths can only omit, and
-        omission reads as "nothing to check" -- the gap that let a rebuilt
-        solver replay a resumed run's numbers as fresh."""
-        ...
-
-    def get_artifact_value_reader(self, artifact_format: str) -> "ArtifactValueReader | None":
-        """The reader for one of this plugin's artifact formats, or ``None``.
-        Composed ``single`` (the most specific provider with a reader for the
-        format answers). Contract: ``core.quantities.ArtifactValueReader``."""
-        ...
-
+    # -- declarations ---------------------------------------------------------
     def get_profile(self):
-        """Return declarative case/C++ provenance metadata for this plugin."""
-        ...
+        """The declarative profile (``plugin_profile.load_plugin_profile``):
+        case files, C++ mapping, environment connection, ``requires``."""
 
-    def get_capabilities(self) -> CapabilityManifest:
-        """
-        Return the capabilities of the solver (e.g., supported physics, 
-        models, regions).
-        """
-        ...
+    def get_capabilities(self) -> dict[str, Any]:
+        """Domain entries core adds to the capability manifest as given."""
 
-    def validate_configuration(self, spec: TutorialSpec) -> tuple[StrictDiagnostic, ...]:
-        """
-        Solver-specific validation logic that goes beyond simple DictEntry constraints.
-        Returns a tuple of diagnostics (errors/warnings).
-        """
-        ...
-
-    def validate_run_semantics(self, case_root: Path) -> tuple[StrictDiagnostic, ...]:
-        """Return the rules the resolved case at ``case_root`` violates, and
-        the notes a rule has for it."""
-        ...
-
-    def predict_data_artifacts(self, case_root: Path, spec: TutorialSpec) -> tuple[DataArtifact, ...]:
-        """
-        Predict the domain-specific artifacts (like ECGs or Purkinje VTK files) 
-        that this solver expects to produce.
-        """
-        ...
-
-@dataclass(frozen=True)
-class PluginIdentity:
-    """Stable description of the plugin semantics attached to an operation.
-
-    Superseded by :class:`DriverContext.identity`, which holds a
-    :class:`~omnidriver.core.provider_identity.StackIdentity` (one identity
-    per operation was an arity assumption that composition removes). Kept,
-    unconstructed by :func:`driver_context`, until nothing in this repository
-    still names it.
-    """
-
-    id: str
-    version: str
-    api_version: str
-    source: str
-    capability_digest: str
-
-    def to_json(self) -> dict[str, str]:
-        """Serialise this identity for provenance records and ``describe``."""
-        return {
-            "id": self.id,
-            "version": self.version,
-            "api_version": self.api_version,
-            "source": self.source,
-            "capability_digest": self.capability_digest,
-        }
-
-
-@dataclass(frozen=True)
-class DriverContext:
-    """Per-operation provider stack for solver-specific behaviour.
-
-    Immutable and threaded through planning, discovery and execution. Holds
-    any number of providers, composed once via :attr:`capabilities`, rather
-    than a single active plugin.
-    """
-
-    providers: tuple[SolverPlugin, ...]
-    identity: "StackIdentity"
-    # The ``--plugin`` value that rebuilds this context in another process,
-    # recorded where a selector becomes a context (``load_plugin_context``,
-    # ``load_discovered_plugin``) and ``None`` everywhere else: a hand-built
-    # or default context was produced by no selector, and inventing one would
-    # be a guess. Excluded from equality because it says how to rebuild a
-    # context, not what the context is, and from ``identity`` for the same
-    # reason ``ProviderIdentity.source`` is kept out of ``capability_digest``.
-    plugin_selector: str | None = field(default=None, compare=False)
-
-    @cached_property
-    def capabilities(self) -> "PluginCapabilities":
-        """Return the focused internal view without changing dataclass fields."""
-        from .provider_stack import compose
-
-        return compose(self.providers)
-
-
-@runtime_checkable
-class SolverPluginOptionalHooks(Protocol):
-    """Optional hooks a plugin MAY implement. Documentation, not enforcement.
-
-    Every member here is probed with ``getattr`` by an adapter in
-    :mod:`omnidriver.core.plugin_capabilities`. None is listed in
-    ``_REQUIRED_PLUGIN_MEMBERS``, so this class is inert at load time:
-    ``validate_plugin`` never consults it, and declaring or omitting any of
-    these changes no plugin's loading behaviour.
-
-    **Why this class exists.** Until it did, these hooks appeared
-    nowhere in the plugin contract. They were reachable only by reading the
-    private ``_*Adapter`` bodies, so a plugin author reading this file could
-    not discover that the extension points existed at all -- while *not*
-    implementing one silently routed them into a compatibility fallback.
-
-    **Not implementing a hook is a real choice, not a no-op.** When the hook
-    is absent, the adapter uses the named compatibility behavior documented in
-    :mod:`omnidriver.core.compatibility`. These fallbacks are neutral or
-    explicitly refuse unsupported operations; they do not infer a solver's
-    vocabulary.
-
-    Hooks are grouped by the capability they back; see that capability's
-    docstring in ``plugin_capabilities.py`` for the full contract.
-    """
-
-    # -- PlanDiagnosticsCapability ---------------------------------------------
-    def get_plan_diagnostics(
-        self, case_root: "Path", *, workflow_dag: dict[str, Any] | None, env: Mapping[str, str],
-        scratch_root: "Path | None", driver_context: Any,
-    ) -> tuple["StrictDiagnostic", ...]:
-        """What this provider adds to a strict plan: checks of the case or of
-        the solver's own source that core cannot express. An error fails the
-        plan; a warning or note never does. Absent -> nothing is added."""
-        ...
-
-    # -- StepFailureCapability -------------------------------------------------
-    def explain_step_failure(
-        self, log_text: str, case_root: "Path", *, driver_context: Any,
-    ) -> tuple["StrictDiagnostic", ...]:
-        """What the tail of a failed step's logs says that the exit code does
-        not: the key a solver reports missing, and the dictionary it looked in.
-        Absent -> the step's failure carries no explanation of its own."""
-        ...
-
-    # -- CaseRuntimeConventionsCapability ------------------------------------
-    def get_case_runtime_conventions(self):
-        """Declare generated case paths and an optional output collection
-        root for this execution environment. Absent -> a neutral declaration
-        that preserves authored paths and collects no convention-specific
-        output."""
-        ...
-
-    # -- ConfigValueCapability ------------------------------------------------
-    def get_config_value_reader(self):
-        """Return a ``(path, key_path_tuple) -> value | None`` reader for
-        this adapter's configuration format -- ``key_path_tuple`` is always
-        a TUPLE (e.g. ``("bidomainSolverCoeffs", "conductivitySource")`` for
-        a nested key, or a one-element tuple for a top-level one), never a
-        single string; an adapter's own reader splits it into whatever
-        scope/leaf-key shape its file format needs (see
-        ``openfoam.environment._read_config_value_by_key_path`` for the
-        reference split). Absent -> no format-specific reader."""
-        ...
-
-    # -- EnvironmentPreflightCapability -----------------------------------------
-    def get_environment_diagnostics(
-        self, workflow_dag, *, env=None, environment_source=None, driver_context=None,
-    ) -> tuple[Any, ...]:
-        """Preflight the runtime environment a plan's workflow_dag will run
-        in. Absent -> no adapter-specific environment evidence is claimed.
-        ``environment_source`` is the operator's opaque ``--environment-source``
-        value; this plugin decides what it means."""
-        ...
-
-    def get_configured_environment(self, env, driver_context) -> dict[str, str]:
-        """Apply this adapter's environment contract to an already-sourced
-        environment mapping. Absent -> the mapping is preserved unchanged."""
-        ...
-
-    # -- CaseProvenanceCapability --------------------------------------------
-    def get_required_inputs(
-        self,
-        case_root: "Path",
-        resolved_case: dict[str, Any],
-    ) -> tuple["ResolvedInput", ...]:
-        """Already-resolved input paths this case reads. Resolved, not globs:
-        field names are dictionary-configurable and locations resolve by a
-        backward ``Time::findInstance`` search. Absent -> ``()``, which under
-        the resolution precedence means "every unknown file is a required
-        input" -- safe, but coarse."""
-        ...
-
-    def get_generated_output_globs(
-        self,
-        case_root: "Path",
-        resolved_case: dict[str, Any],
-    ) -> tuple[str, ...]:
-        """Globs for files this case generates rather than consumes. Globs are
-        fine here: generated diagnostics have fixed names. Absent -> ``()``."""
-        ...
-
-    def get_input_roots(
-        self, case_root: "Path", resolved_case: dict[str, Any],
-        *, conventions: Any,
-    ) -> tuple[str, ...]:
-        """Case-relative directories whose files a run reads as state, beyond
-        the case-file roots: for example the directory a run resumes from,
-        and that directory inside each parallel replica. Absent -> ``()``:
-        core walks no state directory. Each must be a non-empty case-relative
-        ``str`` path inside the case.
-
-        ``conventions`` is the stack's merged ``CaseRuntimeConventions`` --
-        the same value staging and discovery read -- so a plugin computing
-        replica roots reads its own replica globs from there rather than a
-        second, independent copy."""
-        ...
-
-    # -- EnvironmentPreflightCapability --------------------------------------
-    def get_loaded_environment(
-        self, *, environment_source: str | None, driver_context: Any,
-    ) -> dict[str, str]:
-        """Build the execution environment from scratch, e.g. by sourcing
-        whatever ``environment_source`` names. Distinct from
-        ``get_configured_environment``, which overlays a plugin contract onto
-        an environment that already exists.
-
-        Absent -> the current process environment is used unchanged."""
-        ...
-
-    def inspect_effective_configuration(
-        self, *, case_root: "Path", execution_env: dict[str, str] | None = None,
-    ) -> tuple[dict[str, Any], ...]:
-        """Read declared configuration dependencies without modifying a case.
-
-        Records inspected and absent optional files, or explicitly reports an
-        unresolved closure. Absent -> no format-specific configuration
-        evidence is claimed.
-        """
-        ...
-
-    # -- ReportCatalogCapability ---------------------------------------------
-    def get_report_catalog(self) -> tuple["ReportDefinition", ...]:
-        """Post-run reports this plugin offers. Core owns the machinery; the
-        catalog itself is plugin data. Absent -> ``()``."""
-        ...
-
-    # -- NamedCatalogsCapability ---------------------------------------------
     def get_named_catalogs(self) -> dict[str, Any]:
-        """Plugin-chosen catalogs, namespaced under ``plugin_catalogs`` in
-        ``describe``. Core imposes no key set. Absent -> ``{}``."""
-        ...
+        """Catalogs ``describe`` namespaces under ``plugin_catalogs``."""
 
-    # -- DictKeyScannerCapability ---------------------------------------------
-    def get_dict_key_scanner(self):
-        """Return a ``(source_root, *, allowlist_path, entries, cache_root,
-        force) -> report`` callable comparing this adapter's catalogue with
-        its C++ source (``DictKeyScannerCapability``). Absent -> the neutral
-        scanner that reports nothing."""
-        ...
-
-    # -- TutorialRecordCapability ---------------------------------------------
-    def get_tutorial_records(self) -> dict[str, Any]:
-        """This plugin's tutorial records, keyed by name.
-
-        A record (``core.tutorial_records.TutorialRecord``) is inert data --
-        a native case path, its own axes, its workflow steps -- not a
-        callable factory; core never calls into the plugin to build one.
-        Absent -> ``None``, not ``{}`` -- distinct from a plugin that
-        implements this hook and simply registers no records yet; the
-        ordinary case for a plugin that has not migrated any tutorial onto
-        this shape yet (see
-        ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``)."""
-        ...
-
-    # -- RecordKeyValidationCapability ------------------------------------------
-    def get_record_key_validator(self):
-        """Return a ``(document, key_path, value) -> (value_kind, validated)``
-        callable that checks a tutorial-record study's direct ``document:key``
-        name against this plugin's own dictionary catalog.
-
-        Raises ``KeyError`` (or any exception) for a name the catalog does
-        not recognise -- refusing it is this hook's own choice (design §5: "a
-        [solver]-owned key absent from the catalog... never bypassed"); an
-        adapter that instead wants to accept an undeclared key unchecked (the
-        environment-owned-key exception, a key some underlying format reads
-        but this plugin has no full catalog for yet) returns
-        ``(inferred_kind, False)`` rather than raising -- both are
-        legitimate, adapter-owned answers core does not choose between.
-        Absent -> ``None``: a stack with no validator REFUSES a record case
-        outright (``record_execution._resolve_and_split``) rather than
-        checking no direct key at all."""
-        ...
-
-    # -- CaseValueComparisonCapability -------------------------------------------
-    def get_case_value_comparator(self):
-        """Return a ``(value_kind, requested, current) -> bool`` callable, or
-        ``None``.
-
-        Typed comparison: a requested ``"1e-3"`` and a case's resolved
-        ``"0.001"`` are ``False`` under Python ``==`` but the same value in
-        every dictionary format this framework writes, so a tutorial-record
-        patch's "is this unchanged" check (``core.tutorial_records``) must
-        never fall back to string or Python ``==`` equality. Absent ->
-        ``None``: a stack with no comparator REFUSES a record case outright
-        rather than reporting every patch "changed" and committing it."""
-        ...
-
-    # -- ParallelExecutionCapability (PAR, 2026-09-26) ---------------------------
-    def get_parallel_steps(self, step, *, request, read_value, allocation):
-        """The parallel form of one of a record's solve steps.
-
-        Core calls this only when a run asks for parallel (the reserved study
-        name ``tutorial_records.PARALLEL_STUDY_NAME``, or ``--parallel``), and
-        only for a step whose command this stack declares in
-        ``get_solve_step_commands``. ``step`` is that step's serial DAG entry
-        (``id``, ``command``, ``args``, ``depends_on``, ``produces``,
-        ``consumes``); ``request`` is the requested value, never ``False``;
-        ``read_value(document, key_path)`` returns the value the run's case
-        holds for a case-relative document key, uncommitted study patches
-        included; ``allocation`` is the ambient scheduler allocation
-        (``record_execution.SchedulerAllocation``) or ``None``.
-
-        Returns the steps that replace it, in order. Exactly one keeps
-        ``step["id"]`` and its ``produces`` (the step that runs the solver);
-        the others take ids no other step uses. The first follows
-        ``step["depends_on"]``; the step after the solve will follow the last.
-        Raises ``ValueError`` to refuse, naming the fact that is missing or
-        disagrees; core reports it with the record and step. Composed
-        ``single``: the most specific provider's form answers, so a solver
-        plugin may replace its environment's. Absent -> a run asking for
-        parallel is refused by name; a serial run never calls this."""
-        ...
-
-    # -- RecordSurfaceCapability (C10) ------------------------------------------
-    def get_record_key_catalog(self, case_root: "Path") -> tuple[Mapping[str, Any], ...]:
-        """Every key a study may name for this case: document, key, value_kind, and optionally
-        default/description/minimum/maximum/menu. Indexed keys may use ``[Int]`` for any index.
-
-        ``[Int]`` is generic index notation, not a solver's syntax: a key
-        whose path segment carries a concrete index (``stim[0].start``) is
-        matched against its template (``stim[Int].start``). A whole segment
-        ``<name>`` -- any identifier in angle brackets, e.g.
-        ``regions.<region_name>.baseline`` -- stands for any single dot-free
-        segment (``regions.lv.baseline``). A document whose keys are written
-        as asked but have no catalogue is listed once as
-        ``{"document": d, "key": "<any>", "validated": False}``, with no
-        ``value_kind``; it lists every key of ``d``. The grammar, and its
-        matcher, live in ``runtime.record_surface``. Absent -> no keys, which
-        the conformance check C10 reports as a failure."""
-        ...
-
-    def get_agent_guidance(self) -> tuple[Mapping[str, str], ...]:
-        """Solver-level advice an agent should read before writing a study (title, text).
-        Absent -> none, which C10 reports as a failure."""
-        ...
-
-    # -- CaseWriterCapability -------------------------------------------------
-    def resolve_case_mutation(
-        self, request: Any, *, driver_context: Any,
-    ) -> Any:
-        """Resolve a mutation request into concrete addresses and effects.
-
-        The semantic owner's hook: which parameters apply, what they mean,
-        which document and key each lands in, and what the edit is expected to
-        change. Returns a ``ResolvedMutation``.
-
-        **Pure.** Must not read or write the filesystem. A dry run's promise of
-        costing nothing rests on this, and core enforces it rather than
-        trusting it -- but only as far as a before/after name-only snapshot of
-        ``request.case_root`` can: in-place content or permission changes, a
-        write outside ``request.case_root``, a create-then-delete of one path
-        within the call, and -- the one that matters most -- any READ at all,
-        are none of them caught. A resolver that reads makes the dry run's
-        answer depend on case state at read time, which defeats the entire
-        reason this hook is declared pure; the enforcement above will not
-        tell you this happened. Raise a
-        ``ValueError`` naming the supported modes to refuse a mode this
-        adapter does not support. Absent -> this adapter authors no case
-        inputs."""
-        ...
-
-    def get_supported_mutation_modes(self) -> "frozenset[str]":
-        """Which creation modes this adapter supports.
-
-        Adapters differ and are meant to: cardiacCore preprocessing patches
-        declared dictionaries, cardiacFoam synthesizes a case from a catalog.
-
-        Absent alongside ``resolve_case_mutation`` -> refused by name (an
-        implemented resolver whose supported modes are undeclared). Absent
-        alongside no ``resolve_case_mutation`` -> no modes."""
-        ...
-
-    def get_rendered_formats(self) -> "frozenset[str]":
-        """File formats this provider renders. Exactly one declarer per format.
-
-        Composition refuses a stack where two providers claim one format: the
-        bytes reaching disk would otherwise depend on composition order.
-        Absent -> this provider renders nothing."""
-        ...
-
-    def render_case_files(
-        self, resolved: Any, *, snapshot_root: "Path", driver_context: Any,
-        execution_env: Any | None = None,
-    ) -> tuple[Any, ...]:
-        """Render complete proposed file contents, in this provider's formats.
-
-        The format owner's hook. **Reads** the case -- it must, to patch an
-        existing file -- and writes nothing outside ``snapshot_root``, an
-        isolated copy core provides. Returns ``RenderedFile`` objects with
-        complete bytes; core commits them and this hook does not.
-
-        ``execution_env`` is the selected runtime, for a renderer that must
-        resolve includes or evaluate a directive to know what it is editing.
-        Absent -> this provider renders nothing."""
-        ...
-
-    # -- DictionaryCatalogCapability -------------------------------------------
-    # Optional-neutral since 2026-09-26 (spec 2026-09-26 A3).
-    def get_dict_entries(self) -> tuple[DictEntry, ...]:
-        """The plugin's dictionary entries. Absent -> ``()``; the identity
-        digest then hashes ``()``, exactly as an empty stub did."""
-        ...
+    # -- dictionary vocabulary --------------------------------------------------
+    def get_dict_entries(self) -> tuple["DictEntry", ...]:
+        """Every dictionary entry this provider catalogues."""
 
     def get_dictionary_catalog(self):
-        """Entries partitioned by plugin-owned document name. Absent -> an
-        empty ``DictionaryCatalog``."""
-        ...
+        """The same entries as a ``DictionaryCatalog``, by document name."""
 
-    def get_dict_groups(self) -> dict[str, tuple[DictEntry, ...]]:
-        """Entries by the plugin's own group names. Absent -> ``{}``."""
-        ...
+    def get_dict_groups(self) -> dict[str, tuple["DictEntry", ...]]:
+        """The entries by this provider's own group names."""
+
+    def get_dict_entry_catalog(self) -> dict[str, Any]:
+        """The entries arranged by document name, unserialized."""
+
+    def get_dict_key_scanner(self):
+        """A ``(source_root, *, allowlist_path, entries, cache_root, force) ->
+        report`` callable comparing the catalogue with the solver's C++; the
+        report's ``to_json()`` has ``disagreements``, ``unread``,
+        ``uncatalogued``, ``unresolved`` and ``selector_values``."""
+
+    # -- commands -------------------------------------------------------------
+    def get_solver_commands(self) -> frozenset[str]:
+        """Binaries that produce a run's artifacts."""
+
+    def get_auxiliary_commands(self) -> frozenset[str]:
+        """Authorized binaries that produce no artifacts of their own."""
+
+    def get_environment_commands(self) -> frozenset[str]:
+        """Static commands the execution environment supplies."""
+
+    def is_installed_environment_command(self, command: str) -> bool:
+        """Whether ``command`` is an application the environment has installed."""
+
+    def get_utility_manifests(self) -> dict[str, Any]:
+        """``UtilityManifest`` per utility command: what it consumes and produces."""
+
+    def get_solve_step_commands(self) -> frozenset[str]:
+        """The commands that run the solve step, the one a parallel run rewrites."""
+
+    # -- planning and validation ----------------------------------------------
+    def validate_configuration(self, spec: "TutorialSpec") -> tuple["StrictDiagnostic", ...]:
+        """What this provider objects to in a resolved spec."""
+
+    def validate_run_semantics(self, case_root: Path) -> tuple["StrictDiagnostic", ...]:
+        """The rules the resolved case at ``case_root`` breaks; an error
+        refuses the record case before anything runs."""
+
+    def predict_data_artifacts(self, case_root: Path, spec: "TutorialSpec") -> tuple["DataArtifact", ...]:
+        """Files the case will produce; a missing one fails the run. Never raises."""
+
+    def get_plan_diagnostics(
+        self, case_root: Path, *, workflow_dag: dict[str, Any] | None, env: Mapping[str, str],
+        scratch_root: Path | None, driver_context: Any,
+    ) -> tuple["StrictDiagnostic", ...]:
+        """What a strict plan adds about the case or the solver's source. An
+        error fails the plan; ``scratch_root`` is where derived work may be cached."""
+
+    def explain_step_failure(self, log_text: str, case_root: Path, *, driver_context: Any) -> tuple["StrictDiagnostic", ...]:
+        """What a failed step's log tail says that its exit code does not."""
+
+    def inspect_effective_configuration(
+        self, *, case_root: Path, execution_env: dict[str, str] | None = None,
+    ) -> tuple[dict[str, Any], ...]:
+        """The files the case's configuration resolves to, read without running."""
+
+    # -- environment ----------------------------------------------------------
+    def get_environment_diagnostics(
+        self, workflow_dag, *, env=None, environment_source=None, driver_context=None,
+    ) -> tuple["StrictDiagnostic", ...]:
+        """Preflight of the environment a plan will run in.
+        ``environment_source`` is the operator's opaque ``--environment-source``."""
+
+    def get_loaded_environment(self, *, environment_source: str | None, driver_context: Any) -> dict[str, str]:
+        """The execution environment built from scratch, e.g. by sourcing
+        ``environment_source``."""
+
+    def get_configured_environment(self, env: dict[str, str], driver_context: Any) -> dict[str, str]:
+        """This provider's contract applied over an existing environment."""
+
+    def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
+        """The paths this environment generates in a case."""
+
+    # -- provenance -----------------------------------------------------------
+    def resolve_case_models(self, case_root: Path) -> dict[str, Any]:
+        """Best-effort model selections the case holds. Never raises."""
+
+    def get_samplable_fields(self, resolved: dict[str, Any]) -> dict[str, tuple[str, ...]]:
+        """Fields the resolved model exposes for sampling, by region."""
+
+    def get_required_inputs(self, case_root: Path, resolved_case: dict[str, Any]) -> tuple[ResolvedInput, ...]:
+        """Resolved input paths the case reads. Without them every unknown
+        file is a required input."""
+
+    def get_generated_output_globs(self, case_root: Path, resolved_case: dict[str, Any]) -> tuple[str, ...]:
+        """Globs for files the case generates rather than consumes."""
+
+    def get_input_roots(
+        self, case_root: Path, resolved_case: dict[str, Any], *, conventions: CaseRuntimeConventions,
+    ) -> tuple[str, ...]:
+        """Case-relative directories a run reads as state (the instance it
+        resumes from); ``conventions`` is the stack's merged declaration."""
+
+    def get_extra_provenance_paths(self, case_root: Path) -> tuple[RuntimeDependency, ...]:
+        """Run-time dependencies outside the case tree."""
+
+    def get_log_redaction_patterns(self) -> frozenset[str]:
+        """Regexes whose every match in a kept step log becomes ``[REDACTED]``."""
+
+    def get_artifact_value_reader(self, artifact_format: str) -> "ArtifactValueReader | None":
+        """The reader for one artifact format, or ``None``."""
+
+    # -- records --------------------------------------------------------------
+    def get_tutorial_records(self) -> dict[str, Any]:
+        """``TutorialRecord`` values by name."""
+
+    def get_record_key_catalog(self, case_root: Path) -> tuple[Mapping[str, Any], ...]:
+        """Every key a study may name for this case: ``document``, ``key``,
+        ``value_kind`` and optionally ``default``, ``description``,
+        ``minimum``, ``maximum``, ``menu``. The key grammar (``[Int]``,
+        ``<name>``) is ``runtime.record_surface``'s. A document written as
+        asked without a catalogue is listed once with key ``"<any>"`` and
+        ``validated: False``."""
+
+    def get_agent_guidance(self) -> tuple[Mapping[str, str], ...]:
+        """Advice an agent reads before writing a study: ``title``, ``text``."""
+
+    def get_record_key_validator(self):
+        """A ``(document, key_path, value) -> (value_kind, validated)``
+        callable; it raises for a key it refuses."""
+
+    def get_case_value_comparator(self):
+        """A ``(value_kind, requested, current) -> bool`` typed comparison."""
+
+    def get_config_value_reader(self):
+        """A ``(path, key_path_tuple) -> value | None`` reader of this format."""
+
+    def get_parallel_steps(self, step, *, request, read_value, allocation):
+        """The steps replacing one serial solve step for a parallel run.
+        Exactly one keeps ``step["id"]`` and its ``produces``; the first
+        follows ``step["depends_on"]``. Raises ``ValueError`` to refuse."""
+
+    # -- case writing ---------------------------------------------------------
+    def resolve_case_mutation(self, request: Any, *, driver_context: Any) -> Any:
+        """A ``ResolvedMutation`` for the request. Pure: reads and writes
+        nothing; core refuses one that changes the case tree."""
+
+    def get_supported_mutation_modes(self) -> frozenset[str]:
+        """The creation modes ``resolve_case_mutation`` accepts."""
+
+    def render_case_files(
+        self, resolved: Any, *, snapshot_root: Path, driver_context: Any, execution_env: Any | None = None,
+    ) -> tuple[Any, ...]:
+        """``RenderedFile`` values with complete bytes, in this provider's
+        formats, reading the case copy at ``snapshot_root``."""
+
+    def get_rendered_formats(self) -> frozenset[str]:
+        """The file formats this provider renders; one renderer per format."""
 
 
-# The single plugin contract version this core can drive. Anything else is
-# refused before any plugin catalog code runs.
+IDENTITY_MEMBERS = ("plugin_name", "plugin_id", "plugin_version", "plugin_api_version")
+
+#: The plugin contract versions this core drives.
 SUPPORTED_PLUGIN_API_VERSIONS: frozenset[str] = frozenset({"2"})
-
-
-#: Identity properties, which are strings rather than capability members and
-#: therefore appear in no capability's ``:adapts:`` list.
-_IDENTITY_MEMBERS = (
-    "plugin_name",
-    "plugin_id",
-    "plugin_version",
-    "plugin_api_version",
-)
-
-
-def _required_plugin_members() -> tuple[str, ...]:
-    """The contract members ``validate_plugin`` rejects a plugin for lacking.
-
-    Derived from the capability seams' ``:status:`` tiers rather than
-    hand-maintained beside them, so the two cannot disagree.
-    """
-    from .capability_seams import members_by_tier
-
-    return _IDENTITY_MEMBERS + tuple(sorted(members_by_tier()["required"]))
-
-
-_REQUIRED_PLUGIN_MEMBERS = _required_plugin_members()
 
 _PLUGIN_ID_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 
 
+@dataclass(frozen=True)
+class DriverContext:
+    """The provider stack one operation runs against, threaded through
+    planning, discovery and execution."""
+
+    providers: tuple[SolverPlugin, ...]
+    identity: "StackIdentity"
+    #: The ``--plugin`` value that rebuilds this context in another process,
+    #: or ``None`` for a context no selector produced. Not part of equality:
+    #: it says how to rebuild a context, not what the context is.
+    plugin_selector: str | None = field(default=None, compare=False)
+
+    @cached_property
+    def stack(self) -> "ProviderStack":
+        from .provider_stack import ProviderStack
+
+        return ProviderStack(self.providers)
+
+
 def validate_plugin(plugin: Any) -> SolverPlugin:
-    """Reject malformed plugin objects before they enter a driver context.
+    """Refuse a malformed provider before it joins a stack.
 
-    This is an interface guard, not a sandbox: an imported plugin is trusted
-    in-process Python code.  Methods are checked structurally here; their
-    returned values are validated by their owning core consumers.
+    An interface guard, not a sandbox: a plugin is trusted in-process code.
     """
-
-    missing = [name for name in _REQUIRED_PLUGIN_MEMBERS if not hasattr(plugin, name)]
+    missing = [name for name in IDENTITY_MEMBERS if not hasattr(plugin, name)]
     if missing:
-        raise TypeError(
-            "SolverPlugin is missing required members: " + ", ".join(sorted(missing))
-        )
-    for name in ("plugin_name", "plugin_id", "plugin_version", "plugin_api_version"):
+        raise TypeError("SolverPlugin is missing required members: " + ", ".join(sorted(missing)))
+    for name in IDENTITY_MEMBERS:
         value = getattr(plugin, name)
         if not isinstance(value, str) or not value.strip():
             raise TypeError(f"SolverPlugin.{name} must be a non-empty string")
-    # Refused here -- before the callable checks, before get_profile(), and
-    # before any catalog member -- so an unsupported plugin's catalog code
-    # never executes.
+    # Before any other member runs, so an unsupported plugin's code never executes.
     if plugin.plugin_api_version not in SUPPORTED_PLUGIN_API_VERSIONS:
         raise TypeError(
             f"SolverPlugin.plugin_api_version {plugin.plugin_api_version!r} is "
-            "not supported; this omnidriver core drives "
-            f"{sorted(SUPPORTED_PLUGIN_API_VERSIONS)}"
+            f"not supported; this omnidriver core drives {sorted(SUPPORTED_PLUGIN_API_VERSIONS)}"
         )
     if not _PLUGIN_ID_RE.fullmatch(plugin.plugin_id):
         raise TypeError(
             "SolverPlugin.plugin_id must use lowercase letters, digits, dots, "
             "or hyphens and cannot start or end with punctuation"
         )
-    # A member's presence is not enough -- it must be callable. Collected as
-    # one batch rather than raised on the first miss, so a partial
-    # implementation is reported completely instead of one name at a time.
-    non_callable = [
-        name for name in _REQUIRED_PLUGIN_MEMBERS
-        if name not in ("plugin_name", "plugin_id", "plugin_version", "plugin_api_version")
-        and not callable(getattr(plugin, name, None))
-    ]
-    if non_callable:
-        raise TypeError(
-            "SolverPlugin does not implement the plugin contract; missing: "
-            + ", ".join(sorted(non_callable))
-        )
+    from .provider_stack import check_provider_members
+
+    problems = check_provider_members(plugin)
+    if problems:
+        raise TypeError(f"SolverPlugin {plugin.plugin_id!r}: " + "; ".join(problems))
     return plugin
 
 
 def _declared_dict_entries(provider: Any) -> tuple[Any, ...]:
-    """A provider's dictionary entries, or ``()`` when it declares none.
-
-    ``()`` is the identity digest's input for "none": a provider without
-    ``get_dict_entries`` digests exactly as one whose stub returned ``()``
-    did, so deleting such a stub changes no provider digest."""
     hook = getattr(provider, "get_dict_entries", None)
     return tuple(hook()) if callable(hook) else ()
 
 
-def _validate_one_provider(provider: SolverPlugin) -> SolverPlugin:
-    """Structural checks a single provider must pass before it joins a stack.
-
-    Each check here was previously run once, against the single plugin a
-    context held. Composition does not relax any of them -- a provider that
-    fails one of these is malformed regardless of what else is in its stack,
-    so each provider is still checked independently rather than only as part
-    of the composed whole.
-    """
+def _validate_one_provider(provider: Any) -> SolverPlugin:
+    from .contracts.dictionary import DictEntry
+    from .provider_stack import provider_profile
 
     checked = validate_plugin(provider)
-    profile = checked.get_profile()
+    profile = provider_profile(checked)
     if profile.plugin_id != checked.plugin_id:
         raise TypeError("SolverPlugin profile id does not match plugin_id")
     if profile.api_version != checked.plugin_api_version:
         raise TypeError("SolverPlugin profile API version does not match plugin_api_version")
-
-    from .contracts.dictionary import DictEntry
-
     entries = _declared_dict_entries(checked)
-    invalid_entries = [
-        entry for entry in entries
-        if not isinstance(entry, DictEntry) or not entry.driver_path.strip()
-    ]
-    if invalid_entries:
+    if any(not isinstance(entry, DictEntry) or not entry.driver_path.strip() for entry in entries):
         raise TypeError("SolverPlugin.get_dict_entries() must return DictEntry values with paths")
     paths = [entry.driver_path for entry in entries]
     duplicates = sorted({path for path in paths if paths.count(path) > 1})
     if duplicates:
-        raise TypeError(
-            "SolverPlugin dictionary catalog has duplicate paths: "
-            + ", ".join(duplicates)
-        )
-
-    from .provider_stack import check_provides
-
-    problems = check_provides(checked)
-    if problems:
-        raise TypeError("; ".join(problems))
-
+        raise TypeError("SolverPlugin dictionary catalog has duplicate paths: " + ", ".join(duplicates))
     return checked
 
 
 def _provider_identity(provider: SolverPlugin, *, source: str) -> "ProviderIdentity":
-    """One provider's own identity, independent of the stack it joins."""
     from .provider_identity import ProviderIdentity
+    from .provider_stack import provider_profile
 
-    provider_digest = _resolved_capability_digest(
-        profile_digest=provider.get_profile().digest,
-        dictionary_entries=_declared_dict_entries(provider),
-        manifest=provider.get_capabilities(),
-    )
+    manifest = getattr(provider, "get_capabilities", None)
+    payload = identity_jsonable({
+        "profile_digest": provider_profile(provider).digest,
+        "dictionary_entries": _declared_dict_entries(provider),
+        "manifest": manifest() if callable(manifest) else {},
+    })
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return ProviderIdentity(
         id=provider.plugin_id,
         version=provider.plugin_version,
         api_version=provider.plugin_api_version,
         source=source,
-        provider_digest=provider_digest,
+        provider_digest="sha256:" + hashlib.sha256(encoded).hexdigest(),
     )
 
 
@@ -731,34 +396,15 @@ def driver_context(
     source: str | Sequence[str],
     plugin_selector: str | None = None,
 ) -> DriverContext:
-    """Create a validated immutable context for an ordered provider stack.
+    """A validated, immutable context over an ordered provider stack.
 
-    One provider is the common case -- a solver plugin on its own -- but any
-    number may be supplied, e.g. a solver plugin layered on the environment
-    adapter it requires. Each provider is validated and profile-checked
-    independently; the stack is then ordered least-specific first by
-    :func:`provider_stack.order_providers` and composed eagerly so that a
-    packaging error (a duplicated case-file declarer, a resolver and its
-    mode set split across providers, ...) is raised here rather than lazily, the
-    first time some caller happens to touch ``.capabilities``.
-
-    ``source`` is a single string, broadcast to every provider -- the
-    overwhelmingly common single-provider call shape, and still correct for
-    several providers that genuinely share one origin (e.g. all loaded from
-    the same trusted local import) -- or one string per provider, positional
-    against ``providers`` as given (not against the reordered stack; pairing
-    is tracked by ``plugin_id`` internally, so which position wins the
-    reorder does not matter). A shared string for a multi-provider stack
-    whose providers do NOT share an origin silently records the wrong
-    provenance for every provider but one.
-
-    ``plugin_selector`` is passed only by the loaders that turn a ``--plugin``
-    value into a context; see :attr:`DriverContext.plugin_selector`.
+    Each provider is validated on its own; the stack is ordered least
+    specific first by ``requires`` and built eagerly, so a packaging error (a
+    case file or format with two declarers) is raised here. ``source`` is one
+    string shared by every provider, or one per provider in the order given.
     """
-
     if not providers:
         raise TypeError("driver_context() requires at least one provider")
-
     if isinstance(source, str):
         sources = (source,) * len(providers)
     else:
@@ -770,49 +416,32 @@ def driver_context(
                 "provider) or exactly one source per provider"
             )
 
-    from .provider_stack import order_providers, resolutions
     from .provider_identity import build_stack_identity
+    from .provider_stack import ProviderStack, order_providers, resolutions
 
-    checked_providers = tuple(_validate_one_provider(provider) for provider in providers)
-    # Paired with the CHECKED providers, in the caller's original order --
-    # before order_providers can reorder them. Looked back up by plugin_id
-    # below, not position, so the pairing survives the reorder.
-    source_by_id = dict(zip((p.plugin_id for p in checked_providers), sources))
-    ordered = order_providers(checked_providers)
-
-    provider_identities = tuple(
-        _provider_identity(provider, source=source_by_id[provider.plugin_id])
-        for provider in ordered
-    )
+    checked = tuple(_validate_one_provider(provider) for provider in providers)
+    source_by_id = dict(zip((p.plugin_id for p in checked), sources))
+    ordered = order_providers(checked)
+    stack = ProviderStack(ordered)
     identity = build_stack_identity(
-        providers=provider_identities,
-        resolutions=resolutions(ordered),
+        providers=tuple(_provider_identity(p, source=source_by_id[p.plugin_id]) for p in ordered),
+        resolutions=resolutions(stack),
     )
-    context = DriverContext(
-        providers=ordered, identity=identity, plugin_selector=plugin_selector,
-    )
-    # Eager, not lazy: touching .capabilities here runs provider_stack.compose
-    # now, at construction, so a packaging error (the single-declarer rule
-    # over case_files, a resolver and its mode set split across providers, ...)
-    # is raised here rather than lazily on whichever caller first reaches for
-    # .capabilities. Because .capabilities is a cached_property, this is the
-    # ONE compose() call for this context's lifetime, not a duplicate of a
-    # later one -- the result is cached on the instance and every later
-    # access (including this function's own callers) reuses it.
-    context.capabilities
+    context = DriverContext(providers=ordered, identity=identity, plugin_selector=plugin_selector)
+    context.__dict__["stack"] = stack
     return context
 
 
-def _identity_jsonable(value: Any) -> Any:
-    """Convert declarative capability data into deterministic digest input."""
+def identity_jsonable(value: Any) -> Any:
+    """Declarative capability data as deterministic digest input."""
     if is_dataclass(value):
-        return _identity_jsonable(asdict(value))
+        return identity_jsonable(asdict(value))
     if isinstance(value, dict):
-        return {str(key): _identity_jsonable(item) for key, item in value.items()}
+        return {str(key): identity_jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
-        return [_identity_jsonable(item) for item in value]
+        return [identity_jsonable(item) for item in value]
     if isinstance(value, (set, frozenset)):
-        return sorted(_identity_jsonable(item) for item in value)
+        return sorted(identity_jsonable(item) for item in value)
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     raise TypeError(
@@ -821,44 +450,25 @@ def _identity_jsonable(value: Any) -> Any:
     )
 
 
-def _resolved_capability_digest(
-    *, profile_digest: str, dictionary_entries: tuple[Any, ...], manifest: Any,
-) -> str:
-    """Bind the profile, accepted dictionary vocabulary and manifest together."""
-    payload = _identity_jsonable({
-        "profile_digest": profile_digest,
-        "dictionary_entries": dictionary_entries,
-        "manifest": manifest,
-    })
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
-
-
 def load_plugin_context(target: str) -> DriverContext:
     """Load a plugin by discovered id, or by trusted ``module:Class`` import.
 
-    A colon always means the trusted local-development import form, which the
-    CLI labels unsafe. Without a colon the argument names an installed plugin
-    from the ``omnidriver.plugins`` entry-point group. Neither form is
-    sandboxed: loading a plugin executes its Python code.
+    A colon means the trusted local-development import form, which the CLI
+    labels unsafe; otherwise the argument names an installed plugin from the
+    ``omnidriver.plugins`` entry-point group. Neither form is sandboxed.
     """
-
     if ":" not in target:
         from .plugin_discovery import load_discovered_plugin
 
         return load_discovered_plugin(target)
-
     try:
         module_path, class_name = target.split(":", maxsplit=1)
         if not module_path or not class_name:
             raise ValueError
     except ValueError as exc:
         raise ValueError("Plugin target must use the form 'module.path:ClassName'") from exc
-    module = import_module(module_path)
-    plugin_class = getattr(module, class_name)
+    plugin_class = getattr(import_module(module_path), class_name)
     from .plugin_discovery import _expand_with_requirements
 
-    providers, sources = _expand_with_requirements(
-        plugin_class(), f"trusted-import:{target}",
-    )
+    providers, sources = _expand_with_requirements(plugin_class(), f"trusted-import:{target}")
     return driver_context(*providers, source=sources, plugin_selector=target)

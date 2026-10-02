@@ -16,7 +16,6 @@ from typing import Any, Mapping
 
 import yaml
 
-from .capability_seams import collect_seams
 
 
 @dataclass(frozen=True)
@@ -75,20 +74,14 @@ class EnvironmentConnection:
 
 @dataclass(frozen=True)
 class PluginProfile:
-    path: Path
+    #: ``None`` for the profile of a provider that declares none.
+    path: Path | None
     plugin_id: str
     api_version: str
     case_files: tuple[CaseFileRule, ...]
     cxx_mapping: CxxMapping | None
     payload: dict[str, Any]
     environment: EnvironmentConnection | None = None
-    #: Capability names this provider supplies, validated against the seam
-    #: vocabulary at load. Intent, not observation: what the provider MEANS to
-    #: supply. Core separately discovers what it actually implements; a
-    #: declared-vs-implemented guard errors when they disagree, which is how
-    #: a misspelled hook name becomes visible instead of silently routing to
-    #: a fallback.
-    provides: frozenset[str] = frozenset()
     #: Provider ids this one layers on top of, least-specific first. Ordering
     #: is declared, never inferred from install order or entry-point name.
     requires: tuple[str, ...] = ()
@@ -102,16 +95,13 @@ class PluginProfile:
         immutable without changing its public shape. The context identity must
         nevertheless stay stable for the lifetime of a plan.
 
-        ``provides``/``requires`` are folded in explicitly, alongside
-        ``payload`` -- a provider that changes what it provides or what it
-        requires has changed its semantics, and that must not depend on those
-        keys surviving verbatim inside ``payload`` (e.g. a profile built
-        directly rather than through :func:`load_plugin_profile`).
+        ``requires`` is folded in explicitly, alongside ``payload``: a
+        provider that changes what it requires has changed its semantics,
+        whether or not the key survives verbatim inside ``payload``.
         """
         canonical = json.dumps(
             {
                 "payload": self.payload,
-                "provides": sorted(self.provides),
                 "requires": list(self.requires),
             },
             sort_keys=True, separators=(",", ":"), ensure_ascii=True,
@@ -169,20 +159,18 @@ def entrypoint_relpaths(driver_context: Any | None) -> tuple[str, ...]:
     """
     if driver_context is None:
         return ()
-    return tuple(
-        driver_context.capabilities.case_runtime_conventions.conventions()
-        .case_entrypoints
-    )
+    from .runtime_records import case_runtime_conventions
+
+    return tuple(case_runtime_conventions(driver_context).case_entrypoints)
 
 
 def replica_directory_globs(driver_context: Any | None) -> tuple[str, ...]:
     """Parallel-replica directory globs declared by the active environment."""
     if driver_context is None:
         return ()
-    return tuple(
-        driver_context.capabilities.case_runtime_conventions.conventions()
-        .replica_directory_globs
-    )
+    from .runtime_records import case_runtime_conventions
+
+    return tuple(case_runtime_conventions(driver_context).replica_directory_globs)
 
 
 def is_replica_directory_name(name: str, globs: tuple[str, ...]) -> bool:
@@ -315,15 +303,6 @@ def load_plugin_profile(path: str | Path) -> PluginProfile:
 
     environment = _environment_connection(profile_path, raw.get("environment"))
 
-    known_capabilities = {seam.field for seam in collect_seams()}
-    provides = frozenset(raw.get("provides", ()) or ())
-    unknown = sorted(provides - known_capabilities)
-    if unknown:
-        raise _mapping_error(
-            profile_path,
-            "provides entries that name no capability: "
-            f"{unknown}; known capabilities are {sorted(known_capabilities)}",
-        )
     requires = tuple(raw.get("requires", ()) or ())
 
     return PluginProfile(
@@ -334,6 +313,5 @@ def load_plugin_profile(path: str | Path) -> PluginProfile:
         cxx_mapping=cxx_mapping,
         payload=raw,
         environment=environment,
-        provides=provides,
         requires=requires,
     )

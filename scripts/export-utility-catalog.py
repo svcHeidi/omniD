@@ -44,11 +44,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 
-def _manifest_to_record(manifest, utility_roots: tuple[Path, ...]) -> dict:
+def _manifest_to_record(manifest, root: Path) -> dict:
     """Serialise a ``UtilityManifest`` to a JSON-ready dict.
 
     Every field of ``UtilityManifest`` is emitted. The catalog is an agent
@@ -96,17 +97,8 @@ def _manifest_to_record(manifest, utility_roots: tuple[Path, ...]) -> dict:
         ],
         "example": manifest.example,
         "category": manifest.category,
-        "source_path": str(_relativize(manifest.source_path, utility_roots)),
+        "source_path": str(manifest.source_path.relative_to(root)),
     }
-
-
-def _relativize(path: Path, roots: tuple[Path, ...]) -> Path:
-    for root in roots:
-        try:
-            return path.relative_to(root)
-        except ValueError:
-            continue
-    return path
 
 
 def build_catalog(plugin: str) -> dict:
@@ -114,13 +106,13 @@ def build_catalog(plugin: str) -> dict:
 
     context = load_plugin_context(plugin)
 
-    authorization = context.capabilities.command_authorization
-    manifests = authorization.utility_manifests()
-    roots = authorization.utility_roots()
+    manifests = context.stack.call("get_utility_manifests")
+    # Relative to the directory every sidecar sits under, so no install path leaks.
+    root = Path(os.path.commonpath([m.source_path.parent for m in manifests.values()])) if manifests else Path()
     return {
         "version": "1",
         "utilities": [
-            _manifest_to_record(m, roots)
+            _manifest_to_record(m, root)
             for m in sorted(manifests.values(), key=lambda m: m.name)
         ],
     }
