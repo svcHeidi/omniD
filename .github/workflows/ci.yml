@@ -97,9 +97,9 @@ jobs:
         run: python -m pytest packages/omnidriver-cardiacfoam/tests -m "not slow" -q
 
   # Installs omnidriver-openfoam because omnidriver-cardiaccore genuinely
-  # depends on it -- operations/ and workflows/ use
-  # read_foam_entry/update_foam_entry -- which is the allowed direction: a
-  # cardiac adapter may know OpenFOAM, not the reverse. That also means two
+  # depends on it -- its records, case rules and key validation are built on
+  # the OpenFOAM layer -- which is the allowed direction: a cardiac adapter may
+  # know OpenFOAM, not the reverse. That also means two
   # adapters are installed here, so this job is what would catch a
   # regression of the ambient-default-context defect in this package.
   test-cardiaccore:

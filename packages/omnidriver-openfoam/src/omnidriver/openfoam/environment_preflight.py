@@ -12,6 +12,7 @@ from typing import Any
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from omnidriver.core.runtime import mpi
 from omnidriver.core.runtime.workflow import case_script_commands
+from omnidriver.core.scripts import find_script
 from .openfoam_environment import load_openfoam_environment
 
 
@@ -39,6 +40,7 @@ def _required_executables(
             name
             and name not in _INTERPRETER_SKIP
             and name not in case_scripts
+            and find_script(name, driver_context) is None
             and name not in executables
         ):
             executables.append(name)

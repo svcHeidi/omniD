@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import sys
@@ -1216,7 +1217,7 @@ def _select_stack(parser: argparse.ArgumentParser, args):
     Its ``omnidriver.toml`` names the plugin; ``--plugin`` alone names it for
     a solver with no repository, and when both are given they must select the
     same stack. The repository's C++ source is supplied to the stack through
-    the variable its profile declares."""
+    the variable its profile declares, and its scripts folder on the context."""
     from .core.plugin_interface import load_plugin_context
     from .core.provider_identity import stack_identity_mismatch
     from .core.repository import RepositoryError, read_repository, repository_of_cases_root
@@ -1267,6 +1268,7 @@ def _select_stack(parser: argparse.ArgumentParser, args):
                     f"folder {repository.tutorials} that {repository.root / 'omnidriver.toml'} declares"
                 )
             os.environ[mapping.source_root_variable] = str(repository.tutorials)
+        context = dataclasses.replace(context, scripts_dir=repository.scripts)
     return context, repository
 
 

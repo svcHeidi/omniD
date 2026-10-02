@@ -9,6 +9,7 @@ from .artifacts import DRIVER_PRODUCED_BY
 from . import mpi
 from .models import DataArtifact
 from omnidriver.core.plugin_profile import entrypoint_relpaths
+from omnidriver.core.scripts import find_script
 
 
 STEP_STATUS_VALUES = ("pending", "running", "completed", "failed", "skipped")
@@ -452,7 +453,11 @@ def _is_authorized(command: str, driver_context: Any) -> bool:
     """The ONE definition of "authorized" for a bare command name, applied
     both to a step's own command and, for an MPI launcher, the program it
     wraps -- no second, independent notion of "authorized" for either."""
-    if command in CORE_NEUTRAL_COMMANDS or command in case_script_commands(driver_context):
+    if (
+        command in CORE_NEUTRAL_COMMANDS
+        or command in case_script_commands(driver_context)
+        or find_script(command, driver_context) is not None
+    ):
         return True
     if driver_context is None:
         return False
@@ -506,10 +511,11 @@ def validate_workflow_commands(
             ))
             continue
         if "/" in command:
-            # Explicit path form. Only ``./<case-script>`` is permitted (gate
-            # parity with _resolve_command); an arbitrary ``./script`` or any
-            # absolute path is refused so it cannot bypass the allowlist.
-            if command.startswith("./") and command[2:] in case_scripts:
+            # Explicit path form. Only ``./<case-script>`` or a script below
+            # the repository's scripts folder is permitted (gate parity with
+            # _resolve_command); an arbitrary ``./script`` or any absolute
+            # path is refused so it cannot bypass the allowlist.
+            if (command.startswith("./") and command[2:] in case_scripts) or find_script(command, driver_context):
                 continue
             diagnostics.append(WorkflowDiagnostic(
                 level="error",
@@ -552,7 +558,7 @@ def validate_workflow_commands(
             code="unknown_workflow_command",
             message=(
                 f"Workflow command {command!r} is not a declared core, environment, "
-                "plugin, case-script, or utility command."
+                "plugin, case-script, repository-script, or utility command."
             ),
             field=step_id,
         ))

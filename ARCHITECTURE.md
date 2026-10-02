@@ -75,7 +75,7 @@ claim; run the command for the number:
 |---|---|
 | all packages installed | ✅ **0 failed** — `pytest packages/ -q -m "not slow"`. **Corrected 2026-09-18**: this row claimed ✅ **0 failed** before that date too, and that had never been measured. Three cardiacFoam modules resolved a `DriverContext` at import time, so with more than one adapter installed the run died during *collection*: pytest printed errors, not failures, and the absence of a failure count was read as zero failures. Behind the abort were 235 real failures, nearly all one cause — cardiacFoam's own source asking the `omnidriver.plugins` registry which adapter it was, which has no answer once a second adapter is installed. CI's `test-cardiac` job had been red on it continuously. The ✅ is now measured, and `test_adapter_never_asks_who_it_is` guards the cause. |
 | core installed alone | ✅ **0 failed** — `pytest packages/omnidriver/tests -q` in a core-only venv |
-| core's whole suite against a built wheel | ✅ **0 failed** since 2026-09-04 — `scripts/check-wheel-artifact.py` plus the suite; see `CLAUDE.md`. Before that day it could not even be *collected*: eight modules called `repo_root_default()` at import time and thirteen tests failed. |
+| core's whole suite against a built wheel | ✅ **0 failed** since 2026-09-04 — `scripts/check-wheel-artifact.py` plus the suite; see `CLAUDE.md`. Before that day it could not even be *collected*: eight modules looked the repository root up at import time and thirteen tests failed. |
 | core imported from a built wheel | ✅ guarded by `test_wheel_install_imports.py` |
 | plugin resolves by entry-point name | ✅ guarded by `test_entry_point_group_matches_packaging.py` |
 | core's CLI usable alone | ✅ `omnidriver --help` exits 0 in a core-only install |

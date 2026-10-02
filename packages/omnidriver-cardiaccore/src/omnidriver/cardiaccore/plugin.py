@@ -15,8 +15,6 @@ from omnidriver.core.utility_catalog import load_utility_manifests
 
 from .catalogs.inputs import CATALOG, CONDITIONAL_INPUTS, DOCUMENTS
 from .catalogs.support_boundary import FIELD_CONVENTIONS, SUPPORT_BOUNDARY
-from .catalogs.operations import OPERATIONS, utility_index
-from .catalogs.purkinje import TREE_VALIDATION_CONTRACT
 
 
 # cardiacFoam's own manifests declare newVtkUnstructuredToFoam and
@@ -85,11 +83,8 @@ class CardiacCorePlugin:
         # Caller annotations must not mutate declarations seen by later agents.
         return deepcopy({
             "cardiaccore_conditional_inputs": CONDITIONAL_INPUTS,
-            "cardiaccore_tree_validation": TREE_VALIDATION_CONTRACT,
             "cardiaccore_field_conventions": FIELD_CONVENTIONS,
-            "cardiaccore_python_utilities": utility_index(),
             "cardiaccore_support_boundary": SUPPORT_BOUNDARY,
-            "cardiaccore_operations": OPERATIONS,
         })
 
     def get_generated_output_globs(

@@ -1,8 +1,10 @@
 # OmniD cardiacCore adapter
 
-This package exposes the declared cardiacCore preprocessing workflows and
-Python operations through the `cardiaccore` plugin. Native cardiacCore remains
-the owner of its executables, dictionaries and case assets.
+This package exposes the declared cardiacCore preprocessing workflows through
+the `cardiaccore` plugin. Native cardiacCore remains the owner of its
+executables, dictionaries, case assets and helper scripts
+(`applications/scripts/`); `omnidriver describe --repo <cardiacCore>` lists the
+scripts with their usage lines, beside the records.
 
 ## Start from the installed package
 
@@ -11,60 +13,20 @@ from omnidriver.cardiaccore import CardiacCorePlugin
 
 print(CardiacCorePlugin().get_agent_guidance()[0]["text"])
 catalogs = CardiacCorePlugin().get_named_catalogs()
-operation = catalogs["cardiaccore_operations"]["cardiaccore.coordinates.convention.v1"]
-print(operation["preconditions"])
-print(operation["entrypoints"])
+print(catalogs["cardiaccore_field_conventions"]["authority"])
 ```
 
 `guidance.md` is a package resource: this works without a source checkout.
 `describe` lists it under the record surface.
 
-An operation has an exact primary `module:function` reference and separate
-`entrypoints` for preparation, calculation or writing. Read each entrypoint's
-arguments and side effects before calling it. Array availability, native-file
-reading and workflow integration are separate status fields. An available
-array method does not imply that an arbitrary native case can be processed.
-
 A case declares which ventricular coordinate system it uses -- `uvc` or
 `cobiveco`, both first-class -- in `system/coordinatesConventionDict`, along
 with its transmural and chamber reference values and, optionally, its own
-field names. Read that declaration before touching a coordinate field; do not
-assume one system or hardcode canonical field names as if they were always
-correct:
-
-```python
-import tempfile
-from pathlib import Path
-
-from omnidriver.cardiaccore.operations.coordinates_convention import (
-    read_coordinates_convention,
-    coordinate_field_paths,
-)
-
-# Illustrative: case_root is normally an already-staged case directory
-# supplied by the caller. Here a minimal one is built inline so this example
-# runs standalone.
-with tempfile.TemporaryDirectory() as case_dir:
-    case_root = Path(case_dir)
-    (case_root / "system").mkdir()
-    (case_root / "system" / "coordinatesConventionDict").write_text(
-        "coordinateSystem cobiveco; "
-        "transmural { endocardium 1; epicardium 0; } "
-        "intraventricularChambers { LV -1; RV 1; }"
-    )
-
-    convention = read_coordinates_convention(case_root)
-    paths = coordinate_field_paths(convention)
-```
-
-`convention.coordinate_system` names the declared system; `paths` maps
-`transmural`/`intraventricular`/`longitudinal` to that case's actual field
-paths, falling back to the canonical names only for whatever the case's
-`coordinates` block leaves unstated. Do not invent missing fields,
-reinterpret coordinates, or silently use a different method after an error.
-Distinguish invalid input, an unavailable reader, and unresolved scientific
-interpretation. Read the operation record for its limits and correct the
-identified prerequisite first.
+field names. Read that declaration (the repository's
+`coordinates_convention.py` prints it) before touching a coordinate field; do
+not assume one system or hardcode canonical field names as if they were always
+correct. Do not invent missing fields, reinterpret coordinates, or silently use
+a different method after an error.
 
 ## Ownership within the package
 
@@ -73,14 +35,9 @@ identified prerequisite first.
 | `plugin.py` / `plugin.yaml` | Compose capabilities and expose public catalogs |
 | `catalogs/inputs.py` | Reviewed input descriptions and conditional inputs |
 | `utilities/<name>/utility.manifest.toml` | Native commands and their input/output contracts |
-| `catalogs/operations.py` | Canonical callable usage contracts |
-| `catalogs/purkinje.py` | Shared method constants and named baseline categories |
 | `catalogs/support_boundary.py` | Field context and workflow support boundary |
-| `operations/` | Python transformations, proposals and observations |
 | `guidance.md` | Packaged agent guidance |
 
-`cardiaccore_python_utilities` remains a convenience index, derived from
-`cardiaccore_operations`; it is not another maintained set of claims.
 Catalog results are independent snapshots so caller annotations cannot change
 what another agent sees.
 
@@ -104,64 +61,34 @@ The two pig workflows otherwise declare the same utility sequence. Reviewed
 inputs are study values, `<document>:<key>` patches in a sweep spec over the
 record; `describe` lists them in `record_surface.keys`. The workflow permits
 only its declared inputs and mutates a staged case.
-The tree workflows retain fixed native seed/growth dictionaries; array seed
-proposals are not automatically applied. Coverage reports retain the named
-baseline's categories, but do not return scientific acceptance.
+The tree workflows retain fixed native seed/growth dictionaries; seeds are
+placed by hand with `place_purkinje_seeds.py`. Coverage reports retain the
+named baseline's categories, but do not return scientific acceptance.
 
 The native generator owns endocardial-surface definition. It uses named LV/RV
 endocardial patches when those are available; otherwise it uses the selected
-UVC convention and natively recovers the RV-facing septum. Python operations
+UVC convention and natively recovers the RV-facing septum. The helper scripts
 do not re-create that UVC/endoseptal logic. After `setCardiacAnatomy`, each
 chamber has its own `aha_angle` frame: do not compare raw LV and RV angles.
 
-`cardiaccore.coordinates.ring_closure.v1` is the upstream geometry
-check for a VTK volume or boundary mesh. It expects declared binary LV/RV
-intraventricular values, a varying longitudinal coordinate, and a transmural
-coordinate with a declared endocardial boundary value. It extracts each
-candidate endocardial boundary, contours it only at basal longitudinal values
-0.1 and 0.4, and selects one closed component per level: the component closest
-in physical space to the largest connected endocardial `ab=0` reference. It
-then checks that their centres are approximately 0.3 of the selected endocardial span apart,
-rejecting a false nominal 0.1 ring near a valve opening. It needs no
-pre-exported face sets and does not use AHA angles. A failed coordinate
-contract or open ring is a prerequisite to investigate, not permission to
-change the native UVC/CObiveco implementation or a Purkinje parameter.
-For a cell-to-point surface export, a small seam fraction may interpolate
-between the two chamber values; the default permits up to 2%, while values
-outside the declared chamber interval still fail the coordinate contract.
-When the caller has not declared coordinate fields, it assesses scalar-field
-behaviour and ring topology rather than field names: it reports any unique,
-topology-supported two-chamber candidate, ambiguity, or the missing numerical
-prerequisite. The generic result does not invent which numeric chamber is LV
-or RV; callers declare that mapping only when it is needed downstream.
-
-For a selected tree study, keep this audit chain explicit: coordinate-ring
-closure → native face-set construction → `setCardiacAnatomy` AHA fields → seed
-proposal from native face sets plus AHA segments → native tree generation →
-terminal coverage/density observation. The adapter does not yet schedule that
-chain automatically, and it does not expose seed, growth, or density controls
-as sweep axes without separately selected and validated acceptance criteria.
+For a selected tree study, keep this audit chain explicit: native face-set
+construction → `setCardiacAnatomy` AHA fields → seed placement
+(`place_purkinje_seeds.py`) → native tree generation → terminal coverage
+(`purkinje_coverage.py`). The adapter does not yet schedule that chain
+automatically, and it does not expose seed, growth, or density controls as
+sweep axes without separately selected and validated acceptance criteria.
 
 A runnable native case requires the explicitly supplied mesh and initial
-field bundle. Clean-clone asset distribution and native surface/field sampling
-remain separate pending work. The seed proposal operation can now write its
-complete, reviewed coordinates into an existing staged
-`system/generatePurkinjeTreeDict`; it does not alter growth or terminal
-settings. Graph hand-off remains a separate cardiacFOAM workflow.
-The VTU selection reader supports ASCII data with base dependencies; encoded
-or multi-piece data requires the optional `omnidriver-cardiaccore[vtk]` extra.
-Installing that extra does not implement the other pending VTK readers.
+field bundle. Clean-clone asset distribution remains pending work. Graph
+hand-off remains a separate cardiacFOAM workflow.
 
 ## Maintenance and verification
 
-Preserve operation IDs, named catalog IDs and the plugin entry point.
-Callable paths follow the flat-module layout the catalog advertises; there
-is no forwarding layer for other module paths, so callers must use the
-advertised paths directly.
+Preserve named catalog IDs and the plugin entry point.
 
-Tests exercise plugin composition, workflows, operation behavior, and
-catalog-driven invocation. After changing package resources or imports, build
-a fresh wheel and run these tests outside the checkout as well. Do not infer
+Tests exercise plugin composition, workflows and the catalogs. After changing
+package resources or imports, build a fresh wheel and run these tests outside
+the checkout as well. Do not infer
 native or scientific acceptance from synthetic array tests.
 
 Shared OmniD rules belong in its role guidance. This guide explains only this
