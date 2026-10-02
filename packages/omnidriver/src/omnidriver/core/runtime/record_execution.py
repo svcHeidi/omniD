@@ -432,14 +432,14 @@ def _refusal_as_record_error(
         ) from exc
 
 
-def _refuse_a_case_that_breaks_a_rule(
+def refuse_a_case_that_breaks_a_rule(
     record: TutorialRecord, case_root: Path, driver_context: "DriverContext", *, then: str = "",
 ) -> None:
     """Refuse the resolved case by name, with each rule's own message, when
     the stack's catalogue relations, required keys or cross-field rules find
-    an error in it: the one check every plan, run, sweep case and applied
-    edit passes before anything executes. ``then`` says what stays true
-    after the refusal."""
+    an error in it: the one check every plan, run, sweep case, applied edit
+    and run document passes before anything executes. ``then`` says what
+    stays true after the refusal."""
     from ..plugin_capabilities import RunSemanticValidationRequest
 
     found = driver_context.capabilities.run_semantic_validator.validate(
@@ -554,7 +554,7 @@ def commit_record_case(
             driver_context=driver_context, execution_env=execution_env,
             requested_by=requested_by,
         )
-    _refuse_a_case_that_breaks_a_rule(record, staged_case_root, driver_context)
+    refuse_a_case_that_breaks_a_rule(record, staged_case_root, driver_context)
     return RecordCommitResult(
         write_record=write_record, unchanged=unchanged, command_arguments=command_arguments,
         workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,
@@ -594,7 +594,7 @@ def apply_record_study(
             driver_context=driver_context, execution_env=execution_env,
             requested_by="step_apply", case_lease_held=True,
         )
-    _refuse_a_case_that_breaks_a_rule(
+    refuse_a_case_that_breaks_a_rule(
         record, case_root, driver_context,
         then="; the edit stays in the case, so patch it again",
     )

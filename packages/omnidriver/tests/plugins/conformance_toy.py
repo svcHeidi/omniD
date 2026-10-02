@@ -523,3 +523,19 @@ def quantity_toy_conformance_target(tmp_path: Path, *, plugin: str = PARALLEL_QU
             tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9,
         ),
     )
+
+
+RULE_CHECKING_PLUGIN = "plugins.conformance_toy:RuleCheckingPlugin"
+TOY_CELL_LIMIT = 10
+
+
+class RuleCheckingPlugin(E2ERecordPlugin):
+    """Its one rule says a case holds at most ``TOY_CELL_LIMIT`` cells."""
+
+    def validate_run_semantics(self, case_root):
+        from omnidriver.core.planning_types import diagnostic
+
+        cells = int(json.loads((Path(case_root) / "constant" / "mesh.json").read_text())["cells"])
+        if cells <= TOY_CELL_LIMIT:
+            return ()
+        return (diagnostic("error", "too_many_cells", f"{cells} cells exceed {TOY_CELL_LIMIT}", field="cells"),)

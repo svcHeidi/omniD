@@ -11,7 +11,7 @@ import pytest
 
 from omnidriver.cli import main
 from omnidriver.core import case_transaction
-from plugins.conformance_toy import write_toy_native_case
+from plugins.conformance_toy import RULE_CHECKING_PLUGIN, write_toy_native_case
 
 PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
 
@@ -26,10 +26,11 @@ def _cli(*argv: str) -> tuple[int, dict]:
 class _Case:
     """A planned toy record: its staged case and the run document ``plan`` wrote."""
 
-    def __init__(self, tmp_path: Path) -> None:
+    def __init__(self, tmp_path: Path, plugin: str = PLUGIN) -> None:
+        self.plugin = plugin
         write_toy_native_case(tmp_path / "native")
         code, plan = _cli(
-            "plan", "--strict", "--plugin", PLUGIN, "--entry", "toyTutorial",
+            "plan", "--strict", "--plugin", plugin, "--entry", "toyTutorial",
             "--cases-root", str(tmp_path / "native"), "--scratch-dir", str(tmp_path / "scratch"),
         )
         assert code == 0 and plan["status"] == "ok", plan
@@ -40,7 +41,7 @@ class _Case:
 
     def step(self, *extra: str) -> tuple[int, dict]:
         return _cli(
-            "step", "--plugin", PLUGIN, "--run-document", str(self.run_document), "--step", "solve", *extra,
+            "step", "--plugin", self.plugin, "--run-document", str(self.run_document), "--step", "solve", *extra,
         )
 
     def apply(self, study: dict) -> tuple[int, dict]:
@@ -140,3 +141,21 @@ def test_recover_with_nothing_interrupted_says_so(case):
     code, payload = _cli("recover", "--case-root", str(case.root))
 
     assert code == 0 and payload["transaction_id"] is None
+
+
+def test_a_case_left_breaking_a_rule_by_a_refused_edit_does_not_run_until_it_is_patched(tmp_path):
+    case = _Case(tmp_path, RULE_CHECKING_PLUGIN)
+    code, payload = case.apply({"constant/mesh.json:cells": 12})
+    assert code == 1 and "12 cells exceed 10" in payload["error"] and "the edit stays in the case" in payload["error"]
+    assert case.cells() == "12"
+
+    code, payload = case.step()
+    assert code == 1 and payload["status"] == "failed" and "12 cells exceed 10" in payload["error"]
+    assert not (case.root / "solved.marker").exists()
+    code, payload = _cli("run", "--plugin", RULE_CHECKING_PLUGIN, "--run-document", str(case.run_document))
+    assert code == 1 and "12 cells exceed 10" in payload["error"]
+    assert not (case.root / "solved.marker").exists()
+
+    code, payload = case.apply({"constant/mesh.json:cells": 7})
+    assert code == 0 and payload["status"] == "ok"
+    assert (case.root / "solved.marker").is_file()

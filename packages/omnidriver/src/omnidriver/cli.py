@@ -375,6 +375,18 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             "diagnostics": [asdict(d) for d in diagnostics],
         }, indent=2))
         return None
+    record = (driver_context.capabilities.tutorial_records.catalog() or {}).get(run_doc.name)
+    if record is not None and args.apply is None:
+        from .core.runtime.record_execution import refuse_a_case_that_breaks_a_rule
+
+        try:
+            refuse_a_case_that_breaks_a_rule(
+                record, inputs.case_root, driver_context,
+                then="; patch it with step --apply, or plan again, before it runs",
+            )
+        except TutorialRecordError as exc:
+            print(json.dumps({"status": "failed", "run_document": args.run_document, "error": str(exc)}, indent=2))
+            return None
     setup_root_raw = (run_doc.launch or {}).get("setupRoot")
 
     def replan_after_mutation() -> _ReplannedExecution:
