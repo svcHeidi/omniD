@@ -11,7 +11,7 @@ import pytest
 
 from omnidriver.cli import main
 from omnidriver.core import case_transaction
-from plugins.conformance_toy import RULE_CHECKING_PLUGIN, write_toy_native_case
+from plugins.conformance_toy import EXPLAINING_PLUGIN, RULE_CHECKING_PLUGIN, write_toy_native_case
 
 PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
 
@@ -159,3 +159,15 @@ def test_a_case_left_breaking_a_rule_by_a_refused_edit_does_not_run_until_it_is_
     code, payload = case.apply({"constant/mesh.json:cells": 7})
     assert code == 0 and payload["status"] == "ok"
     assert (case.root / "solved.marker").is_file()
+
+
+def test_a_failed_step_carries_what_the_stack_reads_in_its_log(tmp_path):
+    case = _Case(tmp_path, EXPLAINING_PLUGIN)
+    code, payload = case.step()
+    assert code == 1 and payload["status"] == "failed"
+    (explained,) = payload["failure_context"]["diagnostics"]
+    assert (explained["code"], explained["field"], explained["message"]) == (
+        "widget_missing", "widget", "widget is missing from toyTutorial",
+    )
+    (state,) = (s for s in payload["workflow_state"]["steps"] if s["step_id"] == "solve")
+    assert state["diagnostics"] == [explained]

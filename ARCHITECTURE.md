@@ -332,6 +332,7 @@ inline, in the adapter itself, with no named fallback function (for example
 | `case_runtime_conventions` | `CaseRuntimeConventionsCapability` | `get_case_runtime_conventions` | `omnidriver/core/runtime/sweep_runner.py` | `absent_case_runtime_conventions` | optional-neutral |
 | `environment_preflight` | `EnvironmentPreflightCapability` | `get_environment_diagnostics`, `get_configured_environment`, `get_loaded_environment` | `omnidriver/core/strict_planning.py`, `omnidriver/core/runtime/sweep_runner.py`, `omnidriver/cli.py`, `omnidriver/conformance/checks.py` | `absent_environment_diagnostics`, `absent_configured_environment`, `absent_load_environment` | optional-neutral |
 | `plan_diagnostics` | `PlanDiagnosticsCapability` | `get_plan_diagnostics` | `omnidriver/core/strict_planning.py` | none | optional-neutral |
+| `step_failure` | `StepFailureCapability` | `explain_step_failure` | `omnidriver/core/runtime/workflow_runner.py` | none | optional-neutral |
 | `runtime_evidence` | `RuntimeEvidenceCapability` | `get_artifact_value_reader`, `get_extra_provenance_paths`, `get_log_redaction_patterns`, `get_solve_step_commands`, `get_telemetry_source_globs` | `omnidriver/conformance/checks.py`, `omnidriver/core/quantities/comparison.py`, `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/record_execution.py`, `omnidriver/core/runtime/workflow_runner.py` | none | optional-neutral |
 | `record_surface` | `RecordSurfaceCapability` | `get_agent_guidance`, `get_record_key_catalog` | `omnidriver/core/runtime/record_surface.py` | none | optional-neutral |
 | `case_provenance` | `CaseProvenanceCapability` | `get_generated_output_globs`, `get_input_roots`, `get_required_inputs` | `omnidriver/core/runtime/provenance_inputs.py` | none | optional-neutral |
@@ -346,6 +347,6 @@ inline, in the adapter itself, with no named fallback function (for example
 | `case_value_comparison` | `CaseValueComparisonCapability` | `get_case_value_comparator` | `omnidriver/core/runtime/record_execution.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
 | `parallel_execution` | `ParallelExecutionCapability` | `get_parallel_steps` | `omnidriver/core/runtime/record_execution.py` | none | optional-neutral |
 
-25 capability seams.
+26 capability seams.
 
 <!-- END GENERATED: capability-seams -->

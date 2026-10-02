@@ -279,6 +279,15 @@ class SolverPluginOptionalHooks(Protocol):
         plan; a warning or note never does. Absent -> nothing is added."""
         ...
 
+    # -- StepFailureCapability -------------------------------------------------
+    def explain_step_failure(
+        self, log_text: str, case_root: "Path", *, driver_context: Any,
+    ) -> tuple["StrictDiagnostic", ...]:
+        """What the tail of a failed step's logs says that the exit code does
+        not: the key a solver reports missing, and the dictionary it looked in.
+        Absent -> the step's failure carries no explanation of its own."""
+        ...
+
     # -- CaseRuntimeConventionsCapability ------------------------------------
     def get_case_runtime_conventions(self):
         """Declare generated case paths and an optional output collection

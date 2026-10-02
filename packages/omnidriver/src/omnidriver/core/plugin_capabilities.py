@@ -441,6 +441,24 @@ class PlanDiagnosticsCapability(Protocol):
     ) -> tuple[Any, ...]: ...
 
 
+class StepFailureCapability(Protocol):
+    """What a solver's own words in a failed step's log mean for the case.
+
+    A solver stops with a message naming what it could not find; the exit code
+    says only that it stopped. The hook reads the log tail and returns
+    ``StrictDiagnostic`` values the step's failure carries, so an agent reads
+    the key and the dictionary rather than a log. Composed by concatenation in
+    stack order.
+
+    :adapts: explain_step_failure
+    :consumed-by: omnidriver/core/runtime/workflow_runner.py
+    :fallback: none
+    :status: optional-neutral
+    """
+
+    def diagnostics(self, log_text: str, case_root: Path, *, driver_context: Any) -> tuple[Any, ...]: ...
+
+
 class RuntimeEvidenceCapability(Protocol):
     """Where the plugin's runtime evidence lives.
 
@@ -1115,6 +1133,17 @@ class _PlanDiagnosticsAdapter:
 
 
 @dataclass(frozen=True)
+class _StepFailureAdapter:
+    plugin: "SolverPlugin"
+
+    def diagnostics(self, log_text: str, case_root: Path, *, driver_context: Any) -> tuple[Any, ...]:
+        hook = getattr(self.plugin, "explain_step_failure", None)
+        if not callable(hook):
+            return ()
+        return tuple(hook(log_text, case_root, driver_context=driver_context))
+
+
+@dataclass(frozen=True)
 class _RuntimeEvidenceAdapter:
     plugin: "SolverPlugin"
 
@@ -1525,6 +1554,7 @@ class PluginCapabilities:
     case_runtime_conventions: CaseRuntimeConventionsCapability
     environment_preflight: EnvironmentPreflightCapability
     plan_diagnostics: PlanDiagnosticsCapability
+    step_failure: StepFailureCapability
     runtime_evidence: RuntimeEvidenceCapability
     record_surface: RecordSurfaceCapability
     case_provenance: CaseProvenanceCapability
@@ -1563,6 +1593,7 @@ def adapt_plugin_capabilities(plugin: "SolverPlugin") -> PluginCapabilities:
         case_runtime_conventions=_CaseRuntimeConventionsAdapter(plugin),
         environment_preflight=_EnvironmentPreflightAdapter(plugin),
         plan_diagnostics=_PlanDiagnosticsAdapter(plugin),
+        step_failure=_StepFailureAdapter(plugin),
         runtime_evidence=_RuntimeEvidenceAdapter(plugin),
         record_surface=_RecordSurfaceAdapter(plugin),
         case_provenance=_CaseProvenanceAdapter(plugin),

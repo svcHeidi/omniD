@@ -568,3 +568,31 @@ class ProbingPlugin(E2ERecordPlugin):
             "matches": _catalogue_matches, "drifted": _catalogue_drifted, "unreadable": _catalogue_unreadable,
         })
         self._tutorial_records = {"toyTutorial": dataclasses.replace(record, conformance=study)}
+
+
+EXPLAINING_PLUGIN = "plugins.conformance_toy:ExplainingFailurePlugin"
+
+
+class ExplainingFailurePlugin(E2ERecordPlugin):
+    """Its solve step stops saying what it could not find; its hook names the key from the log."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._solver_commands = frozenset({"touch", "sh"})
+
+    def get_tutorial_records(self):
+        return {"toyTutorial": TutorialRecord(
+            name="toyTutorial", native_case_relpath="toyTutorial",
+            axes=(_number_cells_axis(),),
+            workflow_steps=(WorkflowStep(
+                step_id="solve", command=("sh", "-c", "echo 'cannot find widget' >&2; exit 3"),
+                consumes=("constant/mesh.json",), produces=("solved.marker",),
+            ),),
+        )}
+
+    def explain_step_failure(self, log_text, case_root, *, driver_context):
+        from omnidriver.core.planning_types import diagnostic
+
+        if "cannot find widget" not in log_text:
+            return ()
+        return (diagnostic("error", "widget_missing", f"widget is missing from {case_root.name}", field="widget"),)

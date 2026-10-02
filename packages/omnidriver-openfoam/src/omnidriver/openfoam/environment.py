@@ -173,6 +173,11 @@ class OpenFOAMEnvironmentPlugin:
             scratch_root=scratch_root, driver_context=driver_context,
         )
 
+    def explain_step_failure(self, log_text, case_root, *, driver_context):
+        from .step_failure import missing_entry_diagnostics
+
+        return missing_entry_diagnostics(log_text, case_root, driver_context)
+
     def inspect_effective_configuration(self, *, case_root, execution_env=None):
         from .effective_dictionary import inspect_effective_foam_configuration
 

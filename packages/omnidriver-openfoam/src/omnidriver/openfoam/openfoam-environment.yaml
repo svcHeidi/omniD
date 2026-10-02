@@ -26,6 +26,7 @@ provides:
   - case_runtime_conventions
   - environment_preflight
   - plan_diagnostics
+  - step_failure
   - effective_configuration
   - config_value
   - dict_key_scanner

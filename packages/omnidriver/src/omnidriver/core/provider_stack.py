@@ -163,6 +163,7 @@ _SHAPE: dict[str, str] = {
     "predict_data_artifacts": "sequence",
     "get_environment_diagnostics": "sequence",
     "get_plan_diagnostics": "sequence",
+    "explain_step_failure": "sequence",
     "get_utility_roots": "sequence",
     "get_extra_provenance_paths": "sequence",
     "get_telemetry_source_globs": "sequence",

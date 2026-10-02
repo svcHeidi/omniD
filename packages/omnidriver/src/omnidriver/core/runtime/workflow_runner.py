@@ -8,7 +8,7 @@ import signal
 import subprocess
 import time
 from contextlib import ExitStack
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -260,6 +260,28 @@ def _has_live_group_members(process: subprocess.Popen[Any]) -> bool:
     return True
 
 
+#: How much of the end of each log a stack reads to explain a failed step.
+_EXPLAINED_LOG_BYTES = 65536
+
+
+def _explained_by_the_logs(
+    step_id: str, logs: tuple[Path, ...], case_root: Path, driver_context: Any,
+) -> tuple[dict[str, Any], ...]:
+    """What the stack reads in the end of ``logs`` that explains why the step
+    failed, as step diagnostics."""
+    text = ""
+    for log in logs:
+        try:
+            with log.open("rb") as handle:
+                handle.seek(0, os.SEEK_END)
+                handle.seek(max(0, handle.tell() - _EXPLAINED_LOG_BYTES))
+                text += handle.read().decode("utf-8", errors="replace") + "\n"
+        except OSError:
+            continue
+    found = driver_context.capabilities.step_failure.diagnostics(text, case_root, driver_context=driver_context)
+    return tuple({**asdict(item), "field": item.field or step_id} for item in found)
+
+
 def redact_step_logs(paths: Any, patterns: Any) -> None:
     """Replace every match of each pattern, whole, with ``[REDACTED]``.
 
@@ -481,6 +503,11 @@ def run_workflow_step(
             "message": str(exc),
             "field": step_id,
         },)
+
+    if exit_code not in (0, None) and not diagnostics and driver_context is not None:
+        diagnostics = _explained_by_the_logs(
+            step_id, (stdout_log, stderr_log), Path(case_root), driver_context,
+        )
 
     status = "completed" if exit_code == 0 and not diagnostics else "failed"
     produced_artifacts = tuple(str(item) for item in step.get("produces", ())) if status == "completed" else ()
