@@ -6,7 +6,7 @@ from pathlib import Path
 
 from omnidriver.cardiacfoam.activation_probes import ACTIVATION_PROBES_FORMAT
 from omnidriver.cardiacfoam.ionic_catalog_verification import catalogue_probe
-from omnidriver.core.conformance_study import ConformanceStudy, QuantityTarget
+from omnidriver.core.conformance_study import ConformanceStudy, QuantityTarget, RankEvidence
 
 #: The benchmark C13 and C14 compare against, found under ``--benchmarks``.
 REFERENCE = Path("niederer2011.json")
@@ -187,6 +187,8 @@ STUDIES: dict[str, ConformanceStudy] = {
             study={"dx": 0.0005, "system/controlDict:endTime": 0.15},
             sweep_values=(0.0005, 0.001), tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9,
             parallel_study={"system/decomposeParDict:numberOfSubdomains": 2},
+            # The solver's banner names its rank count, and decomposePar leaves one directory per rank.
+            rank_evidence=RankEvidence(log_pattern=r"nProcs\s*:\s*(\d+)", paths="processor*"),
         ),
         # The serial solve of the quantity's run takes about six minutes.
         timeout_s=1500.0,

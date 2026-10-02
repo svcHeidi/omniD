@@ -17,7 +17,7 @@ from plugins.conformance_toy import (
     NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, OPEN_DOCUMENT_PLUGIN, OTHER_OPEN_DOCUMENT_PLUGIN,
     OVER_GENERATED_CONVENTIONS_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN, SILENT_SURFACE_PLUGIN,
     UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN, VALIDATED_KINDLESS_PLUGIN,
-    REORDERING_PARALLEL_PLUGIN, SERIAL_PARALLEL_PLUGIN,
+    REORDERING_PARALLEL_PLUGIN, SERIAL_PARALLEL_PLUGIN, SINGLE_RANK_PLUGIN,
     STRAY_NAME, STRAY_ROOT_VARIABLE, quantity_toy_conformance_target, toy_conformance_target,
     toy_conformance_target_with_input,
 )
@@ -513,6 +513,21 @@ def test_c13_bites_a_parallel_form_that_is_the_serial_run(tmp_path):
     verdict = run_check("C13", quantity_toy_conformance_target(tmp_path, plugin=SERIAL_PARALLEL_PLUGIN))
     assert not verdict.passed
     assert "planned the serial steps" in verdict.detail
+
+
+def test_c13_bites_a_parallel_run_whose_solver_reports_one_rank(tmp_path):
+    verdict = run_check("C13", quantity_toy_conformance_target(tmp_path, plugin=SINGLE_RANK_PLUGIN))
+    assert not verdict.passed
+    assert "no step log matches" in verdict.detail and "with 2 ranks" in verdict.detail
+
+
+def test_c13_bites_a_rank_count_the_declared_paths_do_not_match(tmp_path):
+    target = quantity_toy_conformance_target(tmp_path)
+    evidence = dataclasses.replace(target.quantity.rank_evidence, paths="split.*")
+    target = dataclasses.replace(target, quantity=dataclasses.replace(target.quantity, rank_evidence=evidence))
+    verdict = run_check("C13", target)
+    assert not verdict.passed
+    assert "'split.*' matches 1 entries" in verdict.detail
 
 
 def test_c14_bites_a_comparison_that_reads_nothing(tmp_path):

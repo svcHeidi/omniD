@@ -528,8 +528,7 @@ class SolverPluginOptionalHooks(Protocol):
     def get_supported_mutation_modes(self) -> "frozenset[str]":
         """Which creation modes this adapter supports.
 
-        Adapters differ and are meant to: cardiacCore preprocessing patches
-        declared dictionaries, cardiacFoam synthesizes a case from a catalog.
+        Adapters differ and are meant to.
 
         Absent alongside ``resolve_case_mutation`` -> refused by name (an
         implemented resolver whose supported modes are undeclared). Absent

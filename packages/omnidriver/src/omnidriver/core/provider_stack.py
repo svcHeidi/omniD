@@ -184,7 +184,7 @@ _SHAPE: dict[str, str] = {
 #: whose absence the error names. ``get_supported_mutation_modes`` is
 #: ``single``-shaped (not ``set``) to match ``resolve_case_mutation``'s own
 #: shape: were it a union, a stack where one provider declares only
-#: ``synthesize`` support and a different, more specific provider implements
+#: ``clone_and_patch`` support and a different, more specific provider implements
 #: the resolver would compose to the union of both providers' modes, letting
 #: ``resolve()`` pass a mode into a resolver that never claimed to accept it.
 _CROSS_MEMBER_PAIRS: tuple[tuple[str, str], ...] = (
