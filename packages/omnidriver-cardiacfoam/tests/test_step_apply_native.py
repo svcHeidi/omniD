@@ -1,6 +1,8 @@
 """``step --apply`` on a real cardiacFOAM case: the patches land in the staged case's own dictionaries, and the step reruns against them."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from omnidriver.conformance import record_step, require_commands
@@ -27,4 +29,6 @@ def test_apply_edits_the_staged_case_then_the_solver_runs_against_it(tmp_path):
     assert read_foam_entry(
         case_root / "constant" / "electroProperties", "tissue", scope=["singleCellSolverCoeffs"],
     ) == "epicardialCells"
-    assert (case_root / "0.05").is_dir()
+    # The solver ran against the edit: it stopped at the new endTime and named its result after the new tissue.
+    assert "\nTime = 0.05\n" in Path(payload["stdout_log"]).read_text()
+    assert (case_root / "postProcessing" / "TWorld_epicardialCells_S1_1000.txt").is_file()
