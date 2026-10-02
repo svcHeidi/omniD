@@ -222,12 +222,12 @@ name rather than guessed.
 |---|---|---|---|
 | `describe --plugin P --entry E` | JSON: the record surface (axes, 168 keys for `niederer2011`, 247 for `niedererNVersion`), guidance, catalogs | high; reads only | still returns factory-era fields (`registered_tutorials`, `special_tutorial_aliases`, `available_tutorials`). Without `--plugin`, the default refuses when two independent solver-tier plugins are installed, as they are with all five packages |
 | `plan --strict` | a staged copy, a RunDocument v3, diagnostics | high for records; needs `--scratch-dir` | for cardiacFOAM, the dictionary-key scan is skipped with `plugin_cxx_source_unavailable` on every plan (openCARP and cardiacCore have no scanner); mesh checks are skipped for records (section 5.4) |
-| `run`, `step`, `recover` | execution of the plan's DAG, provenance, recovery | high | `step --apply` works only where `apply_overrides` exists (OpenFOAM); openCARP refuses it by name |
+| `run`, `step`, `recover` | execution of the plan's DAG, provenance, recovery | high | `step --apply` takes the `document:key` patches a study takes, for every record of all three plugins, but only with `--run-document`: `--entry` re-stages the case, so it cannot reach a staged one; a patch that fails the replan after its commit stays in the case, and `recover` restores only an interrupted commit |
 | `sweep-plan`, `sweep-run` | one staged case per study row, each through the record path | high for records | two other sweep paths remain: the from-scratch cardiacFOAM sweep (no `base.entry`) and the factory `base.entry` sweep |
 | `compare` | a report checked against a pre-registered request | high; written once; relative paths resolve from the request's own directory | none known |
 | records | pointers, steps, routes, axes | high; pure data, gated | cardiacCore has none |
 | catalogs | cardiacFOAM hand-curated with C++ `source_refs`; openCARP generated from its binary | openCARP high (drift-gated); cardiacFOAM medium; cardiacCore low (one manual scan, no gate) | section 5.4 |
-| guidance | `record_surface` guidance; `guidance.md` for cardiacFOAM and openCARP; cardiacCore `agent_guidance/`; `AGENTS.md` and `agent-handbook/` | prose, by nature | the environment and machine steps an agent needs are in `CLAUDE.md`, not in any of these |
+| guidance | `record_surface` guidance; `guidance.md` for cardiacFOAM, cardiacCore and openCARP; `AGENTS.md` and `agent-handbook/` | prose, by nature | the environment and machine steps an agent needs are in `CLAUDE.md`, not in any of these |
 
 ---
 

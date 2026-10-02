@@ -38,58 +38,9 @@ from omnidriver.cardiacfoam.detection import (
     detect_ionic_export_list,
     detect_ionic_model_name,
 )
-from omnidriver.cardiacfoam.overrides import (
-    apply_electro_property_overrides,
-    apply_physics_property_overrides,
-    normalize_entry_overrides,
-)
-from cardiacfoam_assertions import assert_foam_entry
 
 
-class TestCardiacPropertyOverrides(unittest.TestCase):
-    def test_single_cell_stimulus_updates_use_nested_scope(self) -> None:
-        text = "\n".join(
-            [
-                "singleCellSolverCoeffs",
-                "{",
-                "    singleCellStimulus",
-                "    {",
-                "        stim_amplitude 0.4;",
-                "        stim_period_S1 1000;",
-                "        stim_period_S2 250;",
-                "        nstim1 10;",
-                "        nstim2 2;",
-                "    }",
-                "}",
-                "",
-            ]
-        )
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "electroProperties"
-            path.write_text(text)
-
-            apply_electro_property_overrides(
-                path,
-                {
-                    "singleCellSolverCoeffs.singleCellStimulus.stim_amplitude": 0.8,
-                    "singleCellSolverCoeffs.singleCellStimulus.stim_period_S1": 1200,
-                    "singleCellSolverCoeffs.singleCellStimulus.stim_period_S2": 300,
-                    "singleCellSolverCoeffs.singleCellStimulus.nstim1": 12,
-                    "singleCellSolverCoeffs.singleCellStimulus.nstim2": 3,
-                },
-            )
-
-            stimulus = ("singleCellSolverCoeffs", "singleCellStimulus")
-            for key, expected in (
-                ("stim_amplitude", "0.8"),
-                ("stim_period_S1", "1200"),
-                ("stim_period_S2", "300"),
-                ("nstim1", "12"),
-                ("nstim2", "3"),
-            ):
-                assert_foam_entry(path, key, expected, scope=stimulus)
-
+class TestCardiacDetection(unittest.TestCase):
     def test_detect_electro_coeffs_scope(self) -> None:
         text = "\n".join(
             [
@@ -107,87 +58,6 @@ class TestCardiacPropertyOverrides(unittest.TestCase):
             path = Path(temp_dir) / "electroProperties"
             path.write_text(text)
             self.assertEqual(detect_electro_coeffs_scope(path), "monodomainSolverCoeffs")
-
-    def test_normalize_entry_overrides_supports_electro_scope_token(self) -> None:
-        text = "\n".join(
-            [
-                "myocardiumSolver singleCellSolver;",
-                "",
-                "singleCellSolverCoeffs",
-                "{",
-                "    ionicModel BuenoOrovio;",
-                "}",
-                "",
-            ]
-        )
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "electroProperties"
-            path.write_text(text)
-
-            normalized = normalize_entry_overrides(
-                {"$ELECTRO_MODEL_COEFFS.ionicModel": "Gaur"},
-                electro_properties_path=path,
-            )
-
-            self.assertEqual(
-                normalized,
-                [{"key": "ionicModel", "value": "Gaur", "scope": ("singleCellSolverCoeffs",)}],
-            )
-
-    def test_apply_electro_property_overrides_handles_nested_paths(self) -> None:
-        text = "\n".join(
-            [
-                "myocardiumSolver singleCellSolver;",
-                "",
-                "singleCellSolverCoeffs",
-                "{",
-                "    ionicModel BuenoOrovio;",
-                "    singleCellStimulus",
-                "    {",
-                "        stim_period_S1 1000;",
-                "    }",
-                "}",
-                "",
-            ]
-        )
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "electroProperties"
-            path.write_text(text)
-
-            apply_electro_property_overrides(
-                path,
-                {
-                    "$ELECTRO_MODEL_COEFFS.ionicModel": "Gaur",
-                    "$ELECTRO_MODEL_COEFFS.singleCellStimulus.stim_period_S1": 750,
-                },
-            )
-
-            assert_foam_entry(
-                path, "ionicModel", "Gaur", scope="singleCellSolverCoeffs"
-            )
-            assert_foam_entry(
-                path,
-                "stim_period_S1",
-                "750",
-                scope=("singleCellSolverCoeffs", "singleCellStimulus"),
-            )
-
-    def test_apply_physics_property_overrides_updates_root_dictionary(self) -> None:
-        text = "\n".join(
-            [
-                "type electroModel;",
-                "",
-            ]
-        )
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "physicsProperties"
-            path.write_text(text)
-
-            apply_physics_property_overrides(path, {"type": "electroMechanicalModel"})
-            assert_foam_entry(path, "type", "electroMechanicalModel")
 
 
 _QUOTED_BRACE_ELECTRO_PROPERTIES = (

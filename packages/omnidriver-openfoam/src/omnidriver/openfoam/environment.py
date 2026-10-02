@@ -44,12 +44,12 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
 
 def _case_value_agree(value_kind: str, requested, current) -> bool:
     """Compares by the requested value's own Python type via
-    ``effective_values_agree``; ``value_kind`` is unused, kept only to match
-    the capability's signature."""
-    from .apply_overrides import effective_values_agree
+    ``values_agree``; ``value_kind`` is unused, kept only to match the
+    capability's signature."""
+    from .literals import values_agree
 
     del value_kind
-    return effective_values_agree(requested, current)
+    return values_agree(requested, current)
 
 
 class OpenFOAMEnvironmentPlugin:
@@ -173,23 +173,6 @@ class OpenFOAMEnvironmentPlugin:
             scratch_root=scratch_root, driver_context=driver_context,
         )
 
-    def apply_overrides(
-        self, overrides, *, case_root, driver_context, execution_env=None,
-    ):
-        from .apply_overrides import apply_overrides
-
-        return apply_overrides(
-            overrides, case_root=case_root, driver_context=driver_context,
-            execution_env=execution_env,
-        )
-
-    def get_override_target_paths(self, overrides, *, case_root, driver_context):
-        from .apply_overrides import override_target_paths
-
-        return override_target_paths(
-            overrides, case_root=case_root, driver_context=driver_context,
-        )
-
     def inspect_effective_configuration(self, *, case_root, execution_env=None):
         from .effective_dictionary import inspect_effective_foam_configuration
 
@@ -235,9 +218,6 @@ class OpenFOAMEnvironmentPlugin:
 
     def get_named_catalogs(self):
         return {}
-
-    def get_override_scopes(self):
-        return ()
 
     def get_dict_key_scanner(self):
         from .dict_keys_scanner import catalog_report

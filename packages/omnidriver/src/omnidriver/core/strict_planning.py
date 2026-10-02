@@ -358,7 +358,7 @@ def _strict_plan_for_spec(
         scratch_root=scratch_root,
         driver_context=driver_context,
     )
-    configuration_evidence = driver_context.capabilities.override_scopes.inspect(
+    configuration_evidence = driver_context.capabilities.effective_configuration.inspect(
         case_root=Path(spec.case_root),
         driver_context=driver_context,
         execution_env=dict(os.environ),

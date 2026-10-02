@@ -111,7 +111,7 @@ class _Plugin:
 
 
 def _named_factory(context) -> str:
-    (name,) = context.capabilities.override_schema.dict_entry_catalog()
+    (name,) = context.capabilities.dictionaries.documents()
     return name
 
 

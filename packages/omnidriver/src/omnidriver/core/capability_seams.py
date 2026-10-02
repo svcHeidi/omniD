@@ -69,7 +69,7 @@ def status_map(status: str) -> dict[str, str]:
 
     A single-tier line applies to every member the seam adapts, and is
     returned under the key ``"*"``. A capability whose members genuinely
-    differ (``case_files``, ``override_scopes``) declares one ``member=tier``
+    differ (``case_files``, ``config_value``) declares one ``member=tier``
     entry per member instead.
 
     The single parser behind both :func:`status_tiers`, which needs the tiers

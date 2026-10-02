@@ -10,7 +10,6 @@ from omnidriver.dict_entries import all_documented_driver_paths
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
-from omnidriver.cardiacfoam.overrides import apply_electro_property_overrides
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from cardiacfoam_assertions import assert_foam_entry
@@ -120,69 +119,6 @@ class TestDictEntryCatalog(unittest.TestCase):
             active_tension["$ELECTRO_MODEL_COEFFS.couplingSignal"].enum_values,
             ("Vm", "vm"),
         )
-
-
-class TestDeepElectroOverrides(unittest.TestCase):
-    def test_apply_electro_property_overrides_updates_dimensioned_and_dynamic_entries(self) -> None:
-        text = "\n".join(
-            [
-                "myocardiumSolver monodomainSolver;",
-                "",
-                "monodomainSolverCoeffs",
-                "{",
-                "    conductivity [-1 -3 3 0 0 2 0] (0.133 0 0 0.017 0 0.017);",
-                "    externalStimulus",
-                "    {",
-                "        stimulusIntensity [0 -3 0 0 0 1 0] 50000;",
-                "    }",
-                "    ecgDomains",
-                "    {",
-                "        ECG",
-                "        {",
-                "            ecgSolver pseudoECG;",
-                "            electrodePositions",
-                "                {",
-                    "                    V1 (-0.02 -0.28 -0.07);",
-                "                }",
-                "        }",
-                "    }",
-                "}",
-                "",
-            ]
-        )
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "electroProperties"
-            path.write_text(text)
-
-            apply_electro_property_overrides(
-                path,
-                {
-                    "$ELECTRO_MODEL_COEFFS.conductivity": "[-1 -3 3 0 0 2 0] (0.2 0 0 0.03 0 0.03)",
-                    "$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusIntensity": "[0 -3 0 0 0 1 0] 75000",
-                    "$ELECTRO_MODEL_COEFFS.ecgDomains.ECG.electrodePositions.V1": "(1 2 3)",
-                },
-            )
-
-            coeffs = "monodomainSolverCoeffs"
-            assert_foam_entry(
-                path,
-                "conductivity",
-                "[-1 -3 3 0 0 2 0] (0.2 0 0 0.03 0 0.03)",
-                scope=coeffs,
-            )
-            assert_foam_entry(
-                path,
-                "stimulusIntensity",
-                "[0 -3 0 0 0 1 0] 75000",
-                scope=(coeffs, "externalStimulus"),
-            )
-            assert_foam_entry(
-                path,
-                "V1",
-                "(1 2 3)",
-                scope=(coeffs, "ecgDomains", "ECG", "electrodePositions"),
-            )
 
 
 class TestConductionSystemSchemaContract(unittest.TestCase):

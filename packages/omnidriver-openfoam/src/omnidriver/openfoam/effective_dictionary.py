@@ -1,20 +1,17 @@
-"""Explicit native effective-dictionary inspection for OpenFOAM.
+"""Read-only inspection of the files an OpenFOAM dictionary depends on.
 
 Separate from :func:`mutators.read_foam_entry`, which only inspects lexical
-source: ``foamDictionary`` can also execute directives, so callers must opt in.
+source: this follows ``#include`` directives, and never runs ``foamDictionary``.
 """
 from __future__ import annotations
 
 import os
 import re
 import shutil
-import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
 from .mutators import _mask_comments
-from .openfoam_environment import discover_openfoam_bashrc
 
 _EXECUTABLE_DIRECTIVE = re.compile(r"#(?:calc|codeStream|eval)\b")
 _QUOTED_INCLUDE = re.compile(r'^\s*#include(?P<optional>IfPresent)?\s+"(?P<path>[^"]+)"', re.MULTILINE)
@@ -28,30 +25,6 @@ def _mask_quoted_strings(text: str) -> str:
     return re.sub(
         r'"(?:\\.|[^"\\])*"', lambda match: " " * len(match.group()), text,
     )
-
-
-class _Unset:
-    """Marks ``bashrc`` as unspecified, so it is discovered lazily rather than defaulted eagerly."""
-
-    def __repr__(self) -> str:
-        return "<discover ambient OpenFOAM installation>"
-
-
-_UNSET = _Unset()
-
-
-@dataclass(frozen=True)
-class EffectiveDictionaryResult:
-    """A native effective-resolution result without overclaiming coverage."""
-
-    status: str
-    value: str | None
-    parser: str
-    runtime: str | None
-    message: str | None = None
-    inspected_files: tuple[str, ...] = ()
-    absent_optional_files: tuple[str, ...] = ()
-    environment_keys: tuple[str, ...] = ()
 
 
 def _expand_include(value: str, environment: Mapping[str, str]) -> tuple[str | None, tuple[str, ...], str | None]:
@@ -135,7 +108,6 @@ def find_etc_file(
             candidates.append(Path(project_dir) / "etc" / name)
         else:
             # FOAM_ETC stands in for WM_PROJECT_DIR/etc when only it is set
-            # (resolve_effective_foam_entry's environment is such a caller);
             # neither published script reads FOAM_ETC itself, but it is
             # normally exported equal to that path.
             etc_root = environment.get("FOAM_ETC")
@@ -235,116 +207,6 @@ def _inspect_source_closure(
     return tuple(inspected), tuple(absent_optional), tuple(sorted(environment_keys)), None
 
 
-def resolve_effective_foam_entry(
-    path: str | Path,
-    entry: str,
-    *,
-    bashrc: str | Path | None | _Unset = _UNSET,
-    allow_executable_directives: bool = False,
-    env: Mapping[str, str] | None = None,
-    timeout_s: float = 10.0,
-) -> EffectiveDictionaryResult:
-    """Resolve one entry through native ``foamDictionary`` explicitly.
-
-    ``bashrc`` defaults to :func:`discover_openfoam_bashrc`; passing ``None``
-    resolves ``foamDictionary`` from ``PATH`` instead. Executable directives
-    return ``execution_required`` unless ``allow_executable_directives`` opts
-    in; dependency closure past that gate is still reported only by the
-    native command's outcome.
-    """
-    dictionary = Path(path)
-    if bashrc is _UNSET:
-        bashrc = discover_openfoam_bashrc()
-    runtime = Path(bashrc) if bashrc is not None else None
-    if not dictionary.is_file():
-        return EffectiveDictionaryResult(
-            status="unresolved", value=None, parser="foamDictionary",
-            runtime=str(runtime) if runtime is not None else None,
-            message=f"dictionary does not exist: {dictionary}",
-        )
-    if runtime is not None and not runtime.is_file():
-        return EffectiveDictionaryResult(
-            status="runtime_unavailable", value=None, parser="foamDictionary",
-            runtime=str(runtime), message=f"OpenFOAM bashrc does not exist: {runtime}",
-        )
-    source_environment = dict(os.environ) if env is None else dict(env)
-    if runtime is not None:
-        # bashrc lives directly in the etc directory it exports as FOAM_ETC.
-        source_environment.setdefault("FOAM_ETC", str(runtime.parent))
-    runtime_label = (
-        str(runtime) if runtime is not None
-        else source_environment.get("WM_PROJECT_DIR")
-    )
-    inspected, absent_optional, environment_keys, gate_error = _inspect_source_closure(
-        dictionary, source_environment,
-    )
-    if gate_error is not None:
-        status = "execution_required" if "executable dictionary directive" in gate_error else "unresolved"
-        if status != "execution_required" or not allow_executable_directives:
-            return EffectiveDictionaryResult(
-                status=status, value=None, parser="foamDictionary", runtime=runtime_label,
-                message=gate_error, inspected_files=tuple(str(item) for item in inspected),
-                absent_optional_files=tuple(str(item) for item in absent_optional),
-                environment_keys=environment_keys,
-            )
-    if runtime is None:
-        executable = shutil.which("foamDictionary", path=source_environment.get("PATH", ""))
-        if executable is None:
-            return EffectiveDictionaryResult(
-                status="runtime_unavailable", value=None, parser="foamDictionary",
-                runtime=source_environment.get("WM_PROJECT_DIR"),
-                message="foamDictionary is not available in the execution environment",
-                inspected_files=tuple(str(item) for item in inspected),
-                absent_optional_files=tuple(str(item) for item in absent_optional),
-                environment_keys=environment_keys,
-            )
-        command = (executable, str(dictionary), "-entry", entry, "-value")
-        command_env = source_environment
-    else:
-        script = 'source "$OMNIDRIVER_FOAM_BASHRC" >/dev/null && foamDictionary "$OMNIDRIVER_DICT" -entry "$OMNIDRIVER_ENTRY" -value'
-        command = ("bash", "-lc", script)
-        command_env = {
-            **source_environment,
-            "OMNIDRIVER_FOAM_BASHRC": str(runtime),
-            "OMNIDRIVER_DICT": str(dictionary),
-            "OMNIDRIVER_ENTRY": entry,
-        }
-    try:
-        completed = subprocess.run(
-            command, env=command_env, text=True,
-            capture_output=True, timeout=timeout_s, check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return EffectiveDictionaryResult(
-            status="unresolved", value=None, parser="foamDictionary", runtime=runtime_label,
-            message=f"foamDictionary timed out after {timeout_s:g} seconds",
-            inspected_files=tuple(str(item) for item in inspected),
-            absent_optional_files=tuple(str(item) for item in absent_optional),
-            environment_keys=environment_keys,
-        )
-    except OSError as exc:
-        return EffectiveDictionaryResult(
-            status="runtime_unavailable", value=None, parser="foamDictionary", runtime=runtime_label,
-            message=str(exc), inspected_files=tuple(str(item) for item in inspected),
-            absent_optional_files=tuple(str(item) for item in absent_optional),
-            environment_keys=environment_keys,
-        )
-    if completed.returncode != 0:
-        return EffectiveDictionaryResult(
-            status="unresolved", value=None, parser="foamDictionary", runtime=runtime_label,
-            message=completed.stderr.strip() or f"foamDictionary exited with {completed.returncode}",
-            inspected_files=tuple(str(item) for item in inspected),
-            absent_optional_files=tuple(str(item) for item in absent_optional),
-            environment_keys=environment_keys,
-        )
-    return EffectiveDictionaryResult(
-        status="resolved", value=completed.stdout.strip(), parser="foamDictionary",
-        runtime=runtime_label, inspected_files=tuple(str(item) for item in inspected),
-        absent_optional_files=tuple(str(item) for item in absent_optional),
-        environment_keys=environment_keys,
-    )
-
-
 def inspect_effective_foam_configuration(
     case_root: str | Path,
     dictionary_relpaths: tuple[str, ...],
@@ -355,8 +217,7 @@ def inspect_effective_foam_configuration(
 
     This is intentionally inspection, not evaluation: planning must not run
     ``#codeStream`` or arbitrary directives merely to discover dependencies.
-    It gives core a uniform, read-only dependency contract; native entry
-    evaluation remains the explicit apply-time operation.
+    It gives core a uniform, read-only dependency contract.
     """
     root = Path(case_root).resolve()
     environment = dict(os.environ) if env is None else dict(env)

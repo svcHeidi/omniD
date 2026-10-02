@@ -175,7 +175,7 @@ def test_config_value_reader_refuses_the_wrong_explicit_expected_blocks(tmp_path
 # ---------------------------------------------------------------------------
 # `hex_cell_counts_key_path`/`hex_cell_counts_expected_blocks` -- the one
 # shared grammar the reader and the writer
-# (`cardiacfoam.overrides._target_for_parameter`) each parse rather than
+# (`case_rendering._target_for_parameter`) each parse rather than
 # independently deciding what a key path means.
 # ---------------------------------------------------------------------------
 

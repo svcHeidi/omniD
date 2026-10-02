@@ -78,9 +78,6 @@ class MinimalOpenFOAMPlugin:
         del resolved
         return {}
 
-    def get_dict_entry_catalog(self):
-        return {}
-
     def get_solve_step_commands(self) -> frozenset:
         return frozenset()
 

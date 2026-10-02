@@ -1,445 +1,142 @@
+"""``step`` over the conformance toy: run one step, edit the staged case with
+``--apply`` (the ``document:key`` patches a study takes), and ``recover``."""
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 
 import pytest
-from conftest import monorepo_root, skip_without_monorepo, NO_REPO_ROOT, repo_root, skip_without_repo
-pytestmark = [skip_without_repo, skip_without_monorepo]
 
 from omnidriver.cli import main
+from omnidriver.core import case_transaction
+from plugins.conformance_toy import write_toy_native_case
+
+PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
 
 
-REPO_ROOT = monorepo_root or repo_root or NO_REPO_ROOT
-SINGLE_CELL_ROOT = REPO_ROOT / "tutorials" / "electrophysiologyProtocols" / "singleCell"
+def _cli(*argv: str) -> tuple[int, dict]:
+    out = StringIO()
+    with redirect_stdout(out):
+        code = main(list(argv))
+    return code, json.loads(out.getvalue())
 
 
-def _write_case(root: Path, *, allrun: str, steps: list[dict]) -> Path:
-    case_root = root / "cliStepCase"
-    (case_root / "constant").mkdir(parents=True)
-    (case_root / "system").mkdir()
-    (case_root / "constant" / "electroProperties").write_text(
-        (SINGLE_CELL_ROOT / "constant" / "electroProperties").read_text()
-    )
-    (case_root / "constant" / "physicsProperties").write_text(
-        (SINGLE_CELL_ROOT / "constant" / "physicsProperties").read_text()
-    )
-    for name in ("controlDict", "fvSchemes", "fvSolution"):
-        (case_root / "system" / name).write_text("\n")
-    allrun_path = case_root / "Allrun"
-    allrun_path.write_text(allrun)
-    os.chmod(allrun_path, 0o755)
-    del steps
-    return case_root
+class _Case:
+    """A planned toy record: its staged case and the run document ``plan`` wrote."""
 
+    def __init__(self, tmp_path: Path) -> None:
+        write_toy_native_case(tmp_path / "native")
+        code, plan = _cli(
+            "plan", "--strict", "--plugin", PLUGIN, "--entry", "toyTutorial",
+            "--cases-root", str(tmp_path / "native"), "--scratch-dir", str(tmp_path / "scratch"),
+        )
+        assert code == 0 and plan["status"] == "ok", plan
+        self.root = tmp_path / "scratch" / "records" / "toyTutorial"
+        self.run_document = self.root / "run_document.json"
+        self.mesh = self.root / "constant" / "mesh.json"
+        self.patches = tmp_path / "patches.json"
 
-def test_cli_step_executes_single_step_and_writes_state_and_logs() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(
-            cases_root,
-            allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nprintf 'step ok\\n'\n",
-            steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
+    def step(self, *extra: str) -> tuple[int, dict]:
+        return _cli(
+            "step", "--plugin", PLUGIN, "--run-document", str(self.run_document), "--step", "solve", *extra,
         )
 
-        out = StringIO()
-        with redirect_stdout(out):
-            code = main([
-                "step",
-                "--strict",
-                "--entry",
-                "cliStepCase",
-                "--step",
-                "run",
-                "--cases-root",
-                str(cases_root),
-            ])
+    def apply(self, study: dict) -> tuple[int, dict]:
+        self.patches.write_text(json.dumps(study))
+        return self.step("--apply", str(self.patches))
 
-        payload = json.loads(out.getvalue())
-        state_path = case_root / "postProcessing" / "workflow_state.json"
-        assert code == 0
-        assert payload["status"] == "ok"
-        assert payload["exit_code"] == 0
-        assert Path(payload["stdout_log"]).read_text() == "step ok\n"
-        assert Path(payload["stderr_log"]).read_text() == ""
-        assert json.loads(state_path.read_text()) == payload["workflow_state"]
-        assert payload["workflow_state"]["status"] == "completed"
-        assert payload["workflow_state"]["steps"][0]["status"] == "completed"
+    def cells(self) -> str:
+        return json.loads(self.mesh.read_text())["cells"]
 
 
-def test_cli_step_returns_nonzero_for_failing_step() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        _write_case(
-            cases_root,
-            allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nprintf 'step failed\\n' >&2\nexit 7\n",
-            steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
-        )
-
-        out = StringIO()
-        with redirect_stdout(out):
-            code = main([
-                "step",
-                "--strict",
-                "--entry",
-                "cliStepCase",
-                "--step",
-                "run",
-                "--cases-root",
-                str(cases_root),
-            ])
-
-        payload = json.loads(out.getvalue())
-        assert code == 1
-        assert payload["status"] == "failed"
-        assert payload["exit_code"] == 7
-        assert Path(payload["stderr_log"]).read_text() == "step failed\n"
-        assert payload["workflow_state"]["status"] == "failed"
-        assert payload["workflow_state"]["failed_step_id"] == "run"
+@pytest.fixture
+def case(tmp_path) -> _Case:
+    return _Case(tmp_path)
 
 
-def test_cli_run_does_not_retry_failed_saved_state() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(
-            cases_root,
-            allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 4\n",
-            steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
-        )
+def test_a_step_runs_and_writes_its_state_and_logs(case):
+    code, payload = case.step()
 
-        first_out = StringIO()
-        with redirect_stdout(first_out):
-            first_code = main([
-                "run",
-                "--strict",
-                "--entry",
-                "cliStepCase",
-                "--cases-root",
-                str(cases_root),
-            ])
-        assert first_code == 1
-
-        (case_root / "Allrun").write_text("#!/bin/sh\nexit 0\n")
-        os.chmod(case_root / "Allrun", 0o755)
-        second_out = StringIO()
-        with redirect_stdout(second_out):
-            second_code = main([
-                "run",
-                "--strict",
-                "--entry",
-                "cliStepCase",
-                "--cases-root",
-                str(cases_root),
-            ])
-
-        payload = json.loads(second_out.getvalue())
-        assert second_code == 1
-        assert payload["status"] == "failed"
-        assert "failed; use action=step" in payload["error"]
-        assert payload["workflow_state"]["steps"][0]["attempt"] == 1
+    assert code == 0 and payload["status"] == "ok"
+    assert (case.root / "solved.marker").is_file()
+    assert Path(payload["stdout_log"]).is_file()
+    assert json.loads((case.root / "workflow_state.json").read_text()) == payload["workflow_state"]
+    assert "applied_patches" not in payload
 
 
-def test_cli_run_fresh_forces_real_rerun_and_wipes_output_dir() -> None:
-    # Reproduces the 2026-08-05 incident at the single-case run level: a
-    # workflow_state.json reporting "completed" is normally resumed and the
-    # solver step (Allrun) is never invoked again -- verified below as the
-    # unchanged default. --fresh must force Allrun to actually run again and
-    # must wipe the whole output_dir (postProcessing/), not just the state
-    # file, proven with a stray marker file that only a whole-dir wipe removes.
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(
-            cases_root,
-            allrun=(
-                "#!/bin/sh\n"
-                "mkdir -p postProcessing 0.001\n"
-                "touch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\n"
-                "count=0\n"
-                "if [ -f run_invocations.count ]; then count=$(cat run_invocations.count); fi\n"
-                "count=$((count+1))\n"
-                "echo $count > run_invocations.count\n"
-            ),
-            steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
-        )
-        invocation_count_path = case_root / "run_invocations.count"
+def test_apply_edits_the_staged_case_then_reruns_the_step(case):
+    code, payload = case.apply({"constant/mesh.json:cells": 7})
 
-        def run_once(extra_args):
-            out = StringIO()
-            with redirect_stdout(out):
-                code = main([
-                    "run", "--strict", "--entry", "cliStepCase",
-                    "--cases-root", str(cases_root),
-                    *extra_args,
-                ])
-            return code, json.loads(out.getvalue())
-
-        first_code, first_payload = run_once([])
-        assert first_code == 0
-        assert first_payload["workflow_state"]["status"] == "completed"
-        assert invocation_count_path.read_text().strip() == "1"
-
-        stray_path = case_root / "postProcessing" / "stale_marker.txt"
-        stray_path.write_text("leftover from a previous, different run")
-
-        second_code, second_payload = run_once([])
-        assert second_code == 0
-        assert second_payload["workflow_state"]["status"] == "completed"
-        assert invocation_count_path.read_text().strip() == "1"
-        assert stray_path.exists()
-
-        third_code, third_payload = run_once(["--fresh"])
-        assert third_code == 0
-        assert third_payload["workflow_state"]["status"] == "completed"
-        assert invocation_count_path.read_text().strip() == "2"
-        assert not stray_path.exists()
+    assert code == 0 and payload["status"] == "ok"
+    assert case.cells() == "7"
+    assert json.loads(case.mesh.read_text())["label"] == "toy"
+    assert [(p["document"], p["key_path"], p["value"], p["status"]) for p in payload["applied_patches"]] == [
+        ("constant/mesh.json", ["cells"], 7, "changed"),
+    ]
+    (record,) = (json.loads(line) for line in (case.root / "remediation_history.jsonl").read_text().splitlines())
+    assert record["resulting_status"] == "ok"
+    assert record["applied_patches"] == payload["applied_patches"]
 
 
-def _failed_exit0_runner(
-    workflow_dag,
-    workflow_state,
-    step_id,
-    *,
-    case_root,
-    log_dir,
-    state_path,
-    expected_artifacts=(),
-    env=None,
-):
-    """Stub for run_workflow_step: marks the step failed with exit_code == 0."""
-    from omnidriver.core.runtime.workflow_runner import (
-        WorkflowStepRunResult,
-        _step_state_by_id,
-    )
-    from omnidriver.core.runtime.workflow_state import (
-        WorkflowStepState,
-        replace_step_state,
-    )
+def test_a_patch_that_changes_nothing_is_reported_unchanged_and_writes_nothing(case):
+    code, payload = case.apply({"constant/mesh.json:cells": 1})
 
-    log_path = Path(log_dir)
-    log_path.mkdir(parents=True, exist_ok=True)
-    previous = _step_state_by_id(workflow_state, step_id)
-    attempt = previous.attempt + 1
-    stdout_log = log_path / f"{step_id}.attempt{attempt}.stdout.log"
-    stderr_log = log_path / f"{step_id}.attempt{attempt}.stderr.log"
-    stdout_log.write_text("starting solve\n")
-    stderr_log.write_text("FOAM FATAL ERROR: missing expected artifacts\n")
-
-    failed_step = WorkflowStepState(
-        step_id=step_id,
-        status="failed",
-        attempt=attempt,
-        command=previous.command,
-        args=previous.args,
-        cwd=previous.cwd,
-        exit_code=0,
-        stdout_log=str(stdout_log),
-        stderr_log=str(stderr_log),
-        diagnostics=(
-            {"level": "error", "code": "missing_artifacts", "message": "missing"},
-        ),
-    )
-    state = replace_step_state(
-        workflow_state,
-        failed_step,
-        status="failed",
-        current_step_id=step_id,
-        completed_steps=workflow_state.completed_steps,
-        failed_step_id=step_id,
-    )
-    if state_path is not None:
-        Path(state_path).write_text(json.dumps(state.to_json()))
-    return WorkflowStepRunResult(
-        state=state,
-        step_id=step_id,
-        exit_code=0,
-        stdout_log=str(stdout_log),
-        stderr_log=str(stderr_log),
-    )
+    assert code == 0
+    assert [p["status"] for p in payload["applied_patches"]] == ["unchanged"]
+    assert not (case.root / ".omnidriver" / "case-transactions").exists()
 
 
-def test_cli_step_attaches_failure_context_on_failure(monkeypatch) -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        _write_case(
-            cases_root,
-            allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 0\n",
-            steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
-        )
-        monkeypatch.setattr("omnidriver.cli.run_workflow_step", _failed_exit0_runner)
+def test_a_key_the_record_does_not_accept_is_refused_and_nothing_runs(case):
+    before = case.mesh.read_text()
+    code, payload = case.apply({"constant/mesh.json:cells": 7, "constant/mesh.json:nope": 1})
 
-        out = StringIO()
-        with redirect_stdout(out):
-            code = main([
-                "step", "--strict",
-                "--entry", "cliStepCase",
-                "--step", "run",
-                "--cases-root", str(cases_root),
-            ])
-
-        payload = json.loads(out.getvalue())
-        assert code == 1
-        assert payload["status"] == "failed"
-        ctx = payload["failure_context"]
-        assert ctx["step_id"] == "run"
-        assert ctx["exit_code"] == 0
-        assert "FOAM FATAL ERROR" in ctx["stderr_tail"]
+    assert code == 1
+    assert "candidate rejected" in payload["error"] and "constant/mesh.json:nope" in payload["error"]
+    assert case.mesh.read_text() == before
+    assert not (case.root / "solved.marker").exists()
 
 
-def test_cli_run_attaches_failure_context_for_failed_step() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        _write_case(
-            cases_root,
-            allrun=(
-                "#!/bin/sh\n"
-                "mkdir -p postProcessing 0.001\n"
-                "touch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\n"
-                "printf 'run blew up\\n' >&2\n"
-                "exit 9\n"
-            ),
-            steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
-        )
+def test_an_axis_name_is_refused_because_it_changes_the_plan(case):
+    code, payload = case.apply({"number_cells": 7})
 
-        out = StringIO()
-        with redirect_stdout(out):
-            code = main([
-                "run", "--strict",
-                "--entry", "cliStepCase",
-                "--cases-root", str(cases_root),
-                "--tail-lines", "50",
-            ])
-
-        payload = json.loads(out.getvalue())
-        assert code == 1
-        assert payload["status"] == "failed"
-        ctx = payload["failure_context"]
-        assert ctx["step_id"] == "run"
-        assert "run blew up" in ctx["stderr_tail"]
+    assert code == 1
+    assert "plan again" in payload["error"]
+    assert case.cells() == "1"
 
 
-def test_cli_step_reports_failed_when_status_failed_with_exit_code_zero(monkeypatch) -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        _write_case(
-            cases_root,
-            allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 0\n",
-            steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
-        )
-        monkeypatch.setattr("omnidriver.cli.run_workflow_step", _failed_exit0_runner)
-
-        out = StringIO()
-        with redirect_stdout(out):
-            code = main([
-                "step", "--strict",
-                "--entry", "cliStepCase",
-                "--step", "run",
-                "--cases-root", str(cases_root),
-            ])
-
-        payload = json.loads(out.getvalue())
-        assert code == 1
-        assert payload["status"] == "failed"
-        assert payload["exit_code"] == 0
-        assert payload["workflow_state"]["status"] == "failed"
+def test_apply_needs_a_staged_case_so_it_refuses_entry(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        main(["step", "--plugin", PLUGIN, "--entry", "toyTutorial", "--step", "solve", "--apply", "p.json"])
+    assert "--run-document" in capsys.readouterr().err
 
 
-def test_cli_step_apply_invalid_override_does_not_rerun() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        _write_case(
-            cases_root,
-            allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 0\n",
-            steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
-        )
-        bad = cases_root / "ov.json"
-        bad.write_text('[{"driver_path": "notAKey", "value": "1"}]')
+def test_an_interrupted_edit_blocks_the_case_until_recover_restores_it(case, monkeypatch):
+    original = case_transaction._write_one
 
-        out = StringIO()
-        with redirect_stdout(out):
-            code = main([
-                "step", "--strict", "--entry", "cliStepCase", "--step", "run",
-                "--cases-root", str(cases_root),
-                "--apply", str(bad),
-            ])
+    def write_then_die(target, rendered):
+        original(target, rendered)
+        raise KeyboardInterrupt
 
-        payload = json.loads(out.getvalue())
-        assert code == 1
-        assert payload["status"] == "failed"
-        assert "notAKey" in payload["error"]
-        # rejected before any rerun: no audit line written.
-        assert not (cases_root / "cliStepCase" / "postProcessing"
-                    / "remediation_history.jsonl").exists()
+    monkeypatch.setattr(case_transaction, "_write_one", write_then_die)
+    with pytest.raises(KeyboardInterrupt):
+        case.apply({"constant/mesh.json:cells": 7})
+    monkeypatch.undo()
+    assert case.cells() == "7"
+
+    code, payload = case.step()
+    assert code == 1 and "recover" in payload["error"]
+
+    code, payload = _cli("recover", "--case-root", str(case.root))
+    assert code == 0 and payload["transaction_id"]
+    assert case.cells() == "1"
+
+    code, payload = case.step()
+    assert code == 0 and payload["status"] == "ok"
 
 
-def test_cli_step_apply_valid_override_mutates_reruns_and_audits() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(
-            cases_root,
-            allrun="#!/bin/sh\nmkdir -p postProcessing 0.001\ntouch postProcessing/cliStepCase_1.txt 0.001/Vm 0.001/AV_Ta\nexit 0\n",
-            steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
-        )
-        (case_root / "system" / "controlDict").write_text("deltaT    0.001;\nendTime    1;\n")
-        good = cases_root / "ov.json"
-        good.write_text('[{"driver_path": "deltaT", "value": "0.0005"}]')
+def test_recover_with_nothing_interrupted_says_so(case):
+    code, payload = _cli("recover", "--case-root", str(case.root))
 
-        out = StringIO()
-        with redirect_stdout(out):
-            code = main([
-                "step", "--strict", "--entry", "cliStepCase", "--step", "run",
-                "--cases-root", str(cases_root),
-                "--apply", str(good),
-            ])
-
-        payload = json.loads(out.getvalue())
-        assert code == 0
-        assert payload["status"] == "ok"
-        assert "0.0005" in (case_root / "system" / "controlDict").read_text()
-        audit = case_root / "postProcessing" / "remediation_history.jsonl"
-        rec = json.loads(audit.read_text().splitlines()[0])
-        assert rec["applied_overrides"][0]["driver_path"] == "deltaT"
-        assert rec["resulting_status"] == "ok"
-
-
-def test_cli_step_apply_audits_rerun_error(monkeypatch) -> None:
-    # A valid override is applied, then the rerun itself raises. The applied mutation must
-    # still be recorded so it is never silently lost. monkeypatch the runner on the cli
-    # module (where it is bound: `from .core.runtime.workflow_runner import run_workflow_step`).
-    def _boom(*args, **kwargs):
-        raise RuntimeError("rerun blew up")
-
-    monkeypatch.setattr("omnidriver.cli.run_workflow_step", _boom)
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        cases_root = Path(temp_dir)
-        case_root = _write_case(
-            cases_root,
-            allrun="#!/bin/sh\nexit 0\n",
-            steps=[{"id": "run", "command": "Allrun", "depends_on": []}],
-        )
-        (case_root / "system" / "controlDict").write_text("deltaT    0.001;\nendTime    1;\n")
-        # A real --apply is always a *rerun*, so the output dir already exists from the
-        # prior attempt; the monkeypatched runner never creates it, so pre-create it here.
-        (case_root / "postProcessing").mkdir()
-        good = cases_root / "ov.json"
-        good.write_text('[{"driver_path": "deltaT", "value": "0.0005"}]')
-
-        out = StringIO()
-        with redirect_stdout(out):
-            code = main([
-                "step", "--strict", "--entry", "cliStepCase", "--step", "run",
-                "--cases-root", str(cases_root),
-                "--apply", str(good),
-            ])
-
-        assert code == 1
-        # overrides were applied before the rerun raised -> file mutated and audited.
-        assert "0.0005" in (case_root / "system" / "controlDict").read_text()
-        audit = case_root / "postProcessing" / "remediation_history.jsonl"
-        rec = json.loads(audit.read_text().splitlines()[0])
-        assert rec["resulting_status"] == "rerun_error"
-        assert rec["applied_overrides"][0]["driver_path"] == "deltaT"
+    assert code == 0 and payload["transaction_id"] is None

@@ -11,8 +11,7 @@ from .literals import _format_value
 def check_dictionary_word_is_safe(word: str) -> str:
     """Apply `_format_value`'s `;`/`#`/newline refusal to a word that will
     become a dictionary key or sub-block name, not a value -- neither
-    `update_foam_entry` nor `ensure_foam_dict` otherwise checks that
-    argument. See SECURITY.md.
+    `update_foam_entry` otherwise checks that argument. See SECURITY.md.
     """
     return _format_value(word)
 
@@ -627,106 +626,3 @@ def remove_foam_entry(
     if scope is None:
         raise KeyError(f"Entry '{entry_name}' not found in {file_path}")
     raise KeyError(f"Entry '{entry_name}' not found in scope '{scope}' in {file_path}")
-
-
-def read_foam_dict_block(
-    file_path: Path,
-    dict_name: str,
-    *,
-    scope: str | list[str] | tuple[str, ...] | None = None,
-) -> str | None:
-    """Read the raw text of a named sub-dictionary block -- header line,
-    braces, and body verbatim -- from an OpenFOAM dictionary-like text file,
-    or ``None`` if the file, its scope, or the block itself is absent.
-    Operates on raw, unexploded lines so the result can be replayed verbatim
-    via :func:`ensure_foam_dict`'s ``block_text`` parameter. Text-based, not
-    foamDictionary-based, for the same reason as :func:`read_foam_entry`.
-    """
-    if not file_path.exists():
-        return None
-
-    lines = file_path.read_text().splitlines(keepends=True)
-    try:
-        search_start, search_end = _resolve_search_region(lines, scope)
-    except KeyError:
-        return None
-
-    header_pattern = re.compile(rf"^\s*{re.escape(dict_name)}(?=\s|\{{|$)")
-
-    i = search_start
-    while i < search_end:
-        candidate = _strip_inline_comment(lines[i])
-        if not header_pattern.match(candidate):
-            i += 1
-            continue
-
-        open_line = i
-        while open_line < search_end and "{" not in _strip_inline_comment(lines[open_line]):
-            open_line += 1
-        if open_line >= search_end:
-            return None
-
-        depth = 0
-        saw_open = False
-        for j in range(open_line, search_end):
-            text = _strip_inline_comment(lines[j])
-            for ch in text:
-                if ch == "{":
-                    depth += 1
-                    saw_open = True
-                elif ch == "}" and saw_open:
-                    depth -= 1
-                    if depth == 0:
-                        return "".join(lines[i:j + 1])
-        return None
-
-    return None
-
-
-# No foamlib fallback here, deliberately: block_text is inserted verbatim
-# to preserve comments and formatting for cardiacfoam's dict_builder
-# carry-forward; routing it through a parser would re-serialise it.
-def ensure_foam_dict(
-    file_path: Path,
-    dict_name: str,
-    block_text: str,
-    *,
-    scope: str | list[str] | tuple[str, ...] | None = None,
-) -> bool:
-    """Insert a dictionary block if it is missing from the selected scope."""
-    if not file_path.exists():
-        raise FileNotFoundError(f"Dictionary file not found: {file_path}")
-
-    lines = file_path.read_text().splitlines(keepends=True)
-    search_start, search_end = _resolve_search_region(lines, scope)
-    # A trailing \b would not match a quoted regex-style block name (its
-    # closing quote is non-word), so require whitespace/brace/end-of-line
-    # instead; this still rejects a longer name with dict_name as a prefix.
-    header_pattern = re.compile(rf"^\s*{re.escape(dict_name)}(?=\s|\{{|$)")
-
-    for idx in range(search_start, search_end):
-        candidate = _strip_inline_comment(lines[idx])
-        if header_pattern.match(candidate):
-            return False
-
-    if not dict_name.startswith('"'):
-        # dict_name may already be covered by a quoted-regex header (e.g.
-        # "Vm|VmFinal" matches "Vm") even with no literal match above;
-        # otherwise this would insert a block OpenFOAM's own
-        # literal-beats-pattern precedence then shadows.
-        if (
-            _resolve_pattern_scope(lines, dict_name, start=search_start, end=search_end)
-            is not None
-        ):
-            return False
-
-    block_lines = block_text.splitlines(keepends=True)
-    if not block_lines:
-        raise ValueError("block_text cannot be empty")
-    if not block_lines[-1].endswith("\n"):
-        block_lines[-1] = f"{block_lines[-1]}\n"
-
-    lines[search_end:search_end] = block_lines
-    file_path.write_text("".join(lines))
-
-    return True

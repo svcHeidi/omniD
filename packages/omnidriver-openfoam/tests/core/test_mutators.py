@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from omnidriver.openfoam.mutators import (
-    ensure_foam_dict,
     read_foam_entry,
     remove_foam_dict,
     update_control_dict,
@@ -207,40 +206,6 @@ class TestScopedMutators(unittest.TestCase):
                     scope=["outer", "neverExisted"],
                     missing_ok=False,
                 )
-
-    def test_ensure_foam_dict_inserts_missing_dict_in_scope(self) -> None:
-        text = "\n".join(
-            [
-                "root",
-                "{",
-                "    existing yes;",
-                "}",
-                "",
-            ]
-        )
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "dict"
-            path.write_text(text)
-
-            inserted = ensure_foam_dict(
-                path,
-                "newBlock",
-                "    newBlock\n    {\n        value 1;\n    }\n",
-                scope="root",
-            )
-            inserted_again = ensure_foam_dict(
-                path,
-                "newBlock",
-                "    newBlock\n    {\n        value 2;\n    }\n",
-                scope="root",
-            )
-
-            updated = path.read_text()
-            self.assertTrue(inserted)
-            self.assertFalse(inserted_again)
-            self.assertEqual(updated.count("newBlock"), 1)
-            assert_entry_present(self, updated, "value", "1")
 
 
 class TestScopeDoesNotDescendIntoNestedDicts(unittest.TestCase):
@@ -600,22 +565,6 @@ def test_remove_foam_dict_resolves_a_pattern_keyed_member(tmp_path):
     text = path.read_text()
     assert "Vm|VmFinal" not in text
     assert "tolerance" not in text
-
-
-def test_ensure_foam_dict_does_not_duplicate_a_pattern_covered_member(tmp_path):
-    """ensure_foam_dict must recognize a name already covered by a pattern,
-    not insert a duplicate literal block that OpenFOAM's
-    literal-beats-pattern precedence would then shadow the existing one
-    with."""
-    path = tmp_path / "fvSolution"
-    path.write_text(_SINGLE_PATTERN_BLOCK)
-    inserted = ensure_foam_dict(
-        path, "Vm", "Vm\n{\n    tolerance 1e-9;\n}\n", scope=["solvers"]
-    )
-    assert inserted is False
-    text = path.read_text()
-    assert text.count("tolerance") == 1
-    assert "1e-11" in text
 
 
 @pytest.mark.parametrize(

@@ -23,13 +23,13 @@ if TYPE_CHECKING:
 
 #: The workflow-state record's filename, named once here instead of
 #: restated as a literal at each write/read site (``cli.py``,
-#: ``postprocess_phase.py``, ``step_candidate.py``, ``sweep_runner.py``,
+#: ``postprocess_phase.py``, ``step_execution.py``, ``sweep_runner.py``,
 #: ``execution_context.py``, ``run_discovery.py``,
 #: ``runtime_records.CORE_RUNTIME_RECORDS`` and ``fresh._OMNIDRIVER_MARKER_NAMES``).
 STATE_FILENAME = "workflow_state.json"
 
 #: The per-run step-log directory's name, named once here for the same
-#: reason (used by ``step_candidate.py`` and ``runtime_records.py``).
+#: reason (used by ``step_execution.py`` and ``runtime_records.py``).
 WORKFLOW_LOGS_DIRNAME = "workflow_logs"
 
 

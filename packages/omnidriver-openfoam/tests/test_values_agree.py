@@ -1,13 +1,12 @@
-"""A requested value and its native resolution are compared as values, not text.
+"""A requested value and the value a case holds are compared as values, not text.
 
-`1e-3` resolves through `foamDictionary` as `0.001`; comparing as text would
-report a mismatch for a correct edit. This is exact value equality, never a
-tolerance -- `0.001` and `0.0010000001` are different configurations.
+`1e-3` is written `0.001`; comparing as text would report a mismatch for an
+unchanged key. This is exact value equality, never a tolerance -- `0.001` and
+`0.0010000001` are different configurations.
 """
-
 import pytest
 
-from omnidriver.openfoam.apply_overrides import effective_values_agree
+from omnidriver.openfoam.literals import values_agree
 
 
 @pytest.mark.parametrize("requested,resolved", [
@@ -29,7 +28,7 @@ from omnidriver.openfoam.apply_overrides import effective_values_agree
     ("40 6 14", "40 6 14"),
 ])
 def test_equal_values_agree(requested, resolved):
-    assert effective_values_agree(requested, resolved)
+    assert values_agree(requested, resolved)
 
 
 @pytest.mark.parametrize("requested,resolved", [
@@ -42,10 +41,10 @@ def test_equal_values_agree(requested, resolved):
     ((40, 6, 14), "40 6 15"),
 ])
 def test_different_values_do_not_agree(requested, resolved):
-    assert not effective_values_agree(requested, resolved)
+    assert not values_agree(requested, resolved)
 
 
 def test_an_unparseable_resolution_does_not_agree_silently():
     """Unknown is not agreement."""
-    assert not effective_values_agree(1e-3, None)
-    assert not effective_values_agree(1e-3, "")
+    assert not values_agree(1e-3, None)
+    assert not values_agree(1e-3, "")

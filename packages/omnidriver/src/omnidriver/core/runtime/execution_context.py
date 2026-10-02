@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from ..planning_types import SimulationAuditItem
 from .models import TutorialSpec
@@ -55,6 +55,9 @@ class StepExecutionContext:
     execution_env: dict[str, str] | None = None
     source_path: str | None = None
     driver_context: "DriverContext | None" = None
+    #: Edit the case with ``document:key`` patches; both are ``None`` for a
+    #: plan that has no record case to edit.
+    apply_study: Callable[[Mapping[str, Any]], tuple[dict[str, Any], ...]] | None = None
     replan_after_mutation: Callable[[], ReplannedExecution] | None = None
 
 

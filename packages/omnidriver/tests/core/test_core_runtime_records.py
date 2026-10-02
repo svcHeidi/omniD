@@ -12,11 +12,6 @@ from omnidriver.core.runtime.attempt_lease import (
 )
 from omnidriver.core.runtime.postprocess_phase import CASE_RECORD_FILENAME
 from omnidriver.core.runtime.record_execution import record_generated_relpaths
-from omnidriver.core.runtime.remediation_transaction import (
-    CANDIDATES_DIRECTORY as REMEDIATION_CANDIDATES_DIRECTORY,
-    MARKER_NAME as REMEDIATION_MARKER_NAME,
-    TRANSACTIONS_DIRECTORY as REMEDIATION_TRANSACTIONS_DIRECTORY,
-)
 from omnidriver.core.runtime.run_document_exec import RUN_DOCUMENT_FILENAME
 from omnidriver.core.runtime.sweep_manifest import SWEEP_MANIFEST_FILENAME
 from omnidriver.core.runtime.sweep_runner import _stage_entry_case
@@ -34,11 +29,10 @@ def test_core_names_every_file_it_writes_into_a_case():
     """Every expected name is imported from its owning module's constant, so a rename there is what this test catches."""
     assert set(CORE_RUNTIME_RECORDS.generated_file_names) == {
         STATE_FILENAME, RUN_DOCUMENT_FILENAME, SWEEP_MANIFEST_FILENAME, CASE_RECORD_FILENAME,
-        ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME, REMEDIATION_MARKER_NAME,
+        ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME,
     }
     assert set(CORE_RUNTIME_RECORDS.generated_directory_names) == {
         WORKFLOW_LOGS_DIRNAME, _JOURNAL_RELATIVE_PATH.parts[0],
-        REMEDIATION_TRANSACTIONS_DIRECTORY, REMEDIATION_CANDIDATES_DIRECTORY,
     }
 
 

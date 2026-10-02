@@ -3,5 +3,3 @@
 # This is debt, not a waiver: scripts/check-core-shape.py fails on any new
 # (file, token) pair, any higher count, and any count that shrank without
 # this file being edited to match -- so the total can only go down.
-core/runtime/remediation_audit.py	dictionary_resolution	1	The `effective_dictionary_resolution` key of a `step --apply` audit record: the effective-dictionary read-back is an OpenFOAM concept in the remediation path. Retires with the `--apply` edit format.
-core/runtime/step_candidate.py	dictionary_resolution	1	The same `effective_dictionary_resolution` key, on the step result payload. Retires with the `--apply` edit format.

@@ -231,24 +231,20 @@ class CardiacFoamPlugin:
 
     # -- CaseWriterCapability --------------------------------------------
     def get_supported_mutation_modes(self) -> "frozenset[str]":
-        #: ``clone_and_patch``: a tutorial that patches an already-rendered
-        #: case builds a `CaseMutationRequest` in this mode, resolved by
-        #: ``overrides.resolve_patch_mutation`` below.
         return frozenset({"synthesize", "clone_and_patch"})
 
     def resolve_case_mutation(self, request, *, driver_context):
-        """Delegate to this package's semantic owner for the request's mode:
-        ``dict_builder`` for a from-scratch case synthesis, ``overrides``
-        for an edit to a case that already exists."""
+        """``dict_builder`` resolves a from-scratch case synthesis; the shared
+        OpenFOAM layer resolves an edit to a case that already exists."""
         del driver_context
         if request.mode == "synthesize":
             from omnidriver.cardiacfoam.dict_builder import resolve_synthesis_mutation
 
             return resolve_synthesis_mutation(request)
         if request.mode == "clone_and_patch":
-            from omnidriver.cardiacfoam.overrides import resolve_patch_mutation
+            from omnidriver.openfoam.case_rendering import patch_mutation
 
-            return resolve_patch_mutation(request)
+            return patch_mutation(request, owner_id=self.plugin_id)
         raise ValueError(
             f"cardiacFoam resolves synthesize and clone_and_patch requests "
             f"only, not {request.mode!r}"
@@ -272,14 +268,17 @@ class CardiacFoamPlugin:
         return generated_output_globs(case_root, resolved_case)
 
     def get_dict_entry_catalog(self) -> dict:
-        """Dictionary entries arranged by cardiacFoam's own document names."""
-        from omnidriver.cardiacfoam.override_schema import (
-            dict_entry_catalog,
-        )
+        """Dictionary entries arranged by cardiacFoam's own document names.
 
-        return dict_entry_catalog(
-            self.get_dictionary_catalog(), self.get_dict_groups(),
-        )
+        ``physicsProperties`` is a flat sequence while ``electroProperties``
+        is grouped: that mirrors the two OpenFOAM dictionaries this solver
+        reads and is deliberately not a core convention."""
+        return {
+            "physicsProperties": list(self.get_dictionary_catalog().entries_for("physicsProperties")),
+            "electroProperties": {
+                group_name: list(entries) for group_name, entries in self.get_dict_groups().items()
+            },
+        }
 
     def get_report_catalog(self) -> tuple:
         """Post-run reports this plugin offers. Core owns the machinery; the
@@ -297,27 +296,6 @@ class CardiacFoamPlugin:
         )
 
         return named_catalogs(self.get_capabilities())
-
-    def get_override_scopes(self) -> tuple:
-        """This plugin's one `step --strict --apply` override scope:
-        $ELECTRO_MODEL_COEFFS -> constant/electroProperties."""
-        from omnidriver.cardiacfoam.overrides import (
-            electro_model_coeffs_scope,
-        )
-
-        return (electro_model_coeffs_scope(),)
-
-    def get_regeneration_scopes(self) -> tuple:
-        """This plugin's one `step --strict --apply` regeneration scope:
-        myocardiumSolver -> constant/electroProperties. Switching
-        myocardiumSolver renames the active <solver>Coeffs sub-block and
-        changes which sibling keys are legal, so it needs a full rebuild
-        rather than the key-patch $ELECTRO_MODEL_COEFFS route above."""
-        from omnidriver.cardiacfoam.overrides import (
-            electro_properties_regeneration_scope,
-        )
-
-        return (electro_properties_regeneration_scope(),)
 
     def get_record_key_validator(self):
         """This plugin's one ``RecordKeyValidationCapability`` answer for a

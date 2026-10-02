@@ -91,9 +91,7 @@ FORBIDDEN_IMPORT_MODULES: tuple[str, ...] = (
     # writer module re-created there is still unreachable from an axis or
     # record.
     "omnidriver.openfoam.utils",
-    "omnidriver.openfoam.apply_overrides",
     "omnidriver.core.case_transaction",
-    "omnidriver.cardiacfoam.overrides",
     # openCARP's plugin module holds the renderer (patch_par/write): a record
     # or axis module that reaches it would be a write path this gate cannot
     # see through the plugin's own indirection.
@@ -108,10 +106,6 @@ FORBIDDEN_IMPORT_MODULES: tuple[str, ...] = (
 # resolution.
 FORBIDDEN_IMPORT_NAMES: frozenset[str] = frozenset({
     "update_foam_entry",
-    "apply_electro_property_overrides",
-    "apply_physics_property_overrides",
-    "apply_overrides",
-    "apply_case_overrides",
     "commit_case_write",
     "case_transaction",
     "dump",
@@ -132,10 +126,6 @@ FORBIDDEN_IMPORT_NAMES: frozenset[str] = frozenset({
 # the Attribute's own `.attr`, no alias resolution needed either.
 FORBIDDEN_CALL_NAMES: frozenset[str] = frozenset({
     "update_foam_entry",
-    "apply_electro_property_overrides",
-    "apply_physics_property_overrides",
-    "apply_overrides",
-    "apply_case_overrides",
     "commit_case_write",
     "write_text",
     "write_bytes",
@@ -528,8 +518,7 @@ def main() -> int:
             "\nA tutorial-record registration or an axis module may not import or "
             "call a writer -- update_foam_entry, anything from "
             "omnidriver.openfoam.mutators/foam_backend/utils, "
-            "apply_electro_property_overrides/apply_physics_property_overrides/"
-            "apply_*_overrides, commit_case_write/case_transaction, shutil, "
+            "commit_case_write/case_transaction, shutil, "
             "subprocess, tempfile, importlib/__import__, exec/eval, "
             ".write_text(...)/.write_bytes(...), open(..., <write mode>), "
             ".rename/.replace/.remove/.unlink/.symlink/.touch/.mkdir, "

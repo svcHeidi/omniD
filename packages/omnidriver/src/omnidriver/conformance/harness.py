@@ -14,8 +14,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from omnidriver.core.plugin_interface import load_plugin_context
 from omnidriver.core.runtime.models import DataArtifact, data_artifact_from_json
 from omnidriver.core.runtime.postprocess_phase import build_sweep_context
+from omnidriver.core.runtime.run_document_exec import RUN_DOCUMENT_FILENAME
+from omnidriver.core.strict_planning import strict_plan
 
 SWEEP_TIMEOUT_S = 1800.0
 
@@ -134,3 +137,39 @@ def record_run(work: Path, **sweep_arguments: Any) -> RecordRun:
     output = record_sweep(work, **sweep_arguments)
     (case,) = build_sweep_context(output).cases
     return RecordRun(output, case.case_id, Path(case.case_root), json.loads((output / case.run_document_path).read_text()))
+
+
+def record_step(
+    work: Path, *, plugin: str, record: str, cases_root: Path, step: str, apply: Mapping[str, Any],
+    before: Sequence[str] = (), study: Mapping[str, Any] | None = None, inputs: Mapping[str, str] | None = None,
+    timeout_s: float = SWEEP_TIMEOUT_S,
+) -> tuple[Path, dict[str, Any]]:
+    """Plan ``record`` under ``work/scratch``, run the steps in ``before``, then run ``step`` after
+    ``omnidriver step --apply`` of ``apply``. Returns the staged case root and that step's JSON; a step in
+    ``before`` that does not complete raises."""
+    report = strict_plan(
+        record, overrides={"cases_root": str(cases_root), **(study or {})}, scratch_root=work / "scratch",
+        inputs=inputs, driver_context=load_plugin_context(plugin),
+    )
+    if report.status != "ok":
+        raise AssertionError(f"plan of {record} is {report.status}: {json.dumps(report.to_json())[:2000]}")
+    document = Path(report.launch["output_dir"]) / RUN_DOCUMENT_FILENAME
+    patches = work / "apply.json"
+    patches.write_text(json.dumps(apply))
+
+    def run_step(name: str, *extra: str) -> tuple[subprocess.CompletedProcess, dict[str, Any]]:
+        proc = subprocess.run(
+            [sys.executable, "-m", "omnidriver", "step", "--plugin", plugin, "--run-document", str(document),
+             "--step", name, *extra],
+            capture_output=True, text=True, timeout=timeout_s,
+        )
+        try:
+            return proc, json.loads(proc.stdout)
+        except ValueError:
+            raise AssertionError(f"step {name} printed no JSON (rc={proc.returncode}): {proc.stderr[-2000:]}") from None
+
+    for name in before:
+        proc, payload = run_step(name)
+        if payload.get("status") != "ok":
+            raise AssertionError(f"step {name} did not complete (rc={proc.returncode}): {json.dumps(payload)[:2000]}")
+    return Path(report.launch["case_root"]), run_step(step, "--apply", str(patches))[1]

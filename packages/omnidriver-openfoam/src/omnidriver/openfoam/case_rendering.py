@@ -11,11 +11,24 @@ import shutil
 from pathlib import Path
 from typing import Any, Mapping
 
-from omnidriver.core.case_write import Precondition, RenderedFile, _digest_bytes
+from omnidriver.core.case_write import (
+    CaseMutationRequest,
+    ParameterAssignment,
+    Precondition,
+    RenderedFile,
+    ResolvedMutation,
+    _digest_bytes,
+)
 
+from .case_planning import (
+    HEX_CELL_COUNTS_KEY_PATH,
+    _rewrite_hex_block_lines,
+    hex_cell_counts_expected_blocks,
+    plan_block_mesh_resolution,
+)
 from .effective_dictionary import _inspect_source_closure
+from .literals import CONTAINER_FORMATTERS
 from .mutators import remove_foam_dict, remove_foam_entry, update_foam_entry
-from .case_planning import _rewrite_hex_block_lines
 
 #: Must match what ``OpenFOAMEnvironmentPlugin.get_rendered_formats`` declares;
 #: ``_CaseWriterAdapter.render`` refuses a ``RenderedFile`` whose format its
@@ -39,6 +52,50 @@ def _document_edits(resolved: Any) -> dict[str, list[Mapping[str, Any]]]:
     for target in resolved.targets:
         by_document.setdefault(str(target["document"]), []).append(target)
     return by_document
+
+
+def _target_for_parameter(parameter: ParameterAssignment) -> dict[str, Any]:
+    """One :func:`render_patch_case_files` edit target for ``parameter``.
+
+    A parameter at ``HEX_CELL_COUNTS_KEY_PATH`` is not a key/value edit: it
+    rewrites every ``hex (`` line, so it becomes ``plan_block_mesh_resolution``'s
+    structural target, with the block count the path itself encodes. A
+    ``remove`` carries no ``"value"``.
+    """
+    if parameter.key_path[:1] == HEX_CELL_COUNTS_KEY_PATH:
+        return dict(plan_block_mesh_resolution(
+            parameter.document, " ".join(str(count) for count in parameter.value),
+            expected_blocks=hex_cell_counts_expected_blocks(parameter.key_path),
+        ))
+    target: dict[str, Any] = {
+        "qualified_id": parameter.qualified_id,
+        "document": parameter.document,
+        "expanded_key_path": list(parameter.expanded_key_path()),
+        "operation": parameter.operation,
+        "format": FORMAT,
+    }
+    if parameter.operation != "remove":
+        render = CONTAINER_FORMATTERS.get(parameter.value_kind)
+        target["value"] = render(parameter.value) if render is not None else parameter.value
+    return target
+
+
+def patch_mutation(request: CaseMutationRequest, *, owner_id: str) -> ResolvedMutation:
+    """The semantic owner's answer for a ``clone_and_patch`` request, for
+    every OpenFOAM-based plugin: pure, every parameter already addressed by
+    its builder. ``owner_id`` is the calling plugin's id."""
+    if request.mode != "clone_and_patch":
+        raise ValueError(f"{owner_id} resolves clone_and_patch requests here, not {request.mode!r}")
+    return ResolvedMutation(
+        request=request,
+        targets=tuple(_target_for_parameter(parameter) for parameter in request.parameters),
+        preconditions=(),
+        expected_effects=tuple(
+            f"{parameter.operation} {parameter.qualified_id!r} in {parameter.document}"
+            for parameter in request.parameters
+        ),
+        semantic_owner_id=owner_id,
+    )
 
 
 def render_patch_case_files(

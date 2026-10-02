@@ -387,7 +387,7 @@ def test_resolve_refuses_a_document_whose_blocks_disagree_with_each_other(tmp_pa
 # (`plan_block_mesh_resolution`/`_rewrite_hex_block_lines`, reused by
 # `render_patch_case_files`) fires independently of the axis: a caller can
 # build a `plan_block_mesh_resolution` target directly (as
-# `cardiacfoam.overrides._target_for_parameter` does) and the renderer still
+# `case_rendering._target_for_parameter` does) and the renderer still
 # refuses a real document whose block count disagrees.
 # ---------------------------------------------------------------------------
 

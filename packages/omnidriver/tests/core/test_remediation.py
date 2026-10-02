@@ -74,7 +74,7 @@ from omnidriver.core.runtime.remediation_audit import append_remediation_record
 def test_append_writes_one_jsonl_record(tmp_path):
     append_remediation_record(
         tmp_path, step_id="solve", attempt=2,
-        applied_overrides=[{"driver_path": "deltaT", "value": "0.0001"}],
+        applied_patches=[{"document": "system/controlDict", "key_path": ["deltaT"], "value": 0.0001}],
         resulting_status="failed",
     )
     path = tmp_path / "remediation_history.jsonl"
@@ -84,45 +84,23 @@ def test_append_writes_one_jsonl_record(tmp_path):
     assert rec["step_id"] == "solve"
     assert rec["attempt"] == 2
     assert rec["resulting_status"] == "failed"
-    assert rec["applied_overrides"][0]["driver_path"] == "deltaT"
+    assert rec["applied_patches"][0]["key_path"] == ["deltaT"]
     assert "timestamp" in rec
 
 
 def test_append_is_additive(tmp_path):
     for _ in range(3):
         append_remediation_record(
-            tmp_path, step_id="solve", attempt=1, applied_overrides=[],
+            tmp_path, step_id="solve", attempt=1, applied_patches=[],
             resulting_status="ok",
         )
     path = tmp_path / "remediation_history.jsonl"
     assert len(path.read_text().splitlines()) == 3
 
 
-def test_append_persists_effective_dictionary_resolution(tmp_path):
-    evidence = ({
-        "driver_path": "deltaT",
-        "requested_value": "0.0001",
-        "status": "resolved",
-        "value": "0.0001",
-        "parser": "foamDictionary",
-        "runtime": "/opt/openfoam",
-        "inspected_files": ["/case/system/controlDict"],
-    },)
-    append_remediation_record(
-        tmp_path,
-        step_id="solve",
-        attempt=2,
-        applied_overrides=[{"driver_path": "deltaT", "value": "0.0001"}],
-        resulting_status="ok",
-        effective_resolution=evidence,
-    )
-    record = json.loads((tmp_path / "remediation_history.jsonl").read_text())
-    assert record["effective_dictionary_resolution"] == list(evidence)
-
-
 def test_append_never_raises_on_bad_dir(tmp_path):
     # A non-existent nested output dir must not crash the rerun.
     append_remediation_record(
         tmp_path / "does" / "not" / "exist", step_id="s", attempt=1,
-        applied_overrides=[], resulting_status="ok",
+        applied_patches=[], resulting_status="ok",
     )  # should silently no-op, not raise

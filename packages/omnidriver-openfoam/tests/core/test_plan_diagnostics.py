@@ -33,9 +33,11 @@ def _context(mapping, *, report=None):
     capabilities = SimpleNamespace(
         cxx_mapping=SimpleNamespace(profile=lambda: SimpleNamespace(cxx_mapping=mapping)),
         dict_key_scanner=SimpleNamespace(scan=scan),
-        dictionaries=SimpleNamespace(entries=lambda: (), catalog=lambda: SimpleNamespace(entries_for=lambda name: ())),
+        dictionaries=SimpleNamespace(
+            entries=lambda: (), catalog=lambda: SimpleNamespace(entries_for=lambda name: ()),
+            documents=lambda: {},
+        ),
         manifest=SimpleNamespace(manifest=lambda: {}),
-        override_schema=SimpleNamespace(dict_entry_catalog=lambda: {}),
         case_files=SimpleNamespace(all_rules=lambda: ()),
     )
     return SimpleNamespace(
@@ -135,6 +137,6 @@ def test_the_dictionaries_checked_follow_the_adapters_case_file_rules_not_a_dire
     ),)
     context = SimpleNamespace(capabilities=SimpleNamespace(
         case_files=SimpleNamespace(all_rules=lambda: rules),
-        override_schema=SimpleNamespace(dict_entry_catalog=lambda: {"solver.yaml": ()}),
+        dictionaries=SimpleNamespace(documents=lambda: {"solver.yaml": ()}),
     ))
     assert _owned_dict_relpaths(case_root, context) == ("config/solver.yaml",)

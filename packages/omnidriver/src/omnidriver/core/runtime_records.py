@@ -11,11 +11,6 @@ from .case_transaction import _JOURNAL_RELATIVE_PATH
 from .plugin_capabilities import CaseRuntimeConventions
 from .runtime.attempt_lease import ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME
 from .runtime.postprocess_phase import CASE_RECORD_FILENAME
-from .runtime.remediation_transaction import (
-    CANDIDATES_DIRECTORY as _REMEDIATION_CANDIDATES_DIRECTORY,
-    MARKER_NAME as _REMEDIATION_MARKER_NAME,
-    TRANSACTIONS_DIRECTORY as _REMEDIATION_TRANSACTIONS_DIRECTORY,
-)
 from .runtime.run_document_exec import RUN_DOCUMENT_FILENAME
 from .runtime.sweep_manifest import SWEEP_MANIFEST_FILENAME
 from .runtime.workflow_orchestrator import STATE_FILENAME, WORKFLOW_LOGS_DIRNAME
@@ -28,13 +23,10 @@ _CASE_TRANSACTION_DIRECTORY = _JOURNAL_RELATIVE_PATH.parts[0]
 #: write. Distinct from ``fresh._OMNIDRIVER_MARKER_NAMES``, a smaller,
 #: deliberately different set -- not a copy-paste of this one.
 CORE_RUNTIME_RECORDS = CaseRuntimeConventions(
-    generated_directory_names=(
-        WORKFLOW_LOGS_DIRNAME, _CASE_TRANSACTION_DIRECTORY,
-        _REMEDIATION_TRANSACTIONS_DIRECTORY, _REMEDIATION_CANDIDATES_DIRECTORY,
-    ),
+    generated_directory_names=(WORKFLOW_LOGS_DIRNAME, _CASE_TRANSACTION_DIRECTORY),
     generated_file_names=(
         STATE_FILENAME, RUN_DOCUMENT_FILENAME, SWEEP_MANIFEST_FILENAME, CASE_RECORD_FILENAME,
-        ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME, _REMEDIATION_MARKER_NAME,
+        ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME,
     ),
     generated_case_markers=(STATE_FILENAME, WORKFLOW_LOGS_DIRNAME, RUN_DOCUMENT_FILENAME),
 )

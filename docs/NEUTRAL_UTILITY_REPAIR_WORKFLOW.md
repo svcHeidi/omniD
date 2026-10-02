@@ -40,40 +40,23 @@ an agent callback.
 
 1. Inspect and plan the case. Do not edit it while planning.
 2. Execute the planned step. A failure report carries `failure_context`.
-3. Propose a finite, catalog-addressable override list and run
-   `omnidriver step ... --apply overrides.json`; the file may carry a
-   `hypothesis` beside the `overrides`.
-4. The executor acquires case/output leases, persists before-images, applies
-   the override, checks effective configuration when the plugin supplies it,
-   replans, and only then dispatches the utility step.
-5. The result names the remediation transaction. An accepted transaction is
-   the case head; a rejected or interrupted one blocks reuse of the case
-   until it is restored or restaged.
+3. Propose a finite set of `document:key` patches, the same a study takes, and
+   run `omnidriver step --run-document ... --apply patches.json`.
+4. The executor acquires case/output leases, commits the patches through the
+   case writer (one journaled `commit_case_write`), replans, and only then
+   dispatches the utility step. Each attempt is appended to
+   `remediation_history.jsonl`.
+5. The result lists `applied_patches`. A commit that fails rolls back to the
+   original bytes; one interrupted by a crash blocks the case until
+   `omnidriver recover` restores it.
 
-The adapter must declare every target through
-`get_override_target_paths(...)`; its `apply_overrides(...)` may reject an
-invalid proposal by raising `ValueError`. A mutation-time rejection restores
-declared before-images and never dispatches. A later replan rejection leaves
-a clearly marked candidate that must go through the durable recovery path;
-it is never silently reused.
+The plugin's record validator accepts or refuses each key by name, and its
+renderer may reject an invalid value by raising `ValueError`: a refusal at
+that stage never writes and never dispatches. A later replan rejection leaves
+the committed edit in the case, says so, and never dispatches.
 
 ## Executable proof
 
-The utility patch slice is exercised with a real `Allrun` subprocess in
-`packages/omnidriver/tests/core/test_step_candidate.py`:
-
-- `test_neutral_utility_workflow_patches_and_dispatches_a_declared_case_script` —
-  successful patch/replan/dispatch and durable acceptance.
-- `test_changed_plan_rejects_written_candidate_before_dispatch` — a
-  post-write replan rejection leaves a marked candidate and never dispatches.
-- `test_unowned_execution_never_starts_a_transaction` — without both leases
-  nothing is written.
-
-Run the focused proof with:
-
-```sh
-.venv/bin/python -m pytest packages/omnidriver/tests/core/test_step_candidate.py -q
-```
-
-This is a local, host-owned workflow. It does not claim distributed locking,
-loader-complete library attestation, or cardiacFOAM scientific validity.
+The patch slice is exercised end to end over the conformance toy in
+`packages/omnidriver/tests/core/test_cli_step.py` and, on each solver's real
+case, by the `test_step_apply_native.py` of its package.

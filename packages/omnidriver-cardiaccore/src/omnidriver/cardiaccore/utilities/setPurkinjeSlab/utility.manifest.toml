@@ -1,0 +1,26 @@
+name = "setPurkinjeSlab"
+description = "Mark the sub-endocardial Purkinje slab and scale conductivity there."
+category = "field-setup"
+
+purpose = "Declared from cardiacCore's native bivCase wrapper and utility documentation."
+inputs = [
+  "system/setPurkinjeSlabDict",
+  "0/transmural",
+  "0/Conductivity",
+]
+requires_mesh = true
+example = "setPurkinjeSlab -case <case>"
+
+[[produces]]
+artifact_id = "purkinje_layer"
+path_pattern = "0/PurkinjeLayer"
+format = "openfoam_field"
+description = "Purkinje slab mask"
+produced_by = "setPurkinjeSlab"
+
+[[produces]]
+artifact_id = "conductivity"
+path_pattern = "0/Conductivity"
+format = "openfoam_field"
+description = "Conductivity tensor updated in the Purkinje slab"
+produced_by = "setPurkinjeSlab"

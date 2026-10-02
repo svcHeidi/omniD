@@ -768,7 +768,7 @@ class ResolvedMutation:
 
     ``preconditions`` and ``semantic_owner_id``, by contrast, are passed
     straight through unchanged by both producers
-    (``cardiaccore/workflows/overrides.py::resolve_patch_mutation``,
+    (``openfoam/case_rendering.py::patch_mutation``,
     ``cardiacfoam/dict_builder.py``'s synthesis resolver) into
     ``CaseWritePlan`` -- expected of a resolve/render boundary, not itself a
     defect.

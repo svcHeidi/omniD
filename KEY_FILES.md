@@ -85,8 +85,6 @@ repository root.
 | `get_plan_diagnostics(...)` | `()` | The stack's own checks in a strict plan's `plugin_diagnostics` |
 | `get_case_runtime_conventions()` | neutral declaration | `case_entrypoints`: the file `--case` runs |
 | `get_parallel_steps(...)` | `parallel` refused by name | `--parallel` / the `parallel` study value |
-| `get_override_scopes()` | `()` | `--apply` patch overrides |
-| `get_regeneration_scopes()` | `()` | `--apply` regenerating overrides |
 | `get_report_catalog()` | `()` | Post-run report listing |
 | `get_named_catalogs()` | `{}` | `describe` plugin catalogs |
 

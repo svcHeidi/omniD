@@ -1,10 +1,4 @@
-"""Shared, attempt-agnostic transaction primitives: atomic-write-with-fsync only.
-
-Before-image/backup bookkeeping deliberately stays split between
-``case_transaction.py`` and ``remediation_transaction.py`` -- different
-before-image shapes, and only remediation has attempt ownership. See
-``docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md``.
-"""
+"""Atomic write-with-fsync primitives for the case transaction."""
 from __future__ import annotations
 
 import json

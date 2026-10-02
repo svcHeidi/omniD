@@ -110,34 +110,6 @@ def test_a_stack_with_no_plan_diagnostics_adds_none():
     ) == ()
 
 
-def test_two_providers_implementing_an_exclusive_hook_is_an_error():
-    a = _Provider("org.a", apply_overrides=lambda *a, **k: (),
-                  get_override_target_paths=lambda *a, **k: ())
-    b = _Provider("org.b", requires=("org.a",),
-                  apply_overrides=lambda *a, **k: (),
-                  get_override_target_paths=lambda *a, **k: ())
-    with pytest.raises(ValueError, match="apply_overrides"):
-        _compose(a, b)
-
-
-def test_apply_and_target_paths_must_come_from_one_provider():
-    """The refusing-hook rule is CROSS-member, not per-member: split across two providers, rollback would break silently."""
-    a = _Provider("org.a", apply_overrides=lambda *a, **k: ())
-    b = _Provider("org.b", requires=("org.a",),
-                  get_override_target_paths=lambda *a, **k: ())
-    with pytest.raises(ValueError, match="get_override_target_paths"):
-        _compose(a, b)
-
-
-def test_one_provider_supplying_both_is_accepted():
-    both = _Provider(
-        "org.both",
-        apply_overrides=lambda *a, **k: (),
-        get_override_target_paths=lambda *a, **k: (),
-    )
-    _compose(both)   # must not raise
-
-
 def test_resolve_and_supported_modes_must_come_from_one_provider():
     """`get_supported_mutation_modes` is `set`-shaped (union across the stack) while `resolve_case_mutation` is `single`-shaped (most specific only)."""
     a = _Provider("org.a", get_supported_mutation_modes=lambda: frozenset({"synthesize"}))
@@ -154,16 +126,6 @@ def test_one_provider_supplying_both_modes_and_resolver_is_accepted():
         get_supported_mutation_modes=lambda: frozenset({"clone_and_patch"}),
     )
     _compose(both)  # must not raise
-
-
-def test_override_scopes_concatenate_across_providers():
-    """`get_override_scopes` fits none of the original six shapes."""
-    env = _Provider("org.env", get_override_scopes=lambda: ("env-scope",))
-    solver = _Provider("org.solver", requires=("org.env",),
-                       get_override_scopes=lambda: ("solver-scope",))
-    assert _compose(env, solver).override_scopes.scopes() == (
-        "env-scope", "solver-scope",
-    )
 
 
 def test_a_case_file_path_declared_twice_is_an_error():

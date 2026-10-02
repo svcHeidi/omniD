@@ -85,9 +85,9 @@ TRANSACTION_STATES = ("planning", "preparing", "applying", "committed", "rolled_
 _JOURNAL_SCHEMA_VERSION = 1
 
 #: Relative to a case root. A sibling of the case content rather than a
-#: temp-directory record, for the same reason the remediation journal and the
-#: case lease both live case-adjacent: recovery must find this from the case
-#: alone, with nothing else supplied.
+#: temp-directory record, for the same reason the case lease lives
+#: case-adjacent: recovery must find this from the case alone, with nothing
+#: else supplied.
 _JOURNAL_RELATIVE_PATH = Path(".omnidriver") / "case-transaction.json"
 _COMPLETED_DIRNAME = "case-transactions"
 
@@ -123,9 +123,7 @@ def _read_journal(case_root: Path) -> dict[str, Any] | None:
     if not isinstance(payload, dict):
         raise CaseTransactionError(f"case transaction journal is malformed: {path}")
     # A corrupted or hand-edited journal with a bogus `state` must not be
-    # read as though it were legitimate. Matches
-    # `remediation_transaction.read_remediation_transaction`'s own
-    # status-validation pattern.
+    # read as though it were legitimate.
     if payload.get("state") not in TRANSACTION_STATES:
         raise CaseTransactionError(
             f"case transaction journal at {path} has state "

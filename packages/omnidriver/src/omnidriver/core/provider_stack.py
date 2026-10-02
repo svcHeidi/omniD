@@ -135,9 +135,6 @@ def order_providers(providers) -> tuple:
 #: ``single``    first non-``None``, most-specific provider first.
 #: ``chain``     thread the first argument through every implementer, in
 #:               stack order.
-#: ``exclusive`` exactly one provider may implement; two is an error, zero
-#:               leaves the member absent so the capability's declared
-#:               fallback refuses by name.
 #: ``profile``   the declarative profile: case-file rules concatenated (with
 #:               §2.1's one-declarer rule enforced at compose time),
 #:               ``provides`` unioned, everything else from the most specific.
@@ -174,8 +171,6 @@ _SHAPE: dict[str, str] = {
     "get_generated_output_globs": "sequence",
     "get_input_roots": "sequence",
     "get_report_catalog": "sequence",
-    "get_regeneration_scopes": "sequence",
-    "get_override_scopes": "sequence",
     "inspect_effective_configuration": "sequence",
     "render_case_files": "sequence",
     "get_record_key_catalog": "sequence",
@@ -195,26 +190,18 @@ _SHAPE: dict[str, str] = {
     "is_installed_environment_command": "single",
     # -- chain -------------------------------------------------------------
     "get_configured_environment": "chain",
-    # -- exclusive ---------------------------------------------------------
-    "apply_overrides": "exclusive",
-    "get_override_target_paths": "exclusive",
     # -- profile -----------------------------------------------------------
     "get_profile": "profile",
 }
 
 #: Members that must be answered by the SAME provider, keyed by the member
-#: whose absence the error names. Generalises the single-plugin crash-safety
-#: check in ``_OverrideScopeAdapter.target_paths``: a provider that mutates
-#: without declaring what it touched is a data-loss risk, and splitting the
-#: pair across two providers reintroduces that risk while satisfying "exactly
-#: one" for each member on its own. ``get_supported_mutation_modes`` is
+#: whose absence the error names. ``get_supported_mutation_modes`` is
 #: ``single``-shaped (not ``set``) to match ``resolve_case_mutation``'s own
 #: shape: were it a union, a stack where one provider declares only
 #: ``synthesize`` support and a different, more specific provider implements
 #: the resolver would compose to the union of both providers' modes, letting
 #: ``resolve()`` pass a mode into a resolver that never claimed to accept it.
 _CROSS_MEMBER_PAIRS: tuple[tuple[str, str], ...] = (
-    ("apply_overrides", "get_override_target_paths"),
     ("resolve_case_mutation", "get_supported_mutation_modes"),
 )
 
@@ -405,22 +392,6 @@ def _chain(ordered, implementers, member):
     return _composed
 
 
-def _exactly_one(ordered, implementers, member):
-    if not implementers:
-        return None
-    if len(implementers) > 1:
-        raise ValueError(_exclusive_conflict(implementers, member))
-    return getattr(implementers[0], member)
-
-
-def _exclusive_conflict(implementers, member) -> str:
-    return (
-        f"providers {[p.plugin_id for p in implementers]} all implement "
-        f"{member}(); exactly one provider in a stack may implement it, "
-        f"because a second implementation would silently shadow the first"
-    )
-
-
 class _ComposedProfile:
     """One profile view over N providers' profiles.
 
@@ -484,7 +455,6 @@ _COMBINATORS = {
     "sequence": _concat,
     "single": _first_non_none,
     "chain": _chain,
-    "exclusive": _exactly_one,
     "profile": _compose_profile,
 }
 
@@ -524,17 +494,6 @@ class _ComposedProvider:
         if name.startswith("_") or name in _SHAPE:
             raise AttributeError(name)
         return getattr(self.__dict__["_primary"], name)
-
-
-def _check_exclusive_arity(ordered) -> None:
-    conflicts = [
-        _exclusive_conflict(implementers, member)
-        for member, shape in _SHAPE.items()
-        if shape == "exclusive"
-        and len(implementers := _implementers(ordered, member)) > 1
-    ]
-    if conflicts:
-        raise ValueError("; ".join(conflicts))
 
 
 def _check_cross_member_pairs(ordered) -> None:
@@ -625,7 +584,6 @@ def compose(ordered_providers):
     ordered = tuple(ordered_providers)
     if not ordered:
         raise ValueError("compose() requires at least one provider")
-    _check_exclusive_arity(ordered)
     _check_cross_member_pairs(ordered)
     _check_case_file_declarers(ordered)
     format_declared_by = _format_declarers(ordered)

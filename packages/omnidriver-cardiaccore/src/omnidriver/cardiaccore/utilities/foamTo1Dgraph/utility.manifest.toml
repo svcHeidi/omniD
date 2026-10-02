@@ -1,0 +1,24 @@
+name = "foamTo1Dgraph"
+description = "Export an OpenFOAM Purkinje graph dictionary as a legacy VTK line graph."
+category = "io-conversion"
+
+purpose = """\
+Reads constant/<graphName>, requiring points and conductionEdges, and writes \
+postProcessing/foamTo1Dgraph/<graphName>.vtk. The VTK contains line cells, per-edge \
+conductance and length, and per-node PVJ resistance when the graph contains matching \
+pvjNodes and pvjResistances."""
+inputs = [
+  "constant/<graphName>",
+]
+positional_args = [
+  {name = "graphName", argument_kind = "word", description = "Name of the graph dictionary read from constant/."},
+]
+requires_mesh = false
+example = "foamTo1Dgraph purkinjeGraphScar -case ."
+
+[[produces]]
+artifact_id = "purkinje_graph_vtk"
+path_pattern = "postProcessing/foamTo1Dgraph/<graphName>.vtk"
+format = "vtk_unstructured_grid"
+description = "VTK inspection export of the graph dictionary."
+produced_by = "foamTo1Dgraph"

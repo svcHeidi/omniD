@@ -1,15 +1,29 @@
-"""OpenFOAM half of a tutorial-record key validator, shared by every
-OpenFOAM-based plugin (see CLAUDE.md "One reality"): an OpenFOAM-owned key
-is written as asked, tagged by an inferred shape, and a key the catalogue
-lacks is accepted when the plugin's own C++ reads it (``scanned_key``).
+"""The tutorial-record key validator, shared by every OpenFOAM-based plugin
+(see CLAUDE.md "One reality"). A plugin supplies how a key path finds its
+catalogue entry (:class:`CataloguedDocument`); the three outcomes are this
+module's:
+
+1. a key of a catalogued document is checked against its entry's
+   ``value_kind``; a key the catalogue lacks is accepted when the plugin's own
+   C++ reads it at that path (:func:`scanned_key`) and refused by name
+   otherwise;
+2. any other ``system/`` document is written as asked, ``validated=False``,
+   tagged by an inferred shape;
+3. anything else is refused by name.
 """
 
 from __future__ import annotations
 
 import os
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterable
 
 from omnidriver.core.contracts.dictionary import validate_value_shape
+from omnidriver.core.runtime.record_surface import ANY_KEY
+
+from .mutators import check_dictionary_word_is_safe
 
 
 def infer_unvalidated_value_kind(value: Any) -> str:
@@ -105,3 +119,109 @@ def scanned_key(
             f"{matching[0].type} ({matching[0].file}:{matching[0].line}): {'; '.join(reasons)}"
         )
     return kind, True
+
+
+def check_binding(entry: Any, placeholder: str, bound_value: str) -> None:
+    """Refuse a dynamic-path binding the entry's own ``allowed_bindings``
+    does not sanction: an undeclared placeholder, an open domain whose value
+    is not a safe word (it becomes a dictionary key), or a value outside a
+    closed domain."""
+    if placeholder not in entry.allowed_bindings:
+        raise ValueError(
+            f"{entry.driver_path!r} declares no binding domain for {placeholder!r}; "
+            f"refusing to accept {bound_value!r} rather than treating an undeclared "
+            "placeholder as unconstrained"
+        )
+    domain = entry.allowed_bindings[placeholder]
+    if domain is None:
+        reasons = validate_value_shape("word", bound_value)
+        if reasons:
+            raise ValueError(
+                f"{placeholder!r} bound to {bound_value!r} in {entry.driver_path!r}, "
+                f"which is not a valid word: {'; '.join(reasons)}"
+            )
+        check_dictionary_word_is_safe(bound_value)
+    elif bound_value not in domain:
+        raise ValueError(
+            f"{placeholder!r} bound to {bound_value!r} in {entry.driver_path!r}, "
+            f"which is not one of {list(domain)}"
+        )
+
+
+@dataclass(frozen=True)
+class CataloguedDocument:
+    """How one catalogued document resolves a key path.
+
+    ``match`` returns the ``(entry, binding)`` a key path addresses, or
+    ``None``. ``scan`` returns the catalogue spelling the C++ scan is asked
+    about (a ``$TOKEN`` first segment for a scoped block). ``members`` says
+    whether the catalogue declares a path's members as one dynamic segment,
+    which a whole mapping value then fills.
+    """
+
+    label: str
+    entries: Callable[[], Iterable[Any]]
+    match: Callable[[tuple[str, ...]], "tuple[Any, dict[str, str]] | None"]
+    scan: Callable[[tuple[str, ...]], tuple[str, ...]]
+    members: Callable[[tuple[str, ...]], bool] = lambda key_path: False
+
+
+def make_validator(
+    documents: Mapping[str, CataloguedDocument], *, mapping: Callable[[], Any], owner: str,
+) -> Callable[[str, "tuple[str, ...]", Any], "tuple[str, bool]"]:
+    """The ``RecordKeyValidationCapability`` answer for a plugin whose
+    catalogued ``documents`` are given. ``mapping`` returns the plugin's
+    ``cxx_mapping``; ``owner`` names the plugin in refusals."""
+
+    def validate(document: str, key_path: "tuple[str, ...]", value: Any) -> "tuple[str, bool]":
+        dotted = ".".join(key_path)
+        catalogued = documents.get(document)
+        if catalogued is not None:
+            match = catalogued.match(key_path)
+            if match is None and isinstance(value, Mapping) and catalogued.members(key_path):
+                for member, member_value in value.items():
+                    validate(document, key_path + (str(member),), member_value)
+                return "mapping", True
+            if match is None:
+                try:
+                    return scanned_key(
+                        document, catalogued.scan(key_path), value,
+                        mapping=mapping(), entries=catalogued.entries(),
+                    )
+                except KeyError as exc:
+                    raise KeyError(
+                        f"{document}:{dotted} is not declared by the {catalogued.label} key catalog, and "
+                        f"{exc.args[0]} (omnidriver catalog --uncatalogued lists what it reads)"
+                    ) from None
+            entry, binding = match
+            for placeholder, bound_value in binding.items():
+                check_binding(entry, placeholder, bound_value)
+            reasons = validate_value_shape(entry.value_kind, value)
+            if reasons:
+                raise ValueError(
+                    f"{document}:{dotted} does not fit catalogued value_kind "
+                    f"{entry.value_kind!r}: {'; '.join(reasons)}"
+                )
+            return entry.value_kind, True
+        if document.startswith("system/"):
+            return infer_unvalidated_value_kind(value), False
+        raise KeyError(
+            f"{document}:{dotted} is neither a {owner}-catalogued document ({', '.join(sorted(documents))}) "
+            "nor an OpenFOAM-owned 'system/' document; refusing rather than silently treating an "
+            "unrecognised document as an unvalidated OpenFOAM key"
+        )
+
+    return validate
+
+
+def open_system_documents(case_root: Path, *, exclude: Iterable[str] = ()) -> "tuple[dict[str, Any], ...]":
+    """Every ``system/`` file of the case, listed once as an open document
+    (any key, ``validated: False``) in ``record_surface``'s grammar, except
+    the catalogued ones in ``exclude``."""
+    case_root = Path(case_root)
+    skipped = set(exclude)
+    return tuple(
+        {"document": path.relative_to(case_root).as_posix(), "key": ANY_KEY, "validated": False}
+        for path in sorted((case_root / "system").rglob("*"))
+        if path.is_file() and path.relative_to(case_root).as_posix() not in skipped
+    )
