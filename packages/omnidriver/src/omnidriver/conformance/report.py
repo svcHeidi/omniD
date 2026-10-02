@@ -63,10 +63,10 @@ def _regression(script: Path, native_case: Path, work: Path, timeout_s: float) -
     }
 
 
-def _probe(probe: Any) -> dict[str, Any]:
+def _probe(probe: Any, env: Mapping[str, str]) -> dict[str, Any]:
     started = time.monotonic()
     try:
-        passed, detail = probe()
+        passed, detail = probe(env)
     except Exception as exc:
         passed, detail = False, f"{type(exc).__name__}: {exc}"
     return {"passed": passed, "detail": detail, "seconds": round(time.monotonic() - started, 1)}
@@ -139,7 +139,10 @@ def check_report(
         entry["checks"] = verdicts
         passed = all(v["passed"] for v in verdicts)
         if not check_ids and record.conformance.probes:
-            entry["probes"] = {name: _probe(probe) for name, probe in record.conformance.probes.items()}
+            env = driver_context.capabilities.environment_preflight.load(
+                environment_source=None, driver_context=driver_context,
+            )
+            entry["probes"] = {name: _probe(probe, env) for name, probe in record.conformance.probes.items()}
             passed = passed and all(item["passed"] for item in entry["probes"].values())
         entry["status"] = "passed" if passed else "failed"
         if regression:

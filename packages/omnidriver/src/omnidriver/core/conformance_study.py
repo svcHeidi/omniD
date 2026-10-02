@@ -80,8 +80,8 @@ class ConformanceStudy:
     verdict naming the timeout. ``quantity``, when declared, is what C13 and
     C14 compare; without it they have nothing to compare and pass saying so.
     ``probes`` name what the record's solver can say about its own catalogues
-    that no static scan can: each returns whether the catalogue matches the
-    built solver, and what it saw. They run beside the checks and report in
+    that no static scan can: each is given the stack's execution environment
+    and returns whether the catalogue matches the built solver, and what it saw. They run beside the checks and report in
     the same way.
     """
 
@@ -94,4 +94,4 @@ class ConformanceStudy:
     requires: tuple[str, ...] = ()
     timeout_s: float = 600.0
     quantity: QuantityTarget | None = None
-    probes: Mapping[str, Callable[[], tuple[bool, str]]] = field(default_factory=dict)
+    probes: Mapping[str, Callable[[Mapping[str, str]], tuple[bool, str]]] = field(default_factory=dict)

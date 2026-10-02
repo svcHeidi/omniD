@@ -72,10 +72,12 @@ Without the utility on ``PATH`` every model reports ``skipped`` and
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -208,9 +210,10 @@ def diff_report(model: str, parsed: dict[str, Any], entry: Any) -> ModelVerifica
     )
 
 
-def find_listCellModelsVariables_binary() -> Path | None:
-    """Locate the utility on PATH, or None when OpenFOAM is not sourced."""
-    found = shutil.which(_UTILITY)
+def find_listCellModelsVariables_binary(env: Mapping[str, str] | None = None) -> Path | None:
+    """Locate the utility on the ``PATH`` of ``env`` (the process's, by
+    default), or None when OpenFOAM is not sourced."""
+    found = shutil.which(_UTILITY, path=(os.environ if env is None else env).get("PATH"))
     return Path(found) if found else None
 
 
@@ -225,7 +228,9 @@ def _synthesize_case(case_dir: Path, model: str, entry: Any) -> None:
         build_physics_properties,
     )
 
-    tissues = tuple(getattr(entry, "compatible_tissues", ()) or ("myocyte",))
+    # The selector takes a tissue the model itself defines; the others are
+    # applied through heterogeneity.
+    tissues = tuple(entry.native_tissue_labels or entry.compatible_tissues or ("myocyte",))
     (case_dir / "constant").mkdir(parents=True, exist_ok=True)
     (case_dir / "system").mkdir(parents=True, exist_ok=True)
 
@@ -279,7 +284,9 @@ def _synthesize_case(case_dir: Path, model: str, entry: Any) -> None:
     (case_dir / "system" / "blockMeshDict").write_text(single_cell_block_mesh_dict_text())
 
 
-def _verify_one(model: str, entry: Any, binary: Path, case_root: Path) -> ModelVerificationResult:
+def _verify_one(
+    model: str, entry: Any, binary: Path, case_root: Path, env: Mapping[str, str] | None,
+) -> ModelVerificationResult:
     """Run the utility for one model. A per-model failure is reported as that
     model's status, never raised -- one awkward model must not blind the rest."""
     case_dir = case_root / model
@@ -293,7 +300,7 @@ def _verify_one(model: str, entry: Any, binary: Path, case_root: Path) -> ModelV
     try:
         subprocess.run(
             ["blockMesh", "-case", str(case_dir)],
-            capture_output=True, text=True, timeout=120, check=True,
+            capture_output=True, text=True, timeout=120, check=True, env=env,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return ModelVerificationResult(
@@ -306,6 +313,7 @@ def _verify_one(model: str, entry: Any, binary: Path, case_root: Path) -> ModelV
             capture_output=True,
             text=True,
             timeout=120,
+            env=env,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return ModelVerificationResult(
@@ -336,6 +344,7 @@ def verify_ionic_catalog(
     model: str | None = None,
     *,
     case_dir: str | Path | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> VerificationResult:
     """Verify one model, or every catalogued model, against the built solver.
 
@@ -353,7 +362,7 @@ def verify_ionic_catalog(
         )
     targets = {model: IONIC_MODEL_CATALOG[model]} if model else dict(IONIC_MODEL_CATALOG)
 
-    binary = find_listCellModelsVariables_binary()
+    binary = find_listCellModelsVariables_binary(env)
     if binary is None:
         return VerificationResult(
             utility_available=False,
@@ -374,27 +383,32 @@ def verify_ionic_catalog(
         root = Path(case_dir)
         root.mkdir(parents=True, exist_ok=True)
         results = {
-            name: _verify_one(name, entry, binary, root)
+            name: _verify_one(name, entry, binary, root, env)
             for name, entry in targets.items()
         }
     else:
         with tempfile.TemporaryDirectory(prefix="verify_ionic_catalog_") as tmp:
             root = Path(tmp)
             results = {
-                name: _verify_one(name, entry, binary, root)
+                name: _verify_one(name, entry, binary, root, env)
                 for name, entry in targets.items()
             }
 
     return VerificationResult(utility_available=True, results=results)
 
 
-def catalogue_probe() -> tuple[bool, str]:
+def catalogue_probe(env: Mapping[str, str]) -> tuple[bool, str]:
     """``omnidriver check``'s probe: every catalogued ionic model against the
-    built solver, as (all matched, what was compared or what differs)."""
-    result = verify_ionic_catalog()
+    built solver, run in the stack's ``env``, as (all matched, what was
+    compared or what differs)."""
+    result = verify_ionic_catalog(env=env)
     if not result.utility_available:
         return False, f"{_UTILITY} is not on PATH; run from the solver's shell"
     differ = {name: model.reason or model.status for name, model in sorted(result.results.items()) if model.status != "match"}
     if differ:
-        return False, f"the catalogue disagrees with the built solver for {differ}"
+        first = next(iter(differ.items()))
+        return False, (
+            f"the catalogue disagrees with the built solver for {len(differ)} of {len(result.results)} models; "
+            f"{first[0]}: {first[1][:300]}"
+        )
     return True, f"{len(result.results)} ionic models match the built solver"

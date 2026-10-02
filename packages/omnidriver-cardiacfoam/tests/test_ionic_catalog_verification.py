@@ -200,7 +200,7 @@ def test_find_binary_returns_none_or_a_path():
 def test_verify_ionic_catalog_reports_skipped_not_verified_when_utility_absent(monkeypatch):
     import omnidriver.cardiacfoam.ionic_catalog_verification as mod
 
-    monkeypatch.setattr(mod, "find_listCellModelsVariables_binary", lambda: None)
+    monkeypatch.setattr(mod, "find_listCellModelsVariables_binary", lambda *a, **k: None)
 
     result = verify_ionic_catalog("TNNP")
 
@@ -214,7 +214,7 @@ def test_verify_ionic_catalog_all_models_skipped_when_utility_absent(monkeypatch
     import omnidriver.cardiacfoam.ionic_catalog_verification as mod
     from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
 
-    monkeypatch.setattr(mod, "find_listCellModelsVariables_binary", lambda: None)
+    monkeypatch.setattr(mod, "find_listCellModelsVariables_binary", lambda *a, **k: None)
 
     result = verify_ionic_catalog()
 
@@ -222,11 +222,22 @@ def test_verify_ionic_catalog_all_models_skipped_when_utility_absent(monkeypatch
     assert all(r.status == "skipped" for r in result.results.values())
 
 
+def test_the_utility_is_looked_up_and_run_in_the_environment_it_is_given(tmp_path):
+    from omnidriver.cardiacfoam.ionic_catalog_verification import find_listCellModelsVariables_binary
+
+    tool = tmp_path / "bin" / "listCellModelsVariables"
+    tool.parent.mkdir()
+    tool.write_text("#!/bin/sh\n")
+    tool.chmod(0o755)
+    assert find_listCellModelsVariables_binary({"PATH": str(tool.parent)}) == tool
+    assert find_listCellModelsVariables_binary({"PATH": str(tmp_path)}) is None
+
+
 def test_the_probe_fails_naming_the_shell_when_the_utility_is_absent_and_names_the_drift_otherwise(monkeypatch):
     import omnidriver.cardiacfoam.ionic_catalog_verification as mod
 
-    monkeypatch.setattr(mod, "find_listCellModelsVariables_binary", lambda: None)
-    passed, detail = catalogue_probe()
+    monkeypatch.setattr(mod, "find_listCellModelsVariables_binary", lambda *a, **k: None)
+    passed, detail = catalogue_probe({})
     assert not passed and "solver's shell" in detail
 
     def drifted(model=None, **_):
@@ -236,11 +247,13 @@ def test_the_probe_fails_naming_the_shell_when_the_utility_is_absent_and_names_t
         })
 
     monkeypatch.setattr(mod, "verify_ionic_catalog", drifted)
-    assert catalogue_probe() == (False, "the catalogue disagrees with the built solver for {'TWorld': 'a constant is missing'}")
-    monkeypatch.setattr(mod, "verify_ionic_catalog", lambda: VerificationResult(
+    assert catalogue_probe({}) == (
+        False, "the catalogue disagrees with the built solver for 1 of 2 models; TWorld: a constant is missing",
+    )
+    monkeypatch.setattr(mod, "verify_ionic_catalog", lambda **_: VerificationResult(
         utility_available=True, results={"TNNP": ModelVerificationResult(model="TNNP", status="match")},
     ))
-    assert catalogue_probe() == (True, "1 ionic models match the built solver")
+    assert catalogue_probe({}) == (True, "1 ionic models match the built solver")
 
 
 def test_verify_ionic_catalog_rejects_unknown_model():

@@ -544,15 +544,15 @@ class RuleCheckingPlugin(E2ERecordPlugin):
 PROBING_PLUGIN = "plugins.conformance_toy:ProbingPlugin"
 
 
-def _catalogue_matches():
+def _catalogue_matches(env):
     return True, "3 models match"
 
 
-def _catalogue_drifted():
+def _catalogue_drifted(env):
     return False, "model A has a constant the solver lacks"
 
 
-def _catalogue_unreadable():
+def _catalogue_unreadable(env):
     raise OSError("the utility is not built")
 
 
