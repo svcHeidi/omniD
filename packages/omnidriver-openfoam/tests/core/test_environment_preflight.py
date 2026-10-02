@@ -1,7 +1,6 @@
 """Environment preflight gate tests.
 
-Every test overrides SKIP_ENV_DIAGNOSTICS (set suite-wide in conftest.py)
-and monkeypatches shutil.which / os.environ instead of touching the machine.
+Every test monkeypatches shutil.which / os.environ instead of touching the machine.
 """
 
 import pytest
@@ -174,7 +173,6 @@ def test_build_staleness_no_src_root_is_silent(tmp_path):
 @pytest.fixture
 def clean_env(monkeypatch):
     """A fully-sourced OpenFOAM env with the preflight gate enabled."""
-    monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
     monkeypatch.setenv("WM_PROJECT_DIR", "/opt/openfoam")
     monkeypatch.setenv("WM_PROJECT_VERSION", "v2406")
     monkeypatch.setenv("FOAM_USER_LIBBIN", "/home/u/platforms/lib")
@@ -278,12 +276,6 @@ def test_partial_openfoam_env_is_warning_only(clean_env):
     assert partial[0].field == "WM_PROJECT_VERSION"
 
 
-def test_skip_env_diagnostics_short_circuits(monkeypatch):
-    monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
-    monkeypatch.setattr(strict_planning.shutil, "which", _which_factory(set()))
-    assert _diags(_dag("cardiacFoam")) == ()
-
-
 def test_both_partial_env_vars_missing_yield_two_warnings(clean_env):
     clean_env.delenv("WM_PROJECT_VERSION", raising=False)
     clean_env.delenv("FOAM_USER_LIBBIN", raising=False)
@@ -317,7 +309,6 @@ def test_load_openfoam_environment_sources_bashrc(tmp_path, monkeypatch):
         f"export PATH={foam_bin}:$PATH\n"
     )
 
-    monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
     loaded = load_openfoam_environment(bashrc_path=bashrc, base_env={})
 
     assert loaded.error is None
@@ -411,3 +402,21 @@ def test_an_mpirun_from_another_mpi_family_is_refused(tmp_path, version, mismatc
     codes = [d.code for d in _mpi_family_diagnostics(env)]
     assert codes == (["openfoam_mpi_launcher_mismatch"] if mismatched else [])
     assert _mpi_family_diagnostics({**env, "WM_MPLIB": "SOMETHINGELSE"}) == ()
+
+
+def test_the_bashrc_is_only_ever_supplied(tmp_path):
+    from omnidriver.openfoam.openfoam_environment import supplied_openfoam_bashrc
+
+    runtime_file = tmp_path / "runtime.yaml"
+    runtime_file.write_text("openfoam:\n  bashrc: /from/runtime/file\n")
+    named = {"OMNIDRIVER_RUNTIME_CONFIG": str(runtime_file)}
+
+    assert supplied_openfoam_bashrc(bashrc_path="/explicit", base_env={**named, "OPENFOAM_BASHRC": "/env"}).as_posix() == "/explicit"
+    assert supplied_openfoam_bashrc(base_env={**named, "OPENFOAM_BASHRC": "/env"}).as_posix() == "/env"
+    assert supplied_openfoam_bashrc(base_env=named).as_posix() == "/from/runtime/file"
+    assert supplied_openfoam_bashrc(base_env={"WM_PROJECT_DIR": str(tmp_path)}) is None
+
+
+def test_a_supplied_bashrc_that_does_not_exist_is_refused_by_name(tmp_path):
+    loaded = load_openfoam_environment(base_env={"OPENFOAM_BASHRC": str(tmp_path / "absent")})
+    assert loaded.error == f"OpenFOAM bashrc not found: {tmp_path / 'absent'}"

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -14,11 +13,6 @@ from .models import DataArtifact
 
 if TYPE_CHECKING:
     from ..plugin_interface import DriverContext  # noqa: F401
-
-
-#: The operator's switch for declining the plugin's geometry-diagnostics
-#: checks.
-SKIP_GEOMETRY_DIAGNOSTICS_ENV = "SKIP_GEOMETRY_DIAGNOSTICS"
 
 
 _READINESS_WEIGHTS = {
@@ -239,17 +233,8 @@ def _build_simulation_audit(
             success_summary="The current environment satisfies the commands declared by the workflow.",
             warning_summary="The environment can be used, but preflight emitted warnings.",
             error_summary="The current environment is missing executables or runtime setup needed to run.",
-            outcome=(
-                "not_requested" if "SKIP_ENV_DIAGNOSTICS" in os.environ else EXECUTED
-            ),
-            uncovered_summary=(
-                "Environment preflight was not requested: SKIP_ENV_DIAGNOSTICS is "
-                "set, so nothing was checked about this environment."
-            ),
-            evidence={
-                "skipped": "SKIP_ENV_DIAGNOSTICS" in os.environ,
-                "diagnostic_count": len(environment_diagnostics),
-            },
+            outcome=EXECUTED,
+            evidence={"diagnostic_count": len(environment_diagnostics)},
         ),
         _score_from_diagnostics(
             stage="mesh_geometry",
@@ -257,23 +242,14 @@ def _build_simulation_audit(
             success_summary="Mesh-scale checks did not find run-preparation issues.",
             warning_summary="Mesh-scale checks emitted warnings.",
             error_summary="Mesh-scale checks found run-preparation issues.",
-            # Three ways to arrive with an empty tuple, and they are not the
-            # same fact: the operator declined the check, the case has no mesh
-            # scale to check, or the mesh was examined and was clean.
-            outcome=(
-                "not_requested" if SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ
-                else NOT_APPLICABLE if mesh_geometry_exempt
-                else EXECUTED
-            ),
+            # An empty tuple is either a case with no mesh scale to check or a
+            # mesh that was examined and was clean.
+            outcome=NOT_APPLICABLE if mesh_geometry_exempt else EXECUTED,
             uncovered_summary=(
-                "Mesh-scale checks were not requested: SKIP_GEOMETRY_DIAGNOSTICS is "
-                "set, so no mesh geometry was examined."
-                if SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ else
                 "This entry declares no physical mesh scale, so there is no "
                 "mesh geometry to check."
             ),
             evidence={
-                "skipped": SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ,
                 "exempt": mesh_geometry_exempt,
                 "diagnostic_count": len(mesh_geometry_diagnostics),
             },

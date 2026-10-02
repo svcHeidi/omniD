@@ -102,8 +102,7 @@ def test_cli_plan_strict_prints_json_and_returns_zero(tmp_path: Path) -> None:
     assert payload["launch"]["command"]
 
 
-def test_strict_plan_status_ignores_environment_only_errors(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
+def test_strict_plan_status_ignores_environment_only_errors(tmp_path: Path, monkeypatch, real_preflight) -> None:
     monkeypatch.delenv("WM_PROJECT_DIR", raising=False)
     monkeypatch.setattr(
         strict_planning.shutil,
@@ -131,8 +130,7 @@ def test_strict_plan_status_ignores_environment_only_errors(tmp_path: Path, monk
     )
 
 
-def test_cli_run_strict_refuses_environment_errors_before_execution(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("SKIP_ENV_DIAGNOSTICS", raising=False)
+def test_cli_run_strict_refuses_environment_errors_before_execution(tmp_path: Path, monkeypatch, real_preflight) -> None:
     monkeypatch.delenv("WM_PROJECT_DIR", raising=False)
     monkeypatch.setattr(
         strict_planning.shutil,

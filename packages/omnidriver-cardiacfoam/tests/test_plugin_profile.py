@@ -238,7 +238,7 @@ def test_build_manifest_self_heals_when_stale(tmp_path: Path, monkeypatch: pytes
     assert solver_artifact["sha256"] == hashlib.sha256(b"fake-solver-v2").hexdigest()
 
 
-def test_cardiac_runtime_file_selects_backend_and_bashrc(tmp_path: Path) -> None:
+def test_cardiac_runtime_file_selects_backend(tmp_path: Path) -> None:
     root = tmp_path / "solids4foam"
     for relative in (
         "src/solids4FoamModels/solidModels/solidModel/solidModel.H",
@@ -251,7 +251,6 @@ def test_cardiac_runtime_file_selects_backend_and_bashrc(tmp_path: Path) -> None
     solver = _write_complete_full_manifest(manifest, tmp_path, root)
     config = tmp_path / "omnidriver-runtime.yaml"
     config.write_text(
-        "openfoam:\n  bashrc: /tmp/openfoam/etc/bashrc\n"
         "plugins:\n  org.cardiacfoam:\n"
         f"    backend: full\n    solids4foam_root: {root}\n"
         f"    build_manifest: {manifest}\n"
@@ -266,6 +265,3 @@ def test_cardiac_runtime_file_selects_backend_and_bashrc(tmp_path: Path) -> None
     assert error is None
     assert env["OMNIDRIVER_CARDIACFOAM_BACKEND"] == "full"
     assert env["SOLIDS4FOAM_INST_DIR"] == str(root.resolve())
-    assert runtime_profile.configured_openfoam_bashrc({
-        "OMNIDRIVER_RUNTIME_CONFIG": str(config),
-    }) == "/tmp/openfoam/etc/bashrc"

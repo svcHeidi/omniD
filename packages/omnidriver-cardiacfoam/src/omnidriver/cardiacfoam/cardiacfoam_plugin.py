@@ -95,32 +95,6 @@ class CardiacFoamPlugin:
         configured_env, _error = configure_runtime_environment(env)
         return configured_env
 
-    def get_loaded_environment(self, *, environment_source=None, driver_context=None):
-        """Resolve this plugin's configured bashrc, then source it via OpenFOAM.
-
-        ``environment_source``, when supplied, is the bashrc to source;
-        absent, this plugin's configured one (``runtime_profile
-        .configured_openfoam_bashrc``) is used. ``get_loaded_environment``
-        is ``single`` in `provider_stack.py` (first non-``None``,
-        most-specific provider first), so this provider resolves the bashrc
-        itself rather than rely on the generic OpenFOAM provider to ask it.
-        """
-        from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-
-        if environment_source is None:
-            import os
-
-            from omnidriver.cardiacfoam.runtime_profile import (
-                configured_openfoam_bashrc,
-            )
-
-            environment_source = configured_openfoam_bashrc(os.environ)
-
-        return OpenFOAMEnvironmentPlugin().get_loaded_environment(
-            environment_source=environment_source,
-            driver_context=driver_context,
-        )
-
     def get_phases(self) -> tuple[str, ...]:
         """This plugin's four editing phases, in the order the RunDocument
         config and the validation slices use."""

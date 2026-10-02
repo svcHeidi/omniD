@@ -68,8 +68,7 @@ def test_describe_entry_includes_capability_manifest(tmp_path: Path) -> None:
     assert "electro" in manifest["samplable_fields"]
 
 
-def test_strict_plan_carries_capability_manifest(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
+def test_strict_plan_carries_capability_manifest(tmp_path: Path) -> None:
     cases_root = tmp_path / "cases"
     _stage_single_cell(cases_root)
     report = strict_plan(

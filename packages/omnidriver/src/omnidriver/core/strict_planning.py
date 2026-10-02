@@ -24,7 +24,7 @@ from .runtime.run_command import omnidriver_run_command
 from .runtime.run_document_adapter import _run_document_from_case
 from .runtime.run_document_exec import RUN_DOCUMENT_FILENAME
 from .runtime.run_model import RunDocument
-from .runtime.strict_audit import SKIP_GEOMETRY_DIAGNOSTICS_ENV, _build_simulation_audit
+from .runtime.strict_audit import _build_simulation_audit
 from .runtime.workflow import (
     WorkflowDiagnostic,
     normalize_workflow_dag,
@@ -321,7 +321,7 @@ def _mesh_geometry_diagnostics(
     the same ``mesh_geometry`` source, and both are skipped by the same
     exemption.
     """
-    if exempt or SKIP_GEOMETRY_DIAGNOSTICS_ENV in os.environ:
+    if exempt:
         return ()
     detected = list(
         driver_context.capabilities.mesh_diagnostic_policy.base_geometry_diagnostics(

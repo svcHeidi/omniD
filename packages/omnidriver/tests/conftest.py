@@ -2,8 +2,6 @@ import os
 import pytest
 from pathlib import Path
 
-os.environ["SKIP_ENV_DIAGNOSTICS"] = "1"
-
 
 @pytest.fixture(autouse=True)
 def _toy_plugins_are_importable(monkeypatch):

@@ -30,7 +30,18 @@ import re
 import pytest
 from pathlib import Path
 
-os.environ["SKIP_ENV_DIAGNOSTICS"] = "1"
+@pytest.fixture
+def real_preflight():
+    """Request this to keep OpenFOAM's environment preflight in a test."""
+
+
+@pytest.fixture(autouse=True)
+def _environment_preflight_is_stubbed(request, monkeypatch):
+    if "real_preflight" in request.fixturenames:
+        return
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+
+    monkeypatch.setattr(OpenFOAMEnvironmentPlugin, "get_environment_diagnostics", lambda *args, **kwargs: ())
 
 
 def _cardiacfoam_monorepo_root() -> Path | None:

@@ -93,8 +93,7 @@ def test_missing_controldict_is_silent(tmp_path):
     assert diags == ()
 
 
-def test_strict_plan_exposes_field_family_and_stays_ok(monkeypatch):
-    monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
+def test_strict_plan_exposes_field_family_and_stays_ok():
     from omnidriver.core.plugin_interface import default_driver_context
     from omnidriver.core.strict_planning import strict_plan
 

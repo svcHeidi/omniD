@@ -217,8 +217,6 @@ def test_a_nested_parameter_value_reaches_describe_as_plain_json(tmp_path, monke
     from omnidriver.core.plugin_interface import driver_context
     from plugins.minimal_plugin import MinimalTestPlugin
 
-    monkeypatch.setenv("SKIP_ENV_DIAGNOSTICS", "1")
-    monkeypatch.setenv("SKIP_GEOMETRY_DIAGNOSTICS", "1")
     nested_value = {"dimensions": [0, 1, -1], "value": [1.5, 0.0, 2.5]}
 
     def _case_mutation(case_root):

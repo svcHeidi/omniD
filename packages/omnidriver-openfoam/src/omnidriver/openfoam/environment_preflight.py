@@ -200,8 +200,6 @@ def _environment_diagnostics(
     driver_context: Any | None = None,
 ) -> tuple[StrictDiagnostic, ...]:
     """Preflight the runtime environment against the plan's actual commands."""
-    if "SKIP_ENV_DIAGNOSTICS" in os.environ:
-        return ()
     diagnostics: list[StrictDiagnostic] = []
     checked_env = env
     loaded_environment = None
@@ -231,7 +229,9 @@ def _environment_diagnostics(
             diagnostics.append(diagnostic(
                 "error",
                 "missing_openfoam_env",
-                "WM_PROJECT_DIR is not set. OpenFOAM environment not sourced.",
+                "WM_PROJECT_DIR is not set and no OpenFOAM bashrc was supplied: pass "
+                "--environment-source, set OPENFOAM_BASHRC, or name openfoam.bashrc in "
+                "the file OMNIDRIVER_RUNTIME_CONFIG points to. OpenFOAM environment not sourced.",
                 source="environment",
             ))
         else:

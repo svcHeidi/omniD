@@ -46,18 +46,3 @@ def test_the_plugin_hook_exempts(tmp_path):
 def test_a_generic_case_is_exempt(tmp_path):
     ctx = driver_context(MinimalTestPlugin(), source="test")
     assert strict_planning._mesh_geometry_exempt(_spec(tmp_path, generic_case=True), ctx) is True
-
-
-def test_the_geometry_skip_variable_declines_the_checks(tmp_path, monkeypatch):
-    ctx = driver_context(_HasGeometryChecks(), source="test")
-    monkeypatch.delenv("SKIP_GEOMETRY_DIAGNOSTICS", raising=False)
-    assert strict_planning._mesh_geometry_diagnostics(tmp_path, driver_context=ctx) != ()
-    monkeypatch.setenv("SKIP_GEOMETRY_DIAGNOSTICS", "1")
-    assert strict_planning._mesh_geometry_diagnostics(tmp_path, driver_context=ctx) == ()
-
-
-def test_the_old_variable_name_is_not_read(tmp_path, monkeypatch):
-    ctx = driver_context(_HasGeometryChecks(), source="test")
-    monkeypatch.delenv("SKIP_GEOMETRY_DIAGNOSTICS", raising=False)
-    monkeypatch.setenv("SKIP_MESH_DIAGNOSTICS", "1")
-    assert strict_planning._mesh_geometry_diagnostics(tmp_path, driver_context=ctx) != ()

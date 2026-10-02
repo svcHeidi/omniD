@@ -4,7 +4,6 @@ actually written). OpenFOAM ignores an unrecognised key silently."""
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
@@ -12,8 +11,6 @@ from pathlib import Path
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
 _WILDCARD = re.compile(r"<[^>]+>")
-
-SKIP_ENV_VAR = "SKIP_CASE_DICT_KEY_DIAGNOSTICS"
 
 # OpenFOAM's runtime-selection convention: a model selected by <key> reads its
 # settings from a sibling <modelName>Coeffs sub-dictionary, which belongs to
@@ -68,13 +65,10 @@ def case_dict_key_diagnostics(
     Matching is by position, not bare name: a trail matches a catalogue path
     (or a path prefix) with `<placeholder>` segments matching any name --
     otherwise an author's own instance label (e.g. `ecgDomains { ECG {...} }`)
-    is indistinguishable from a misspelling. Honors `SKIP_ENV_VAR`; a parse
+    is indistinguishable from a misspelling. A parse
     or IO failure reports `case_dict_inspection_unavailable` instead of
     emitting spurious key warnings for that file.
     """
-    if os.environ.get(SKIP_ENV_VAR):
-        return ()
-
     known = _prefixes(catalogued_paths)
     root = Path(case_root)
     diagnostics: list[StrictDiagnostic] = []

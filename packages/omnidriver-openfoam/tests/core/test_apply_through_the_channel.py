@@ -502,13 +502,13 @@ def test_apply_readback_matches_the_real_foamdictionary(tmp_path):
     real `foamDictionary` as "0.001" and still be reported as a match:
     values are compared, not spellings."""
     from omnidriver.openfoam.openfoam_environment import (
-        discover_openfoam_bashrc,
         load_openfoam_environment,
+        supplied_openfoam_bashrc,
     )
 
-    bashrc = discover_openfoam_bashrc()
+    bashrc = supplied_openfoam_bashrc()
     if bashrc is None:
-        pytest.skip("no real OpenFOAM install discoverable on this machine")
+        pytest.skip("OPENFOAM_BASHRC is not supplied")
 
     openfoam_env = load_openfoam_environment(bashrc_path=bashrc)
     if openfoam_env.error or "PATH" not in openfoam_env.env:

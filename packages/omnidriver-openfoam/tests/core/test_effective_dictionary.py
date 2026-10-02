@@ -12,14 +12,14 @@ from omnidriver.openfoam.effective_dictionary import (
     inspect_effective_foam_configuration,
     resolve_effective_foam_entry,
 )
-from omnidriver.openfoam.openfoam_environment import discover_openfoam_bashrc
+from omnidriver.openfoam.openfoam_environment import supplied_openfoam_bashrc
 
 
 HEADER = "FoamFile { version 2.0; format ascii; class dictionary; object d; }\n"
-NATIVE_BASHRC = discover_openfoam_bashrc()
+NATIVE_BASHRC = supplied_openfoam_bashrc()
 native = pytest.mark.skipif(
     NATIVE_BASHRC is None,
-    reason="no OpenFOAM installation discoverable; native effective resolution is not verified",
+    reason="OPENFOAM_BASHRC is not supplied; native effective resolution is not verified",
 )
 
 
@@ -28,14 +28,14 @@ def test_bashrc_default_is_not_a_hardcoded_machine_path():
     default = sig.parameters["bashrc"].default
     assert not isinstance(default, (str, Path)), (
         f"bashrc default is a hardcoded path: {default!r}; "
-        "it must be a sentinel that triggers ambient discovery instead"
+        "it must be a sentinel that defers to the supplied bashrc instead"
     )
 
 
 def test_unspecified_bashrc_does_not_mask_lexical_execution_required(monkeypatch, tmp_path):
     import omnidriver.openfoam.effective_dictionary as effective_dictionary_module
 
-    monkeypatch.setattr(effective_dictionary_module, "discover_openfoam_bashrc", lambda: None)
+    monkeypatch.setattr(effective_dictionary_module, "supplied_openfoam_bashrc", lambda **_: None)
     path = tmp_path / "d"
     path.write_text(
         HEADER + f'pwned #codeStream {{ code #{{ system("touch dummy"); #}}; }};\n'
