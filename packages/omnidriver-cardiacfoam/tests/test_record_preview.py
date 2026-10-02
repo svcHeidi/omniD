@@ -138,7 +138,7 @@ def test_apply_edits_the_staged_cases_own_dictionaries_through_the_real_renderer
         "singleCell", overrides={"cases_root": str(TUTORIALS)}, driver_context=context, scratch_root=str(tmp_path / "scratch"),
     )
     case_root = Path(report.launch["case_root"])
-    record = context.capabilities.tutorial_records.catalog()["singleCell"]
+    record = context.stack.call("get_tutorial_records")["singleCell"]
     with acquire_case_lease(case_root):
         applied = record_execution.apply_record_study(
             record, case_root=case_root, driver_context=context,

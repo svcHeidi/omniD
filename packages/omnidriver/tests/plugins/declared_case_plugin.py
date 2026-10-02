@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from plugins.minimal_plugin import MinimalTestPlugin
 
 

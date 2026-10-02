@@ -125,10 +125,10 @@ def test_the_regression_script_is_where_the_stacks_case_file_rule_puts_it(tmp_pa
     from omnidriver.conformance.report import regression_script
 
     native, script = _native_with_script(tmp_path, "true\n")
-    rules = SimpleNamespace(all_rules=lambda: [
+    profile = SimpleNamespace(case_files=[
         SimpleNamespace(role="case.documentation", path="README.md"),
         SimpleNamespace(role="case.regression_test", path="regression/regressionTest.sh"),
     ])
-    context = SimpleNamespace(capabilities=SimpleNamespace(case_files=rules))
+    context = SimpleNamespace(stack=SimpleNamespace(call=lambda member: profile))
     assert regression_script(context, native) == script
     assert regression_script(context, tmp_path) is None

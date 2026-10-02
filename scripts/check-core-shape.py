@@ -49,7 +49,7 @@ TOKENS = (
     "reconstructPar", "processor", "case.foam", "Allrun", "Allclean", "bashrc",
     "WM_PROJECT", "FOAM_", "foamlib",
     # Core's own retired "start time"/time-indexed vocabulary
-    # (CaseIntrospectionCapability.selected_start_time, DataArtifact
+    # (selected_start_time, DataArtifact
     # .time_indexed, the {time} path placeholder): guards against it
     # regrowing, since only test_instance_directories.py's specific
     # assertions would otherwise catch a regression.

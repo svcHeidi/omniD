@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core.plugin_capabilities import (
+from omnidriver.core.plugin_interface import (
     CaseRuntimeConventions,
     ResolvedInput,
     RuntimeDependency,

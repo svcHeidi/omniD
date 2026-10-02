@@ -6,14 +6,10 @@ from omnidriver.core.plugin_interface import (
     validate_plugin,
 )
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
-from plugins.minimal_plugin import MinimalOpenFOAMPlugin
 
 
 def test_cardiacfoam_plugin_satisfies_runtime_contract() -> None:
     plugin = validate_plugin(CardiacFoamPlugin())
-    # Not `isinstance(plugin, SolverPlugin)`: the Protocol lists environment
-    # hooks this plugin composes from the environment provider instead.
-    # `validate_plugin` is the real gate (required members from `:status:` tiers).
     ctx = driver_context(OpenFOAMEnvironmentPlugin(), plugin, source="test")
 
     assert ctx.identity.to_json()["providers"][-1]["id"] == "org.cardiacfoam"
@@ -30,13 +26,5 @@ def test_generic_openfoam_plugin_satisfies_runtime_contract() -> None:
     ctx = driver_context(plugin, source="test")
 
     assert ctx.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.openfoam.environment"
-    assert ctx.capabilities.dictionaries.entries() == ()
+    assert ctx.stack.call("get_dict_entries") == ()
 
-
-def test_minimal_plugin_proves_non_cardiac_solver_contract() -> None:
-    plugin = validate_plugin(MinimalOpenFOAMPlugin())
-    ctx = driver_context(plugin, source="test")
-
-    assert ctx.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.test-minimal"
-    assert ctx.capabilities.dictionaries.entries() == ()
-    assert plugin.get_capabilities() == {}

@@ -1,5 +1,5 @@
-"""P2.5: modules outside the cardiac package and core/compatibility.py must
-not import cardiac plugin internals at module scope."""
+"""Modules outside the cardiac package must not import cardiac plugin
+internals at module scope."""
 from __future__ import annotations
 
 import ast
@@ -8,9 +8,7 @@ from pathlib import Path
 import omnidriver.core
 
 _PACKAGE_ROOT = Path(omnidriver.core.__file__).resolve().parent.parent
-_EXEMPT = {
-    _PACKAGE_ROOT / "core" / "compatibility.py",
-}
+_EXEMPT: set[Path] = set()
 
 
 def _module_level_imports_cardiac_plugin(path: Path) -> bool:

@@ -54,7 +54,7 @@ def _validate(config, *, entries=None, driver_context):
     """The catalogue relations over the flat context the per-phase slices make."""
     context = {key: val for slice_ in config.values() for key, val in slice_.items() if val not in (None, "")}
     if entries is None:
-        entries = driver_context.capabilities.dictionaries.entries()
+        entries = driver_context.stack.call("get_dict_entries")
     return tuple(rule_diagnostics(entries, context, document="constant/electroProperties"))
 
 _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")

@@ -194,7 +194,7 @@ class E2EFolderPlugin(E2ERecordPlugin):
     """The toy record stack, which also declares a case entrypoint, so ``--case`` can run a folder."""
 
     def get_case_runtime_conventions(self):
-        from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+        from omnidriver.core.plugin_interface import CaseRuntimeConventions
 
         return CaseRuntimeConventions(
             case_entrypoints=("run-test-case",), case_script_commands=("run-test-case",),

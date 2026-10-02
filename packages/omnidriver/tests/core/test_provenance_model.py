@@ -13,7 +13,7 @@ from omnidriver.core.runtime.provenance import (
     snapshot_from_components,
 )
 from omnidriver.core.runtime.provenance_dependencies import component_for_verified_absence
-from omnidriver.core.plugin_capabilities import RuntimeDependency
+from omnidriver.core.plugin_interface import RuntimeDependency
 
 
 def _component(path: Path, root: Path, **kw):

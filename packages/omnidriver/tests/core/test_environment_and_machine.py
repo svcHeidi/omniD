@@ -72,15 +72,15 @@ def _context(connection):
         preflight_calls.append((dag, env))
         return ()
 
-    capabilities = SimpleNamespace(
-        command_authorization=SimpleNamespace(
-            solver_commands=lambda: frozenset({"toySolver"}),
-            auxiliary_commands=lambda: frozenset(), environment_commands=lambda: frozenset(),
-        ),
-        environment_preflight=SimpleNamespace(diagnostics=diagnostics),
-    )
+    answers = {
+        "get_solver_commands": lambda: frozenset({"toySolver"}),
+        "get_auxiliary_commands": lambda: frozenset(),
+        "get_environment_commands": lambda: frozenset(),
+        "get_environment_diagnostics": diagnostics,
+    }
+    stack = SimpleNamespace(call=lambda member, *args, **kwargs: answers[member](*args, **kwargs))
     return SimpleNamespace(
-        providers=(_Provider(connection),), capabilities=capabilities,
+        providers=(_Provider(connection),), stack=stack,
         identity=SimpleNamespace(to_json=lambda: {"providers": [{"id": "toy"}]}),
     ), preflight_calls
 

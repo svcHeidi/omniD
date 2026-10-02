@@ -4,6 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+from omnidriver.core.provider_stack import ProviderStack
+
 from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.core.plugin_profile import CxxMapping
 from omnidriver.openfoam.case_dict_keys import case_dict_key_diagnostics
@@ -23,6 +25,17 @@ SLAB = '''int main(int argc, char *argv[])
 '''
 
 
+class _Provider:
+    plugin_id = "toy"
+    plugin_api_version = "2"
+
+    def __init__(self, profile):
+        self._profile = profile
+
+    def get_profile(self):
+        return self._profile
+
+
 def _context(mapping, *, report=None):
     scans = []
 
@@ -30,19 +43,10 @@ def _context(mapping, *, report=None):
         scans.append(root)
         return SimpleNamespace(to_json=lambda: report)
 
-    capabilities = SimpleNamespace(
-        cxx_mapping=SimpleNamespace(profile=lambda: SimpleNamespace(cxx_mapping=mapping)),
-        dict_key_scanner=SimpleNamespace(scan=scan),
-        dictionaries=SimpleNamespace(
-            entries=lambda: (), catalog=lambda: SimpleNamespace(entries_for=lambda name: ()),
-            documents=lambda: {},
-        ),
-        manifest=SimpleNamespace(manifest=lambda: {}),
-        case_files=SimpleNamespace(all_rules=lambda: ()),
-        run_semantic_validator=SimpleNamespace(validate=lambda request: ()),
-    )
+    provider = _Provider(SimpleNamespace(cxx_mapping=mapping, case_files=(), requires=()))
+    provider.get_dict_key_scanner = lambda: scan
     return SimpleNamespace(
-        capabilities=capabilities, identity=SimpleNamespace(resolutions={"cxx_mapping": "toy"}),
+        stack=ProviderStack((provider,)), identity=SimpleNamespace(resolutions={"get_profile": "toy"}),
     ), scans
 
 
@@ -165,8 +169,7 @@ def test_the_dictionaries_checked_follow_the_adapters_case_file_rules_not_a_dire
     rules = (CaseFileRule(
         path="config/solver.yaml", kind="configuration", role="x-neutral.configuration", required="always",
     ),)
-    context = SimpleNamespace(capabilities=SimpleNamespace(
-        case_files=SimpleNamespace(all_rules=lambda: rules),
-        dictionaries=SimpleNamespace(documents=lambda: {"solver.yaml": ()}),
-    ))
+    provider = _Provider(SimpleNamespace(cxx_mapping=None, case_files=rules, requires=()))
+    provider.get_dict_entry_catalog = lambda: {"solver.yaml": ()}
+    context = SimpleNamespace(stack=ProviderStack((provider,)))
     assert _owned_dict_relpaths(case_root, context) == ("config/solver.yaml",)

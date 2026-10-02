@@ -10,7 +10,7 @@ def test_opencarp_stack_is_one_provider_C1():
 
 def test_record_is_registered():
     ctx = load_discovered_plugin("opencarp")
-    assert "niedererNVersion" in ctx.capabilities.tutorial_records.catalog()
+    assert "niedererNVersion" in ctx.stack.call("get_tutorial_records")
 
 
 def test_record_key_catalog_lists_only_addressable_documents_and_keys_I1(tmp_path):

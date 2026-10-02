@@ -1,4 +1,4 @@
-"""A provider declares what it provides and what it layers on."""
+"""A provider declares what it layers on; the stack orders and composes it."""
 
 import pytest
 import yaml
@@ -19,16 +19,8 @@ BASE = {
 }
 
 
-def test_provides_and_requires_default_to_empty(tmp_path):
-    profile = _profile(tmp_path, dict(BASE))
-    assert profile.provides == frozenset()
-    assert profile.requires == ()
-
-
-def test_provides_is_read(tmp_path):
-    payload = dict(BASE, provides=["command_authorization", "case_files"])
-    profile = _profile(tmp_path, payload)
-    assert profile.provides == frozenset({"command_authorization", "case_files"})
+def test_requires_defaults_to_empty(tmp_path):
+    assert _profile(tmp_path, dict(BASE)).requires == ()
 
 
 def test_requires_preserves_order(tmp_path):
@@ -37,58 +29,13 @@ def test_requires_preserves_order(tmp_path):
     assert profile.requires == ("org.omnidriver.openfoam", "org.example.mid")
 
 
-def test_provides_rejects_an_unknown_capability(tmp_path):
-    payload = dict(BASE, provides=["not_a_capability"])
-    with pytest.raises(ValueError, match="not_a_capability"):
-        _profile(tmp_path, payload)
-
-
-def test_declared_provides_must_match_implementation():
-    """A misspelled hook name must be an error, not a silent fallback."""
-    from omnidriver.core import provider_stack
-
-    class _Claims:
-        """Declares command_authorization but misspells one of its members."""
-        def get_solver_commands(self): return frozenset()
-        def get_auxiliary_commands(self): return frozenset()
-        def get_utility_manifest(self): return {}          # typo: no trailing s
-        def get_utility_roots(self): return ()
-
-        class _Profile:
-            provides = frozenset({"command_authorization"})
-        def get_profile(self): return self._Profile()
-
-    problems = provider_stack.check_provides(_Claims())
-    assert problems, "a misspelled member must be reported"
-    assert any("get_utility_manifests" in p for p in problems)
-
-
-def test_matching_declaration_reports_nothing():
-    from omnidriver.core import provider_stack
-
-    class _Honest:
-        def get_solver_commands(self): return frozenset()
-        def get_auxiliary_commands(self): return frozenset()
-        def get_utility_manifests(self): return {}
-        def get_utility_roots(self): return ()
-        def get_environment_commands(self): return frozenset()
-        def is_installed_environment_command(self, command): return False
-
-        class _Profile:
-            provides = frozenset({"command_authorization"})
-        def get_profile(self): return self._Profile()
-
-    assert provider_stack.check_provides(_Honest()) == []
-
-
-def _fake(plugin_id, requires=(), provides=frozenset()):
+def _fake(plugin_id, requires=()):
     class _P:
         class _Profile:
             pass
         def get_profile(self):
             profile = self._Profile()
             profile.requires = requires
-            profile.provides = provides
             return profile
     p = _P()
     p.plugin_id = plugin_id
@@ -140,8 +87,8 @@ def _fake_with_profile(plugin_id, *, requires=(), case_files=(), **members):
 
     profile = _Profile()
     profile.requires = tuple(requires)
-    profile.provides = frozenset()
     profile.case_files = tuple(case_files)
+    profile.digest = f"sha256:{plugin_id}"
 
     class _P:
         def get_profile(self):
@@ -171,7 +118,7 @@ def test_a_case_file_path_declared_by_two_providers_is_an_error():
         "org.solver", requires=("org.env",), case_files=(rule,),
     )
     with pytest.raises(ValueError, match="system/controlDict"):
-        provider_stack.compose(provider_stack.order_providers([env, solver]))
+        provider_stack.ProviderStack(provider_stack.order_providers([env, solver]))
 
 
 def test_distinct_case_file_paths_compose():
@@ -182,16 +129,14 @@ def test_distinct_case_file_paths_compose():
         "org.solver", requires=("org.env",),
         case_files=(_rule("constant/electroProperties"),),
     )
-    composed = provider_stack.compose(
-        provider_stack.order_providers([env, solver])
-    )
-    assert sorted(rule.path for rule in composed.case_files.all_rules()) == [
+    composed = provider_stack.ProviderStack(provider_stack.order_providers([env, solver]))
+    assert sorted(rule.path for rule in composed.call("get_profile").case_files) == [
         "constant/electroProperties", "system/controlDict",
     ]
 
 
-def test_resolutions_name_a_winner_for_every_capability():
-    from omnidriver.core import capability_seams, provider_stack
+def test_resolutions_name_a_winner_for_every_member():
+    from omnidriver.core import provider_stack
 
     env = _fake_with_profile(
         "org.env", get_environment_commands=lambda: frozenset({"blockMesh"}),
@@ -201,13 +146,13 @@ def test_resolutions_name_a_winner_for_every_capability():
         get_solver_commands=lambda: frozenset({"theSolver"}),
     )
     resolved = provider_stack.resolutions(
-        provider_stack.order_providers([env, solver])
+        provider_stack.ProviderStack(provider_stack.order_providers([env, solver]))
     )
-    assert set(resolved) == {seam.field for seam in capability_seams.collect_seams()}
-    # command_authorization is answered by the most specific provider that
-    # implements any of its members.
-    assert resolved["command_authorization"][0] == "org.solver"
-    # Only the three capabilities the single-plugin digest covered carry a
-    # content digest; the rest record the decision alone (spec §4.4).
-    assert resolved["named_catalogs"][1] == provider_stack.RESOLUTION_PLACEHOLDER
-    assert resolved["cxx_mapping"][1].startswith("sha256:")
+    assert set(resolved) == set(provider_stack.MEMBERS)
+    assert resolved["get_environment_commands"][0] == "org.env"
+    assert resolved["get_solver_commands"][0] == "org.solver"
+    assert resolved["get_named_catalogs"] == (provider_stack.UNCLAIMED, provider_stack.RESOLUTION_PLACEHOLDER)
+    # Only the profile, dictionary entries and manifest carry a content
+    # digest; the rest record the winner alone.
+    assert resolved["get_solver_commands"][1] == provider_stack.RESOLUTION_PLACEHOLDER
+    assert resolved["get_profile"][1].startswith("sha256:")

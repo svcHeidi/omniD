@@ -48,7 +48,7 @@ uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
 | all packages | `python -m pytest packages/ -q -m "not slow"` | ordinary regressions |
 | core alone | `python -m pytest packages/omnidriver/tests -q` | core reaching into a sibling package |
 | **installed wheel** | see below | core reading repo-relative state at import time |
-| static gates | `python3 scripts/check-import-boundaries.py`, `scripts/export-capability-seams.py --check`, `scripts/check-case-writes.py`, `scripts/check-core-shape.py`, and `scripts/check-benchmark-references.py` | import direction; a stale generated table; a tutorial-record/axis module writing a case directly instead of through `commit_case_write`; core gaining a new OpenFOAM layout token or growing its recorded debt; a benchmark reference under `benchmarks/` that fails to load, misnames its own id, or cites nothing |
+| static gates | `python3 scripts/check-import-boundaries.py`, `scripts/check-case-writes.py`, `scripts/check-core-shape.py`, and `scripts/check-benchmark-references.py` | import direction; a tutorial-record/axis module writing a case directly instead of through `commit_case_write`; core gaining a new OpenFOAM layout token or growing its recorded debt; a benchmark reference under `benchmarks/` that fails to load, misnames its own id, or cites nothing |
 
 The wheel shape is the one people skip and the one that found the worst
 defects. Rebuild it after **every** source change or it tests stale code:
@@ -123,10 +123,10 @@ A skip here hides exactly what the guard exists to find.
 | core declares no solver vocabulary | `test_core_declares_no_phase_vocabulary`, `test_core_exports_no_phase_vocabulary` |
 | core never invents a filesystem root | `test_core_never_invents_a_filesystem_root`; for the scratch root, `test_the_scratch_resolver_invents_no_default` and `test_nothing_rebuilds_a_dot_omnidriver_scratch_default` |
 | core threads its `DriverContext` through the public edge | `test_core_threads_its_context_through_the_public_edge` |
-| no compatibility fallback reaches cardiac code | `test_no_fallback_reaches_cardiac_code_at_all` |
+| every plugin contract member is optional: `provider_stack.MEMBERS` gives each its composition and its answer when no provider implements it, and an operation that needs one refuses by name; a provider's public callable that names no member is refused | `test_plugin_contract.py` |
+| no fallback reaches cardiac code: the stack's only fallbacks are the member table's absent answers, which take no argument and sit in a module importing nothing outside core | `test_no_fallback_reaches_cardiac_code_at_all` |
 | a sentinel is never converted (-1 s is never -1000 ms) | `test_a_sentinel_is_resolved_before_conversion` |
 | a comparison report is written once | `test_a_report_is_written_once` |
-| the capability-seam table matches the docstrings | `scripts/export-capability-seams.py --check` |
 | a tutorial record is the only entry kind; a case folder that is no record runs as an ad hoc one-step record of the stack's declared entrypoint (`--case`), staged from the folder and never written | `test_case_folder_record.py`; `test_tutorial_records.py` |
 | a solver repository names its plugin, tutorials, C++ source and scripts in `omnidriver.toml`, read only from `--repo` or the repository of a supplied cases root (never searched for); `--plugin` alone serves a solver with no repository, and when both are given they must select the same stack | `test_repository.py`; `test_repository_source.py` (cardiacfoam) |
 | a plan report carries one `plugin_diagnostics` list, composed by the stack's `get_plan_diagnostics`; core names no function-object, nondimensional or dictionary-resolution concept | `scripts/check-core-shape.py`; `test_strict_planning.py`; `test_plan_diagnostics.py` (openfoam) |
@@ -180,7 +180,7 @@ runtime, silently.
 
 - `future/ENVIRONMENT_CONTRACT.md` — what core owns and how. Supersedes
   `ARCHITECTURE.md`'s Rule 1. §12 is the supplied-vs-discovered rule.
-- `ARCHITECTURE.md` — layer map and the generated capability-seam table.
+- `ARCHITECTURE.md` — the layer map.
 - `docs/superpowers/specs/` and `plans/` — design reasoning and executed plans.
   **Start at `plans/`'s newest-dated file's own `## Status` table** for what is
   done and what is open; each phase plan tracks its own tasks there, with
@@ -205,8 +205,8 @@ publication, and these rules bind every agent:
 - **Comments only for the non-obvious:** a native solver quirk, a numerical
   trade-off, a workaround, a rule the code cannot show. Never narrate what the
   next line does.
-- **Docstrings on the public surface only:** the plugin contract, capability
-  seams, CLI commands, and names a package exports. Keep them short: what it
+- **Docstrings on the public surface only:** the plugin contract, CLI
+  commands, and names a package exports. Keep them short: what it
   does, its arguments and errors where not obvious. Private helpers get none,
   or one line.
 - **No history in code.** No dated corrections, review or task IDs, plan

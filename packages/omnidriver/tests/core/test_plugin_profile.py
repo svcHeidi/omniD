@@ -215,5 +215,5 @@ def test_a_non_openfoam_role_survives_driver_context_end_to_end() -> None:
 
     context = driver_context(_FenicsLikePlugin(), source="test")
 
-    assert fenics_rule in context.capabilities.case_files.all_rules()
+    assert fenics_rule in context.stack.call("get_profile").case_files
     assert not fenics_rule.role.startswith("openfoam.")

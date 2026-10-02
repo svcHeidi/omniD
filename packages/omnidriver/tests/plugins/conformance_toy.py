@@ -13,7 +13,7 @@ TOY_PLUGIN = "plugins.e2e_record_plugin:E2ERecordPlugin"
 import json as _json
 
 from omnidriver.core.case_write import RenderedFile, _digest_bytes
-from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.tutorial_records import RecordInput, TutorialRecord, WorkflowStep
 
 from plugins.e2e_record_plugin import _TOY_RECORD, E2ERecordPlugin, _FORMAT, _deep_set, _number_cells_axis

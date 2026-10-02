@@ -58,9 +58,9 @@ def test_case_scripts_remain_core_owned() -> None:
 
 
 def test_generic_plugin_authorizes_neither_kind_of_command() -> None:
-    auth = driver_context(MinimalTestPlugin(), source="test:commands").capabilities.command_authorization
-    assert auth.solver_commands() == frozenset()
-    assert auth.auxiliary_commands() == frozenset()
+    stack = driver_context(MinimalTestPlugin(), source="test:commands").stack
+    assert stack.call("get_solver_commands") == frozenset()
+    assert stack.call("get_auxiliary_commands") == frozenset()
 
 
 def test_mpi_wrapped_payload_is_authorized() -> None:
@@ -87,7 +87,7 @@ def test_mpi_wrapped_authorized_solver_is_accepted() -> None:
         MinimalTestPlugin(solver_commands={"authorized-solver"}),
         source="test:commands",
     )
-    solver = next(iter(context.capabilities.command_authorization.solver_commands()))
+    solver = next(iter(context.stack.call("get_solver_commands")))
     dag = {"steps": [{
         "id": "solve",
         "command": "mpirun",

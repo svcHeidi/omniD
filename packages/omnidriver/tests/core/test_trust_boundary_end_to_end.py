@@ -374,7 +374,7 @@ def test_a_plugins_declared_entrypoint_resolves_case_locally_but_blockmesh_still
     """SECURITY.md: "No command shadowing", extended to the Tier 4 entrypoint seam (future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md) -- a plugin naming its entrypoint anything gets the same case-local resolution, but a command the stack does not declare as a case script must never resolve case-locally, regardless of which plugin is active."""
     from plugins.minimal_plugin import MinimalTestPlugin
 
-    from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+    from omnidriver.core.plugin_interface import CaseRuntimeConventions
     from omnidriver.core.plugin_interface import driver_context as _driver_context
     from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 

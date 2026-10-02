@@ -260,9 +260,9 @@ design. The trust model is local/single-tenant: it assumes `PATH` and the
 `$FOAM_*BIN` variables are not attacker-controlled.
 
 See [`SECURITY.md`](SECURITY.md) for the full trust model, output-location
-contract, and the explicit list of what is and is not mitigated. For the
-plugin-boundary compatibility fallbacks (optional-hook defaults), see
-`omnidriver/core/compatibility.py`.
+contract, and the explicit list of what is and is not mitigated. What a stack
+answers for a contract member no provider implements is
+`omnidriver/core/provider_stack.py`'s `MEMBERS`.
 
 ## Running a study: sweeps
 
@@ -968,7 +968,7 @@ Three layers of discovery:
 1. **What records exist?** The `records` key of `describe --entry <record>`'s output (`describe_entry(...)` programmatically) lists every tutorial record the selected stack registers.
 2. **What dict keys can I set?** Iterate `omnidriver.cardiacfoam.dict_entries_catalog.ELECTRO_PROPERTY_ENTRY_GROUPS` and `omnidriver.cardiacfoam.common_dict_entries.PHYSICS_PROPERTY_ENTRIES` for case-physics entries. For time-control use `omnidriver.cardiacfoam.common_dict_entries.CONTROL_DICT_ENTRIES` (`deltaT`, `endTime`). Each entry carries `driver_path`, `value_kind`, `enum_values`, `unit`, `typical_value`, and structured constraints (`applicable_when`, `forbidden_when`, `required_when`, `mutually_exclusive_with`). These live in the `omnidriver-cardiacfoam` package, not `omnidriver.dict_entries` in core — core's `dict_entries.py` only exposes context-aware helpers such as `get_electro_property_entry_groups(driver_context)`.
 3. **What ionic models can I pick?** `from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG`. Each entry carries `states`, `algebraic`, `compatible_solvers`, `compatible_tissues`, `species`, `cardiac_region`, `recommended_exports`.
-4. **What utilities are known?** `from omnidriver.core.utility_catalog import load_utility_manifests`; call it with a plugin's utility root(s) (`plugin.get_utility_roots()`) to get a `dict[str, UtilityManifest]`. Strict planning fails when a workflow command has missing required `produces` metadata. There is no `UTILITY_CATALOG` module-level constant — core names no solver's utilities by design; see `future/UTILITY_CATALOG_STANDALONE_GAP.md`.
+4. **What utilities are known?** `driver_context.stack.call("get_utility_manifests")` is the stack's `dict[str, UtilityManifest]`. Strict planning fails when a workflow command has missing required `produces` metadata. There is no `UTILITY_CATALOG` module-level constant — core names no solver's utilities by design; see `future/UTILITY_CATALOG_STANDALONE_GAP.md`.
 5. **What does the C++ read that the catalogue lacks?** `omnidriver catalog --plugin P --uncatalogued` (see "The C++ scan" above). (`omnidriver.plugins` is the entry-point group name, not a package path.)
 6. **What commands may a workflow step run, and what fields may a function object sample?** Read the `capability_manifest` block emitted by both `describe --entry <name>` and `plan --strict --entry <name>` (and `describe_entry(...)` / `strict_plan(...).to_json()` programmatically). It is the authoritative, machine-readable accept-surface: `allowed_commands` (`core`, `case_scripts`, `utilities`, plus the `$FOAM_APPBIN` note) mirrors the command allowlist exactly, and `samplable_fields` lists the field names the *resolved* model exposes,
 keyed by region. **Both blocks are plugin-dependent.** For cardiacFoam the
@@ -1266,7 +1266,7 @@ Once registered, drive it exclusively through `omnidriver`
 ## Plugin Guide — Adding a New Solver to omnidriver
 
 This section is for **plugin authors** — developers or AI agents who need to
-add support for a new OpenFOAM solver to omnidriver. End-users running existing
+add support for a new solver to omnidriver. End-users running existing
 solvers do not need to read this section.
 
 > **Quickest path:** Follow the dedicated skill at
@@ -1277,103 +1277,73 @@ solvers do not need to read this section.
 
 ### What a plugin is
 
-An omnidriver plugin is a Python class that implements the `SolverPlugin`
-contract defined in `omnidriver/core/plugin_interface.py`. It creates a
-clean boundary between the generic execution engine and all solver-specific
-knowledge.
+A plugin is a stack of providers: a Python class implementing `SolverPlugin`
+(`omnidriver/core/plugin_interface.py`), layered on any environment it
+`requires:` in its profile (cardiacFOAM and cardiacCore on the OpenFOAM layer;
+openCARP stands alone).
 
-Two Protocol classes define the contract:
+**Only the identity is required:** `plugin_name`, `plugin_id` (reverse-DNS,
+matching the profile), `plugin_version`, `plugin_api_version` (`"2"`). Every
+other member of `SolverPlugin` is optional. `provider_stack.MEMBERS` says
+how a stack composes each member across providers and what the stack answers
+when no provider implements it: an empty value for most, and a refusal naming
+the member and the operation for those an operation cannot do without.
+Implement what your solver has; omit the rest. Do not write stubs.
 
-| Class | Members | Required when |
+| operation | refused by name without | read when present |
 |---|---|---|
-| `SolverPlugin` | the contract's declared members | Only those `validate_plugin` names (below) |
-| `SolverPluginOptionalHooks` | probe-based hooks | Never required; enable capabilities |
+| join a stack | — | `get_profile` (case files, C++ mapping, environment connection, `requires`) |
+| `describe`, `catalog` | — | `get_tutorial_records`, `get_record_key_catalog`, `get_agent_guidance`, `get_named_catalogs`, `get_capabilities`, the dictionary members, `get_dict_key_scanner` |
+| strict plan | — (no `get_environment_diagnostics` is an `environment_capability_unavailable` error in the plan) | the command members, `validate_configuration`, `predict_data_artifacts`, `get_plan_diagnostics`, `inspect_effective_configuration`, `get_case_runtime_conventions` |
+| run a record case | `get_record_key_validator`, `get_case_value_comparator`, `get_config_value_reader` | `validate_run_semantics`, `get_loaded_environment`, `get_configured_environment`, `explain_step_failure`, `get_log_redaction_patterns`, the provenance members |
+| write a case (a study patch) | `resolve_case_mutation` + `get_supported_mutation_modes`, `render_case_files` + `get_rendered_formats` (each pair from one provider) | — |
+| run in parallel | `get_parallel_steps` | `get_solve_step_commands` |
+| compare a quantity | — | `get_artifact_value_reader` (no reader: the quantity is `not_evaluated`) |
 
-### Mandatory files
+The smallest provider that runs a record serially:
+
+```python
+class MySolver:
+    plugin_id = "org.example.mysolver"
+    plugin_name = "MySolver"
+    plugin_version = "0.1.0"
+    plugin_api_version = "2"
+
+    def get_solver_commands(self):
+        return frozenset({"mysolver"})
+
+    def get_tutorial_records(self):
+        return {"demo": DEMO_RECORD}           # core.tutorial_records.TutorialRecord
+
+    def get_record_key_validator(self):
+        return validate_key                    # (document, key_path, value) -> (value_kind, validated)
+
+    def get_case_value_comparator(self):
+        return lambda kind, requested, current: requested == current
+
+    def get_config_value_reader(self):
+        return read_value                      # (path, key_path_tuple) -> value | None
+
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
+        return ()
+```
+
+`validate_plugin` refuses a public callable that names no member, so a
+misspelled member fails loudly; keep helpers private (`_name`). For a
+complete plugin outside OpenFOAM, read `OpenCARPPlugin`
+(`packages/omnidriver-opencarp/src/omnidriver/opencarp/plugin.py`); for an
+environment layer, `OpenFOAMEnvironmentPlugin`
+(`packages/omnidriver-openfoam/src/omnidriver/openfoam/environment.py`).
+`omnidriver check` runs the conformance checks C1–C14 against your solver.
+
+### Files
 
 | File | Purpose |
 |---|---|
-| `my_solver_plugin.py` | Python class implementing the contract |
-| `plugin.yaml` | Manifest: identity, case file rules, optional C++ roots |
+| `my_solver_plugin.py` | the provider class |
+| `plugin.yaml` | optional profile: identity, `requires`, case-file rules, C++ mapping, environment connection |
 | `pyproject.toml` entry-point | `[project.entry-points."omnidriver.plugins"]` |
 | `omnidriver.toml` | In a solver's own repository, if it has one: `plugin`, `tutorials`, `source`, `scripts` (see "Selecting the stack") |
-
-### Required Members (all plugins)
-
-The list below is `_REQUIRED_PLUGIN_MEMBERS`'s own nine: the 4 identity strings
-plus the 5 capability members `capability_seams.members_by_tier()["required"]`
-names -- the two places that decide enforcement, kept in sync by
-construction (`plugin_interface._required_plugin_members`).
-
-```python
-plugin_name             # str — human display name
-plugin_id               # str — reverse-DNS id, must match plugin.yaml
-plugin_version          # str — plugin semantics version
-plugin_api_version      # str — "2", the only supported contract version
-get_profile()           # PluginProfile from load_plugin_profile("plugin.yaml")
-get_capabilities()      # CapabilityManifest via build_capability_manifest()
-validate_configuration(spec)   # tuple[StrictDiagnostic, ...]
-validate_run_semantics(case_root) # tuple[StrictDiagnostic, ...]: the resolved case's rules
-predict_data_artifacts(case_root, spec) # tuple[DataArtifact, ...]
-```
-
-### Optional Members (probed; answer a documented fallback when absent)
-
-Everything else `plugin_capabilities.py` declares is optional: most answer a
-neutral value (`False`, `{}`, `()`) when the plugin omits them
-(`capability_seams.members_by_tier()["optional-neutral"]`); a small set
-instead raises, naming the missing hook
-(`...["optional-refusing"]`, e.g. `render_case_files`,
-`resolve_case_mutation`). A representative sample a solver plugin commonly
-implements:
-
-```python
-get_solver_commands()           # frozenset[str] — artifact-producing binaries
-get_auxiliary_commands()        # frozenset[str] — meshers, decomposers
-get_environment_commands()      # frozenset[str] — environment-supplied static commands
-is_installed_environment_command(command) # bool — runtime lookup for an environment app
-get_utility_manifests()         # dict[str, Any]
-get_utility_roots()             # tuple[Path, ...]
-resolve_case_models(case_root)  # dict — best-effort, never raise
-get_samplable_fields(resolved)  # dict[str, tuple[str, ...]] — by region
-get_tutorial_records()          # dict[str, TutorialRecord] — what `--entry` names
-get_plan_diagnostics(case_root, *, workflow_dag, env, scratch_root, driver_context)
-                                # tuple[StrictDiagnostic, ...] — added to a strict plan
-get_case_runtime_conventions()  # CaseRuntimeConventions; `case_entrypoints` is the file `--case` runs
-get_dict_entry_catalog()        # dict — entries by document name (unserialized)
-get_solve_step_commands()       # frozenset[str]
-get_telemetry_source_globs(command) # tuple[str, ...]
-get_extra_provenance_paths(case_root) # tuple[RuntimeDependency, ...]
-get_artifact_value_reader(format)    # Any | None
-```
-
-`get_dict_entries`, `get_dictionary_catalog` and
-`get_dict_groups` are optional; absent, each answers empty. A plugin without dictionaries (openCARP) omits them.
-
-There is no shipped scaffold to copy in this repository. The closest in-repo
-example of a plugin with no domain-specific semantics is
-`OpenFOAMEnvironmentPlugin`
-(`packages/omnidriver-openfoam/src/omnidriver/openfoam/environment.py`,
-paired with `openfoam-environment.yaml` in the same directory) — read it
-alongside this contract and the plugin-builder skill referenced above.
-
-`OpenFOAMEnvironmentPlugin` proves
-"no domain-specific semantics"; it does not prove "no OpenFOAM". For the
-complete example of a plugin outside OpenFOAM entirely, read
-`packages/omnidriver-opencarp/src/omnidriver/opencarp/plugin.py`
-(`OpenCARPPlugin`) — it implements the full contract with none of the four
-optional dictionary members and passes conformance C1–C14 against the real
-openCARP v18.1 binary.
-
-### Key Optional Hooks (`SolverPluginOptionalHooks`, probed with `getattr`)
-
-| Hook | If absent |
-|---|---|
-| `get_tutorial_records()` | no records: `--entry` refuses every name |
-| `get_plan_diagnostics(...)` | `()`: the plan adds nothing of the stack's own. An error fails the plan; a warning or note never does |
-| `get_report_catalog()` | `()` |
-| `get_named_catalogs()` | `{}` |
-| `get_parallel_steps(step, *, request, read_value, allocation)` | a run asking for `parallel` is refused by name; serial runs never call it |
 
 ### Entry-point registration
 
@@ -1403,24 +1373,22 @@ print('OK:', ctx.identity)
 omnidriver plan --strict --plugin mysolver --cases-root <tutorials> --scratch-dir <scratch> --entry <record>
 ```
 
-### `validate_plugin()` cross-validation rules
-
-- `profile.plugin_id` **must equal** `plugin.plugin_id`
-- `profile.api_version` **must equal** `plugin.plugin_api_version`
-- All `DictEntry.driver_path` values must be **globally unique**
-
 ### Common errors
 
 | Error | Cause |
 |---|---|
 | `KeyError: 'mysolver'` | Wrong entry-point group or not installed |
-| `TypeError: SolverPlugin is missing required members: X` | A required member (above) is absent |
+| `TypeError: SolverPlugin is missing required members: X` | An identity property is absent |
+| `TypeError: ... X is not a plugin contract member` | A public callable names no member: a misspelling, or a helper to make private |
+| `TypeError: ... X() needs Y() from the same provider` | Half of a pair (resolver and modes, renderer and formats) |
 | `TypeError: profile id does not match plugin_id` | YAML id ≠ class property |
 | `TypeError: duplicate paths: X` | Two `DictEntry` share same `driver_path` |
+| `MemberAbsent: ... implements no X(), which <operation> needs` | The operation needs a member no provider implements |
 
 ### See also
 
-- `omnidriver/core/plugin_interface.py` — full Protocol definitions
+- `omnidriver/core/plugin_interface.py` — the contract, member by member
+- `omnidriver/core/provider_stack.py` — `MEMBERS`: each member's composition and its answer when absent
 - `omnidriver/openfoam/environment.py` (`OpenFOAMEnvironmentPlugin`) — closest
   in-repo example of a plugin with no domain-specific semantics
 - `omnidriver/opencarp/plugin.py` (`OpenCARPPlugin`) — the complete

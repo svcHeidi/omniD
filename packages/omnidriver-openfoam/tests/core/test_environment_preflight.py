@@ -262,18 +262,12 @@ def _fake_context_declaring_entrypoint(relpath: str):
     """A minimal stand-in exposing only the runtime convention declaration."""
     from types import SimpleNamespace
 
-    from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+    from omnidriver.core.plugin_interface import CaseRuntimeConventions
 
     conventions = CaseRuntimeConventions(
         case_entrypoints=(relpath,), case_script_commands=(relpath,),
     )
-    return SimpleNamespace(
-        capabilities=SimpleNamespace(
-            case_runtime_conventions=SimpleNamespace(
-                conventions=lambda: conventions,
-            ),
-        ),
-    )
+    return SimpleNamespace(stack=SimpleNamespace(call=lambda member: conventions))
 
 
 def test_a_declared_entrypoint_is_also_not_path_checked():
@@ -424,9 +418,7 @@ def test_the_stale_build_check_reads_the_supplied_source_root_only(tmp_path, mon
     from omnidriver.openfoam.environment_preflight import _supplied_src_root
 
     mapping = CxxMapping("TOY_TREE", "src", tmp_path / "allowlist.json")
-    context = SimpleNamespace(capabilities=SimpleNamespace(
-        cxx_mapping=SimpleNamespace(profile=lambda: SimpleNamespace(cxx_mapping=mapping)),
-    ))
+    context = SimpleNamespace(stack=SimpleNamespace(call=lambda member: SimpleNamespace(cxx_mapping=mapping)))
     monkeypatch.delenv("TOY_TREE", raising=False)
     assert _supplied_src_root(context) is None
     assert _supplied_src_root(None) is None

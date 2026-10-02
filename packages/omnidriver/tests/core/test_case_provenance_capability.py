@@ -1,4 +1,4 @@
-"""CaseProvenanceCapability's empty fallback means "everything unknown is a required input", the safe default for a plugin that declares nothing."""
+"""A stack declaring no provenance answers empty, which means "everything unknown is a required input", the safe default."""
 
 from __future__ import annotations
 
@@ -10,35 +10,19 @@ from omnidriver.core.plugin_interface import (
 from plugins.minimal_plugin import MinimalTestPlugin
 
 
-def test_minimal_plugin_declares_no_required_inputs(tmp_path: Path) -> None:
-    generic = driver_context(
-        MinimalTestPlugin(), source="test:minimal-provenance",
-    ).capabilities.case_provenance
-    assert generic.required_inputs(tmp_path, {}) == ()
-
-
-def test_minimal_plugin_declares_no_generated_outputs(tmp_path: Path) -> None:
-    generic = driver_context(
-        MinimalTestPlugin(), source="test:minimal-provenance",
-    ).capabilities.case_provenance
-    assert generic.generated_output_globs(tmp_path, {}) == ()
-
-
-def test_a_v1_plugin_with_no_hooks_gets_the_empty_fallback(tmp_path: Path) -> None:
-    """A plugin that predates this capability -- v1 or a v2 third-party plugin that never implemented it -- must still load and adapt cleanly."""
+def test_a_plugin_with_no_provenance_members_gets_empty_answers(tmp_path: Path) -> None:
     context = driver_context(MinimalTestPlugin(), source="test")
-    assert context.capabilities.case_provenance.required_inputs(tmp_path, {}) == ()
-    assert context.capabilities.case_provenance.generated_output_globs(tmp_path, {}) == ()
+    assert context.stack.call("get_required_inputs", tmp_path, {}) == ()
+    assert context.stack.call("get_generated_output_globs", tmp_path, {}) == ()
 
 
 def test_extra_provenance_paths_is_annotated_as_dependencies():
     """A bare Path can only omit, and omission reads as nothing-to-check."""
     import typing
-    from omnidriver.core import plugin_capabilities
+    from omnidriver.core import plugin_interface
 
     hints = typing.get_type_hints(
-        plugin_capabilities._RuntimeEvidenceAdapter.extra_provenance_paths,
-        include_extras=True,
+        plugin_interface.SolverPlugin.get_extra_provenance_paths, vars(plugin_interface), include_extras=True,
     )
     assert "RuntimeDependency" in str(hints["return"]), (
         f"annotation is {hints['return']!r}, not a RuntimeDependency tuple"

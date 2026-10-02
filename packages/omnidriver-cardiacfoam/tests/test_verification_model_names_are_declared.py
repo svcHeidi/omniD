@@ -45,7 +45,7 @@ def _declared_types() -> dict[str, frozenset[str]]:
     """Selectable model names, keyed by the driver path that declares them."""
     return {
         entry.driver_path: frozenset(entry.enum_values)
-        for entry in _CTX.capabilities.dictionaries.entries()
+        for entry in _CTX.stack.call("get_dict_entries")
         if entry.driver_path.endswith(_TYPE_KEY_SUFFIX) and entry.enum_values
     }
 
@@ -55,7 +55,7 @@ def test_every_gated_verifier_name_is_selectable() -> None:
     assert declared, "no verificationModel.type entry declares its enum_values"
 
     offenders: list[str] = []
-    for entry in _CTX.capabilities.dictionaries.entries():
+    for entry in _CTX.stack.call("get_dict_entries"):
         for key, value in (entry.applicable_when or {}).items():
             if not key.endswith(_TYPE_KEY_SUFFIX):
                 continue

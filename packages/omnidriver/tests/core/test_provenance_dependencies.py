@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from omnidriver.core.plugin_capabilities import RuntimeDependency
+from omnidriver.core.plugin_interface import RuntimeDependency
 from omnidriver.core.runtime.provenance import snapshot_from_components
 from omnidriver.core.runtime.provenance_dependencies import (
     component_for_runtime_dependency,

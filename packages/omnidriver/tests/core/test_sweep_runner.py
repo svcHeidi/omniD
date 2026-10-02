@@ -10,7 +10,7 @@ from unittest import mock
 import pytest
 
 from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
-from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.core.runtime.attempt_lease import AttemptLeaseError, acquire_case_lease
 from omnidriver.core.runtime.sweep_runner import _run_case_process, _stage_entry_case, sweep_plan, sweep_run
@@ -399,7 +399,7 @@ def test_sweep_plan_over_a_record_entry_refuses_a_bad_axis_name_upfront_before_s
     assert not (tmp_path / "out" / "cases").exists()
 
 
-def test_sweep_run_over_a_record_entry_refuses_a_missing_capability_upfront_before_staging_any_case(tmp_path):
+def test_sweep_run_over_a_record_entry_refuses_a_missing_member_upfront_before_staging_any_case(tmp_path):
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
@@ -410,7 +410,7 @@ def test_sweep_run_over_a_record_entry_refuses_a_missing_capability_upfront_befo
     )
     ctx = _driver_context(plugin, source="test:record-sweep-no-validator")
 
-    with pytest.raises(TutorialRecordError, match="no record-key validator"):
+    with pytest.raises(TutorialRecordError, match="get_record_key_validator"):
         sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
 
     assert not (tmp_path / "out").exists()

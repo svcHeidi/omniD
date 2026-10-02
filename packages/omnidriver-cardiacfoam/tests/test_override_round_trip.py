@@ -95,7 +95,7 @@ def _electro_entries():
     context = _driver_context(
         OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:override_round_trip",
     )
-    catalog = context.capabilities.dictionaries.catalog()
+    catalog = context.stack.call("get_dictionary_catalog")
     return [
         entry
         for entry in catalog.entries_for("electroProperties")

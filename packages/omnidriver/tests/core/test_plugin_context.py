@@ -3,15 +3,12 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from pathlib import Path
 
 from omnidriver.core.plugin_interface import (
     driver_context,
     validate_plugin,
 )
-from omnidriver.core.plugin_profile import PluginProfile
 from omnidriver.core.contracts.dictionary import DictEntry
-from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
 
 class _Plugin:
@@ -35,83 +32,13 @@ class _Plugin:
     def plugin_api_version(self) -> str:
         return "2"
 
-    def get_profile(self):
-        return PluginProfile(
-            path=Path("test-plugin.yaml"),
-            plugin_id=self._plugin_id,
-            api_version="2",
-            case_files=(),
-            cxx_mapping=None,
-            payload={
-                "schema_version": 1,
-                "plugin": {"id": self._plugin_id, "api_version": "2"},
-                "case_profile": {"dictionaries": []},
-            },
-        )
-
-    def get_dict_entries(self):
-        return ()
-
-    def get_dictionary_catalog(self):
-        return DictionaryCatalog({})
-
-    def get_dict_groups(self):
-        return {}
-
-    def get_capabilities(self):
-        return {}
-
-    def validate_configuration(self, spec):
-        return ()
-
-    def validate_run_semantics(self, context):
-        return ()
-
-    def predict_data_artifacts(self, case_root, spec):
-        return ()
-
-    def get_solver_commands(self) -> frozenset[str]:
-        return frozenset()
-
-    def get_auxiliary_commands(self) -> frozenset[str]:
-        return frozenset()
-
-    def get_utility_manifests(self) -> dict:
-        return {}
-
-    def get_utility_roots(self):
-        return ()
-
-    def resolve_case_models(self, case_root):
-        del case_root
-        return {}
-
-    def get_samplable_fields(self, resolved):
-        del resolved
-        return {}
-
     def get_dict_entry_catalog(self):
         # A per-instance-distinguishable answer: proves context isolation.
         return {self._tutorial_name: ()}
 
-    def get_solve_step_commands(self) -> frozenset:
-        return frozenset()
-
-    def get_telemetry_source_globs(self, command: str) -> tuple:
-        del command
-        return ()
-
-    def get_extra_provenance_paths(self, case_root) -> tuple:
-        del case_root
-        return ()
-
-    def get_artifact_value_reader(self, artifact_format: str):
-        del artifact_format
-        return None
-
 
 def _named_factory(context) -> str:
-    (name,) = context.capabilities.dictionaries.documents()
+    (name,) = context.stack.call("get_dict_entry_catalog")
     return name
 
 

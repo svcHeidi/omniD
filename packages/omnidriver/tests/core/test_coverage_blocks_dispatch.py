@@ -51,11 +51,7 @@ def test_the_dispatch_gate_receives_the_audit(tmp_path: Path):
         },
         expected_artifacts=(),
     )
-    driver_context = SimpleNamespace(
-        capabilities=SimpleNamespace(
-            environment_preflight=SimpleNamespace(load=lambda **_kwargs: {}),
-        )
-    )
+    driver_context = SimpleNamespace(stack=SimpleNamespace(call=lambda member, *_args, **_kwargs: {}))
 
     with mock.patch.object(cli, "strict_plan", return_value=report):
         execution, code = cli._context_from_entry(
@@ -102,11 +98,7 @@ def test_an_available_audit_does_not_block_on_coverage_alone(tmp_path: Path):
         },
         expected_artifacts=(),
     )
-    driver_context = SimpleNamespace(
-        capabilities=SimpleNamespace(
-            environment_preflight=SimpleNamespace(load=lambda **_kwargs: {}),
-        )
-    )
+    driver_context = SimpleNamespace(stack=SimpleNamespace(call=lambda member, *_args, **_kwargs: {}))
 
     with mock.patch.object(cli, "strict_plan", return_value=report):
         execution, code = cli._context_from_entry(

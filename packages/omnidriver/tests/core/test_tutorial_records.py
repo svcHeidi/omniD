@@ -9,7 +9,6 @@ import pytest
 
 from omnidriver.core.runtime.attempt_lease import acquire_case_lease
 
-from omnidriver.core import compatibility
 from omnidriver.core.case_write import ParameterAssignment, ResolvedMutation, RenderedFile, _digest_bytes
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.plugin_interface import driver_context
@@ -1324,15 +1323,10 @@ def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(t
     by_qualified_id = {p["qualified_id"]: p for p in write_record.parameters}
     assert by_qualified_id["constant/physics.json::modelName"]["validated"] is True
     assert by_qualified_id["system/unowned.json::endTime"]["validated"] is False
-    # Minor m1: the owner comes from the context's own identity resolutions
-    # (which provider actually answers `case_writer` for this stack), not a
-    # dead `getattr(driver_context, "identity", None)` fallback that could
-    # never fire (`DriverContext.identity` has no default -- it is always
-    # present) nor a `providers[-1].id` guess that can name the wrong
-    # provider in a multi-provider stack.
+    # The owner is the provider that resolves the stack's mutations.
     assert (
         by_qualified_id["constant/physics.json::modelName"]["owner"]
-        == context.identity.resolutions["case_writer"]
+        == context.identity.resolutions["resolve_case_mutation"]
     )
     written = json.loads((tmp_path / "staged" / "constant" / "physics.json").read_text())
     assert written["modelName"] == "modelBeta"
@@ -1409,9 +1403,9 @@ def test_commit_record_case_refuses_a_conflict_between_base_and_sweep(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# M1: no compatibility fallback for the four tutorial-record capabilities --
-# a stack with no key validator or no value comparator REFUSES a record case
-# rather than running it unchecked (or reporting every no-op as "changed").
+# A stack with no key validator, value comparator or config reader REFUSES a
+# record case rather than running it unchecked (or reporting every no-op as
+# "changed").
 # ---------------------------------------------------------------------------
 
 
@@ -1431,7 +1425,7 @@ def test_commit_record_case_refuses_when_the_stack_has_no_record_key_validator(t
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(axes=())
     context = driver_context(_NoValidatorPlugin(), source="test:no-validator")
-    with pytest.raises(TutorialRecordError, match="no record-key validator"):
+    with pytest.raises(TutorialRecordError, match="get_record_key_validator"):
         record_execution.commit_record_case(
             record,
             cases_root=tmp_path / "cases",
@@ -1445,7 +1439,7 @@ def test_preview_record_case_refuses_when_the_stack_has_no_record_key_validator(
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(axes=())
     context = driver_context(_NoValidatorPlugin(), source="test:no-validator")
-    with pytest.raises(TutorialRecordError, match="no record-key validator"):
+    with pytest.raises(TutorialRecordError, match="get_record_key_validator"):
         record_execution.preview_record_case(
             record,
             cases_root=tmp_path / "cases",
@@ -1455,14 +1449,14 @@ def test_preview_record_case_refuses_when_the_stack_has_no_record_key_validator(
 
 
 def test_commit_record_case_refuses_when_the_stack_has_no_case_value_comparator(tmp_path):
-    """Before this fix (E8): a stack with no comparator reported every patch, including a genuine no-op, as 'changed' and committed it."""
+    """Without a comparator every patch, including a genuine no-op, would be reported 'changed' and committed."""
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(axes=())
     context = driver_context(
         _NoComparatorPlugin(record_key_validator=_known_catalog_validator),
         source="test:no-comparator",
     )
-    with pytest.raises(TutorialRecordError, match="no case-value comparator"):
+    with pytest.raises(TutorialRecordError, match="get_case_value_comparator"):
         record_execution.commit_record_case(
             record,
             cases_root=tmp_path / "cases",
@@ -1473,14 +1467,14 @@ def test_commit_record_case_refuses_when_the_stack_has_no_case_value_comparator(
 
 
 def test_commit_record_case_refuses_when_the_stack_has_no_config_value_reader(tmp_path):
-    """M1: `_resolve_and_split` must refuse a missing config-value reader exactly like a missing validator/comparator -- before this fix, a stack with no reader silently reported every patch "changed" (split_unchanged's own no-reader default) and committed it, unable to ever report a real no-op."""
+    """Without a reader every patch would be reported "changed" and committed."""
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(axes=())
     context = driver_context(
         _NoReaderPlugin(record_key_validator=_known_catalog_validator),
         source="test:no-reader",
     )
-    with pytest.raises(TutorialRecordError, match="no config-value reader"):
+    with pytest.raises(TutorialRecordError, match="get_config_value_reader"):
         record_execution.commit_record_case(
             record,
             cases_root=tmp_path / "cases",
@@ -1497,39 +1491,13 @@ def test_preview_record_case_refuses_when_the_stack_has_no_config_value_reader(t
         _NoReaderPlugin(record_key_validator=_known_catalog_validator),
         source="test:no-reader",
     )
-    with pytest.raises(TutorialRecordError, match="no config-value reader"):
+    with pytest.raises(TutorialRecordError, match="get_config_value_reader"):
         record_execution.preview_record_case(
             record,
             cases_root=tmp_path / "cases",
             study_by_source={"base": {"constant/physics.json:modelName": "modelAlpha"}},
             driver_context=context,
         )
-
-
-class _DeclaresNoneOfTheFourHooks(MinimalTestPlugin):
-    """Unlike `MinimalTestPlugin`, which implements all three hooks with empty/None defaults, this plugin declares none of them."""
-
-    get_tutorial_records = None
-    get_record_key_validator = None
-    get_case_value_comparator = None
-
-
-def test_tutorial_record_capability_seams_call_no_legacy_fallback_when_absent():
-    """The four legacy_* fallbacks are deleted outright, not merely unused; their adapters return None directly."""
-    for legacy_name in (
-        "legacy_tutorial_records", "legacy_axis_catalog",
-        "legacy_record_key_validation", "legacy_case_value_comparator",
-    ):
-        assert not hasattr(compatibility, legacy_name), (
-            f"compatibility.{legacy_name} should have been deleted (M1)"
-        )
-
-    ctx = driver_context(_DeclaresNoneOfTheFourHooks(), source="test:m1-census")
-    with compatibility.track_fallback_calls() as calls:
-        assert ctx.capabilities.tutorial_records.catalog() is None
-        assert ctx.capabilities.record_key_validation.validator() is None
-        assert ctx.capabilities.case_value_comparison.comparator() is None
-    assert calls == []
 
 
 # ---------------------------------------------------------------------------

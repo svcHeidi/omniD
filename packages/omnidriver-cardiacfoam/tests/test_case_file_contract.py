@@ -12,7 +12,7 @@ _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source=
 
 
 def test_cardiac_required_files_include_its_dictionaries() -> None:
-    rules = _CTX.capabilities.case_files.all_rules()
+    rules = _CTX.stack.call("get_profile").case_files
     required = {str(rule.path) for rule in rules if rule.required == "always"}
     assert "constant/electroProperties" in required
     assert "constant/physicsProperties" in required

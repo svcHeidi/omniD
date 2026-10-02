@@ -1,10 +1,15 @@
 """Who answers what, and what happens when nobody does."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from omnidriver.core import case_write, plugin_capabilities, provider_stack
+from omnidriver.core import case_write, provider_stack
+
+
+def _context(*providers):
+    return SimpleNamespace(stack=provider_stack.ProviderStack(provider_stack.order_providers(providers)))
 
 
 def _assignment(**overrides):
@@ -48,9 +53,7 @@ class _SecondRenderer(_Renderer):
 
 def test_two_providers_claiming_one_format_are_refused():
     with pytest.raises(ValueError, match="openfoam_dictionary"):
-        provider_stack.compose(
-            provider_stack.order_providers([_Renderer(), _SecondRenderer()])
-        )
+        _context(_Renderer(), _SecondRenderer())
 
 
 class _SemanticOnly:
@@ -76,18 +79,20 @@ def test_resolution_must_not_touch_the_filesystem(tmp_path, monkeypatch):
         def get_profile(self):
             return _Profile()
 
+        def get_supported_mutation_modes(self):
+            return frozenset({"clone_and_patch"})
+
         def resolve_case_mutation(self, request, *, driver_context):
             (Path(request.case_root) / "probe").open("w").close()
             return None
 
-    capabilities = plugin_capabilities.adapt_plugin_capabilities(_ImpureAdapter())
     request = case_write.CaseMutationRequest(
         mode="clone_and_patch", case_root=tmp_path, adapter_id="org.impure",
         workflow="w", source_artifacts=(), parameters=(_assignment(),),
         requested_by="test",
     )
     with pytest.raises(ValueError, match="pure"):
-        capabilities.case_writer.resolve(request, driver_context=object())
+        case_write.resolve_mutation(_context(_ImpureAdapter()), request)
 
 
 def test_an_adapter_with_no_writer_hooks_refuses_by_name():
@@ -99,14 +104,13 @@ def test_an_adapter_with_no_writer_hooks_refuses_by_name():
         def get_profile(self):
             return _Profile()
 
-    capabilities = plugin_capabilities.adapt_plugin_capabilities(_Bare())
     request = case_write.CaseMutationRequest(
         mode="clone_and_patch", case_root=Path("/tmp/case"), adapter_id="org.bare",
         workflow="w", source_artifacts=(), parameters=(_assignment(),),
         requested_by="test",
     )
-    with pytest.raises(ValueError, match="org.bare"):
-        capabilities.case_writer.resolve(request, driver_context=object())
+    with pytest.raises(provider_stack.MemberAbsent, match="org.bare.*writing a case"):
+        case_write.resolve_mutation(_context(_Bare()), request)
 
 
 def test_an_unsupported_mode_is_refused_by_the_adapter_not_the_type():
@@ -121,41 +125,13 @@ def test_an_unsupported_mode_is_refused_by_the_adapter_not_the_type():
         def resolve_case_mutation(self, request, *, driver_context):
             raise AssertionError("must be refused before reaching the adapter")
 
-    capabilities = plugin_capabilities.adapt_plugin_capabilities(_PatchOnly())
     request = case_write.CaseMutationRequest(
         mode="synthesize", case_root=Path("/tmp/case"), adapter_id="org.patch_only",
         workflow="w", source_artifacts=("mesh.vtu",), parameters=(),
         requested_by="test",
     )
     with pytest.raises(ValueError, match="clone_and_patch"):
-        capabilities.case_writer.resolve(request, driver_context=object())
-
-
-def test_a_resolver_with_no_mutation_modes_hook_is_refused_by_name():
-    class _UndeclaredModes(_Renderer):
-        plugin_id = "org.undeclared_modes"
-
-        def resolve_case_mutation(self, request, *, driver_context):
-            return case_write.ResolvedMutation(
-                request=request, targets=(), expected_effects=(), semantic_owner_id=self.plugin_id,
-            )
-
-    capabilities = plugin_capabilities.adapt_plugin_capabilities(_UndeclaredModes())
-    with pytest.raises(ValueError, match="org.undeclared_modes"):
-        capabilities.case_writer.supported_modes()
-
-
-def test_a_provider_with_neither_hook_supports_no_modes():
-    """Both absent -> `frozenset()`, not a raise: nothing here resolves, so an empty set changes nothing -- `resolve()` already refuses this provider by name (no `resolve_case_mutation`) before the mode check is ever reached."""
-
-    class _Bystander:
-        plugin_id = "org.bystander"
-
-        def get_profile(self):
-            return _Profile()
-
-    capabilities = plugin_capabilities.adapt_plugin_capabilities(_Bystander())
-    assert capabilities.case_writer.supported_modes() == frozenset()
+        case_write.resolve_mutation(_context(_PatchOnly()), request)
 
 
 def test_an_adapter_with_no_render_hook_refuses_by_name():
@@ -165,26 +141,12 @@ def test_an_adapter_with_no_render_hook_refuses_by_name():
         def get_profile(self):
             return _Profile()
 
-        def get_rendered_formats(self):
-            return frozenset()
-
-        def resolve_case_mutation(self, request, *, driver_context):
-            return case_write.ResolvedMutation(
-                request=request, targets=(), expected_effects=(), semantic_owner_id=self.plugin_id,
-            )
-
-    capabilities = plugin_capabilities.adapt_plugin_capabilities(_ResolveOnly())
-    with pytest.raises(ValueError, match="render_case_files"):
-        capabilities.case_writer.render(
-            object(), snapshot_root=Path("/tmp/snap"), driver_context=object(),
-        )
+    with pytest.raises(provider_stack.MemberAbsent, match="render_case_files"):
+        case_write.render_mutation(_context(_ResolveOnly()), object(), snapshot_root=Path("/tmp/snap"))
 
 
 def test_a_renderer_renders_its_declared_format():
-    capabilities = plugin_capabilities.adapt_plugin_capabilities(_Renderer())
-    rendered = capabilities.case_writer.render(
-        object(), snapshot_root=Path("/tmp/snap"), driver_context=object(),
-    )
+    rendered = case_write.render_mutation(_context(_Renderer()), object(), snapshot_root=Path("/tmp/snap"))
     assert rendered[0].path == "constant/electroProperties"
     assert rendered[0].format == "openfoam_dictionary"
 
@@ -212,19 +174,11 @@ class _Liar:
 
 def test_a_renderer_cannot_claim_a_format_it_does_not_declare():
     """`render_case_files` is `sequence`-composed: a returned `RenderedFile.format` must be one the returning provider itself declares."""
-    capabilities = plugin_capabilities.adapt_plugin_capabilities(_Liar())
     with pytest.raises(ValueError, match="does not declare"):
-        capabilities.case_writer.render(
-            object(), snapshot_root=Path("/tmp/snap"), driver_context=object(),
-        )
+        case_write.render_mutation(_context(_Liar()), object(), snapshot_root=Path("/tmp/snap"))
 
 
 def test_a_composed_stack_refuses_a_liar_alongside_the_real_declarer():
     """The defect as described: a provider declaring only `other_format` can return a file claiming `openfoam_dictionary` and it is concatenated alongside the real declarer's, unnoticed."""
-    capabilities = provider_stack.compose(
-        provider_stack.order_providers([_Renderer(), _Liar()])
-    )
     with pytest.raises(ValueError, match="does not declare"):
-        capabilities.case_writer.render(
-            object(), snapshot_root=Path("/tmp/snap"), driver_context=object(),
-        )
+        case_write.render_mutation(_context(_Renderer(), _Liar()), object(), snapshot_root=Path("/tmp/snap"))

@@ -28,7 +28,7 @@ from .literals import CONTAINER_FORMATTERS
 from .mutators import remove_foam_dict, remove_foam_entry, update_foam_entry
 
 #: Must match what ``OpenFOAMEnvironmentPlugin.get_rendered_formats`` declares;
-#: ``_CaseWriterAdapter.render`` refuses a ``RenderedFile`` whose format its
+#: ``case_write.render_mutation`` refuses a ``RenderedFile`` whose format its
 #: provider did not declare.
 FORMAT = "openfoam_dictionary"
 

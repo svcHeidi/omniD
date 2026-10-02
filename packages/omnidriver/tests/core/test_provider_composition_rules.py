@@ -1,4 +1,4 @@
-"""The six composition rules from spec §4.3, as behaviour, independent of the dispatch mechanism."""
+"""The composition rules of ``provider_stack.MEMBERS``, as behaviour."""
 
 import pytest
 
@@ -11,11 +11,9 @@ class _Provider:
     # The profile is built once and memoized, so a test mutating
     # `.get_profile().case_files` in place actually sticks for composition to see.
 
-    def __init__(self, plugin_id, provides=frozenset(), requires=(),
-                 case_files=(), **members):
+    def __init__(self, plugin_id, requires=(), case_files=(), **members):
         self.plugin_id = plugin_id
         self._profile = type("_P", (), {})()
-        self._profile.provides = frozenset(provides)
         self._profile.requires = tuple(requires)
         self._profile.case_files = tuple(case_files)
         for name, value in members.items():
@@ -26,7 +24,7 @@ class _Provider:
 
 
 def _compose(*providers):
-    return provider_stack.compose(provider_stack.order_providers(providers))
+    return provider_stack.ProviderStack(provider_stack.order_providers(providers))
 
 
 def test_sets_are_unioned():
@@ -36,8 +34,8 @@ def test_sets_are_unioned():
         get_solver_commands=lambda: frozenset({"theSolver"}),
     )
     composed = _compose(env, solver)
-    assert composed.command_authorization.environment_commands() == frozenset({"blockMesh"})
-    assert composed.command_authorization.solver_commands() == frozenset({"theSolver"})
+    assert composed.call("get_environment_commands") == frozenset({"blockMesh"})
+    assert composed.call("get_solver_commands") == frozenset({"theSolver"})
 
 
 def test_maps_merge_and_an_unmarked_duplicate_is_an_error():
@@ -47,7 +45,7 @@ def test_maps_merge_and_an_unmarked_duplicate_is_an_error():
         get_named_catalogs=lambda: {"shared": {"from": "solver"}},
     )
     with pytest.raises(ValueError, match="shared"):
-        _compose(env, solver).named_catalogs.catalogs()
+        _compose(env, solver).call("get_named_catalogs")
 
 
 def test_a_marked_override_wins():
@@ -58,7 +56,7 @@ def test_a_marked_override_wins():
             "shared": {"from": "solver", "overrides": "org.env"},
         },
     )
-    assert _compose(env, solver).named_catalogs.catalogs()["shared"]["from"] == "solver"
+    assert _compose(env, solver).call("get_named_catalogs")["shared"]["from"] == "solver"
 
 
 def test_an_override_naming_a_provider_that_did_not_declare_it_is_an_error():
@@ -71,7 +69,7 @@ def test_an_override_naming_a_provider_that_did_not_declare_it_is_an_error():
         },
     )
     with pytest.raises(ValueError, match="gone"):
-        _compose(env, solver).named_catalogs.catalogs()
+        _compose(env, solver).call("get_named_catalogs")
 
 
 def test_single_values_take_the_most_specific_non_none():
@@ -80,7 +78,7 @@ def test_single_values_take_the_most_specific_non_none():
         "org.solver", requires=("org.env",),
         get_config_value_reader=lambda: "solver-reader",
     )
-    assert _compose(env, solver).config_value.reader() == "solver-reader"
+    assert _compose(env, solver).call("get_config_value_reader") == "solver-reader"
 
 
 def test_single_values_fall_through_a_none():
@@ -89,7 +87,7 @@ def test_single_values_fall_through_a_none():
         "org.solver", requires=("org.env",),
         get_config_value_reader=lambda: None,
     )
-    assert _compose(env, solver).config_value.reader() == "env-reader"
+    assert _compose(env, solver).call("get_config_value_reader") == "env-reader"
 
 
 def test_diagnostics_concatenate_in_stack_order():
@@ -99,33 +97,29 @@ def test_diagnostics_concatenate_in_stack_order():
         get_plan_diagnostics=lambda case_root, **kw: ("solver-diag",),
     )
     composed = _compose(env, solver)
-    assert composed.plan_diagnostics.diagnostics(
-        None, workflow_dag=None, env={}, scratch_root=None, driver_context=None,
+    assert composed.call(
+        "get_plan_diagnostics", None, workflow_dag=None, env={}, scratch_root=None, driver_context=None,
     ) == ("env-diag", "solver-diag")
 
 
 def test_a_stack_with_no_plan_diagnostics_adds_none():
-    assert _compose(_Provider("org.only")).plan_diagnostics.diagnostics(
-        None, workflow_dag=None, env={}, scratch_root=None, driver_context=None,
+    assert _compose(_Provider("org.only")).call(
+        "get_plan_diagnostics", None, workflow_dag=None, env={}, scratch_root=None, driver_context=None,
     ) == ()
 
 
 def test_resolve_and_supported_modes_must_come_from_one_provider():
-    """`get_supported_mutation_modes` is `set`-shaped (union across the stack) while `resolve_case_mutation` is `single`-shaped (most specific only)."""
-    a = _Provider("org.a", get_supported_mutation_modes=lambda: frozenset({"synthesize"}))
-    b = _Provider("org.b", requires=("org.a",),
-                  resolve_case_mutation=lambda *a, **k: None)
-    with pytest.raises(ValueError, match="get_supported_mutation_modes"):
-        _compose(a, b)
-
-
-def test_one_provider_supplying_both_modes_and_resolver_is_accepted():
+    """Which modes a resolver accepts is its own provider's answer."""
+    modes_only = _Provider("org.a", get_supported_mutation_modes=lambda: frozenset({"synthesize"}))
+    resolver_only = _Provider("org.b", resolve_case_mutation=lambda *a, **k: None)
+    assert any("get_supported_mutation_modes" in p for p in provider_stack.check_provider_members(modes_only))
+    assert any("get_supported_mutation_modes" in p for p in provider_stack.check_provider_members(resolver_only))
     both = _Provider(
         "org.both",
         resolve_case_mutation=lambda *a, **k: None,
         get_supported_mutation_modes=lambda: frozenset({"clone_and_patch"}),
     )
-    _compose(both)  # must not raise
+    assert provider_stack.check_provider_members(both) == []
 
 
 def test_a_case_file_path_declared_twice_is_an_error():

@@ -123,16 +123,6 @@ def test_the_solver_layers_refusal_names_the_record_and_the_step():
     assert "'threeSteps'" in message and "'solve'" in message and "got request 2" in message
 
 
-class _BadForm:
-    """A solver layer whose form breaks one of core's three rules."""
-
-    def __init__(self, form):
-        self.form = form
-
-    def __call__(self, step, **_):
-        return self.form(step)
-
-
 @pytest.mark.parametrize("form, fragment", [
     (lambda step: (), "returned no steps"),
     (lambda step: ({**step, "id": "renamed"},), "keep the solve step's id"),
@@ -142,8 +132,7 @@ class _BadForm:
 ])
 def test_a_form_that_breaks_the_rewrite_rules_is_refused(monkeypatch, form, fragment):
     context = _toy_context()
-    monkeypatch.setattr(type(context.capabilities.parallel_execution), "steps_for",
-                        lambda self: _BadForm(form))
+    monkeypatch.setattr(type(context.providers[-1]), "get_parallel_steps", lambda self, step, **_: form(step))
     with pytest.raises(TutorialRecordError, match=fragment):
         _parallel_workflow_dag(THREE_STEPS, _serial(), request=True, driver_context=context,
                                read_value=_reader({}), allocation=None)
@@ -181,7 +170,7 @@ def test_the_solver_layer_sees_the_allocation_and_refuses_a_disagreement():
 def test_a_committed_case_runs_serial_by_default(tmp_path):
     cases_root = _native_toy_case(tmp_path)
     context = _toy_context()
-    record = context.capabilities.tutorial_records.catalog()["toyTutorial"]
+    record = context.stack.call("get_tutorial_records")["toyTutorial"]
     commit, spec = commit_and_build_record_spec(
         record, case_id="c", cases_root=cases_root, staged_case_root=tmp_path / "staged",
         study_by_source={"base": {}}, driver_context=context,
@@ -194,7 +183,7 @@ def test_a_committed_case_runs_serial_by_default(tmp_path):
 def test_parallel_false_is_serial(tmp_path):
     cases_root = _native_toy_case(tmp_path)
     context = _toy_context()
-    record = context.capabilities.tutorial_records.catalog()["toyTutorial"]
+    record = context.stack.call("get_tutorial_records")["toyTutorial"]
     _commit, spec = commit_and_build_record_spec(
         record, case_id="c", cases_root=cases_root, staged_case_root=tmp_path / "staged",
         study_by_source={"base": {"parallel": False}}, driver_context=context,
@@ -206,7 +195,7 @@ def test_parallel_false_is_serial(tmp_path):
 def test_parallel_null_is_refused_by_name_never_read_as_serial(tmp_path):
     cases_root = _native_toy_case(tmp_path)
     context = _toy_context()
-    record = context.capabilities.tutorial_records.catalog()["toyTutorial"]
+    record = context.stack.call("get_tutorial_records")["toyTutorial"]
     with pytest.raises(TutorialRecordError, match="'parallel' is null"):
         commit_and_build_record_spec(
             record, case_id="c", cases_root=cases_root, staged_case_root=tmp_path / "staged",
@@ -219,7 +208,7 @@ def test_the_count_is_read_from_the_committed_case(tmp_path, monkeypatch):
     monkeypatch.delenv("SLURM_NTASKS", raising=False)
     cases_root = _native_toy_case(tmp_path, cells="2")
     context = _toy_context()
-    record = context.capabilities.tutorial_records.catalog()["toyTutorial"]
+    record = context.stack.call("get_tutorial_records")["toyTutorial"]
     commit, spec = commit_and_build_record_spec(
         record, case_id="c", cases_root=cases_root, staged_case_root=tmp_path / "staged",
         study_by_source={"base": {"parallel": True, "number_cells": 3}}, driver_context=context,
@@ -234,7 +223,7 @@ def test_the_preview_shows_the_parallel_form_the_uncommitted_study_would_run(tmp
     monkeypatch.delenv("SLURM_NTASKS", raising=False)
     cases_root = _native_toy_case(tmp_path, cells="2")
     context = _toy_context()
-    record = context.capabilities.tutorial_records.catalog()["toyTutorial"]
+    record = context.stack.call("get_tutorial_records")["toyTutorial"]
     preview = preview_record_case(
         record, cases_root=cases_root, driver_context=context,
         study_by_source={"base": {"parallel": True, "number_cells": 5}},
@@ -251,7 +240,7 @@ def test_an_allocation_in_the_environment_reaches_the_solver_layer(tmp_path, mon
     monkeypatch.setenv("SLURM_NTASKS", "2")
     cases_root = _native_toy_case(tmp_path, cells="2")
     context = _toy_context()
-    record = context.capabilities.tutorial_records.catalog()["toyTutorial"]
+    record = context.stack.call("get_tutorial_records")["toyTutorial"]
     _commit, spec = commit_and_build_record_spec(
         record, case_id="c", cases_root=cases_root, staged_case_root=tmp_path / "ok",
         study_by_source={"base": {"parallel": True}}, driver_context=context,

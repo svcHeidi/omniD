@@ -9,9 +9,8 @@ repository root.
 
 | File | Role |
 |---|---|
-| `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | **Start here.** Defines `SolverPlugin`, `SolverPluginOptionalHooks` (the probe-based hooks), `DriverContext`, and `validate_plugin()`. |
-| `packages/omnidriver/src/omnidriver/core/plugin_capabilities.py` | The capability Protocol classes (`ARCHITECTURE.md`'s capability-seam table is generated from them and CI-verified by `scripts/export-capability-seams.py --check`; treat it as the authority) + adapter dataclasses + `adapt_plugin_capabilities()`. Every plugin capability seam is documented here. |
-| `packages/omnidriver/src/omnidriver/core/compatibility.py` | The `absent_*` answers core gives for optional-hook capabilities a plugin does not implement -- neutral fallbacks, not plugin-specific ones. |
+| `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | **Start here.** `SolverPlugin` (the contract, member by member; only the identity is required), `DriverContext`, `validate_plugin()` and `driver_context()`. |
+| `packages/omnidriver/src/omnidriver/core/provider_stack.py` | `MEMBERS`, the one table of the contract: each member's composition across providers and the stack's answer when none implements it (empty, or a refusal naming the operation). `ProviderStack.call(member, ...)` is how core reaches a plugin. |
 | `packages/omnidriver/src/omnidriver/core/plugin_discovery.py` | Entry-point discovery via `importlib.metadata`. Explains `omnidriver.plugins` group name, ambiguity handling, and `_entry_points()` test seam. |
 | `packages/omnidriver/src/omnidriver/core/strict_planning.py` | The strict planner: `strict_plan()` / `omnidriver plan --strict`. Stages a copy of the record's case under the scratch root and never writes the native case; produces machine-readable JSON with readiness score, diagnostics (including the stack's `plugin_diagnostics`), and launch command. |
 | `packages/omnidriver/src/omnidriver/core/runtime_records.py` | `CORE_RUNTIME_RECORDS` — every filename/directory core itself writes into a case (`workflow_state.json`, `run_document.json`, `sweep_manifest.json`, `case_record.json`, `workflow_logs/`, ...), merged into every stack's `CaseRuntimeConventions` so staging never carries a prior run's state forward (conformance C11). |
@@ -20,7 +19,7 @@ repository root.
 | `packages/omnidriver/src/omnidriver/core/repository.py` | `read_repository()` / `repository_of_cases_root()`: a solver repository's `omnidriver.toml` (`plugin`, `tutorials`, `source`, `scripts`), read only from a supplied place. |
 | `packages/omnidriver/src/omnidriver/core/tutorial_records.py` | `TutorialRecord` and the record study contract; `case_folder_record()` builds the ad hoc one-step record `--case` runs. |
 | `benchmarks/` | Published, solver-neutral reference definitions (e.g. `niederer2011.json`) a comparison request cites by id; `scripts/check-benchmark-references.py` gates them. |
-| `ARCHITECTURE.md` | Deep architectural review: layer map, claim discipline, coupling analysis, runtime flow diagrams. Read the package-independence rules and the capability-seam table first. |
+| `ARCHITECTURE.md` | Deep architectural review: layer map, claim discipline, coupling analysis, runtime flow diagrams. Read the package-independence rules and "Provider composition" first. |
 | `CHANGELOG.md` | History of contract changes per phase. |
 
 ---
@@ -40,53 +39,14 @@ repository root.
 | `packages/omnidriver/src/omnidriver/core/contracts/dictionary.py` | `DictEntry` dataclass — the vocabulary unit. | Every dictionary key your solver reads must be a `DictEntry`. |
 | `packages/omnidriver/src/omnidriver/core/contracts/dictionary_catalog.py` | `DictionaryCatalog` — immutable partitioned store. | Return from `get_dictionary_catalog()`; validates uniqueness at construction. |
 | `pyproject.toml` | Entry-point registration. | You must add your plugin under `[project.entry-points."omnidriver.plugins"]`. |
-| `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | Full contract definition. | Read `SolverPlugin` and `SolverPluginOptionalHooks`. |
+| `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | Full contract definition. | Read `SolverPlugin`; only its identity is required. |
 
 ### Plugin Contract Quick Reference
 
-**Required (`validate_plugin` rejects a plugin lacking any)**
-
-| Member | Returns |
-|---|---|
-| `plugin_name` | `str` — human display name |
-| `plugin_id` | `str` — reverse-DNS id, matches `plugin.yaml` |
-| `plugin_version` | `str` — plugin semantics version |
-| `plugin_api_version` | `str` — `"2"`, the only supported contract version |
-| `get_profile()` | `PluginProfile` loaded from `plugin.yaml` |
-| `get_capabilities()` | `CapabilityManifest` — call `build_capability_manifest()` |
-| `validate_configuration(spec)` | `tuple[StrictDiagnostic, ...]` — plan-time checks |
-| `validate_run_semantics(context)` | `tuple[...]` — execution-time checks |
-| `predict_data_artifacts(case_root, spec)` | `tuple[DataArtifact, ...]` — never raise |
-
-**Optional members commonly implemented (probed with `getattr`; absent, each answers a neutral value or refuses by name)**
-
-| Member | Returns |
-|---|---|
-| `get_solver_commands()` | `frozenset[str]` — artifact-producing binaries |
-| `get_auxiliary_commands()` | `frozenset[str]` — meshers, decomposers |
-| `get_environment_commands()` | `frozenset[str]` — optional static commands supplied by the execution environment |
-| `is_installed_environment_command(command)` | `bool` — runtime lookup for an environment-provided application |
-| `get_utility_manifests()` | `dict[str, Any]` — per-utility pre-flight declarations |
-| `get_utility_roots()` | `tuple[Path, ...]` — utility source dirs |
-| `resolve_case_models(case_root)` | `dict` — best-effort, never raise |
-| `get_samplable_fields(resolved)` | `dict[str, tuple[str, ...]]` — by region |
-| `get_dict_entries()` / `get_dictionary_catalog()` / `get_dict_groups()` | the dictionary vocabulary; a plugin without dictionaries omits them |
-| `get_dict_entry_catalog()` | `dict` — entries by document name (unserialized) |
-| `get_solve_step_commands()` | `frozenset[str]` — for telemetry attribution |
-| `get_telemetry_source_globs(command)` | `tuple[str, ...]` — solver log locations |
-| `get_extra_provenance_paths(case_root)` | `tuple[RuntimeDependency, ...]` |
-| `get_artifact_value_reader(format)` | `Any | None` |
-
-**Key optional hooks (`SolverPluginOptionalHooks`)**
-
-| Hook | If absent | Unlocks |
-|---|---|---|
-| `get_tutorial_records()` | `--entry` refuses every name | Records for `describe`/`plan`/`run`/`sweep-run` |
-| `get_plan_diagnostics(...)` | `()` | The stack's own checks in a strict plan's `plugin_diagnostics` |
-| `get_case_runtime_conventions()` | neutral declaration | `case_entrypoints`: the file `--case` runs |
-| `get_parallel_steps(...)` | `parallel` refused by name | `--parallel` / the `parallel` study value |
-| `get_report_catalog()` | `()` | Post-run report listing |
-| `get_named_catalogs()` | `{}` | `describe` plugin catalogs |
+Only the identity is required (`plugin_name`, `plugin_id`, `plugin_version`,
+`plugin_api_version`). Which members each operation needs, and what a stack
+answers without them, is the table in `AGENT_GUIDE.md`, "Adding a New
+Solver"; `provider_stack.MEMBERS` is the authority.
 
 ---
 

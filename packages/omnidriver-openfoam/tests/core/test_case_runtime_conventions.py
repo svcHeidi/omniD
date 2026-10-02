@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from omnidriver.core.capability_manifest import capability_manifest
 from omnidriver.core.runtime.reconciler import declared_instance_names
 from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
 from omnidriver.openfoam.environment import openfoam_environment_context
 
 
 def test_openfoam_declares_allrun_case_scripts() -> None:
-    manifest = openfoam_environment_context().capabilities.manifest.manifest()
+    manifest = capability_manifest(openfoam_environment_context())
     assert manifest["allowed_commands"]["case_scripts"] == sorted(
         openfoam_case_runtime_conventions().case_script_commands
     )

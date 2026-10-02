@@ -209,16 +209,11 @@ jobs:
       - name: Check tutorial-record/axis modules write nothing
         run: python3 scripts/check-case-writes.py
 
-      # The seam table in ARCHITECTURE.md is generated from the capability
-      # Protocol docstrings. It went stale silently before this gate existed.
-      - name: Install omnidriver (the generator imports it)
+      - name: Install omnidriver (the benchmark check imports it)
         run: pip install -e packages/omnidriver
 
       - name: Check benchmark references load and cite their sources
         run: python3 scripts/check-benchmark-references.py
-
-      - name: Check ARCHITECTURE.md's capability-seam table is current
-        run: python3 scripts/export-capability-seams.py --check
 
   test-wheel:
     name: test-wheel (core artifact, py${{ matrix.python-version }})
@@ -236,10 +231,8 @@ jobs:
 
       # Every other job installs editable, which leaves this repository on
       # sys.path -- so a module reading repo-relative state at import time
-      # still works and the defect stays invisible. That bug shipped once
-      # (capability_seams.py called repo_root_default() at module scope,
-      # making it unimportable from a wheel while every test passed). This
-      # job is the only one that tests what actually ships.
+      # still works and the defect stays invisible. This job is the only one
+      # that tests what actually ships.
       - name: Build core sdist and wheel
         run: |
           pip install build

@@ -14,12 +14,13 @@ def test_profile_contract_reuses_the_cached_profile_parse():
     assert contract is profile.payload["runtime"]["backend"]
 
 
-def test_capability_manifest_adapter_no_longer_shares_a_cached_copy():
-    from omnidriver.core.plugin_capabilities import _CapabilityManifestAdapter
+def test_the_capability_manifest_is_never_a_shared_copy():
+    from omnidriver.core.capability_manifest import capability_manifest
+    from omnidriver.core.plugin_interface import driver_context
     from plugins.minimal_plugin import MinimalTestPlugin
 
-    adapter = _CapabilityManifestAdapter(MinimalTestPlugin())
-    first = adapter.manifest()
-    second = adapter.manifest()
+    context = driver_context(MinimalTestPlugin(), source="test")
+    first = capability_manifest(context)
+    second = capability_manifest(context)
     assert first == second
     assert first is not second

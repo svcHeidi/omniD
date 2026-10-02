@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from omnidriver.core.environment_connection import load_environment
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.strict_planning import strict_plan
 from plugins.conformance_toy import write_toy_native_case
@@ -29,8 +30,8 @@ class _RecordingPlugin(E2ERecordPlugin):
 def test_the_preflight_adapter_hands_the_value_over_unchanged():
     plugin = _RecordingPlugin()
     ctx = driver_context(plugin, source="test")
-    ctx.capabilities.environment_preflight.diagnostics(None, environment_source=_OPAQUE, driver_context=ctx)
-    ctx.capabilities.environment_preflight.load(environment_source=_OPAQUE, driver_context=ctx)
+    ctx.stack.call("get_environment_diagnostics", None, environment_source=_OPAQUE, driver_context=ctx)
+    load_environment(ctx, _OPAQUE)
     assert plugin.seen == [("diagnostics", _OPAQUE), ("load", _OPAQUE)]
 
 

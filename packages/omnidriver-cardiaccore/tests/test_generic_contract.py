@@ -17,11 +17,11 @@ def test_plugin_has_a_valid_context() -> None:
     # the ordered stack) is this plugin, per
     # `identity.to_json()["providers"][-1]["id"]`.
     assert context.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
-    assert len(context.capabilities.dictionaries.entries()) == 88  # includes rvLocalBands
-    assert set(context.capabilities.tutorial_records.catalog()) == {
+    assert len(context.stack.call("get_dict_entries")) == 88  # includes rvLocalBands
+    assert set(context.stack.call("get_tutorial_records")) == {
         "humanSlab", "idealizedHeart", "idealizedHeartEndocardial", "idealizedHeartPigTransmural",
     }
-    assert context.capabilities.case_runtime_conventions.conventions().case_entrypoints == ("Allrun",)
+    assert context.stack.call("get_case_runtime_conventions").case_entrypoints == ("Allrun",)
 
 
 def test_plugin_exposes_named_catalogs() -> None:
@@ -72,7 +72,7 @@ def test_declared_vocabulary_names_the_current_coordinates_dictionary() -> None:
     # records are inert data, so no plugin code runs to inspect them.
     records = driver_context(
         OpenFOAMEnvironmentPlugin(), plugin, source="test",
-    ).capabilities.tutorial_records.catalog()
+    ).stack.call("get_tutorial_records")
     consumed = {
         path
         for record in records.values()
@@ -96,7 +96,7 @@ def test_declared_tree_extension_targets_are_wall_thickness_depths() -> None:
         for e in driver_context(
             OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test",
         )
-        .capabilities.dictionaries.entries()
+        .stack.call("get_dict_entries")
     }
     assert "$PURKINJE_TREE.<ventKey>.extension.dMin" not in entries
     assert "$PURKINJE_TREE.<ventKey>.extension.dMax" not in entries
@@ -117,7 +117,7 @@ def test_every_ventkey_entry_declares_its_allowed_bindings() -> None:
 
     entries = list(
         driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
-        .capabilities.dictionaries.entries()
+        .stack.call("get_dict_entries")
     )
     vent_key_entries = [e for e in entries if "<ventKey>" in e.driver_path]
     assert len(vent_key_entries) == 21, len(vent_key_entries)
@@ -138,7 +138,7 @@ def test_every_dynamic_entry_declares_a_domain_for_every_placeholder() -> None:
     placeholder_re = re.compile(r"<[A-Za-z_][A-Za-z0-9_]*>")
     entries = list(
         driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
-        .capabilities.dictionaries.entries()
+        .stack.call("get_dict_entries")
     )
     dynamic = [e for e in entries if e.dynamic_path]
     assert dynamic, "the catalog declares no dynamic_path entry at all"
@@ -164,7 +164,7 @@ def test_the_region_id_domain_is_declared_open_on_evidence() -> None:
         e.driver_path: e
         for e in driver_context(
             OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test",
-        ).capabilities.dictionaries.entries()
+        ).stack.call("get_dict_entries")
     }
     region_entries = [
         entry for path, entry in entries.items()
@@ -199,7 +199,7 @@ def test_every_scar_source_ref_names_the_branch_it_resolves_on() -> None:
     "does the file exist" but "does the citation say where to look"."""
     entries = list(
         driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
-        .capabilities.dictionaries.entries()
+        .stack.call("get_dict_entries")
     )
     scar_dirs = ("setCardiacScar/", "setPurkinjeScar/")
     cited = [

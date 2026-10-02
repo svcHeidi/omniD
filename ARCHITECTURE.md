@@ -79,7 +79,7 @@ claim; run the command for the number:
 | core imported from a built wheel | ✅ guarded by `test_wheel_install_imports.py` |
 | plugin resolves by entry-point name | ✅ guarded by `test_entry_point_group_matches_packaging.py` |
 | core's CLI usable alone | ✅ `omnidriver --help` exits 0 in a core-only install |
-| `"org.cardiacfoam"` in core | 1 occurrence, in a docstring recording that the twenty gated fallbacks were deleted (`plugin_capabilities.py:1362`) — zero in executable logic. **Corrected 2026-09-03**: this said 2 occurrences and named `capability_seams.py:160`, whose copy went in `6a212dd`. |
+| `"org.cardiacfoam"` in core | 0 occurrences |
 
 The core-only failure count that this table used to track as the honest
 measure of how far core is from standing alone is now **zero**. It began at
@@ -133,9 +133,9 @@ Tracked as standalone notes in `future/`, each with its own status:
 
 - [`future/UTILITY_CATALOG_STANDALONE_GAP.md`](future/UTILITY_CATALOG_STANDALONE_GAP.md) —
   resolved. The 12 `utility.manifest.toml` sidecars are now bundled as
-  `omnidriver-cardiacfoam` package data and read through the
-  `command_authorization` capability seam; core no longer hardcodes any
-  plugin's utilities root.
+  `omnidriver-cardiacfoam` package data and read through the stack's
+  `get_utility_manifests`; core no longer hardcodes any plugin's utilities
+  root.
 - [`future/ELECTROPROPERTIES_TEMPLATE_FIXTURE_REVIEW.md`](future/ELECTROPROPERTIES_TEMPLATE_FIXTURE_REVIEW.md) —
   resolved. The bundled fixture is verified accurate against the dict-key
   catalog (every scoped key catalog-addressable, both dead `initialODEStep`
@@ -168,185 +168,46 @@ Tracked as standalone notes in `future/`, each with its own status:
 
 ## Provider composition
 
-**Hand-written. Outside the generated block below.** The table under
-"Plugin capability seams" is spliced by `scripts/export-capability-seams.py`
-between the `BEGIN GENERATED`/`END GENERATED` markers and regenerated from
-`core/plugin_capabilities.py`'s docstrings; this section sits above those
-markers, so `--check` and regeneration never touch it, and it is this
-document's own job to keep it accurate.
+A plugin is a stack of providers: a solver plugin layered on the environment
+it `requires:` (cardiacFOAM and cardiacCore on the OpenFOAM layer), or one
+provider on its own (openCARP). `provider_stack.order_providers` orders them
+least specific first from their profiles' `requires:`, refusing an unmet
+requirement or a cycle, stably, since the stack digest hashes the order.
 
-`provider_stack.py` composes an ordered stack of providers into one
-capability view — the same shape a single plugin produces, so every
-consumer of one plugin's capabilities consumes a composed stack unchanged.
-Composition happens per **contract member** (a `SolverPlugin` method), not
-per capability: `_SHAPE` classifies every member a capability adapts into
-exactly one shape, and `_check_classification()` fails at import if a member
-reaches composition unclassified, so an unclassified member can never fall
-through to an accidental default.
-
-The original composition spec
-(`docs/superpowers/specs/2026-09-20-provider-composition-design.md`) named
-six shapes. Classifying every member against those six (Task 6) found three
-members it could not express — `get_dictionary_catalog` (a `DictionaryCatalog`
-core owns, not a mapping), `get_configured_environment` (a transform, not a
-declaration, so it must thread through every implementer rather than merge),
-and `get_profile` (needing `case_files` concatenated and `provides` unioned,
-not resolved most-specific-first like every other opaque document) — adding
-`catalog`, `chain`, and `profile`. So what ships today is seven:
+The contract is `SolverPlugin` in `core/plugin_interface.py`. Only a
+provider's four identity properties are required; every other member is
+optional. `provider_stack.MEMBERS` is the one table of the contract: for each
+member, how a stack composes the providers that implement it, and what the
+stack answers when none does. Core reaches every member through
+`driver_context.stack.call(member, ...)`.
 
 | shape | semantics | example member(s) |
 |---|---|---|
-| `set` | union of every implementer's declared set | `get_solver_commands`, `get_environment_commands` |
-| `map` | merge in stack order; a duplicate key is an error unless the more specific entry carries `overrides: <provider id>` naming whose declaration it replaces | `get_dict_groups`, `get_named_catalogs`, `get_tutorial_records` |
-| `catalog` | the `map` rule applied to a `DictionaryCatalog`'s `documents`, then rebuilt into a catalog — core owns that type, so a provider cannot merge it itself | `get_dictionary_catalog` |
-| `sequence` | concatenate every implementer's result, in stack order | `validate_configuration`, `get_record_key_catalog` |
-| `single` | first non-`None` answer, most-specific provider first | `get_capabilities`, `get_config_value_reader`, `get_case_runtime_conventions` |
-| `chain` | thread the first argument through every implementer, in stack order | `get_configured_environment` |
-| `profile` | the declarative profile itself: `case_files` concatenated (see the single-declarer rule below), `provides` unioned, everything else from the most specific provider | `get_profile` |
+| `set` | union of every implementer's set | `get_solver_commands`, `get_environment_commands` |
+| `map` | merge in stack order; a duplicate key is an error unless the more specific entry carries `overrides: <provider id>` naming whose entry it replaces | `get_named_catalogs`, `get_tutorial_records` |
+| `catalog` | the `map` rule over a `DictionaryCatalog`'s documents, rebuilt into a catalog | `get_dictionary_catalog` |
+| `sequence` | concatenate every implementer's result, in stack order | `validate_run_semantics`, `get_record_key_catalog` |
+| `single` | the most specific non-`None` answer | `get_config_value_reader`, `get_parallel_steps` |
+| `chain` | thread the first argument through every implementer | `get_configured_environment` |
+| `profile` | every provider's profile: case files concatenated, the rest from the most specific | `get_profile` |
 
-One cross-member constraint (`_CROSS_MEMBER_PAIRS`): whichever provider wins
-`resolve_case_mutation` must also be the one that wins
-`get_supported_mutation_modes`, or a resolver would be handed a mode it never
-claimed to accept.
+A member nobody implements answers its shape's empty value (`frozenset()`,
+`{}`, `()`, `None`, an empty catalogue; `chain` returns its argument), or its
+own entry where empty would be wrong (no `get_environment_diagnostics` is an
+`environment_capability_unavailable` error in the plan). A member marked
+`Needed` refuses by name instead, naming the operation that needs it: the
+record-key validator, case-value comparator and config-value reader for
+running a record case, `get_parallel_steps` for a parallel run, and the
+resolver and renderer for writing a case.
 
-### `provides:` / `requires:`
+When a provider joins a stack, `validate_plugin` refuses a public callable
+that names no member (a misspelling would otherwise be ignored), and half of
+a pair that one provider answers together: `resolve_case_mutation` with
+`get_supported_mutation_modes`, `render_case_files` with
+`get_rendered_formats`. Building the stack refuses a case-file path or a
+rendered format with two declarers.
 
-A `PluginProfile` declares two things about how it joins a stack:
-
-- **`provides:`** is intent, not discovery — the set of capability names the
-  provider claims to fully implement. `check_provides()` compares it against
-  what the provider object actually exposes (built from the same seam table
-  the generated section below documents) and
-  reports a declared-but-absent capability as an error — how a misspelled
-  hook name becomes visible instead of silently taking a fallback route.
-  Implementing a member without declaring it is not an error: a provider may
-  use a member internally without offering it to the stack.
-- **`requires:`** names other providers' `plugin_id`s that must be present
-  for this one to compose. `order_providers()` builds the stack from every
-  provider's `requires:`, raising if a requirement is unmet or the
-  requirements form a cycle, and orders the result least-specific first —
-  stably, so the same installation always composes identically, which
-  matters because the stack digest hashes that order.
-
-**Correction, 2026-09-22 (final whole-branch review, Finding 4).** Task 9's
-plan step justified an expensive per-manifest `provides:` realness re-audit
-across all three adapters by claiming that declaring a hollow stub in
-`provides:` "lands in the stack digest's `resolutions` record as the
-provider that answered — which is a false provenance claim." That premise
-is false: `resolutions()` (`provider_stack.py`) never reads `provides:` at
-all. It picks each capability's winner purely by which provider has a
-*callable member* for it (`any(callable(getattr(provider, member, None)) ...)`),
-independent of whether that provider *declared* the capability in
-`provides:`. So a provider that implements a member but withholds the
-capability from `provides:` still wins `resolutions()` for it if it is the
-most-specific implementer — the exact "false provenance claim" the audit
-was meant to prevent still happens, just silently, in the digest. `provides:`
-is declaration-and-validation only, as the paragraph above still correctly
-describes: it controls what `check_provides()` enforces about a provider's
-own honesty (declared but not implemented is an error), and it documents
-intent. It has no effect on which provider's answer `resolutions()` — and
-therefore the stack digest — credits for a capability. This is a real gap,
-found during the final whole-branch review of Phase 1's provider-composition
-work, and is deliberately **not fixed here**: changing `resolutions()`'s
-winner-selection rule would change every `capability_digest` this codebase
-has ever computed, a far bigger and riskier change than this finding
-warrants on its own.
-
-### The single-declarer rule for case files
-
-`_check_case_file_declarers()` requires that every case-file path be
-declared by exactly one provider in the stack. Two providers declaring the
-same path raises `ValueError` naming both. This is checked eagerly, at
-`compose()` time, because it is a packaging error, not something that should
-depend on which capability a run happens to touch.
-
-### Manifest visibility across a composed stack (corrected 2026-09-22)
-
-The composition spec's §4.4 point 3 stated, as a standing limitation: "an
-environment provider's manifest is not visible in a composed stack's
-manifest." That was accurate when written: `_CapabilityManifestAdapter.manifest()`
-was then just `self.plugin.get_capabilities()` — the raw, `single`-shaped
-member — so only the most-specific provider's self-authored manifest ever
-won, discarding a companion environment provider's contribution entirely.
-
-Task 10 (2026-09-22) rewrote that adapter. It now builds the
-`environment_commands` and `plugin_commands` sections from
-`get_environment_commands`/`get_solver_commands`/`get_auxiliary_commands`
-(all `set`-shaped, unioned across the whole stack) and the
-`utility_manifests`/`samplable_fields` sections from `get_utility_manifests`/
-`get_samplable_fields` (both `map`-shaped, merged across the whole stack) —
-capability reads genuinely composed across every provider, not just the
-most specific. It merges in a provider's own raw `get_capabilities()` only
-for what core cannot compose on its own, such as cardiacFoam's
-`ionic_models` catalogue; that raw member is still `single`-shaped and still
-most-specific-wins. (`case_script_commands` is the one section this does not
-apply to: it still comes from `get_case_runtime_conventions`, which stays
-`single`-shaped, so that one section is the most-specific provider's alone.)
-
-Every real caller of the manifest capability (`dict_entries.py`,
-`core/introspection.py`, `core/strict_planning.py`) goes through
-`.manifest.manifest()`, not the raw `get_capabilities` member directly — so
-in practice an environment provider's contribution (its
-`environment_commands`, for instance) **is** visible in a composed stack's
-manifest today. The original limitation survives only for the raw
-`get_capabilities` member itself, if something were to bypass the manifest
-capability and call it directly on a composed stack — nothing in this
-codebase does.
-
-## Plugin capability seams
-
-<!-- BEGIN GENERATED: capability-seams -->
-
-<!-- Generated by scripts/export-capability-seams.py -- do not edit by
-     hand. The source of truth is the structured field block in each
-     capability Protocol's docstring in core/plugin_capabilities.py. -->
-
-`SolverPlugin` (plus the optional
-`SolverPluginOptionalHooks`) in `core/plugin_interface.py` is the **public**
-contract a plugin author implements. `PluginCapabilities` in
-`core/plugin_capabilities.py` is core's **internal** view *over* a loaded
-plugin — it points the opposite way and is not an authoring surface.
-
-A capability marked `optional-neutral` or `optional-refusing` degrades when
-the plugin does not implement its hook. Most name a `compatibility.py`
-fallback, which runs instead; no fallback branches on plugin identity, so a
-given fallback answers the same for every plugin. An `optional-refusing`
-member's fallback cannot be neutral and refuses by hook name instead.
-
-The table's `fallback` column below names one only where one exists (`none`
-otherwise) -- some optional-neutral members instead answer a neutral value
-inline, in the adapter itself, with no named fallback function (for example
-`dictionaries`'s `entries`, `catalog`, and `groups`).
-
-| capability | protocol | adapts | consumed by | fallback | status |
-|---|---|---|---|---|---|
-| `dictionaries` | `DictionaryCatalogCapability` | `get_dict_entries`, `get_dict_groups`, `get_dict_entry_catalog`, `get_dictionary_catalog` | `omnidriver/dict_entries.py`, `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/openfoam/plan_diagnostics.py`, `omnidriver/core/catalog_query.py` | `absent_dict_entry_catalog` | optional-neutral |
-| `manifest` | `CapabilityManifestCapability` | `get_capabilities` | `omnidriver/cardiacfoam/dict_entries.py`, `omnidriver/core/introspection.py`, `omnidriver/core/strict_planning.py` | none | required |
-| `configuration_validator` | `ConfigurationValidatorCapability` | `validate_configuration` | `omnidriver/core/strict_planning.py` | none | required |
-| `run_semantic_validator` | `RunSemanticValidatorCapability` | `validate_run_semantics` | `omnidriver/core/runtime/record_execution.py` | none | required |
-| `artifacts` | `ArtifactPredictorCapability` | `predict_data_artifacts` | `omnidriver/core/runtime/artifacts.py` | none | required |
-| `cxx_mapping` | `CxxMappingCapability` | `get_profile` | `omnidriver/core/catalog_query.py`, `omnidriver/openfoam/plan_diagnostics.py` | none | required |
-| `command_authorization` | `CommandAuthorizationCapability` | `get_auxiliary_commands`, `get_environment_commands`, `get_solver_commands`, `get_utility_manifests`, `get_utility_roots`, `is_installed_environment_command` | `omnidriver/core/runtime/artifacts.py`, `omnidriver/core/runtime/workflow.py`, `omnidriver/core/strict_planning.py` | `absent_auxiliary_commands`, `absent_environment_commands`, `absent_is_installed_environment_command`, `absent_solver_commands`, `absent_utility_manifests`, `absent_utility_roots` | optional-neutral |
-| `case_introspection` | `CaseIntrospectionCapability` | `get_samplable_fields`, `resolve_case_models` | `omnidriver/core/runtime/provenance_inputs.py` | `absent_resolve_case_models`, `absent_samplable_fields` | optional-neutral |
-| `case_files` | `CaseFileContractCapability` | `get_profile` | `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/record_surface.py` | none | required |
-| `case_runtime_conventions` | `CaseRuntimeConventionsCapability` | `get_case_runtime_conventions` | `omnidriver/core/runtime/sweep_runner.py` | `absent_case_runtime_conventions` | optional-neutral |
-| `environment_preflight` | `EnvironmentPreflightCapability` | `get_environment_diagnostics`, `get_configured_environment`, `get_loaded_environment` | `omnidriver/core/strict_planning.py`, `omnidriver/core/runtime/sweep_runner.py`, `omnidriver/cli.py`, `omnidriver/conformance/checks.py` | `absent_environment_diagnostics`, `absent_configured_environment`, `absent_load_environment` | optional-neutral |
-| `plan_diagnostics` | `PlanDiagnosticsCapability` | `get_plan_diagnostics` | `omnidriver/core/strict_planning.py` | none | optional-neutral |
-| `step_failure` | `StepFailureCapability` | `explain_step_failure` | `omnidriver/core/runtime/workflow_runner.py` | none | optional-neutral |
-| `runtime_evidence` | `RuntimeEvidenceCapability` | `get_artifact_value_reader`, `get_extra_provenance_paths`, `get_log_redaction_patterns`, `get_solve_step_commands`, `get_telemetry_source_globs` | `omnidriver/conformance/checks.py`, `omnidriver/core/quantities/comparison.py`, `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/runtime/record_execution.py`, `omnidriver/core/runtime/workflow_runner.py` | none | optional-neutral |
-| `record_surface` | `RecordSurfaceCapability` | `get_agent_guidance`, `get_record_key_catalog` | `omnidriver/core/runtime/record_surface.py` | none | optional-neutral |
-| `case_provenance` | `CaseProvenanceCapability` | `get_generated_output_globs`, `get_input_roots`, `get_required_inputs` | `omnidriver/core/runtime/provenance_inputs.py` | none | optional-neutral |
-| `report_catalog` | `ReportCatalogCapability` | `get_report_catalog` | `scripts/export-report-catalog.py` | `absent_report_catalog` | optional-neutral |
-| `named_catalogs` | `NamedCatalogsCapability` | `get_named_catalogs` | `omnidriver/core/introspection.py` | `absent_named_catalogs` | optional-neutral |
-| `config_value` | `ConfigValueCapability` | `get_config_value_reader` | `omnidriver/core/runtime/record_execution.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
-| `effective_configuration` | `EffectiveConfigurationCapability` | `inspect_effective_configuration` | `omnidriver/core/runtime/provenance_inputs.py`, `omnidriver/core/strict_planning.py` | `absent_inspect_effective_configuration` | optional-neutral |
-| `dict_key_scanner` | `DictKeyScannerCapability` | `get_dict_key_scanner` | `omnidriver/openfoam/plan_diagnostics.py`, `omnidriver/core/catalog_query.py` | `absent_dict_key_scanner` | optional-neutral |
-| `case_writer` | `CaseWriterCapability` | `resolve_case_mutation`, `get_supported_mutation_modes`, `get_rendered_formats`, `render_case_files` | none | none | resolve_case_mutation=optional-refusing, get_supported_mutation_modes=optional-refusing, get_rendered_formats=optional-refusing, render_case_files=optional-refusing |
-| `tutorial_records` | `TutorialRecordCapability` | `get_tutorial_records` | `omnidriver/core/tutorial_records.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
-| `record_key_validation` | `RecordKeyValidationCapability` | `get_record_key_validator` | `omnidriver/core/runtime/record_execution.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
-| `case_value_comparison` | `CaseValueComparisonCapability` | `get_case_value_comparator` | `omnidriver/core/runtime/record_execution.py`, `omnidriver/conformance/checks.py` | none | optional-neutral |
-| `parallel_execution` | `ParallelExecutionCapability` | `get_parallel_steps` | `omnidriver/core/runtime/record_execution.py` | none | optional-neutral |
-
-26 capability seams.
-
-<!-- END GENERATED: capability-seams -->
+The stack identity records, per member, the most specific implementing
+provider (`<unclaimed>` when none), and digests the content of the profile,
+the dictionary entries and the manifest. A content change in another member,
+in an editable install with no version bump, is invisible to it.

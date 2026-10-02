@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.capability_manifest import build_capability_manifest
-from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from omnidriver.core.runtime.provenance_inputs import _is_case_local_script

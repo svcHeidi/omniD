@@ -40,6 +40,7 @@ from pathlib import Path
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.runtime_profile import configure_runtime_environment
+from omnidriver.core.environment_connection import load_environment
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
@@ -122,9 +123,7 @@ def test_composed_load_threads_the_sourced_environment_through_configure(tmp_pat
         source="test:environment_preflight_composition",
     )
 
-    loaded = ctx.capabilities.environment_preflight.load(
-        environment_source=str(bashrc), driver_context=ctx,
-    )
+    loaded = load_environment(ctx, str(bashrc))
 
     # Sourcing only re-exports the process environment; this key comes from `configure_runtime_environment`.
     assert loaded.get("OMNIDRIVER_CARDIACFOAM_BUILD_MANIFEST") == str(manifest_path)

@@ -131,11 +131,10 @@ def test_core_exports_no_phase_vocabulary():
 
 
 def test_entries_and_catalog_agree(driver_context_for_installed_plugins):
-    """One capability must not give two answers."""
+    """The flat entries and the catalogue must not give two answers."""
     for context in driver_context_for_installed_plugins:
-        dictionaries = context.capabilities.dictionaries
-        flat = {entry.driver_path for entry in dictionaries.entries()}
-        catalogued = {entry.driver_path for entry in dictionaries.catalog().entries}
+        flat = {entry.driver_path for entry in context.stack.call("get_dict_entries")}
+        catalogued = {entry.driver_path for entry in context.stack.call("get_dictionary_catalog").entries}
         # StackIdentity has no singular id -- name every provider in the
         # composed stack instead.
         provider_ids = [p.id for p in context.identity.providers]

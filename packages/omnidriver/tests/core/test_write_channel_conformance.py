@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core import case_transaction, case_write, plugin_capabilities, provider_stack
+from omnidriver.core import case_transaction, case_write, provider_stack
 from omnidriver.core import provider_identity
 from omnidriver.core.planning_types import SimulationAuditItem
 from omnidriver.core.runtime.attempt_lease import acquire_case_lease
@@ -98,6 +98,12 @@ class _Profile:
     def __init__(self, requires=()):
         self.requires = tuple(requires)
         self.case_files = ()
+
+
+def _context(*providers):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(stack=provider_stack.ProviderStack(provider_stack.order_providers(providers)))
 
 
 # --------------------------------------------------------------------------
@@ -206,11 +212,8 @@ class _FormatBRenderer:
 
 def test_format_specific_patching(tmp_path):
     """A plan spanning two formats, each rendered by its own declarer, committed in one transaction."""
-    capabilities = provider_stack.compose(
-        provider_stack.order_providers([_FormatARenderer(), _FormatBRenderer()])
-    )
-    rendered = capabilities.case_writer.render(
-        object(), snapshot_root=tmp_path, driver_context=object(),
+    rendered = case_write.render_mutation(
+        _context(_FormatARenderer(), _FormatBRenderer()), object(), snapshot_root=tmp_path,
     )
     assert {r.renderer_id for r in rendered} == {"org.format_a", "org.format_b"}
 
@@ -267,17 +270,11 @@ class _FoldedRenderer(_TwoFileRenderer):
 
 def test_repeated_edits_to_one_file(tmp_path):
     """`CaseWritePlan` refuses two `RenderedFile`s at one path, so a renderer handling two parameters landing in one document must fold them into one rendering."""
-    two_files = plugin_capabilities.adapt_plugin_capabilities(_TwoFileRenderer())
-    rendered = two_files.case_writer.render(
-        object(), snapshot_root=tmp_path, driver_context=object(),
-    )
+    rendered = case_write.render_mutation(_context(_TwoFileRenderer()), object(), snapshot_root=tmp_path)
     with pytest.raises(ValueError, match="written twice"):
         _plan(tmp_path, rendered)
 
-    folded = plugin_capabilities.adapt_plugin_capabilities(_FoldedRenderer())
-    one_file = folded.case_writer.render(
-        object(), snapshot_root=tmp_path, driver_context=object(),
-    )
+    one_file = case_write.render_mutation(_context(_FoldedRenderer()), object(), snapshot_root=tmp_path)
     plan = _plan(tmp_path, one_file)
     case_transaction.commit_case_write(plan, driver_context=object())
     content = (tmp_path / "constant" / "a").read_bytes()
@@ -441,13 +438,15 @@ def test_rollback_failure(tmp_path, monkeypatch):
 
 
 class _StackProfile:
+    digest = "sha256:profile"
+
     def __init__(self, requires=()):
         self.requires = tuple(requires)
         self.case_files = ()
 
 
 class _StackProvider:
-    """Implements `case_writer` (not digested) and `get_profile` (digested via `cxx_mapping`), so `resolutions()` gives one capability a real winner with a placeholder digest."""
+    """Implements a renderer (not digested) and `get_profile` (digested), so `resolutions()` gives one member a real winner with a placeholder digest."""
 
     def __init__(self, plugin_id: str):
         self.plugin_id = plugin_id
@@ -456,7 +455,7 @@ class _StackProvider:
         return _StackProfile()
 
     def get_rendered_formats(self):
-        return frozenset({"openfoam_dictionary"})
+        return frozenset({f"{self.plugin_id}_format"})
 
     def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env):
         return ()
@@ -468,7 +467,7 @@ def _installed_providers():
 
 def _stack_identity_for(providers) -> provider_identity.StackIdentity:
     ordered = provider_stack.order_providers(providers)
-    resolved = provider_stack.resolutions(ordered)
+    resolved = provider_stack.resolutions(provider_stack.ProviderStack(ordered))
     identities = tuple(
         provider_identity.ProviderIdentity(
             id=provider.plugin_id, version="1.0", api_version="2",
@@ -514,21 +513,10 @@ def test_stale_build(tmp_path):
 
 def test_the_stack_digest_does_not_yet_bind_renderer_content(tmp_path):
     """Fails when C4 is fixed."""
-    recorded = provider_stack.resolutions(
-        provider_stack.order_providers(_installed_providers())
-    )
-    placeheld = [
-        capability for capability, (_winner, digest) in recorded.items()
-        if digest == provider_stack.RESOLUTION_PLACEHOLDER
-    ]
-    assert placeheld, (
-        "every capability now carries a real content digest; C4 is closed, "
-        "so delete this test and the limit note on test_stale_build"
-    )
-    # The stronger form of the claim: `case_writer` has a real IMPLEMENTER
-    # (not `UNCLAIMED`) and still only a placeholder digest -- an editable
-    # install's renderer content is genuinely unbound, not merely unclaimed.
-    winner, digest = recorded["case_writer"]
+    recorded = provider_stack.resolutions(_context(*_installed_providers()).stack)
+    # A renderer with a real implementer (not `UNCLAIMED`) still carries only
+    # a placeholder digest: an editable install's renderer content is unbound.
+    winner, digest = recorded["render_case_files"]
     assert winner == "org.format"
     assert digest == provider_stack.RESOLUTION_PLACEHOLDER
 
@@ -644,9 +632,7 @@ class _SecondRenderer(_Renderer):
 def test_duplicate_ownership():
     """Two providers declaring one format; composition refuses."""
     with pytest.raises(ValueError, match="openfoam_dictionary"):
-        provider_stack.compose(
-            provider_stack.order_providers([_Renderer(), _SecondRenderer()])
-        )
+        _context(_Renderer(), _SecondRenderer())
 
 
 # --------------------------------------------------------------------------

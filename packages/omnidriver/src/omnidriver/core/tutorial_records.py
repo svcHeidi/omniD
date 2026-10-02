@@ -754,7 +754,7 @@ class AxisPatch:
     axis-produced patch for a key absent from any catalog reach a commit
     unchecked. ``resolve_case_patches`` runs every patch, axis-produced or a
     direct study key alike, through
-    ``RecordKeyValidationCapability.validate`` and carries the answer on
+    the stack's record-key validator and carries the answer on
     ``SourcedPatch.validated`` instead -- the validator decides, never the
     patch.
     """
@@ -907,8 +907,8 @@ def sort_study_name(
     ``/``, e.g. ``constant/someProperties``), the rest is a dot-joined key
     path. Its document is checked for shape only (case-relative, no ``..``
     escape, non-empty) -- whether the key itself is one a real catalog
-    recognises is adapter work, resolved later by
-    ``RecordKeyValidationCapability`` (``resolve_case_patches``), not here.
+    recognises is adapter work, resolved later by the stack's record-key
+    validator (``resolve_case_patches``), not here.
 
     A name with no colon is a bare axis name, resolved against ``axes``, the
     entry's own (``TutorialRecord.axes``), and refused when none of them has
@@ -948,7 +948,7 @@ class SourcedPatch:
     record-key catalog considers it.
 
     ``validated`` lives here, not on ``AxisPatch``: it is always
-    ``RecordKeyValidationCapability.validate``'s own answer for this exact
+    the record-key validator's own answer for this exact
     ``(document, key_path, value)``, computed uniformly for a direct study
     key or an axis-produced patch alike -- never a value a patch invented
     about itself. There is deliberately no default: every call site that
@@ -1256,11 +1256,11 @@ def split_unchanged(
 ) -> tuple[tuple[SourcedPatch, ...], tuple[SourcedPatch, ...]]:
     """Split ``patches`` into ``(to_write, unchanged)``.
 
-    Uses the adapter's own typed comparison (``values_agree``, sourced from
-    ``CaseValueComparisonCapability``) against the staged case's current
-    value (``read_current_value``, sourced from ``ConfigValueCapability``) --
-    never Python ``==``/string equality (see ``CaseValueComparisonCapability``'s
-    docstring for why). ``read_current_value`` is always called with the
+    Uses the adapter's own typed comparison (``values_agree``, the stack's
+    ``get_case_value_comparator``) against the staged case's current value
+    (``read_current_value``, its ``get_config_value_reader``) -- never Python
+    ``==``/string equality: a requested ``1e-3`` and a resolved ``0.001`` are
+    one value. ``read_current_value`` is always called with the
     patch's ``key_path`` as a tuple (``patch.key_path`` itself, never a
     dotted string): a real adapter's reader may split that tuple into a
     scope and a leaf key of its own file format's shape -- this function

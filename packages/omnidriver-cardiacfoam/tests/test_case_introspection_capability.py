@@ -22,21 +22,18 @@ def _cardiac_case(root: Path) -> Path:
 
 
 def test_cardiac_plugin_exposes_its_fixed_fields(tmp_path: Path) -> None:
-    introspection = _CTX.capabilities.case_introspection
-    resolved = introspection.resolve_case_models(_cardiac_case(tmp_path))
+    resolved = _CTX.stack.call("resolve_case_models", _cardiac_case(tmp_path))
     assert resolved["solver"] == "monodomainSolver"
-    electro = introspection.samplable_fields(resolved)["electro"]
+    electro = _CTX.stack.call("get_samplable_fields", resolved)["electro"]
     assert "Vm" in electro
     assert "activationTime" in electro
 
 
 def test_missing_case_file_resolves_to_none_without_raising(tmp_path: Path) -> None:
-    introspection = _CTX.capabilities.case_introspection
-    resolved = introspection.resolve_case_models(tmp_path)
+    resolved = _CTX.stack.call("resolve_case_models", tmp_path)
     assert resolved == {"solver": None, "ionic_model": None, "active_tension": None}
 
 
 def test_no_active_tension_means_no_solid_region(tmp_path: Path) -> None:
-    introspection = _CTX.capabilities.case_introspection
-    resolved = introspection.resolve_case_models(_cardiac_case(tmp_path))
-    assert introspection.samplable_fields(resolved)["solid"] == ()
+    resolved = _CTX.stack.call("resolve_case_models", _cardiac_case(tmp_path))
+    assert _CTX.stack.call("get_samplable_fields", resolved)["solid"] == ()

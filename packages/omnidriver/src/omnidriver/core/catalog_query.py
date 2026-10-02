@@ -1,7 +1,7 @@
 """``omnidriver catalog``: the entries of one dictionary for one solver.
 
 One query over the one canonical key catalogue a record has
-(``RecordSurfaceCapability.key_catalog``, what ``describe`` shows as
+(the stack's ``get_record_key_catalog``, what ``describe`` shows as
 ``record_surface.keys`` and what the record-key validator refuses by), so an
 agent can ask for a document or a key without reading all of ``describe``.
 

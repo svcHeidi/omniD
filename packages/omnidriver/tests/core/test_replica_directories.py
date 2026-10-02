@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import is_replica_directory_name
 from omnidriver.core.runtime.sweep_runner import _stage_entry_case

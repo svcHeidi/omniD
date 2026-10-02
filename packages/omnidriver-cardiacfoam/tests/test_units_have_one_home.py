@@ -50,7 +50,7 @@ def _claimed_in_prose(entry) -> str | None:
 
 
 def test_a_unit_stated_in_prose_is_also_declared() -> None:
-    entries = _CTX.capabilities.dictionaries.entries()
+    entries = _CTX.stack.call("get_dict_entries")
     assert len(entries) > 100, (
         f"expected the full cardiacFOAM catalogue, got {len(entries)} entries -- "
         "this guard is not looking where it thinks"
@@ -72,7 +72,7 @@ def test_a_unit_stated_in_prose_is_also_declared() -> None:
 
 def test_prose_and_declared_units_agree() -> None:
     """The bracketed token may stay for human readers, but this fails the moment it drifts from the field."""
-    entries = _CTX.capabilities.dictionaries.entries()
+    entries = _CTX.stack.call("get_dict_entries")
 
     disagreements = [
         f"{entry.driver_path}: prose says [{_claimed_in_prose(entry)}], unit is {entry.unit!r}"

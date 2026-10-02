@@ -48,9 +48,7 @@ monodomainSolver::monodomainSolver(const dictionary& electroProperties)
 
 
 def _context(mapping):
-    return SimpleNamespace(capabilities=SimpleNamespace(
-        cxx_mapping=SimpleNamespace(profile=lambda: SimpleNamespace(cxx_mapping=mapping)),
-    ))
+    return SimpleNamespace(stack=SimpleNamespace(call=lambda member: SimpleNamespace(cxx_mapping=mapping)))
 
 
 def _mapping(tmp_path, monkeypatch, source):

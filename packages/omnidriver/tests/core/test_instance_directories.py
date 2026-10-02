@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.models import DataArtifact, expand_path_pattern
 from omnidriver.core.runtime.reconciler import declared_instance_names, reconcile_artifacts

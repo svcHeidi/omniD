@@ -18,10 +18,10 @@ _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source=
 
 
 def _resolve(record_name: str, study: dict, tmp_path):
-    record = _CTX.capabilities.tutorial_records.catalog()[record_name]
+    record = _CTX.stack.call("get_tutorial_records")[record_name]
     combined, command_arguments = resolve_case_patches(
         record, study_by_source={"base": study}, staged_case_root=tmp_path,
-        direct_key_validator=_CTX.capabilities.record_key_validation.validator(),
+        direct_key_validator=_CTX.stack.call("get_record_key_validator"),
     )
     return {sourced.slot(): sourced.patch.value for sourced in combined}, command_arguments
 
@@ -77,7 +77,7 @@ def test_a_record_refuses_an_axis_only_another_record_declares():
     """``ionicModel`` is restitutionCurves' axis; bidomain refuses it by name rather than borrowing it."""
     from omnidriver.core.tutorial_records import sort_study_name
 
-    catalog = _CTX.capabilities.tutorial_records.catalog()
+    catalog = _CTX.stack.call("get_tutorial_records")
     assert "ionicModel" in catalog["restitutionCurves"].axis_names()
     with pytest.raises(TutorialRecordError, match="ionicModel"):
         sort_study_name("ionicModel", axes=catalog["manufacturedBidomain"].axes)
@@ -100,10 +100,10 @@ _TET_ROUTES_WRITING_DIMENSION = [
 
 
 def _resolve_on_route(record_name: str, variant: str, study: dict, tmp_path):
-    record = _CTX.capabilities.tutorial_records.catalog()[record_name]
+    record = _CTX.stack.call("get_tutorial_records")[record_name]
     return resolve_case_patches(
         record, study_by_source={"base": study}, staged_case_root=tmp_path,
-        direct_key_validator=_CTX.capabilities.record_key_validation.validator(),
+        direct_key_validator=_CTX.stack.call("get_record_key_validator"),
         workflow_step_ids=record.workflow_variants[variant],
     )
 
@@ -134,7 +134,7 @@ def test_the_hex_route_admits_every_dimension(record_name, dimension, tmp_path):
 
 
 def _records_with_a_gmsh_step():
-    for record in _CTX.capabilities.tutorial_records.catalog().values():
+    for record in _CTX.stack.call("get_tutorial_records").values():
         steps = {step.step_id: step for step in record.workflow_steps}
         if "gmsh" in steps:
             yield record, steps
@@ -158,7 +158,7 @@ def test_no_gmsh_step_restates_its_templates_lc_default():
     ("niederer2011", {"tetDx": 0.0002}, "0.0002"),
 ])
 def test_a_tet_axis_adds_lc_to_the_gmsh_command_line(record_name, study, lc, tmp_path):
-    record = _CTX.capabilities.tutorial_records.catalog()[record_name]
+    record = _CTX.stack.call("get_tutorial_records")[record_name]
     _, command_arguments = _resolve(record_name, study, tmp_path)
     gmsh = next(step for step in record.workflow_steps if step.step_id == "gmsh")
     argv = gmsh.argv(command_arguments["gmsh"])

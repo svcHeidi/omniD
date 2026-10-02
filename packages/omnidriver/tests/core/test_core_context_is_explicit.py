@@ -159,10 +159,8 @@ def test_core_threads_its_context_through_the_public_edge() -> None:
 # name here stops existing -- a guard naming nothing guards nothing.
 _ROOT_INVENTING = {"repo_root_default"}
 
-# capability_seams.architecture_path() legitimately needs a checkout: it
-# points at ARCHITECTURE.md for the seam-table generator, which is dev
-# tooling, never a runtime path. paths.py is where these are defined.
-_ROOT_EXEMPT = {_CORE_ROOT / "capability_seams.py", _CORE_ROOT / "specs" / "paths.py"}
+# paths.py is where these are defined.
+_ROOT_EXEMPT = {_CORE_ROOT / "specs" / "paths.py"}
 
 
 def test_the_root_inventing_names_still_exist() -> None:

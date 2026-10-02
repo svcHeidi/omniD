@@ -15,7 +15,7 @@ STEP_STATUS_VALUES = ("pending", "running", "completed", "failed", "skipped")
 
 
 # Core-only process commands, always allowed and resolved via PATH. Solver
-# and environment commands arrive through CommandAuthorizationCapability;
+# and environment commands arrive through the stack's command members;
 # core must not name either kind here.
 CORE_NEUTRAL_COMMANDS = frozenset(
     {

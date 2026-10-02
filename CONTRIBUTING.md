@@ -55,7 +55,7 @@ environment; in short:
 | all four packages installed | ordinary regressions |
 | core installed alone | core reaching into a sibling package |
 | **core installed from a built wheel** | core reading repo-relative state at import time |
-| `scripts/check-import-boundaries.py`, `scripts/export-capability-seams.py --check` | import direction; a stale generated table |
+| `scripts/check-import-boundaries.py`, `scripts/check-case-writes.py`, `scripts/check-core-shape.py`, `scripts/check-benchmark-references.py` | import direction; a record module writing a case directly; core naming a new OpenFOAM layout token; a benchmark reference that fails to load |
 
 CI runs all four. The wheel shape is the one contributors skip and the one that
 has found the worst defects.

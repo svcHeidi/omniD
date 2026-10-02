@@ -1,12 +1,15 @@
 """The utility manifests and the guidance are package data, read without a source checkout."""
 
+from pathlib import Path
+
 from omnidriver.cardiaccore import CardiacCorePlugin
+from omnidriver.cardiaccore import plugin as plugin_module
 
 
 def test_utility_manifests_load_from_the_declared_root() -> None:
     plugin = CardiacCorePlugin()
     manifests = plugin.get_utility_manifests()
-    (root,) = plugin.get_utility_roots()
+    root = Path(plugin_module.__file__).parent / "utilities"
 
     assert plugin.get_auxiliary_commands() == frozenset(manifests)
     assert {"setCardiacConductivity", "generatePurkinjeTree", "refine1Dgraph"} <= set(manifests)

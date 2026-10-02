@@ -128,7 +128,7 @@ class ParameterAssignment:
     #: full catalog yet is written anyway, flagged ``False``. Core never
     #: decides this itself; whichever adapter resolves the key
     #: (``core.tutorial_records.resolve_case_patches``'s
-    #: ``direct_key_validator``, via ``RecordKeyValidationCapability``) does.
+    #: ``direct_key_validator``, the stack's ``get_record_key_validator``) does.
     #:
     #: Tri-state, not a default-True boolean: a validation opinion that was
     #: never formed is not the same as one that passed, so ``None`` means

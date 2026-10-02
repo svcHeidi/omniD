@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from omnidriver.core.plugin_discovery import load_discovered_plugin
-from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS
+from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS, case_runtime_conventions
 
 
 def test_no_provider_declares_cores_own_files() -> None:
@@ -16,5 +16,5 @@ def test_no_provider_declares_cores_own_files() -> None:
             | set(conventions.generated_case_markers)
         )
         assert not declared & core_names, f"{provider.plugin_id} declares core's {sorted(declared & core_names)}"
-    merged = ctx.capabilities.case_runtime_conventions.conventions()
+    merged = case_runtime_conventions(ctx)
     assert core_names <= set(merged.generated_file_names) | set(merged.generated_directory_names)

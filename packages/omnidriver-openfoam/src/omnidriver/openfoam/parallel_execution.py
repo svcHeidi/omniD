@@ -16,8 +16,7 @@ def parallel_steps_for_record(
     step: Mapping[str, Any], *, request: Any,
     read_value: Callable[[str, tuple[str, ...]], Any], allocation: Any,
 ) -> list[dict]:
-    """The OpenFOAM layer's ``get_parallel_steps`` (core's
-    ``SolverPluginOptionalHooks``): a record's serial solve step as
+    """The OpenFOAM layer's ``get_parallel_steps``: a record's serial solve step as
     ``<id>.decompose`` -> ``<id>`` under ``mpirun -np N ... -parallel`` ->
     ``<id>.reconstruct``; later steps follow the reconstruct step.
 

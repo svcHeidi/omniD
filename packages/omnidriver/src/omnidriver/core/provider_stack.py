@@ -55,7 +55,8 @@ _WRITE = Needed("writing a case")
 #: answer; ``chain`` threads the first argument through each; ``profile``
 #: composes every provider's declarative profile.
 #:
-#: Absent, when no provider implements the member: ``None`` answers the
+#: Absent, when no provider implements the member (or, for ``single``, every
+#: implementer answers ``None``): ``None`` answers the
 #: shape's empty value (``chain`` returns its first argument); a function
 #: answers what it returns; :class:`Needed` refuses by name.
 MEMBERS: dict[str, tuple[str, Any]] = {
@@ -340,7 +341,9 @@ class ProviderStack:
             return self._profile
         implementers = self.implementers(member)
         if implementers:
-            return _COMPOSE[shape](implementers, member, args, kwargs)
+            answer = _COMPOSE[shape](implementers, member, args, kwargs)
+            if answer is not None or shape != "single":
+                return answer
         if isinstance(absent, Needed):
             raise self.refusal(member)
         return absent() if absent is not None else _EMPTY[shape](args)
@@ -381,8 +384,8 @@ class ProviderStack:
 
 def check_provider_members(provider: Any) -> list[str]:
     """One problem per malformed member: a public callable the contract does
-    not name (a misspelling would otherwise be ignored), a member that is not
-    callable, or half of a pair in :data:`_PAIRS`."""
+    not name (a misspelling would otherwise be ignored), a member that is
+    neither callable nor ``None``, or half of a pair in :data:`_PAIRS`."""
     from .plugin_interface import IDENTITY_MEMBERS
 
     problems: list[str] = []
@@ -391,7 +394,8 @@ def check_provider_members(provider: Any) -> list[str]:
             continue
         value = getattr(provider, name, None)
         if name in MEMBERS:
-            if not callable(value):
+            # None declares the member absent, as a subclass removing one does.
+            if value is not None and not callable(value):
                 problems.append(f"{name} must be callable")
         elif callable(value):
             problems.append(f"{name} is not a plugin contract member")

@@ -185,7 +185,7 @@ class CataloguedDocument:
 def make_validator(
     documents: Mapping[str, CataloguedDocument], *, mapping: Callable[[], Any], owner: str,
 ) -> Callable[[str, "tuple[str, ...]", Any], "tuple[str, bool]"]:
-    """The ``RecordKeyValidationCapability`` answer for a plugin whose
+    """The ``get_record_key_validator`` answer for a plugin whose
     catalogued ``documents`` are given. ``mapping`` returns the plugin's
     ``cxx_mapping``; ``owner`` names the plugin in refusals."""
 

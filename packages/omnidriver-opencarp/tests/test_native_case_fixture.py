@@ -77,7 +77,7 @@ def test_apply_adds_a_line_to_the_staged_par_and_keeps_every_other_byte(tmp_path
     before = (case_root / "nversion.par").read_text()
     with acquire_case_lease(case_root):
         applied = record_execution.apply_record_study(
-            context.capabilities.tutorial_records.catalog()[ENTRY], case_root=case_root, driver_context=context,
+            context.stack.call("get_tutorial_records")[ENTRY], case_root=case_root, driver_context=context,
             study={"nversion.par:tend": 12.0},
         )
     assert {patch["status"] for patch in applied} == {"changed"}

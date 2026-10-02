@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 
 
@@ -24,7 +24,6 @@ class MinimalTestPlugin:
     #: that overrides ``__init__`` without calling ``super()`` must still
     #: resolve them.
     _solver_commands: frozenset[str] = frozenset()
-    _telemetry_globs: dict[str, tuple[str, ...]] = {}
     #: Tutorial-record test seams. Empty by default: a plugin declaring no
     #: records/validator/comparator is the ordinary case -- this plugin
     #: still implements all three hooks (returning the empty/None defaults
@@ -39,7 +38,6 @@ class MinimalTestPlugin:
         *,
         entrypoint: str | None = None,
         solver_commands: frozenset[str] | set[str] | None = None,
-        telemetry_globs: dict[str, tuple[str, ...]] | None = None,
         tutorial_records: dict | None = None,
         record_key_validator=None,
         case_value_comparator=None,
@@ -48,8 +46,6 @@ class MinimalTestPlugin:
         self._entrypoint = entrypoint
         if solver_commands is not None:
             self._solver_commands = frozenset(solver_commands)
-        if telemetry_globs is not None:
-            self._telemetry_globs = dict(telemetry_globs)
         if tutorial_records is not None:
             self._tutorial_records = dict(tutorial_records)
         if record_key_validator is not None:
@@ -135,9 +131,6 @@ class MinimalTestPlugin:
     def get_utility_manifests(self) -> dict:
         return {}
 
-    def get_utility_roots(self) -> tuple[Path, ...]:
-        return ()
-
     def resolve_case_models(self, case_root):
         del case_root
         return {}
@@ -148,9 +141,6 @@ class MinimalTestPlugin:
 
     def get_solve_step_commands(self) -> frozenset:
         return frozenset()
-
-    def get_telemetry_source_globs(self, command: str) -> tuple:
-        return self._telemetry_globs.get(command, ())
 
     def get_extra_provenance_paths(self, case_root) -> tuple:
         del case_root

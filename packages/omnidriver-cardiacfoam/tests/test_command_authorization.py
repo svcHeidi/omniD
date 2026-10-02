@@ -45,18 +45,19 @@ def test_cardiac_plugin_authorizes_its_own_solver() -> None:
 
 def test_cardiac_utilities_come_from_the_plugin() -> None:
     context = _CTX
-    manifests = context.capabilities.command_authorization.utility_manifests()
+    manifests = context.stack.call("get_utility_manifests")
     assert "listCellModelsVariables" in manifests
     generic = openfoam_environment_context()
-    assert generic.capabilities.command_authorization.utility_manifests() == {}
+    assert generic.stack.call("get_utility_manifests") == {}
 
 
 def test_solver_and_auxiliary_commands_are_distinct() -> None:
     """Only solver_commands() may be credited with a run's artifacts (normalize_workflow_dag)."""
-    auth = _CTX.capabilities.command_authorization
-    assert auth.solver_commands() == frozenset({"cardiacFoam"})
-    assert auth.auxiliary_commands() == frozenset({"gradientReconstructionOrder"})
-    assert not (auth.solver_commands() & auth.auxiliary_commands())
+    solver = _CTX.stack.call("get_solver_commands")
+    auxiliary = _CTX.stack.call("get_auxiliary_commands")
+    assert solver == frozenset({"cardiacFoam"})
+    assert auxiliary == frozenset({"gradientReconstructionOrder"})
+    assert not (solver & auxiliary)
 
 
 def test_utility_manifests_are_not_a_shared_mutable_dict() -> None:

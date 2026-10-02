@@ -37,36 +37,6 @@ def test_unsupported_version_is_rejected_before_any_catalog_runs() -> None:
         driver_context(FuturePlugin(), source="test")
 
 
-def test_declaring_the_contract_without_implementing_it_is_rejected() -> None:
-    """A version string is not a contract unless the shape is checked."""
-
-    class HalfMigratedPlugin(MinimalTestPlugin):
-        # Drops one required member; must be one the seam tiers still mark
-        # `required` -- several members have since been demoted to
-        # `optional-neutral` and no longer serve this test.
-        validate_configuration = None
-
-    with pytest.raises(TypeError, match="does not implement the plugin contract"):
-        driver_context(HalfMigratedPlugin(), source="test")
-
-
-def test_the_shape_check_names_what_is_missing() -> None:
-    # Both members must be `required` per the seam tiers -- see the note in
-    # test_declaring_the_contract_without_implementing_it_is_rejected above.
-    # Step S6 deleted `get_tutorial_catalog` (the required member this used
-    # to pair with `get_capabilities`) outright, along with the capability
-    # it backed; `predict_data_artifacts` is still real and required.
-    class MissingTwo(MinimalTestPlugin):
-        get_capabilities = None
-        predict_data_artifacts = None
-
-    with pytest.raises(TypeError) as excinfo:
-        driver_context(MissingTwo(), source="test")
-    message = str(excinfo.value)
-    assert "get_capabilities" in message
-    assert "predict_data_artifacts" in message
-
-
 def test_neutral_plugin_builds_an_explicit_context() -> None:
     context = driver_context(MinimalTestPlugin(), source="test:plugin-api")
     assert context.identity.providers[0].id == "org.omnidriver.test-minimal"

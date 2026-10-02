@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context
-from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin

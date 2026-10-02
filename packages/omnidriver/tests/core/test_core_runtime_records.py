@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from omnidriver.core.case_transaction import _JOURNAL_RELATIVE_PATH
-from omnidriver.core.plugin_capabilities import CaseRuntimeConventions
+from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.attempt_lease import (
     ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME,
@@ -16,7 +16,7 @@ from omnidriver.core.runtime.run_document_exec import RUN_DOCUMENT_FILENAME
 from omnidriver.core.runtime.sweep_manifest import SWEEP_MANIFEST_FILENAME
 from omnidriver.core.runtime.sweep_runner import _stage_entry_case
 from omnidriver.core.runtime.workflow_orchestrator import STATE_FILENAME, WORKFLOW_LOGS_DIRNAME
-from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS, with_core_runtime_records
+from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS, case_runtime_conventions, with_core_runtime_records
 from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 from plugins.minimal_plugin import MinimalTestPlugin
 
@@ -38,7 +38,7 @@ def test_core_names_every_file_it_writes_into_a_case():
 
 def test_a_stack_that_declares_nothing_still_knows_cores_records():
     ctx = driver_context(MinimalTestPlugin(), source="test")
-    assert ctx.capabilities.case_runtime_conventions.conventions() == CORE_RUNTIME_RECORDS
+    assert case_runtime_conventions(ctx) == CORE_RUNTIME_RECORDS
 
 
 def test_merging_keeps_the_plugins_names_first_and_adds_cores_once():
