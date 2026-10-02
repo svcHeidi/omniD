@@ -45,8 +45,8 @@ from the working directory:
   the tutorials folder. omnidriver exports the profile's declared source
   variable (`OMNIDRIVER_NATIVE_TUTORIALS` for cardiacFOAM,
   `OMNIDRIVER_CARDIACCORE_TREE` for cardiacCore) from the repository, and
-  refuses a variable already set to something else. `scripts` is read, not
-  yet used.
+  refuses a variable already set to something else. It likewise exports
+  `scripts` as `OMNIDRIVER_SCRIPTS_DIR` (see "Repository scripts").
 - `--cases-root <dir>` or `$OMNIDRIVER_CASES_ROOT`, when it is a repository's
   tutorials folder: the cases root itself or its parent holds an
   `omnidriver.toml` whose `tutorials` is that folder. The working-directory
@@ -61,6 +61,25 @@ With neither a repository nor `--plugin` the run is refused: there is no
 default plugin and no choice among installed plugins. `capability_manifest`'s
 accept-surface is the selected stack's own, so `allowed_commands.core` changes
 with the stack.
+
+## Repository scripts
+
+A solver repository keeps its helper scripts in the folder its `omnidriver.toml`
+names (`applications/scripts`). `describe` lists them under `scripts`, beside
+`records`, each with its `name`, absolute `path` and `usage` line. The usage
+line is the first line of the script's docstring, the line under a
+`# Description` heading in its header comment, a `usage:` line in its text, or,
+for a script that parses options and states none of these, the first line of
+`--help` (the only time a script is executed while listing, with a timeout).
+omnidriver keeps no catalogue of them: the folder is the truth.
+
+Use one in two ways. When a record fails and a script looks relevant (a
+coordinate convention, a seed placement, a coverage report), run it by hand
+after reading its `--help`. A record may also name a script as a step command
+(`("place_purkinje_seeds.py", "--write", ".")`); it is then authorized like any
+other command and runs from the case directory under the `python3` on the
+stack's own `PATH` (a non-Python script runs through its shebang). A name not
+in the supplied folder is refused as an unknown command.
 
 ## Preferred strict agent loop
 
@@ -239,7 +258,8 @@ omnidriver step --repo <cardiacFOAM> --run-document run.json --step solve   # si
    `$FOAM_APPBIN`/`$FOAM_USER_APPBIN` (any core OpenFOAM app or your own
    compiled utility). Arbitrary non-OpenFOAM commands are rejected before
    anything runs. Note: when OpenFOAM is not sourced, only the core set +
-   case scripts + declared utility manifests are accepted.
+   case scripts + declared utility manifests are accepted. A script in the
+   supplied repository's scripts folder is accepted too, named relative to it.
 4. Requires `launch.caseRoot` (an existing directory) and `launch.outputDir`;
    when `OMNIDRIVER_ALLOWED_RUNS_ROOT` is set, both must resolve under it.
 
