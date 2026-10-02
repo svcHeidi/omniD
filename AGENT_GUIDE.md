@@ -864,16 +864,25 @@ keyed by a digest of the `*.C`/`*.H` files and of the scanner itself: every
 plan recomputes the digest and rescans only when either changed, and an
 unreadable or altered cache file is rescanned.
 
-The catalogues stay the source of truth. A plan compares them with the scan:
+The catalogues stay the source of truth, and a key that appears in or
+disappears from the C++ never fails a plan. A plan compares them with the scan:
 - a key, sub-dictionary, menu value or selection table the C++ reads and the
-  catalogue lacks is a `plugin_catalog_uncatalogued` note, never a failure;
-- a catalogue claim the C++ refutes fails the plan as
-  `plugin_catalog_contradiction`, naming both sides: a type the C++ cannot
-  read, a menu value no table registers, a required key the C++ gives a
-  default, or a catalogued key the C++ no longer reads. A read counts
-  against an entry only when it agrees with the entry beyond the final name,
-  or is in a file the entry cites, so a same-named key elsewhere fails
-  nothing.
+  catalogue lacks is a `plugin_catalog_uncatalogued` note carrying what was
+  scanned (type, default, whether it is required, where, and the `entry`
+  arguments to write the catalogue entry from);
+- a catalogued key the C++ no longer reads is a `plugin_catalog_unread` note
+  ("catalogued; the supplied C++ no longer reads it"), and a case or study that
+  sets it gets an `unread_case_dict_key` warning saying it has no effect;
+- a catalogue claim the C++ refutes is a `plugin_catalog_disagreement` warning
+  stating both sides: a type the C++ reads differently, a menu value no table
+  registers, a required key the C++ gives a default, or an optional key the C++
+  requires. A read counts against an entry only when it agrees with the entry
+  beyond the final name, or is in a file the entry cites, so a same-named key
+  elsewhere disagrees with nothing.
+
+The C++ wins when a value is judged: a study's value is checked against the
+type the C++ reads the key as, and an enum value outside the names the C++'s
+selection table registers refuses the case. Only an invalid value refuses.
 
 A study may set an uncatalogued key at exactly the path where the C++ reads
 it, even when the case does not hold it yet: a validated key is written with
@@ -886,7 +895,8 @@ A model a scanned selection table registers but the catalogue's menu lacks
 
 ```bash
 omnidriver scan --plugin cardiacfoam --scratch-dir <dir>        # rescan, print a summary
-omnidriver catalog --plugin cardiacfoam --uncatalogued         # every uncatalogued read
+omnidriver catalog --plugin cardiacfoam --uncatalogued         # every uncatalogued read, with its entry arguments
+omnidriver catalog --plugin cardiacfoam --unread               # every catalogued key the C++ no longer reads
 ```
 
 `catalog --uncatalogued` lists each uncatalogued read with its type,

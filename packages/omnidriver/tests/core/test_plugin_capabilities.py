@@ -147,7 +147,7 @@ def test_dict_key_scanner_uses_the_fallback_for_a_plugin_that_declares_nothing()
         entries=(),
     )
 
-    assert report.to_json() == {"contradictions": [], "uncatalogued": [], "unresolved": [], "selector_values": {}}
+    assert report.to_json() == {"disagreements": [], "unread": [], "uncatalogued": [], "unresolved": [], "selector_values": {}}
 
 
 def test_dict_key_scanner_calls_through_to_the_plugin_hook() -> None:

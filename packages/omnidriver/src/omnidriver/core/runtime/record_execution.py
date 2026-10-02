@@ -442,16 +442,17 @@ def _refuse_a_case_that_breaks_a_rule(
     after the refusal."""
     from ..plugin_capabilities import RunSemanticValidationRequest
 
-    broken = [
-        item for item in driver_context.capabilities.run_semantic_validator.validate(
-            RunSemanticValidationRequest(case_root),
-        ) if item.level == "error"
-    ]
+    found = driver_context.capabilities.run_semantic_validator.validate(
+        RunSemanticValidationRequest(case_root),
+    )
+    broken = [item for item in found if item.level == "error"]
     if broken:
+        noted = [item for item in found if item.level != "error"]
         raise TutorialRecordError(
             f"tutorial record {record.name!r}: the resolved case breaks "
             f"{len(broken)} rule(s): "
             + "; ".join(f"{item.field or item.source}: {item.message}" for item in broken)
+            + (" Also noted: " + "; ".join(item.message for item in noted) if noted else "")
             + then
         )
 

@@ -23,6 +23,8 @@ from typing import Any, Iterable
 from omnidriver.core.contracts.dictionary import validate_value_shape
 from omnidriver.core.runtime.record_surface import ANY_KEY
 
+from .dict_keys_scanner import cxx_value_kind
+
 from .mutators import check_dictionary_word_is_safe
 
 
@@ -64,6 +66,14 @@ def listed_entry(document: str, key: str, entry: Any) -> dict[str, Any]:
     }
 
 
+def _supplied_scan(mapping: Any):
+    """The scan of the plugin's supplied C++ source, or ``None``."""
+    from .dict_keys_scanner import cached_scan, scan_cache_root
+
+    root = mapping.source_root(os.environ) if mapping is not None else None
+    return cached_scan(root, cache_root=scan_cache_root()) if root is not None and root.is_dir() else None
+
+
 def scanned_key(
     document: str, catalog_path: "tuple[str, ...]", value: Any, *, mapping: Any, entries: Iterable[Any],
 ) -> "tuple[str, bool]":
@@ -75,13 +85,12 @@ def scanned_key(
     segment for a scoped block). Raises ``KeyError`` saying why when no read
     matches, and ``ValueError`` when the value does not fit the scanned
     type."""
-    from .dict_keys_scanner import _segment_matches, cached_scan, locate, value_kind_of
+    from .dict_keys_scanner import _segment_matches, locate, value_kind_of
 
-    root = mapping.source_root(os.environ) if mapping is not None else None
-    if root is None or not root.is_dir():
+    scan = _supplied_scan(mapping)
+    if scan is None:
         variable = mapping.source_root_variable if mapping is not None else "the source root"
         raise KeyError(f"the C++ source is not supplied ({variable}), so no uncatalogued key can be checked")
-    scan = cached_scan(root, cache_root=None)
     name = document.rsplit("/", 1)[-1]
     reads = [
         read for read in scan.reads
@@ -196,13 +205,19 @@ def make_validator(
             entry, binding = match
             for placeholder, bound_value in binding.items():
                 check_binding(entry, placeholder, bound_value)
-            reasons = validate_value_shape(entry.value_kind, value)
+            scan = _supplied_scan(mapping())
+            kind = (scan is not None and cxx_value_kind(scan, entry)) or entry.value_kind
+            reasons = validate_value_shape(kind, value)
             if reasons:
                 raise ValueError(
-                    f"{document}:{dotted} does not fit catalogued value_kind "
-                    f"{entry.value_kind!r}: {'; '.join(reasons)}"
+                    f"{document}:{dotted} does not fit "
+                    + (
+                        f"value_kind {kind!r}, which the supplied C++ reads it as (the catalogue says {entry.value_kind!r})"
+                        if kind != entry.value_kind else f"catalogued value_kind {entry.value_kind!r}"
+                    )
+                    + f": {'; '.join(reasons)}"
                 )
-            return entry.value_kind, True
+            return kind, True
         if document.startswith("system/"):
             return infer_unvalidated_value_kind(value), False
         raise KeyError(

@@ -97,7 +97,7 @@ def absent_dict_key_scanner():
 
     class _EmptyReport:
         def to_json(self):
-            return {"contradictions": [], "uncatalogued": [], "unresolved": [], "selector_values": {}}
+            return {"disagreements": [], "unread": [], "uncatalogued": [], "unresolved": [], "selector_values": {}}
 
     def _report(*args, **kwargs):
         del args, kwargs

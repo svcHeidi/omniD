@@ -105,23 +105,23 @@ def runtime_selection_report(
     internal = dict(mapping.get("internal_bases", {}))
     mapped_bases = {rule["base"] for rule in by_path.values()}
 
-    contradictions: list[str] = []
+    disagreements: list[str] = []
     uncatalogued: list[dict[str, Any]] = []
     values: dict[str, list[str]] = {}
     for path, rule in sorted(by_path.items()):
         base, mode = rule["base"], rule["mode"]
         if mode not in _MODES:
-            contradictions.append(f"runtime_selection maps {path} with unknown mode {mode!r}")
+            disagreements.append(f"runtime_selection maps {path} with unknown mode {mode!r}")
         elif path not in enums:
-            contradictions.append(f"runtime_selection maps {path}, which is not a catalogue enum")
+            disagreements.append(f"runtime_selection maps {path}, which is not a catalogue enum")
         elif base not in registrations:
-            contradictions.append(f"{path}: menu drawn from {base}, but no addToRunTimeSelectionTable({base}, ...) exists")
+            disagreements.append(f"{path}: menu drawn from {base}, but no addToRunTimeSelectionTable({base}, ...) exists")
         else:
             registered = set(registrations[base])
             catalogued = set(enums[path].enum_values)
             values[path] = sorted(registered)
             if mode != "polymorphic" and catalogued - registered:
-                contradictions.append(
+                disagreements.append(
                     f"{path}: menu lists {sorted(catalogued - registered)}, which {base} does not register"
                 )
             if mode != "subset":
@@ -130,16 +130,16 @@ def runtime_selection_report(
                      "class": registrations[base][name]}
                     for name in sorted(registered - catalogued)
                 ]
-    contradictions += [
+    disagreements += [
         f"runtime_selection lists {path} as not runtime-selected, which is not a catalogue enum"
         for path in sorted(not_selected) if path not in enums
     ]
-    contradictions += [
+    disagreements += [
         f"runtime_selection lists {base} as internal, but "
         + ("no table registers it" if base not in registrations else "it is also mapped")
         for base in sorted(internal) if base not in registrations or base in mapped_bases
     ]
-    contradictions += [
+    disagreements += [
         f"{path}: catalogue enum with no runtime_selection classification"
         for path in sorted(enums) if path not in by_path and path not in not_selected
     ]
@@ -147,4 +147,4 @@ def runtime_selection_report(
         {"kind": "selection_table", "base": base, "values": sorted(registrations[base])}
         for base in sorted(registrations) if base not in mapped_bases and base not in internal
     ]
-    return {"contradictions": contradictions, "uncatalogued": uncatalogued, "selector_values": values}
+    return {"disagreements": disagreements, "uncatalogued": uncatalogued, "selector_values": values}

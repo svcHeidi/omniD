@@ -25,7 +25,7 @@ from .core.runtime.sweep_runner import sweep_plan, sweep_run
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.provider_identity import stack_identity_mismatch
-from omnidriver.core.specs.paths import default_sweep_output_dir, resolve_scratch_root
+from omnidriver.core.specs.paths import SCRATCH_ENV_VAR, default_sweep_output_dir, resolve_scratch_root
 from omnidriver.core.strict_planning import _utility_produces_by_command, strict_plan
 from .core.runtime.run_document_exec import build_execution_inputs, load_run_document, _allowed_runs_root
 from .core.runtime.fresh import ensure_fresh_output_dir
@@ -910,6 +910,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--unread",
+        action="store_true",
+        help=(
+            "For action=catalog: list every catalogued key the stack's C++ no "
+            "longer reads (setting one has no effect), with what is needed to "
+            "retire or correct its entry (no --entry needed)."
+        ),
+    )
+    parser.add_argument(
         "--comparison-request",
         help="For action=compare: an agent's quantity comparison request (JSON; schema omnidriver/schemas/quantity-comparison.schema.json).",
     )
@@ -955,10 +964,12 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
     for flag_name, message in _FLAG_ERRORS_BY_ACTION.get(args.action, ()):
         if getattr(args, flag_name):
             parser.error(message)
-    if (args.document or args.key or args.uncatalogued) and args.action != "catalog":
-        parser.error("--document/--key/--uncatalogued are only valid with action=catalog")
-    if args.uncatalogued and (args.entry or args.case or args.document or args.key):
-        parser.error("--uncatalogued lists the whole stack's C++ reads; it takes no --entry/--case/--document/--key")
+    if (args.document or args.key or args.uncatalogued or args.unread) and args.action != "catalog":
+        parser.error("--document/--key/--uncatalogued/--unread are only valid with action=catalog")
+    if args.uncatalogued and args.unread:
+        parser.error("--uncatalogued and --unread are separate listings: pass one")
+    if (args.uncatalogued or args.unread) and (args.entry or args.case or args.document or args.key):
+        parser.error("--uncatalogued/--unread list the whole stack's C++ scan; they take no --entry/--case/--document/--key")
     if args.action not in {"plan", "step", "run"} and args.strict:
         parser.error("--strict is only valid with action=plan, action=step, or action=run")
     if args.allow_unresolved_configuration and args.action not in {"plan", "step", "run"}:
@@ -1046,7 +1057,7 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         args.parallel is not None, args.inputs, args.dry_run, args.continue_on_error,
     )):
         parser.error("action=scan takes only --plugin or --repo, and --scratch-dir: it rescans the stack's C++ source")
-    if not args.run_document and not args.entry and not args.case and not args.uncatalogued and args.action not in {
+    if not args.run_document and not args.entry and not args.case and not (args.uncatalogued or args.unread) and args.action not in {
         "recover", "sweep-plan", "sweep-run", "compare", "env", "scan",
     }:
         parser.error("--entry or --case is required (or use --run-document with action=run/step)")
@@ -1092,7 +1103,7 @@ def _scan_or_uncatalogued(args, driver_context) -> int:
     cache and prints a summary; ``catalog --uncatalogued`` lists what the
     C++ reads and the catalogue lacks (cached when a scratch root is
     supplied)."""
-    from .core.catalog_query import cxx_evidence, uncatalogued_query
+    from .core.catalog_query import cxx_evidence, scan_query
 
     try:
         cache_root = resolve_scratch_root(args.scratch_dir)
@@ -1106,7 +1117,7 @@ def _scan_or_uncatalogued(args, driver_context) -> int:
             return 1
         cache_root = None
     if args.action == "catalog":
-        print(json.dumps(uncatalogued_query(driver_context, cache_root=cache_root), indent=2))
+        print(json.dumps(scan_query(driver_context, cache_root=cache_root, unread=args.unread), indent=2))
         return 0
     cxx = cxx_evidence(driver_context, os.environ, cache_root=cache_root, force=True)
     summary: dict = {
@@ -1119,9 +1130,9 @@ def _scan_or_uncatalogued(args, driver_context) -> int:
         summary["error"] = "the stack declares no C++ source" if cxx is None else cxx["reason"]
     else:
         cxx.pop("selector_values")
-        cxx["uncatalogued"] = len(cxx["uncatalogued"])
-        cxx["unresolved"] = len(cxx["unresolved"])
-        summary["status"] = cxx["status"]
+        for name in ("uncatalogued", "unresolved", "unread", "disagreements"):
+            cxx[name] = len(cxx[name])
+        summary["status"] = "ok"
     print(json.dumps(summary, indent=2))
     return 0 if summary["status"] == "ok" else 1
 
@@ -1192,7 +1203,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     _validate_args(parser, args)
+    previous = os.environ.get(SCRATCH_ENV_VAR)
+    if args.scratch_dir and args.action != "recover":
+        # The one supplied scratch root, for the layers that cache a scan there.
+        os.environ[SCRATCH_ENV_VAR] = str(Path(args.scratch_dir).expanduser())
+    try:
+        return _dispatch(parser, args)
+    finally:
+        if previous is None:
+            os.environ.pop(SCRATCH_ENV_VAR, None)
+        else:
+            os.environ[SCRATCH_ENV_VAR] = previous
 
+
+def _dispatch(parser: argparse.ArgumentParser, args) -> int:
     if args.action == "recover":
         return _recover(args)
 
@@ -1208,7 +1232,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, indent=2))
         return 0 if report["status"] == "ok" else 1
 
-    if args.action == "scan" or args.uncatalogued:
+    if args.action == "scan" or args.uncatalogued or args.unread:
         return _scan_or_uncatalogued(args, driver_context)
 
     # The CLI's own study source, beside a sweep's `base`.

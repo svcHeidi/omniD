@@ -58,6 +58,7 @@ def case_dict_key_diagnostics(
     catalogued_paths: Iterable[str],
     dict_relpaths: Sequence[str],
     scanned: Callable[[str, tuple[str, ...]], bool] | None = None,
+    unread: Iterable[str] = (),
 ) -> tuple[StrictDiagnostic, ...]:
     """Warn (never error) about keys in `dict_relpaths` absent from the
     catalogue; the catalogue deliberately omits keys OpenFOAM itself owns, so
@@ -65,7 +66,8 @@ def case_dict_key_diagnostics(
 
     ``scanned(relpath, trail)`` says whether the solver's own source reads
     that key: the plan then reports it once, as an uncatalogued note, and this
-    check stays silent.
+    check stays silent. A key at one of the catalogue paths in ``unread`` (the
+    supplied C++ no longer reads them) is warned about as having no effect.
 
     Matching is by position, not bare name: a trail matches a catalogue path
     (or a path prefix) with `<placeholder>` segments matching any name --
@@ -75,6 +77,7 @@ def case_dict_key_diagnostics(
     emitting spurious key warnings for that file.
     """
     known = _prefixes(catalogued_paths)
+    unread_paths = {tuple(path.split(".")) for path in unread}
     root = Path(case_root)
     diagnostics: list[StrictDiagnostic] = []
 
@@ -90,6 +93,7 @@ def case_dict_key_diagnostics(
                 trail for trail in _unmatched(parsed, known)
                 if scanned is None or not scanned(relpath, trail)
             ]
+            ignored = [trail for trail in _leaves(parsed) if _matches(_scope_relative(trail), unread_paths)]
         except Exception as exc:
             diagnostics.append(
                 diagnostic(
@@ -101,6 +105,19 @@ def case_dict_key_diagnostics(
                 )
             )
             continue
+        for trail in ignored:
+            diagnostics.append(
+                diagnostic(
+                    "warning",
+                    "unread_case_dict_key",
+                    (
+                        f"{relpath}: key {'.'.join(trail)!r} is catalogued, but the supplied "
+                        "C++ no longer reads it, so setting it has no effect."
+                    ),
+                    source=relpath,
+                    field=trail[-1],
+                )
+            )
         for trail in unmatched:
             where = ".".join(trail)
             diagnostics.append(
@@ -118,6 +135,17 @@ def case_dict_key_diagnostics(
                 )
             )
     return tuple(diagnostics)
+
+
+def _leaves(node: Mapping, trail: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
+    found: list[tuple[str, ...]] = []
+    for key in node:
+        full = trail + (str(key),)
+        if hasattr(node[key], "keys"):
+            found.extend(_leaves(node[key], full))
+        else:
+            found.append(full)
+    return found
 
 
 def _unmatched(

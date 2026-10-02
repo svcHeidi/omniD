@@ -8,9 +8,11 @@ agent can ask for a document or a key without reading all of ``describe``.
 When the stack's C++ source root is supplied (``cxx_mapping.source_root``),
 the stack's own scanner runs, and every entry whose values the C++ registers
 (a runtime-selection table) carries them as ``cxx_values``.
-``uncatalogued_query`` lists what the C++ reads and the catalogue lacks, so
-an agent can describe it and add it. Core names no solver and no document:
-it filters what the plugin lists and attaches what the scanner returns.
+``scan_query`` lists what the C++ reads and the catalogue lacks (``uncatalogued``),
+or the catalogued keys it no longer reads (``unread``), each with what an
+agent needs to write or retire the catalogue entry. Core names no solver and
+no document: it filters what the plugin lists and attaches what the scanner
+returns.
 """
 from __future__ import annotations
 
@@ -67,19 +69,38 @@ def cxx_evidence(
     return evidence
 
 
-def uncatalogued_query(driver_context: "DriverContext", *, cache_root: Path | None) -> dict[str, Any]:
-    """``omnidriver catalog --uncatalogued``: every read the C++ makes that
-    the catalogue lacks, with its scanned type, default, scope and source
-    location, and the reads the scan could not place."""
+_UNCATALOGUED_HOW = (
+    "Each uncatalogued key carries `entry`: the DictEntry arguments the scan establishes "
+    "(driver_path when its block is placed, value_kind, required, typical_value, source_refs). "
+    "Write the description, unit and applicable_when/required_when from the C++ at `source`, "
+    "then add the entry to the plugin's catalogue; `selected_as` names the selection-table "
+    "class that reads it, and `required` is true when the read has no default and is not "
+    "tested first. A `menu_value` or `selection_table` item names a model to add to an enum's "
+    "enum_values."
+)
+_UNREAD_HOW = (
+    "Each key is catalogued, and the supplied C++ no longer reads it, so setting it has no "
+    "effect. Delete the entry, or correct its driver_path if the C++ moved the key; its "
+    "description and source_refs say what it was for."
+)
+
+
+def scan_query(driver_context: "DriverContext", *, cache_root: Path | None, unread: bool = False) -> dict[str, Any]:
+    """``omnidriver catalog --uncatalogued`` (every read the C++ makes that the
+    catalogue lacks, with its scanned type, default, scope, source location and
+    the entry arguments the scan can fill) or, with ``unread``, ``catalog
+    --unread`` (every catalogued key the C++ no longer reads)."""
     cxx = cxx_evidence(driver_context, os.environ, cache_root=cache_root)
+    listed = ("unread",) if unread else ("uncatalogued", "unresolved")
     return {
         "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
         "cxx_source": {
             key: value for key, value in (cxx or {}).items()
-            if key not in ("uncatalogued", "unresolved", "selector_values")
+            if key not in ("uncatalogued", "unresolved", "unread", "disagreements", "selector_values")
         } if cxx is not None else None,
-        "uncatalogued": (cxx or {}).get("uncatalogued", []),
-        "unresolved": (cxx or {}).get("unresolved", []),
+        "how": _UNREAD_HOW if unread else _UNCATALOGUED_HOW,
+        **{name: (cxx or {}).get(name, []) for name in listed},
+        **({} if unread else {"disagreements": (cxx or {}).get("disagreements", [])}),
     }
 
 
@@ -105,8 +126,8 @@ def catalog_query(
         entries.append(listed)
     if cxx is not None and cxx["scanned"]:
         cxx.pop("selector_values")
-        cxx["uncatalogued"] = len(cxx["uncatalogued"])
-        cxx["unresolved"] = len(cxx["unresolved"])
+        for name in ("uncatalogued", "unresolved", "unread", "disagreements"):
+            cxx[name] = len(cxx[name])
     return {
         "entry": record.name,
         "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],

@@ -218,8 +218,10 @@ the scanner already finds):
   --uncatalogued` lists the reads a catalog lacks.
 - `openfoam.dict_keys_scanner.catalog_report(src_root, allowlist_path=,
   entries=)` compares that inventory with the adapter's `DictEntry`s: a
-  catalog claim the C++ refutes is a contradiction (a strict plan fails), a
-  read the catalog lacks is uncatalogued (a note). The reviewed file holds
+  catalog claim the C++ refutes is a disagreement (a warning stating both
+  sides), a catalogued key the C++ no longer reads is unread, and a read the
+  catalog lacks is uncatalogued (a note carrying the entry arguments); none
+  fails a plan. The reviewed file holds
   only what the scan cannot see (`unseen_reads`) and the enum-to-table
   mapping (`runtime_selection`).
 - `DictEntry.dynamic_path` with `<name>` segments covers instance-named blocks

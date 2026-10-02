@@ -83,3 +83,12 @@ def test_uncatalogued_takes_no_entry_and_scan_needs_a_scratch_root(tmp_path, cap
     monkeypatch.delenv("OMNIDRIVER_SCRATCH_DIR", raising=False)
     assert main(["scan", "--plugin", _TOY]) == 1
     assert "scratch root" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_catalog_unread_answers_for_the_whole_stack_and_excludes_uncatalogued(tmp_path, capsys):
+    assert main(["catalog", "--plugin", _TOY, "--unread"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert (payload["cxx_source"], payload["unread"]) == (None, [])
+    assert "uncatalogued" not in payload and "no longer reads" in payload["how"]
+    with pytest.raises(SystemExit):
+        main(["catalog", "--plugin", _TOY, "--unread", "--uncatalogued"])

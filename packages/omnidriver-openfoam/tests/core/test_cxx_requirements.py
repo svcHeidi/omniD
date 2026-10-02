@@ -79,6 +79,35 @@ MYOCARDIUM_SOLVER_NEW = '''autoPtr<myocardiumSolver> myocardiumSolver::New
 }
 '''
 
+# cardiacFOAM src/electroModels/electroDomains/myocardiumDomain/myocardiumDomainInterface.C:
+# the selector's head, to the end of the eikonal branch (the function's closing brace added).
+MYOCARDIUM_DOMAIN_INTERFACE_NEW = '''autoPtr<myocardiumDomainInterface> myocardiumDomainInterface::New
+(
+    const fvMesh& mesh,
+    const dictionary& electroProperties,
+    PtrList<volScalarField>& outFields,
+    const wordList& postProcessFieldNames,
+    PtrList<volScalarField>& postProcessFields,
+    autoPtr<ionicModel>& ionicModelPtr,
+    autoPtr<electroVerificationModel>& verificationModelPtr,
+    scalar initialDeltaT
+)
+{
+    const word solverType = myocardiumSolverType(electroProperties);
+
+    if (solverType == "eikonalSolver")
+    {
+        ionicModelPtr.clear();
+        verificationModelPtr.clear();
+
+        return autoPtr<myocardiumDomainInterface>
+        (
+            new eikonalMyocardiumDomain(mesh, electroProperties)
+        );
+    }
+}
+'''
+
 ROOT = "param:Solver::Solver:electroProperties"
 
 
@@ -103,6 +132,13 @@ def test_the_selector_hands_its_dictionary_to_the_constructor_of_every_registere
     assert ("monodomainSolver::monodomainSolver", 3, 4, "param:myocardiumSolver::New:coeffs", ()) in scan.calls
     (read,) = [r for r in scan.reads if r.key == "sealedHeartBoundary"]
     assert (read.method, read.type, read.selected_as) == ("get", "Switch", (("myocardiumSolver", "monodomainSolver"),))
+
+
+def test_a_class_built_only_inside_an_if_on_a_literal_is_tied_to_that_literal(tmp_path):
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "myocardiumDomainInterface.C").write_text(MYOCARDIUM_DOMAIN_INTERFACE_NEW)
+    assert scan_source(root).dispatch == (("eikonalMyocardiumDomain", "eikonalSolver"),)
 
 
 def test_only_a_read_without_a_default_that_nothing_tests_first_is_required():
@@ -138,8 +174,13 @@ def test_a_class_no_table_registers_is_judged_only_when_the_plugin_says_the_case
     )
     assert [item.field for item in judge({"myocardiumSolver": "eikonalSolver"})] == ["sealedHeartBoundary"]
     assert judge({"myocardiumSolver": "monodomainSolver"}) == []
+
     unknown = _facts(monkeypatch, [_read("sealedHeartBoundary", function="otherDomain::otherDomain")])
-    assert unknown({"myocardiumSolver": "eikonalSolver"}) == []
+    (note,) = unknown({"myocardiumSolver": "eikonalSolver"})
+    assert (note.level, note.code, note.field) == ("info", "cxx_required_key_unjudged", "sealedHeartBoundary")
+    assert "cannot tell whether this case builds the class" in note.message
+    assert "otherDomain::otherDomain" in note.message
+    assert unknown({"myocardiumSolver": "eikonalSolver", "sealedHeartBoundary": "no"}) == []
 
 
 def test_each_instance_of_a_block_the_case_holds_must_set_the_key(monkeypatch):

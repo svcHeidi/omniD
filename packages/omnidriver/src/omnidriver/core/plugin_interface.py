@@ -176,7 +176,8 @@ class SolverPlugin(Protocol):
         ...
 
     def validate_run_semantics(self, case_root: Path) -> tuple[StrictDiagnostic, ...]:
-        """Return the rules the resolved case at ``case_root`` violates."""
+        """Return the rules the resolved case at ``case_root`` violates, and
+        the notes a rule has for it."""
         ...
 
     def predict_data_artifacts(self, case_root: Path, spec: TutorialSpec) -> tuple[DataArtifact, ...]:

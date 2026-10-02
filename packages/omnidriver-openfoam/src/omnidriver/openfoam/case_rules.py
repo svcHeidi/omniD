@@ -13,6 +13,7 @@ does not set. Menus and value types are not judged here: the C++ owns them.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections.abc import Iterable, Mapping
@@ -153,14 +154,12 @@ def _scan_facts(mapping: Any, entries: tuple[Any, ...], document: str):
     requires that ``entries`` lack, the classes that build them, and the names
     its selection tables register for each enum. Nothing when the source is
     not supplied."""
-    import json
-
-    from .dict_keys_scanner import built_when, cached_scan, registered_menus, required_reads
+    from .dict_keys_scanner import built_when, cached_scan, registered_menus, required_reads, scan_cache_root
 
     root = mapping.source_root(os.environ) if mapping is not None else None
     if root is None or not root.is_dir():
         return {}, {}, {}
-    scan = cached_scan(root, cache_root=None)
+    scan = cached_scan(root, cache_root=scan_cache_root())
     reviewed = json.loads(Path(mapping.allowlist_path).read_text())
     return (
         required_reads(scan, entries, document=document.rsplit("/", 1)[-1]),
@@ -176,18 +175,19 @@ def _scan_requirement(
     """A key the C++ requires, absent from the case, in each block of the
     case that a class the case builds reads it from. A class is built when a
     selection table registers it under a name the case selects, or when the
-    plugin's reviewed ``built_when`` says the case's selectors build it; a
-    class neither says anything about is not judged."""
+    scan or the plugin's reviewed ``built_when`` ties it to a selector value
+    the case holds. A class nothing ties to the case is noted, not judged."""
     from .dict_keys_scanner import owner_of
 
     selected = {str(_word(value)) for value in context.values()}
-    reads = [
-        read for read in reads
-        if any(name in selected for _base, name in read.selected_as)
-        or (not read.selected_as and built.get(owner_of(read), frozenset()) & selected)
-    ]
-    if not reads:
-        return []
+
+    def ties(read: Any) -> frozenset[str] | None:
+        if read.selected_as:
+            return frozenset(name for _base, name in read.selected_as)
+        return built.get(owner_of(read))
+
+    judged = [read for read in reads if (names := ties(read)) is not None and names & selected]
+    unjudged = [read for read in reads if ties(read) is None]
     segments = path[1:] if path[0].startswith("$") else path
     block, key = segments[:-1], segments[-1]
     pattern = re.compile(r"\.".join(r"[^.]+" if _PLACEHOLDER.fullmatch(s) or s == "*" else re.escape(s) for s in block))
@@ -195,21 +195,27 @@ def _scan_requirement(
         ".".join(name.split(".")[:len(block)]) for name in context
         if len(name.split(".")) > len(block) and pattern.fullmatch(".".join(name.split(".")[:len(block)]))
     }) if block else [""]
-    first = reads[0]
     found = []
     for scope in blocks:
         concrete = f"{scope}.{key}" if scope else key
         if _present(context.get(concrete)) or any(name.startswith(concrete + ".") for name in context):
             continue
-        sources = ", ".join(sorted({f"{read.file}:{read.line} ({read.function})" for read in reads}))
-        found.append(diagnostic(
-            "error", "cxx_required_key",
-            f"{concrete} is required: the supplied C++ reads it as {first.method}<{first.type or 'an unresolved type'}> "
-            f"with no default at {sources}, and the catalogue does not list it "
-            f"(omnidriver catalog --uncatalogued describes it). Set {concrete} in {document}"
-            + (f" (below {path[0]})" if path[0].startswith("$") else "") + ".",
-            source=document, field=concrete,
-        ))
+        for level, code, group, how in (
+            ("error", "cxx_required_key", judged, "this case builds the class that reads it"),
+            ("info", "cxx_required_key_unjudged", unjudged, "the scan cannot tell whether this case builds the class that reads it"),
+        ):
+            if not group:
+                continue
+            sources = ", ".join(sorted({f"{read.file}:{read.line} ({read.function})" for read in group}))
+            found.append(diagnostic(
+                level, code,
+                f"{concrete} is read as {group[0].method}<{group[0].type or 'an unresolved type'}> with no default at "
+                f"{sources}, and the catalogue does not list it (omnidriver catalog --uncatalogued describes it); "
+                + (f"{how}, so set {concrete} in {document}"
+                   if level == "error" else f"{how}; if it does, set {concrete} in {document}")
+                + (f" (below {path[0]})" if path[0].startswith("$") else "") + ".",
+                source=document, field=concrete,
+            ))
     return found
 
 

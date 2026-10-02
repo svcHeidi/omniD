@@ -643,10 +643,12 @@ class DictKeyScannerCapability(Protocol):
 
     The scan is C++/dictionary-format knowledge, so it belongs to the
     environment adapter (``omnidriver-openfoam``), not to a solver plugin.
-    The report's JSON carries ``contradictions`` (catalogue claims the C++
-    refutes: strict planning fails on each), ``uncatalogued`` (what the C++
-    reads and the catalogue lacks: a note each, never a failure),
-    ``unresolved`` (reads the scan could not place) and ``selector_values``.
+    The report's JSON carries ``disagreements`` (catalogue claims the C++
+    refutes, each stating both sides), ``unread`` (catalogued keys the C++ no
+    longer reads), ``uncatalogued`` (what the C++ reads and the catalogue
+    lacks, with the entry arguments the scan can fill), ``unresolved`` (reads
+    the scan could not place) and ``selector_values``. None of them fails a
+    plan.
     ``cache_root`` keeps the scan between processes; ``force`` rescans. The
     fallback (``absent_dict_key_scanner``) reports nothing.
 

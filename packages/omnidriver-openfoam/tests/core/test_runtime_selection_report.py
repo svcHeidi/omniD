@@ -22,29 +22,29 @@ def _report(values: tuple[str, ...], mode: str = "strict", registrations=_REGIST
 
 def test_agreeing_menus_report_nothing_and_show_the_registered_names():
     report = _report(("Stewart", "TNNP"))
-    assert report == {"contradictions": [], "uncatalogued": [], "selector_values": {"ionicModel": ["Stewart", "TNNP"]}}
+    assert report == {"disagreements": [], "uncatalogued": [], "selector_values": {"ionicModel": ["Stewart", "TNNP"]}}
 
 
 def test_a_registered_name_the_menu_lacks_is_uncatalogued():
     report = _report(("TNNP",))
-    assert report["contradictions"] == []
+    assert report["disagreements"] == []
     assert report["uncatalogued"] == [
         {"kind": "menu_value", "path": "ionicModel", "value": "Stewart", "base": "ionicModel", "class": "Stewart"},
     ]
     assert _report(("TNNP",), mode="subset")["uncatalogued"] == []
 
 
-def test_a_menu_value_no_table_registers_is_a_contradiction_unless_polymorphic():
-    assert _report(("Stewart", "TNNP", "Gone"))["contradictions"] == [
+def test_a_menu_value_no_table_registers_is_a_disagreement_unless_polymorphic():
+    assert _report(("Stewart", "TNNP", "Gone"))["disagreements"] == [
         "ionicModel: menu lists ['Gone'], which ionicModel does not register",
     ]
-    assert _report(("Stewart", "TNNP", "Gone"), mode="polymorphic")["contradictions"] == []
-    assert _report(("TNNP",), registrations={})["contradictions"] == [
+    assert _report(("Stewart", "TNNP", "Gone"), mode="polymorphic")["disagreements"] == []
+    assert _report(("TNNP",), registrations={})["disagreements"] == [
         "ionicModel: menu drawn from ionicModel, but no addToRunTimeSelectionTable(ionicModel, ...) exists",
     ]
 
 
-def test_an_unmapped_table_is_uncatalogued_and_a_stale_mapping_is_a_contradiction():
+def test_an_unmapped_table_is_uncatalogued_and_a_stale_mapping_is_a_disagreement():
     report = runtime_selection_report(
         _REGISTRATIONS, entries=(_enum("tissue", ("epi",)),),
         mapping={
@@ -53,7 +53,7 @@ def test_an_unmapped_table_is_uncatalogued_and_a_stale_mapping_is_a_contradictio
             "internal_bases": {"noSuchBase": "why"},
         },
     )
-    assert report["contradictions"] == [
+    assert report["disagreements"] == [
         "runtime_selection maps gone.path, which is not a catalogue enum",
         "runtime_selection lists gone.word as not runtime-selected, which is not a catalogue enum",
         "runtime_selection lists noSuchBase as internal, but no table registers it",

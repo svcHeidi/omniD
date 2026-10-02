@@ -1,6 +1,6 @@
 """What an OpenFOAM-based stack adds to a strict plan: the catalogue compared
-with the solver's own C++, the sampled fields a function object names, and
-the case keys nothing catalogues."""
+with the solver's own C++, the sampled fields a function object names, the
+case keys nothing catalogues, and the notes the rules have for the case."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from omnidriver.core.contracts.catalogue_paths import catalogued_paths
+from omnidriver.core.contracts.catalogue_paths import catalogued_paths, slot_key
+from omnidriver.core.plugin_capabilities import RunSemanticValidationRequest
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
 from .case_dict_keys import case_dict_key_diagnostics
@@ -29,7 +30,8 @@ def plan_diagnostics(
     del workflow_dag
     mapping = driver_context.capabilities.cxx_mapping.profile().cxx_mapping
     source_root = mapping.source_root(env) if mapping is not None else None
-    catalog = _catalog_diagnostics(driver_context, mapping, source_root, scratch_root)
+    report = _report(driver_context, mapping, source_root, scratch_root)
+    catalog = _catalog_diagnostics(driver_context, mapping, source_root, report)
     manifest = driver_context.capabilities.manifest.manifest()
     function_objects = function_object_field_diagnostics(
         case_root, samplable=manifest.get("samplable_fields", {}),
@@ -43,8 +45,14 @@ def plan_diagnostics(
         catalogued_paths=catalogued_paths(driver_context.capabilities.dictionaries.entries()),
         dict_relpaths=_owned_dict_relpaths(case_root, driver_context),
         scanned=scanned,
+        unread=[slot_key(item["driver_path"]) for item in (report or {}).get("unread", ())],
     )
-    return catalog + function_objects + keys
+    rules = tuple(
+        item for item in driver_context.capabilities.run_semantic_validator.validate(
+            RunSemanticValidationRequest(case_root),
+        ) if item.level != "error"
+    )
+    return catalog + function_objects + keys + rules
 
 
 def _scanned_reader(driver_context: Any, source_root: Path, scratch_root: Path | None):
@@ -93,10 +101,22 @@ def _owned_dict_relpaths(case_root: Path, driver_context: Any) -> tuple[str, ...
     return tuple(relpaths)
 
 
+def _report(driver_context: Any, mapping: Any, source_root: Path | None, scratch_root: Path | None) -> dict | None:
+    if mapping is None or source_root is None or not source_root.is_dir():
+        return None
+    return driver_context.capabilities.dict_key_scanner.scan(
+        source_root,
+        allowlist_path=mapping.allowlist_path,
+        entries=driver_context.capabilities.dictionaries.entries(),
+        cache_root=scratch_root,
+    ).to_json()
+
+
 def _catalog_diagnostics(
-    driver_context: Any, mapping: Any, source_root: Path | None, scratch_root: Path | None,
+    driver_context: Any, mapping: Any, source_root: Path | None, report: dict | None,
 ) -> tuple[StrictDiagnostic, ...]:
-    """The catalogue compared with the C++: an error per contradiction, a
+    """The catalogue compared with the C++, never failing the plan: a warning
+    per disagreement, a note per catalogued key the C++ no longer reads and a
     note per uncatalogued read."""
     if mapping is None:
         return ()
@@ -114,7 +134,7 @@ def _catalog_diagnostics(
             f"${mapping.source_root_variable}/{mapping.source_root_relative})",
             source=cxx_mapping_source,
         ),)
-    if not source_root.is_dir():
+    if report is None:
         return (diagnostic(
             "error",
             "plugin_cxx_source_unavailable",
@@ -122,16 +142,19 @@ def _catalog_diagnostics(
             f"{source_root} is not a directory",
             source=cxx_mapping_source,
         ),)
-    report = driver_context.capabilities.dict_key_scanner.scan(
-        source_root,
-        allowlist_path=mapping.allowlist_path,
-        entries=driver_context.capabilities.dictionaries.entries(),
-        cache_root=scratch_root,
-    ).to_json()
     source = f"{cxx_mapping_source}:{source_root}"
-    contradictions = tuple(
-        diagnostic("error", "plugin_catalog_contradiction", item, source=source)
-        for item in report.get("contradictions", ())
+    disagreements = tuple(
+        diagnostic("warning", "plugin_catalog_disagreement", item, source=source)
+        for item in report.get("disagreements", ())
+    )
+    unread = tuple(
+        diagnostic(
+            "info", "plugin_catalog_unread",
+            f"{item['driver_path']}: {item['note']}, so setting it has no effect "
+            "(omnidriver catalog --unread lists every one)",
+            source=source, field=item["driver_path"],
+        )
+        for item in report.get("unread", ())
     )
     notes = tuple(
         diagnostic(
@@ -142,4 +165,4 @@ def _catalog_diagnostics(
         )
         for item in report.get("uncatalogued", ())
     )
-    return contradictions + notes
+    return disagreements + unread + notes

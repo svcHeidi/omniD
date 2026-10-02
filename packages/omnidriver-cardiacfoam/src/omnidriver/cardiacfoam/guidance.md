@@ -16,6 +16,12 @@ enforces; none is new. The last section is about the mesh.
   `uncatalogued`, accepted (and added if the case lacks it), and checked
   against the type the C++ reads it as (`omnidriver catalog --uncatalogued`
   lists them). Any other key is refused by name, with where the C++ reads it.
+- **A key the C++ requires must be set.** A key the supplied C++ reads with
+  no default (`get<T>`, `lookup`) that the catalogue lacks refuses the case
+  that does not set it, naming the key, its type and where the C++ reads it;
+  an `uncatalogued` note's `required` says which are. When the scan cannot tell
+  whether the case builds the class that reads it, the plan says so in a note
+  instead.
 - **Write the active solver's scope.** Coefficients live under
   `<myocardiumSolver>Coeffs`: for `myocardiumSolver singleCellSolver;`, write
   `singleCellSolverCoeffs.tissue`. `describe` lists the case's own scope. A

@@ -312,48 +312,70 @@ def _report(tmp_path, entries, reviewed=None, **files):
     return catalog_report(root, allowlist_path=allowlist, entries=entries).to_json()
 
 
-def test_a_read_the_catalogue_lacks_is_uncatalogued_never_a_contradiction(tmp_path):
+def test_a_read_the_catalogue_lacks_is_uncatalogued_with_what_an_entry_needs(tmp_path):
     report = _report(tmp_path, (_entry("$PURKINJE_SLAB.thickness"),))
-    assert report["status"] == "ok" and report["contradictions"] == []
+    assert report["disagreements"] == [] and report["unread"] == []
     (note,) = report["uncatalogued"]
-    assert (note["key"], note["value_kind"], note["default"], note["source"]) == (
-        "multiplier", "scalar", "3.0", "setPurkinjeSlab.C:45",
+    assert (note["key"], note["value_kind"], note["default"], note["source"], note["required"]) == (
+        "multiplier", "scalar", "3.0", "setPurkinjeSlab.C:45", False,
     )
+    assert note["entry"] == {
+        "driver_path": None, "value_kind": "scalar", "required": False, "typical_value": "3.0",
+        "source_refs": ["src/setPurkinjeSlab.C"],
+    }
 
 
-def test_each_catalogue_claim_the_cxx_refutes_is_a_contradiction(tmp_path):
+def test_a_read_without_a_default_is_required_unless_the_function_tests_it_first(tmp_path):
+    report = _report(tmp_path, (), **{"generatePurkinjeTree.C": READ_VENT_PARAMS})
+    by_key = {note["key"]: note for note in report["uncatalogued"]}
+    assert by_key["seed"]["required"] is True
+    assert by_key["terminalCount"]["required"] is False and by_key["terminalCount"]["method"] == "get"
+
+
+def test_each_catalogue_claim_the_cxx_refutes_is_reported_with_both_sides_and_fails_nothing(tmp_path):
     cited = ("src/setPurkinjeSlab/setPurkinjeSlab.C",)
     report = _report(tmp_path, (
         _entry("$PURKINJE_SLAB.thickness", "integer", source_refs=cited),
         _entry("$PURKINJE_SLAB.multiplier", "word", source_refs=cited),
         _entry("$PURKINJE_SLAB.depth", required=True),
     ), **{"setPurkinjeSlab__setPurkinjeSlab.C": SET_PURKINJE_SLAB})
-    assert report["status"] == "failed"
-    assert [item.split(":")[0] for item in report["contradictions"]] == [
-        "$PURKINJE_SLAB.multiplier", "$PURKINJE_SLAB.depth",
-    ]
+    assert [item.split(":")[0] for item in report["disagreements"]] == ["$PURKINJE_SLAB.multiplier"]
+    assert "catalogue value_kind 'word'; the C++ reads scalar" in report["disagreements"][0]
+    (unread,) = report["unread"]
+    assert unread["driver_path"] == "$PURKINJE_SLAB.depth"
+    assert unread["note"] == "catalogued; the supplied C++ no longer reads it"
     report = _report(tmp_path, (_entry("$PURKINJE_SLAB.thickness", required=True, source_refs=cited),),
                      **{"setPurkinjeSlab__setPurkinjeSlab.C": SET_PURKINJE_SLAB})
-    assert "the C++ gives it a default (0.1" in report["contradictions"][0]
+    assert "the C++ gives it a default (0.1" in report["disagreements"][0]
 
 
-def test_a_same_named_read_elsewhere_contradicts_nothing(tmp_path):
+def test_a_catalogue_that_calls_optional_a_key_the_cxx_requires_is_reported(tmp_path):
+    cited = ("src/generatePurkinjeTree.C",)
+    entries = (_entry("$PURKINJE_TREE.<ventKey>.seed", "vector3", dynamic_path=True, source_refs=cited),)
+    report = _report(tmp_path, entries, **{"generatePurkinjeTree.C": READ_VENT_PARAMS})
+    assert report["disagreements"] == [
+        "$PURKINJE_TREE.<ventKey>.seed: catalogue says optional; the C++ reads it with no default (generatePurkinjeTree.C:15)",
+    ]
+
+
+def test_a_same_named_read_elsewhere_disagrees_with_nothing(tmp_path):
     entries = (_entry("$PURKINJE_SLAB.thickness", "integer", required=True),)
-    assert _report(tmp_path, entries)["contradictions"] == []
+    assert _report(tmp_path, entries)["disagreements"] == []
     nested = (_entry("$CONVENTION.coordinates.transmuralField", "scalar"),)
     report = _report(tmp_path, nested, **{"coordinatesConvention.H": READ_COORDINATES_CONVENTION})
-    assert report["contradictions"] == [
+    assert report["disagreements"] == [
         "$CONVENTION.coordinates.transmuralField: catalogue value_kind 'scalar'; the C++ reads word "
         "(coordinatesConvention.H:11)",
     ]
 
 
-def test_an_unseen_read_is_reviewed_and_a_stale_review_is_a_contradiction(tmp_path):
+def test_an_unseen_read_is_reviewed_and_a_stale_review_is_a_disagreement(tmp_path):
     reviewed = {"unseen_reads": {"read upstream": ["$PURKINJE_SLAB.depth", "$PURKINJE_SLAB.gone"]}}
     report = _report(tmp_path, (_entry("$PURKINJE_SLAB.depth"),), reviewed)
-    assert report["contradictions"] == [
+    assert report["disagreements"] == [
         "unseen_reads names $PURKINJE_SLAB.gone, which the catalogue does not list",
     ]
+    assert report["unread"] == []
 
 
 def _mapping(tmp_path, monkeypatch, **files):
@@ -398,3 +420,23 @@ def test_a_parameter_is_placed_through_the_calls_that_pass_it_a_dictionary(tmp_p
     ) == ("word", True)
     with pytest.raises(KeyError, match="not at"):
         scanned_key(document, ("$CONVENTION", "transmuralField"), "uvc_transmural", mapping=mapping, entries=catalogued)
+
+
+def test_a_value_is_checked_against_the_kind_the_cxx_reads_not_the_one_the_catalogue_claims(tmp_path, monkeypatch):
+    from omnidriver.openfoam.dict_keys_scanner import cxx_value_kind
+    from omnidriver.openfoam.record_key_validation import CataloguedDocument, make_validator
+
+    cited = ("src/setPurkinjeSlab/setPurkinjeSlab.C",)
+    mapping = _mapping(tmp_path, monkeypatch, **{"setPurkinjeSlab__setPurkinjeSlab.C": SET_PURKINJE_SLAB})
+    stale = _entry("$PURKINJE_SLAB.thickness", "word", source_refs=cited)
+    assert cxx_value_kind(scan_source(tmp_path / "src"), stale) == "scalar"
+    assert cxx_value_kind(scan_source(tmp_path / "src"), _entry("$PURKINJE_SLAB.thickness", source_refs=cited)) is None
+
+    document = CataloguedDocument(
+        label="slab", entries=lambda: (stale,),
+        match=lambda key_path: (stale, {}) if key_path == ("thickness",) else None, scan=lambda key_path: key_path,
+    )
+    validate = make_validator({"system/setPurkinjeSlabDict": document}, mapping=lambda: mapping, owner="test")
+    assert validate("system/setPurkinjeSlabDict", ("thickness",), 0.2) == ("scalar", True)
+    with pytest.raises(ValueError, match="value_kind .scalar., which the supplied C\\+\\+ reads it as .the catalogue says .word."):
+        validate("system/setPurkinjeSlabDict", ("thickness",), "thick")

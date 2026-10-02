@@ -28,7 +28,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Iterator
 
-from omnidriver.core.contracts.catalogue_paths import catalogued_paths
+from omnidriver.core.contracts.catalogue_paths import catalogued_paths, slot_key
+from omnidriver.core.specs.paths import SCRATCH_ENV_VAR
 
 from . import rtst_scanner
 from .rtst_scanner import scan_rtst_registrations
@@ -134,6 +135,9 @@ class Scan:
     #: passing a resolved dictionary; a callee ``=<root>`` is a member
     #: initialised from it, ``^<class>`` a base-class constructor.
     calls: tuple[tuple[str, int, int, str, tuple[str, ...]], ...] = ()
+    #: ``(class, literal)`` per ``new <class>(...)`` made only when a
+    #: selector equals the literal: ``if (x == "literal") { ... new C(...) }``.
+    dispatch: tuple[tuple[str, str], ...] = ()
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -147,6 +151,7 @@ class Scan:
         return cls(
             digest=payload["digest"], reads=reads, registrations=payload["registrations"],
             parameters=tupled(payload["parameters"]), calls=tupled(payload["calls"]),
+            dispatch=tupled(payload["dispatch"]),
         )
 
     def resolution(self) -> dict[str, object]:
@@ -186,6 +191,15 @@ def source_digest(source_root: Path) -> str:
 
 
 _MEMO: dict[tuple[str, str], Scan] = {}
+
+
+def scan_cache_root() -> Path | None:
+    """The supplied scratch root (``OMNIDRIVER_SCRATCH_DIR``, which the CLI
+    sets from ``--scratch-dir``) where scans are cached across processes,
+    for the callers that are handed no root of their own."""
+    supplied = os.environ.get(SCRATCH_ENV_VAR)
+    return Path(supplied) if supplied else None
+
 
 
 def cached_scan(source_root: Path, *, cache_root: Path | None, force: bool = False) -> Scan:
@@ -253,8 +267,10 @@ def scan_source(source_root: Path, *, digest: str | None = None) -> Scan:
     reads: list[DictRead] = []
     parameters: set[tuple[str, int, int, str]] = set()
     calls: list[tuple[str, int, int, str, tuple[str, ...]]] = []
+    dispatch: set[tuple[str, str]] = set()
     for relative, (text, structure, functions) in files.items():
         for function in functions or _includers(relative, files, includes):
+            dispatch.update(_dispatch(text, structure, function))
             params = _split_args(function.params)
             for index, param in enumerate(params):
                 match = _DICT_PARAM.search(param)
@@ -263,8 +279,28 @@ def scan_source(source_root: Path, *, digest: str | None = None) -> Scan:
             reads.extend(_reads_in(text, structure, function, relative, classes, selected, registrations, calls))
     return Scan(
         digest=digest or source_digest(source_root), reads=tuple(reads), registrations=registrations,
-        parameters=tuple(sorted(parameters)), calls=tuple(calls),
+        parameters=tuple(sorted(parameters)), calls=tuple(calls), dispatch=tuple(sorted(dispatch)),
     )
+
+
+_NEW = re.compile(r"\bnew\s+(?P<class>[A-Za-z_]\w*)\s*\(")
+_IF_LITERAL = re.compile(r'\bif\s*\(\s*[\w.]+\s*==\s*"(?P<literal>[^"]+)"\s*\)\s*$')
+
+
+def _dispatch(text: str, structure: str, function: "_Function") -> Iterator[tuple[str, str]]:
+    """The classes ``function`` builds only inside ``if (x == "literal")``."""
+    for match in _NEW.finditer(structure, function.start, function.end):
+        depth = 0
+        for index in range(match.start() - 1, function.start - 1, -1):
+            if structure[index] == "}":
+                depth += 1
+            elif structure[index] == "{" and depth == 0:
+                condition = _IF_LITERAL.search(text[max(function.start, index - 200):index])
+                if condition:
+                    yield match.group("class"), condition.group("literal")
+                break
+            elif structure[index] == "{":
+                depth -= 1
 
 
 def _includers(relative: str, files, includes) -> list["_Function"]:
@@ -1057,10 +1093,7 @@ def required_reads(scan: Scan, entries: Iterable, *, document: str) -> dict[tupl
     (``found``, ``isDict``) or reads only if present is optional."""
     entries = tuple(entries)
     placed = locate(scan, entries, document=document)
-    guarded = {
-        (read.file, read.function, read.root, read.scope, read.key)
-        for read in scan.reads if read.method in _GUARDS
-    }
+    guarded = _guards(scan)
     listed = [tuple(entry.driver_path.split(".")) for entry in entries]
     required: dict[tuple[str, ...], list[DictRead]] = {}
     for read in scan.reads:
@@ -1083,21 +1116,60 @@ def _same_function(defined: str, called: str) -> bool:
 
 @dataclass(frozen=True)
 class CatalogReport:
-    """The catalogue compared with the scan. ``contradictions`` are catalogue
-    claims the C++ refutes, each naming both sides; ``uncatalogued`` are
-    what the C++ reads and the catalogue lacks; ``unresolved`` are reads the
+    """The catalogue compared with the scan. Nothing in it fails a plan.
+    ``disagreements`` are catalogue claims the C++ refutes, each stating both
+    sides; ``unread`` are catalogued keys the C++ no longer reads;
+    ``uncatalogued`` are what the C++ reads and the catalogue lacks, each with
+    the ``DictEntry`` arguments the scan can fill; ``unresolved`` are reads the
     scan could not place (their receiver is not shown to be a dictionary)."""
 
-    status: str
     digest: str
     resolution: dict[str, object]
-    contradictions: list[str]
+    disagreements: list[str]
+    unread: list[dict]
     uncatalogued: list[dict]
     unresolved: list[dict]
     selector_values: dict[str, list[str]]
 
     def to_json(self) -> dict[str, object]:
         return asdict(self)
+
+
+def _guards(scan: Scan) -> set[tuple]:
+    """``(file, function, root, scope, key)`` of every key some read tests or
+    reads only if present: a ``get`` of it in the same function is optional."""
+    return {
+        (read.file, read.function, read.root, read.scope, read.key)
+        for read in scan.reads if read.method in _GUARDS
+    }
+
+
+def cxx_value_kind(scan: Scan, entry) -> str | None:
+    """The ``value_kind`` the C++ reads ``entry`` as when its anchored, typed
+    reads agree with each other and not with the catalogue; else ``None``. A
+    value is checked against this kind: the C++ is what rejects a bad one."""
+    path = tuple(slot_key(entry.driver_path).split("."))
+    typed = [
+        read for read in scan.reads
+        if read.value_read and read.key == path[-1] and read.type in _KINDS_BY_TYPE
+        and _path_matches(read.scope + (read.key,), path) and _anchored(read, path, entry)
+    ]
+    kinds = {value_kind_of(read.type) for read in typed}
+    if len(kinds) != 1 or any(entry.value_kind in _KINDS_BY_TYPE[read.type] for read in typed):
+        return None
+    return kinds.pop()
+
+
+def _entry_arguments(read: DictRead, required: bool, driver_path: str | None) -> dict[str, object]:
+    """The ``DictEntry`` arguments the scan establishes for an uncatalogued
+    read; the description, unit and conditions are the author's to write."""
+    return {
+        "driver_path": driver_path,
+        "value_kind": value_kind_of(read.type),
+        "required": required,
+        "typical_value": read.default,
+        "source_refs": [f"src/{read.file}"],
+    }
 
 
 def catalog_report(
@@ -1111,7 +1183,7 @@ def catalog_report(
     this source, or by a non-literal key) and ``runtime_selection`` (which
     selection table each enum draws its menu from). A read counts against an
     entry's type or required flag only when it is anchored to it
-    (``_anchored``), so a same-named key elsewhere never fails a plan."""
+    (``_anchored``), so a same-named key elsewhere never counts."""
     from .rtst_scanner import runtime_selection_report
 
     scan = cached_scan(source_root, cache_root=cache_root, force=force)
@@ -1120,14 +1192,20 @@ def catalog_report(
     entries = tuple(entries)
     catalogue = [(entry, tuple(path.split("."))) for entry, path in zip(entries, catalogued_paths(entries))]
     containers = [path[:i] for _entry, path in catalogue for i in range(1, len(path))]
+    guarded = _guards(scan)
 
-    contradictions: list[str] = []
+    disagreements: list[str] = []
+    unread: list[dict] = []
     read_keys = {read.key for read in scan.reads if read.key is not None}
     for entry, path in catalogue:
         if _PLACEHOLDER.fullmatch(path[-1]) or entry.driver_path in unseen:
             continue
         if path[-1] not in read_keys:
-            contradictions.append(f"{entry.driver_path}: catalogued, but the C++ reads no {path[-1]!r}")
+            unread.append({
+                "driver_path": entry.driver_path, "value_kind": entry.value_kind, "required": entry.required,
+                "description": entry.description, "source_refs": list(entry.source_refs),
+                "note": "catalogued; the supplied C++ no longer reads it",
+            })
             continue
         reads = [
             read for read in scan.reads
@@ -1136,20 +1214,37 @@ def catalog_report(
         ]
         typed = [read for read in reads if read.type in _KINDS_BY_TYPE]
         if typed and not any(entry.value_kind in _KINDS_BY_TYPE[read.type] for read in typed):
-            contradictions.append(
+            disagreements.append(
                 f"{entry.driver_path}: catalogue value_kind {entry.value_kind!r}; the C++ reads "
                 + ", ".join(sorted({f"{read.type} ({read.file}:{read.line})" for read in typed}))
             )
         if entry.required and reads and all(read.default is not None for read in reads):
-            contradictions.append(
+            disagreements.append(
                 f"{entry.driver_path}: catalogue says required; the C++ gives it a default ("
                 + ", ".join(sorted({f"{read.default} at {read.file}:{read.line}" for read in reads})) + ")"
             )
-    contradictions += [
+        if (
+            not entry.required and not entry.required_when and reads
+            and all(
+                read.method in _REQUIRED_METHODS
+                and (read.file, read.function, read.root, read.scope, read.key) not in guarded
+                for read in reads
+            )
+        ):
+            disagreements.append(
+                f"{entry.driver_path}: catalogue says optional; the C++ reads it with no default ("
+                + ", ".join(sorted({f"{read.file}:{read.line}" for read in reads})) + ")"
+            )
+    disagreements += [
         f"unseen_reads names {path}, which the catalogue does not list"
         for path in sorted(set(unseen) - {entry.driver_path for entry in entries})
     ]
 
+    documents = sorted({read.root.split(":", 1)[1] for read in scan.reads if (read.root or "").startswith("document:")})
+    placed: dict[str, set[tuple[str, ...]]] = {}
+    for name in documents or [""]:
+        for root, places in locate(scan, entries, document=name).items():
+            placed.setdefault(root, set()).update(places)
     uncatalogued: list[dict] = []
     seen: set[tuple] = set()
     for read in scan.reads:
@@ -1160,23 +1255,29 @@ def catalog_report(
         if any(_path_matches(read_path, path) for path in listed) or (read.root, read_path, read.method) in seen:
             continue
         seen.add((read.root, read_path, read.method))
+        required = (
+            read.method in _REQUIRED_METHODS
+            and (read.file, read.function, read.root, read.scope, read.key) not in guarded
+        )
+        places = placed.get(read.root, ())
+        driver_path = ".".join(next(iter(places)) + read_path) if len(places) == 1 else None
         uncatalogued.append({
             "kind": "dictionary" if read.subdict else "key",
             "key": read.key, "path": ".".join(read_path), "root": read.root,
             "type": read.type, "value_kind": value_kind_of(read.type), "default": read.default,
-            "method": read.method, "source": f"{read.file}:{read.line}", "function": read.function,
-            "selected_as": [list(pair) for pair in read.selected_as],
+            "method": read.method, "required": required, "source": f"{read.file}:{read.line}",
+            "function": read.function, "selected_as": [list(pair) for pair in read.selected_as],
+            **({"entry": _entry_arguments(read, required, driver_path)} if not read.subdict else {}),
         })
 
     selection = runtime_selection_report(
         scan.registrations, entries=entries, mapping=reviewed.get("runtime_selection", {}),
-    ) if "runtime_selection" in reviewed else {"contradictions": [], "uncatalogued": [], "selector_values": {}}
-    contradictions += selection["contradictions"]
+    ) if "runtime_selection" in reviewed else {"disagreements": [], "uncatalogued": [], "selector_values": {}}
     return CatalogReport(
-        status="failed" if contradictions else "ok",
         digest=scan.digest,
         resolution=scan.resolution(),
-        contradictions=contradictions,
+        disagreements=disagreements + selection["disagreements"],
+        unread=unread,
         uncatalogued=uncatalogued + selection["uncatalogued"],
         unresolved=[
             {"key": read.key, "method": read.method, "source": f"{read.file}:{read.line}", "function": read.function}
@@ -1204,13 +1305,17 @@ def registered_menus(reviewed: dict, scan: Scan, entries: Iterable) -> dict[str,
 
 def built_when(reviewed: dict, scan: Scan) -> dict[str, frozenset[str]]:
     """For a class no selection table registers, the values of a case's
-    selectors that build it, from the plugin's ``reviewed``
-    ``runtime_selection.built_when``: ``names`` it lists, and the names of the
-    ``tables`` it lists."""
-    return {
+    selectors that build it: the literal an ``if`` compares before the scan
+    sees it built, and what the plugin's ``reviewed``
+    ``runtime_selection.built_when`` adds (``names``, and the names of
+    ``tables``) where the code does not show it."""
+    built = {
         name: frozenset(spec.get("names", ())).union(*(scan.registrations.get(table, {}) for table in spec.get("tables", ())))
         for name, spec in reviewed.get("runtime_selection", {}).get("built_when", {}).items()
     }
+    for name, literal in scan.dispatch:
+        built[name] = built.get(name, frozenset()) | {literal}
+    return built
 
 
 def owner_of(read: DictRead) -> str:

@@ -39,6 +39,7 @@ def _context(mapping, *, report=None):
         ),
         manifest=SimpleNamespace(manifest=lambda: {}),
         case_files=SimpleNamespace(all_rules=lambda: ()),
+        run_semantic_validator=SimpleNamespace(validate=lambda request: ()),
     )
     return SimpleNamespace(
         capabilities=capabilities, identity=SimpleNamespace(resolutions={"cxx_mapping": "toy"}),
@@ -73,18 +74,21 @@ def test_a_supplied_root_that_is_not_a_directory_is_refused(tmp_path):
     assert scans == []
 
 
-def test_a_contradiction_is_an_error_and_an_uncatalogued_read_a_note(tmp_path):
+def test_what_the_cxx_disagrees_with_never_fails_the_plan(tmp_path):
     (tmp_path / "tree" / "src").mkdir(parents=True)
     report = {
-        "status": "failed", "contradictions": ["a.b: catalogued, but the C++ reads no 'b'"],
+        "disagreements": ["a.c: catalogue value_kind 'word'; the C++ reads scalar (x.C:3)"],
+        "unread": [{"driver_path": "$S.a.b", "note": "catalogued; the supplied C++ no longer reads it"}],
         "uncatalogued": [{"kind": "key", "key": "c"}], "unresolved": [{"key": "d"}],
     }
     context, scans = _context(_mapping(tmp_path), report=report)
     diagnostics = _diagnose(context, tmp_path, {"TOY_NATIVE_TREE": str(tmp_path / "tree")})
     assert scans == [(tmp_path / "tree" / "src").resolve()]
     assert [(d.level, d.code) for d in diagnostics] == [
-        ("error", "plugin_catalog_contradiction"), ("info", "plugin_catalog_uncatalogued"),
+        ("warning", "plugin_catalog_disagreement"), ("info", "plugin_catalog_unread"),
+        ("info", "plugin_catalog_uncatalogued"),
     ]
+    assert "no longer reads it" in diagnostics[1].message and "has no effect" in diagnostics[1].message
 
 
 def test_a_stack_without_a_cxx_mapping_adds_no_catalogue_diagnostics(tmp_path):
@@ -126,6 +130,27 @@ def test_a_case_key_the_cxx_reads_is_reported_once_by_the_plan_not_by_the_key_ch
         )
     ]
     assert unfiltered == ["multiplier", "mulitplier"]
+
+
+def test_a_case_that_sets_a_key_the_cxx_no_longer_reads_is_warned_that_it_has_no_effect(tmp_path):
+    case = tmp_path / "case"
+    (case / "system").mkdir(parents=True)
+    (case / "system" / "setPurkinjeSlabDict").write_text(
+        "FoamFile\n{\n    version 2.0;\n    format ascii;\n    class dictionary;\n"
+        "    object setPurkinjeSlabDict;\n}\nthickness 0.2;\nsmoothing 4;\nblock { retired 1; }\n"
+    )
+    found = case_dict_key_diagnostics(
+        case, catalogued_paths=["thickness", "smoothing", "block.retired"],
+        dict_relpaths=["system/setPurkinjeSlabDict"], unread=["smoothing", "block.retired"],
+    )
+    assert [(d.level, d.code, d.field) for d in found] == [
+        ("warning", "unread_case_dict_key", "smoothing"), ("warning", "unread_case_dict_key", "retired"),
+    ]
+    assert "'smoothing' is catalogued, but the supplied C++ no longer reads it" in found[0].message
+    assert case_dict_key_diagnostics(
+        case, catalogued_paths=["thickness", "smoothing", "block.retired"],
+        dict_relpaths=["system/setPurkinjeSlabDict"],
+    ) == ()
 
 
 def test_the_dictionaries_checked_follow_the_adapters_case_file_rules_not_a_directory_name(tmp_path):
