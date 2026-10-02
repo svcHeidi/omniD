@@ -48,7 +48,8 @@ _VIRTUAL_PRESENCE_TRIGGERS: tuple[tuple[str, str], ...] = (
 
 def infer_virtual_presence(ctx: dict[str, Any]) -> None:
     """Set, in place, the virtual keys that a leaf of `ctx` under a block
-    implies. Idempotent."""
+    implies, and for each ECG domain holding ``personalizedTemplates`` the
+    domain's own ``$personalizedTemplates_present``. Idempotent."""
     for prefix, virtual_key in _VIRTUAL_PRESENCE_TRIGGERS:
         if virtual_key in ctx:
             continue
@@ -56,6 +57,8 @@ def infer_virtual_presence(ctx: dict[str, Any]) -> None:
             if existing_key.startswith(prefix):
                 ctx[virtual_key] = True
                 break
+    for existing_key in [key for key in ctx if key.startswith(_ECG_DOMAIN_PREFIX) and _PERSONALIZED_TEMPLATES_SUFFIX in key]:
+        ctx[existing_key.split(_PERSONALIZED_TEMPLATES_SUFFIX)[0] + ".$personalizedTemplates_present"] = True
 
     from omnidriver.cardiacfoam.dict_entries import get_heterogeneity_models
     from omnidriver.cardiacfoam.own_context import own_driver_context
@@ -435,18 +438,10 @@ _PERSONALIZED_TEMPLATES_SUFFIX = ".personalizedTemplates."
 
 
 def _evaluate_personalized_templates(context: dict[str, Any]) -> list["StrictDiagnostic"]:
-    """Validate an explicitly selected eikonalECG template-generation block.
-
-    The block is intentionally optional: eikonalECG otherwise uses compiled
-    templates.  Its all-or-nothing contents and its relationship to a
-    manufactured verifier are solver science, not generic dictionary rules.
-    This mirrors constructor checks in ``eikonalECG.C`` before a run starts.
-
-    A case selects its verifier only through
-    ``ecgVerificationModel``/``verificationModel.type``; the native
-    ``manufacturedEikonalECG.`` legacy alias key does not exist, so no
-    context built from a real case can hold it.
-    """
+    """The value checks of an explicitly selected eikonalECG
+    template-generation block, which is optional: eikonalECG otherwise uses
+    compiled templates. The keys it must hold are the catalogue's
+    ``required_when`` on the block's presence."""
     errors: list["StrictDiagnostic"] = []
     domains = {
         key[len(_ECG_DOMAIN_PREFIX):].split(".", 1)[0]
@@ -480,22 +475,6 @@ def _evaluate_personalized_templates(context: dict[str, Any]) -> list["StrictDia
                          "eikonal ECG verification configuration."),
                 level="error",
             ))
-
-        required = (
-            "ionicModelConfig.ionicModel", "nBeats", "duration", "dt",
-            "ionicModelConfig.singleCellStimulus.stim_start",
-            "ionicModelConfig.singleCellStimulus.stim_period_S1",
-            "ionicModelConfig.singleCellStimulus.stim_duration",
-            "ionicModelConfig.singleCellStimulus.stim_amplitude",
-        )
-        for suffix in required:
-            key = template_prefix + suffix
-            if context.get(key) in (None, ""):
-                errors.append(_diagnostic_from_phase(
-                    phase="physics", field=key,
-                    message=f"{key} is required when personalizedTemplates is configured.",
-                    level="error",
-                ))
 
         def number(suffix: str) -> float | None:
             try:

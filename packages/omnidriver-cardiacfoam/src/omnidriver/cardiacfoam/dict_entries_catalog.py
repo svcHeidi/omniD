@@ -924,6 +924,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             allowed_bindings={"<name>": None},
             constraints=('Required when personalizedTemplates is configured; validated as a cardiac semantic block.',),
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
+            required_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.$personalizedTemplates_present": True},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.tissue',
@@ -968,24 +969,28 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             phases=frozenset({'physics'}), description='S1 pacing start time for template anchors [ms].',
             source_refs=('src/electroModels/ecgModels/eikonalECG/eikonalTemplateGenerator.C',), value_kind='scalar', unit='ms', allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
+            required_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.$personalizedTemplates_present": True},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.singleCellStimulus.stim_period_S1',
             phases=frozenset({'physics'}), description='S1 pacing cycle length for template anchors [ms].',
             source_refs=('src/electroModels/ecgModels/eikonalECG/eikonalTemplateGenerator.C',), value_kind='scalar', unit='ms', allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
+            required_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.$personalizedTemplates_present": True},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.singleCellStimulus.stim_duration',
             phases=frozenset({'physics'}), description='S1 pacing pulse duration for template anchors [ms].',
             source_refs=('src/electroModels/ecgModels/eikonalECG/eikonalTemplateGenerator.C',), value_kind='scalar', unit='ms', allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
+            required_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.$personalizedTemplates_present": True},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.singleCellStimulus.stim_amplitude',
             phases=frozenset({'physics'}), description='Model-scaled S1 stimulus amplitude for template anchors.',
             source_refs=('src/electroModels/ecgModels/eikonalECG/eikonalTemplateGenerator.C',), value_kind='scalar', allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
+            required_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.$personalizedTemplates_present": True},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.singleCellStimulus.nstim1',
@@ -1006,6 +1011,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             source_refs=('src/electroModels/ecgModels/eikonalECG/eikonalECG.C',), value_kind='integer', allowed_bindings={"<name>": None},
             constraints=('Required and must be at least one when personalizedTemplates is configured.',),
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
+            required_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.$personalizedTemplates_present": True},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.duration',
@@ -1013,6 +1019,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             source_refs=('src/electroModels/ecgModels/eikonalECG/eikonalECG.C',), value_kind='scalar', unit='s', allowed_bindings={"<name>": None},
             constraints=('Required, positive, and no longer than one S1 period when personalizedTemplates is configured.',),
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
+            required_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.$personalizedTemplates_present": True},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.dt',
@@ -1020,6 +1027,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             source_refs=('src/electroModels/ecgModels/eikonalECG/eikonalECG.C',), value_kind='scalar', unit='s', allowed_bindings={"<name>": None},
             constraints=('Required and positive when personalizedTemplates is configured.',),
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
+            required_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.$personalizedTemplates_present": True},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.electrodePositions.<electrode>',

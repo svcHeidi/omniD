@@ -194,6 +194,36 @@ def test_personalized_templates_valid_contract_is_accepted():
     assert _evaluate_personalized_templates(context) == []
 
 
+def test_a_configured_personalized_templates_block_must_set_the_keys_the_catalogue_requires_of_it():
+    from omnidriver.cardiacfoam.record_key_validation import _ELECTRO_ENTRIES_BY_PATH
+    from omnidriver.cardiacfoam.validation import infer_virtual_presence
+    from omnidriver.openfoam.case_rules import rule_diagnostics
+
+    def judge(context):
+        context = dict(context)
+        infer_virtual_presence(context)
+        return sorted(
+            item.field for item in rule_diagnostics(
+                tuple(_ELECTRO_ENTRIES_BY_PATH.values()), context, document="constant/electroProperties",
+            ) if "personalizedTemplates" in item.field
+        )
+
+    case = {
+        "ecgDomains.A.ecgSolver": "eikonalECG", "ecgDomains.B.ecgSolver": "eikonalECG",
+        "ecgDomains.A.personalizedTemplates.nBeats": 3,
+    }
+    assert judge(case) == sorted(
+        "ecgDomains.A.personalizedTemplates." + leaf for leaf in (
+            "ionicModelConfig.ionicModel", "duration", "dt",
+            "ionicModelConfig.singleCellStimulus.stim_start",
+            "ionicModelConfig.singleCellStimulus.stim_period_S1",
+            "ionicModelConfig.singleCellStimulus.stim_duration",
+            "ionicModelConfig.singleCellStimulus.stim_amplitude",
+        )
+    )
+    assert judge({k: v for k, v in case.items() if "personalizedTemplates" not in k}) == []
+
+
 def test_personalized_templates_rejects_manufactured_ecg_before_execution():
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
     from omnidriver.cardiacfoam.validation import _evaluate_personalized_templates
