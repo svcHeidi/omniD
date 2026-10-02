@@ -75,8 +75,7 @@ class _SemanticOnly:
 
     def resolve_case_mutation(self, request, *, driver_context):
         return case_write.ResolvedMutation(
-            request=request, targets=(), preconditions=(),
-            expected_effects=(), semantic_owner_id=self.plugin_id,
+            request=request, targets=(), expected_effects=(), semantic_owner_id=self.plugin_id,
         )
 
 
@@ -158,8 +157,7 @@ def test_a_resolver_with_no_mutation_modes_hook_is_refused_by_name():
 
         def resolve_case_mutation(self, request, *, driver_context):
             return case_write.ResolvedMutation(
-                request=request, targets=(), preconditions=(),
-                expected_effects=(), semantic_owner_id=self.plugin_id,
+                request=request, targets=(), expected_effects=(), semantic_owner_id=self.plugin_id,
             )
 
     capabilities = plugin_capabilities.adapt_plugin_capabilities(_UndeclaredModes())
@@ -192,8 +190,7 @@ def test_an_adapter_with_no_render_hook_refuses_by_name():
 
         def resolve_case_mutation(self, request, *, driver_context):
             return case_write.ResolvedMutation(
-                request=request, targets=(), preconditions=(),
-                expected_effects=(), semantic_owner_id=self.plugin_id,
+                request=request, targets=(), expected_effects=(), semantic_owner_id=self.plugin_id,
             )
 
     capabilities = plugin_capabilities.adapt_plugin_capabilities(_ResolveOnly())

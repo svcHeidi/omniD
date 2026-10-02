@@ -43,12 +43,6 @@ def _plan(**overrides):
     fields = dict(
         request=_request(),
         files=(_file(),),
-        preconditions=(
-            case_write.Precondition(
-                kind="file", target="constant/electroProperties",
-                digest="a" * 64, must_be_absent=False,
-            ),
-        ),
         semantic_owner_id="org.cardiacfoam",
         stack_identity="deadbeef" * 8,
         created_at="2026-09-22T00:00:00Z",
@@ -140,7 +134,6 @@ def test_the_digest_is_stable_across_processes():
                 mode=None, exists_before=False, before_digest=None,
                 renderer_id="org.openfoam", format="openfoam_dictionary",
             ),),
-            preconditions=(),
             semantic_owner_id="org.a",
             stack_identity="0" * 64,
             created_at="2026-09-22T00:00:00Z",
@@ -175,21 +168,6 @@ def test_a_schema_version_mismatch_is_refused_with_the_versions_named():
     payload["schema_version"] = 999
     with pytest.raises(ValueError, match="999"):
         case_write.CaseWritePlan.from_json(payload)
-
-
-def test_an_unknown_precondition_kind_is_refused():
-    with pytest.raises(ValueError, match="guess"):
-        case_write.Precondition(
-            kind="guess", target="x", digest=None, must_be_absent=False,
-        )
-
-
-def test_an_absence_precondition_carries_no_digest():
-    """"This file must not exist" and "this file must have digest X" are different claims."""
-    with pytest.raises(ValueError, match="absent"):
-        case_write.Precondition(
-            kind="absence", target="constant/x", digest="a" * 64, must_be_absent=True,
-        )
 
 
 def test_a_record_is_separate_from_its_plan():
@@ -314,7 +292,7 @@ def test_a_case_write_record_carries_its_committed_parameters_and_expected_effec
 def test_a_resolved_mutation_target_is_frozen_not_a_live_dict():
     resolved = case_write.ResolvedMutation(
         request=_request(), targets=({"format": "openfoam_dictionary", "path": "x"},),
-        preconditions=(), expected_effects=(), semantic_owner_id="org.a",
+        expected_effects=(), semantic_owner_id="org.a",
     )
     with pytest.raises(TypeError):
         resolved.targets[0]["path"] = "y"

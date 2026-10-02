@@ -315,8 +315,7 @@ class _RecordSweepWriterPlugin(MinimalTestPlugin):
             f"set {p.qualified_id} in {p.document}" for p in request.parameters
         )
         return ResolvedMutation(
-            request=request, targets=targets, preconditions=(),
-            expected_effects=expected_effects, semantic_owner_id=self.plugin_id,
+            request=request, targets=targets, expected_effects=expected_effects, semantic_owner_id=self.plugin_id,
         )
 
     def get_rendered_formats(self):

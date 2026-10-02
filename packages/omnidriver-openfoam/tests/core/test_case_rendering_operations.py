@@ -65,8 +65,7 @@ def _resolved(case_root: Path, *parameters: ParameterAssignment, extra_targets=(
         for p in parameters
     ) + tuple(extra_targets)
     return ResolvedMutation(
-        request=request, targets=targets, preconditions=(),
-        expected_effects=(), semantic_owner_id="org.omnidriver.test",
+        request=request, targets=targets, expected_effects=(), semantic_owner_id="org.omnidriver.test",
     )
 
 
@@ -141,8 +140,7 @@ def test_an_unknown_operation_on_a_target_is_refused_by_name(tmp_path):
     bad_target = dict(resolved.targets[0])
     bad_target["operation"] = "banana"
     resolved = ResolvedMutation(
-        request=resolved.request, targets=(bad_target,), preconditions=(),
-        expected_effects=(), semantic_owner_id="org.omnidriver.test",
+        request=resolved.request, targets=(bad_target,), expected_effects=(), semantic_owner_id="org.omnidriver.test",
     )
     with pytest.raises(ValueError, match="banana"):
         _render(resolved, tmp_path)
@@ -166,8 +164,7 @@ def test_a_target_with_no_operation_key_defaults_to_set(tmp_path):
         },
     )
     resolved = ResolvedMutation(
-        request=request, targets=targets, preconditions=(),
-        expected_effects=(), semantic_owner_id="org.omnidriver.test",
+        request=request, targets=targets, expected_effects=(), semantic_owner_id="org.omnidriver.test",
     )
     content = _render(resolved, tmp_path)
     assert "existingScalar    9;" in content

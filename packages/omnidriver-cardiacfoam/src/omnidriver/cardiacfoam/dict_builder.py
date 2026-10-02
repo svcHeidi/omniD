@@ -781,7 +781,7 @@ def resolve_synthesis_mutation(request: CaseMutationRequest) -> ResolvedMutation
         f"author {target['document']}" for target in targets if "content" in target
     )
     return ResolvedMutation(
-        request=request, targets=tuple(targets), preconditions=(),
+        request=request, targets=tuple(targets),
         expected_effects=expected_effects, semantic_owner_id=PLUGIN_ID,
     )
 
@@ -952,7 +952,7 @@ def build_case(
         identity = getattr(driver_context, "identity", None)
         stack_identity = identity.capability_digest if identity is not None else "0" * 64
         plan = CaseWritePlan(
-            request=request, files=rendered, preconditions=resolved.preconditions,
+            request=request, files=rendered,
             semantic_owner_id=resolved.semantic_owner_id, stack_identity=stack_identity,
             created_at=_datetime.datetime.now(_datetime.timezone.utc).isoformat(),
             expected_effects=resolved.expected_effects,
@@ -1025,13 +1025,8 @@ def build_and_launch(
         case_dir = case_dir.resolve()
     electro_path = case_dir / "constant" / "electroProperties"
 
-    # Preserved as a direct check, not a channel precondition: the
-    # regression test
-    # test_dict_builder.py::test_existing_case_dir_is_not_overwritten_without_consent
-    # asserts this exact FileExistsError type. Routing it through
-    # commit_case_write's precondition recheck instead would surface it as
-    # CaseTransactionError, breaking that external-facing exception contract
-    # for no behavioural gain.
+    # FileExistsError is the contract callers rely on; the transaction would
+    # surface the same refusal as CaseTransactionError.
     if electro_path.exists() and not overwrite:
         raise FileExistsError(
             f"{electro_path} already exists; pass overwrite=True to replace."
@@ -1056,7 +1051,7 @@ def build_and_launch(
         overwrite=overwrite, delta_t=delta_t, end_time=end_time, dx=dx,
         dry_run=dry_run, include_allrun=include_allrun, driver_context=write_context,
     )
-    commit_case_write(plan, driver_context=write_context, execution_env=None)
+    commit_case_write(plan, driver_context=write_context)
 
     # Every solver meshes now: `build_case` always puts a `blockMeshDict` in
     # the plan, and `commit_case_write` just wrote it, journaled, the same

@@ -23,14 +23,8 @@ What this does NOT guarantee, and must not be documented as guaranteeing:
   readers, and outside readers that read after the transaction completes.
 * Control over writers outside the framework. A lease coordinates this
   framework's attempts. A user editing a dictionary in an editor is not
-  prevented -- an edit that changes the file's content in place is detected
-  at precondition recheck as drift, which refuses the commit. A read
-  dependency replaced by a *symlink* is a different case and is refused
-  outright rather than detected as drift by digest: dereferencing it would
-  validate one file's identity while reading another's content, so
-  :func:`_check_preconditions` refuses to trust a symlinked precondition
-  target at all, the same way :func:`_resolve_target` already refused a
-  symlinked write target.
+  prevented. A symlinked write target is refused outright
+  (:func:`_resolve_target`).
 * Durability beyond what ``fsync`` on the file and its directory provides on
   the host filesystem. Network filesystems that reorder or defer writes are
   outside the supported profile -- this module has been exercised only
@@ -47,7 +41,6 @@ from __future__ import annotations
 
 import base64
 import json
-import os
 import uuid
 from pathlib import Path
 from typing import Any, Mapping
@@ -186,117 +179,6 @@ def _record_from_completed(payload: Mapping[str, Any]) -> CaseWriteRecord:
     )
 
 
-# --------------------------------------------------------------------------
-# Precondition rechecking
-# --------------------------------------------------------------------------
-
-
-def _check_environment_precondition(
-    precondition: "Precondition", environment: Mapping[str, str],
-) -> None:
-    """Recheck one ``environment`` precondition against the environment the
-    commit is running under.
-
-    Recorded at planning time as either a value (``digest`` is that value's
-    digest, ``must_be_absent`` is ``False``) or an absence (``digest`` is
-    ``None``, ``must_be_absent`` is ``True``) -- there is no third state, so
-    an absent variable that later appears is exactly as much a change as a
-    present one whose value changed (the same "absence is a dependency"
-    principle applied to include candidates).
-    """
-    key = precondition.target
-    value = environment.get(key)
-    if precondition.must_be_absent:
-        if value is not None:
-            raise CaseTransactionError(
-                f"precondition on environment variable {key!r} expected it "
-                f"to be unset, but it is now {value!r}; the plan was made "
-                f"assuming this variable played no part in resolution"
-            )
-        return
-    if value is None:
-        raise CaseTransactionError(
-            f"precondition on environment variable {key!r} expected a value "
-            f"but it is now unset; the case changed since the plan was made"
-        )
-    actual = _digest_bytes(value.encode())
-    if actual != precondition.digest:
-        raise CaseTransactionError(
-            f"precondition on environment variable {key!r} failed: its "
-            f"value changed since the plan was made"
-        )
-
-
-def _check_preconditions(
-    case_root: Path, preconditions: tuple, *, environment: Mapping[str, str],
-) -> None:
-    """Recheck every precondition against the filesystem, before any write.
-
-    ``file`` and ``include`` are checked identically -- both name a
-    case-relative path whose content must still match a digest; the
-    distinction between them is provenance (why the plan cared), not
-    mechanics. ``source_artifact`` is checked the same generic way: no case
-    in this batch exercises one whose target is not a case-relative file, and
-    a target that does not resolve to one simply reads as "missing" and
-    refuses -- fail-closed, not silently accepted. ``environment`` is checked
-    against ``environment`` (the execution environment the commit runs
-    under, or ``os.environ`` when the caller supplied none), never the
-    filesystem -- see :func:`_check_environment_precondition`.
-
-    A symlink at a ``file``/``include``/``source_artifact``/``absence``
-    target is refused outright, mirroring :func:`_resolve_target`'s refusal
-    of a symlink write target: dereferencing it would validate one file's
-    identity while reading another's content, which is exactly how a
-    case-relative read dependency could be quietly replaced by a symlink to
-    content outside the case with its precondition still reporting green.
-    """
-    for precondition in preconditions:
-        if precondition.kind == "environment":
-            _check_environment_precondition(precondition, environment)
-            continue
-        target = Path(case_root) / precondition.target
-        is_symlink = target.is_symlink()
-        exists = target.is_file()
-        if precondition.must_be_absent:
-            if exists or is_symlink:
-                raise CaseTransactionError(
-                    f"precondition on {precondition.target!r} requires it to be "
-                    f"absent, but it exists"
-                )
-            continue
-        if is_symlink:
-            raise CaseTransactionError(
-                f"precondition on {precondition.target!r} targets a symlink; "
-                f"refusing to trust it as {precondition.kind!r} evidence -- a "
-                f"symlink can point to different content than what was "
-                f"digested when the plan was made"
-            )
-        if not exists:
-            raise CaseTransactionError(
-                f"precondition on {precondition.target!r} expected digest "
-                f"{precondition.digest!r}, but the target is missing"
-            )
-        # A target with no read permission (``mode=0o000`` is a plan-legal
-        # ``RenderedFile.mode``, so this is reachable by ordinary use, not a
-        # contrived edge case) must not raise a bare ``PermissionError`` here
-        # -- every caller assumes a commit failure surfaces as
-        # ``CaseTransactionError``.
-        try:
-            content = target.read_bytes()
-        except OSError as exc:
-            raise CaseTransactionError(
-                f"cannot read {precondition.target!r} to check its "
-                f"precondition: {exc}"
-            ) from exc
-        actual = _digest_bytes(content)
-        if actual != precondition.digest:
-            raise CaseTransactionError(
-                f"precondition on {precondition.target!r} failed: expected "
-                f"digest {precondition.digest!r}, found {actual!r}; the case "
-                f"changed since the plan was made"
-            )
-
-
 def _check_render_exists_before(
     files: tuple[RenderedFile, ...], targets: Mapping[str, Path],
 ) -> None:
@@ -314,8 +196,7 @@ def _check_render_exists_before(
     every sibling key the moment ``_write_one`` replaces the file. This is
     the generic, solver-agnostic guard: it does not know what a document
     means, only whether the claim about its prior existence matches disk,
-    the same "recheck against the filesystem before any write" posture
-    :func:`_check_preconditions` already applies to a different claim.
+    the same "recheck against the filesystem before any write" posture.
     """
     for rendered in files:
         target = targets[rendered.path]
@@ -524,14 +405,13 @@ def commit_case_write(
     plan: CaseWritePlan,
     *,
     driver_context: Any,
-    execution_env: Any,
     transaction_id: str | None = None,
     case_lease_held: bool = False,
 ) -> CaseWriteRecord:
     """Commit a reviewed plan, or replay a completed one by id.
 
     Ordering: replay check -> stack-freshness check -> lease ->
-    unrecovered-journal check -> preconditions -> path safety -> journal ->
+    unrecovered-journal check -> path safety -> journal ->
     writes -> (rollback on failure | completion record).
 
     The lease this function acquires is host-local and **not reentrant**
@@ -593,9 +473,6 @@ def commit_case_write(
                 f"{pending.get('transaction_id')!r}; call "
                 f"recover_case_transaction() before committing another"
             )
-
-        environment = execution_env if execution_env is not None else os.environ
-        _check_preconditions(case_root, plan.preconditions, environment=environment)
 
         targets = {
             rendered.path: _resolve_target(case_root, rendered.path)

@@ -86,7 +86,6 @@ def patch_mutation(request: CaseMutationRequest, *, owner_id: str) -> ResolvedMu
     return ResolvedMutation(
         request=request,
         targets=tuple(_target_for_parameter(parameter) for parameter in request.parameters),
-        preconditions=(),
         expected_effects=tuple(
             f"{parameter.operation} {parameter.qualified_id!r} in {parameter.document}"
             for parameter in request.parameters

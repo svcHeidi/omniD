@@ -51,8 +51,8 @@ def find_etc_file(
     Returns ``(selected, candidates)``: the first existing file in search order,
     and every location searched whether or not it exists. An absent candidate
     still matters -- a file later appearing at a higher-priority location
-    changes which file the next run reads, so a plan's preconditions must
-    record that those locations were empty.
+    changes which file the next run reads, so the evidence records that
+    those locations were empty.
 
     Modelled on ESI's (openfoam.com) and Foundation's (openfoam.org) own
     ``bin/foamEtcFile``/``etc/bashrc``: both build the same six-slot search
@@ -160,8 +160,8 @@ def _inspect_source_closure(
             environment_keys.add("FOAM_ETC")
             # Every key find_etc_file reads is recorded unconditionally, not only
             # the ones this install happens to set: recording an unused key is
-            # harmless, but an unrecorded one would silently invalidate a
-            # precondition (see find_etc_file's docstring for the two families).
+            # harmless, but an unrecorded one would silently invalidate the
+            # evidence (see find_etc_file's docstring for the two families).
             environment_keys.update(
                 ("FOAM_API", "FOAM_CONFIG_ETC", "FOAM_CONFIG_MODE", "HOME",
                  "WM_PROJECT_VERSION", "WM_PROJECT_SITE", "WM_PROJECT_DIR",
@@ -181,7 +181,7 @@ def _inspect_source_closure(
                 )
             # Higher-priority locations that are empty today are recorded as
             # absent: a file appearing at one of them changes which file the
-            # next run reads, which is a precondition, not a detail.
+            # next run reads.
             for candidate in candidates:
                 if candidate == selected:
                     break

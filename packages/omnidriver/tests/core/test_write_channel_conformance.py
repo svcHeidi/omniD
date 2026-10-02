@@ -21,15 +21,12 @@ CHANNEL_CONFORMANCE_CASES = (
     "no_hidden_mutable_payloads",
     "format_specific_patching",
     "repeated_edits_to_one_file",
-    "missing_files",
     "new_files",
     "file_modes",
     "rollback_after_injected_failure",
     "interrupted_recovery",
     "rollback_failure",
-    "stale_input",
     "stale_build",
-    "changed_indirect_dependency",
     "replay_after_an_uncertain_result",
     "competing_attempts",
     "path_escape_and_symlinks",
@@ -72,7 +69,7 @@ def _parameter(**overrides):
     return case_write.ParameterAssignment(**fields)
 
 
-def _plan(case_root: Path, files, preconditions=(), **overrides):
+def _plan(case_root: Path, files, **overrides):
     fields = dict(
         mode="clone_and_patch", case_root=case_root, adapter_id="org.a",
         workflow="w", source_artifacts=(), parameters=(_parameter(),),
@@ -81,7 +78,7 @@ def _plan(case_root: Path, files, preconditions=(), **overrides):
     fields.update(overrides)
     request = case_write.CaseMutationRequest(**fields)
     return case_write.CaseWritePlan(
-        request=request, files=tuple(files), preconditions=tuple(preconditions),
+        request=request, files=tuple(files),
         semantic_owner_id="org.a", stack_identity="0" * 64,
         created_at="2026-09-22T00:00:00Z",
     )
@@ -125,7 +122,7 @@ def test_complete_plan_serialization_and_identity(tmp_path):
 
     forward = case_write.CaseWritePlan(
         request=_request(two_params), files=tuple(files_forward),
-        preconditions=(), semantic_owner_id="org.a", stack_identity="0" * 64,
+        semantic_owner_id="org.a", stack_identity="0" * 64,
         created_at="2026-09-22T00:00:00Z",
     )
     payload = forward.to_json()
@@ -136,7 +133,7 @@ def test_complete_plan_serialization_and_identity(tmp_path):
     reordered = case_write.CaseWritePlan(
         request=_request(tuple(reversed(two_params))),
         files=tuple(reversed(files_forward)),
-        preconditions=(), semantic_owner_id="org.a", stack_identity="0" * 64,
+        semantic_owner_id="org.a", stack_identity="0" * 64,
         created_at="2026-09-22T00:00:00Z",
     )
     assert forward.to_json() != reordered.to_json()  # to_json preserves review order
@@ -219,7 +216,7 @@ def test_format_specific_patching(tmp_path):
 
     plan = _plan(tmp_path, rendered)
     record = case_transaction.commit_case_write(
-        plan, driver_context=object(), execution_env=None,
+        plan, driver_context=object(),
     )
     assert (tmp_path / "constant" / "a").read_bytes() == b"alpha\n"
     assert (tmp_path / "system" / "b").read_bytes() == b"beta\n"
@@ -282,7 +279,7 @@ def test_repeated_edits_to_one_file(tmp_path):
         object(), snapshot_root=tmp_path, driver_context=object(),
     )
     plan = _plan(tmp_path, one_file)
-    case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+    case_transaction.commit_case_write(plan, driver_context=object())
     content = (tmp_path / "constant" / "a").read_bytes()
     assert b"one" in content and b"two" in content
 
@@ -290,24 +287,6 @@ def test_repeated_edits_to_one_file(tmp_path):
 # --------------------------------------------------------------------------
 # 5: missing files
 # --------------------------------------------------------------------------
-
-
-def test_missing_files(tmp_path):
-    """A precondition expects an existing file with a digest; it was deleted since planning."""
-    (tmp_path / "constant").mkdir()
-    (tmp_path / "constant" / "a").write_bytes(b"original\n")
-    digest = case_write._digest_bytes(b"original\n")
-    (tmp_path / "constant" / "a").unlink()
-
-    plan = _plan(
-        tmp_path,
-        [_rendered("constant/a", b"new\n", exists_before=True, before_digest=digest)],
-        preconditions=[case_write.Precondition(
-            kind="file", target="constant/a", digest=digest, must_be_absent=False,
-        )],
-    )
-    with pytest.raises(case_transaction.CaseTransactionError, match="missing"):
-        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
 
 
 # --------------------------------------------------------------------------
@@ -318,7 +297,7 @@ def test_missing_files(tmp_path):
 def test_new_files(tmp_path):
     plan = _plan(tmp_path, [_rendered("constant/brand_new", b"hello\n")])
     record = case_transaction.commit_case_write(
-        plan, driver_context=object(), execution_env=None,
+        plan, driver_context=object(),
     )
     assert (tmp_path / "constant" / "brand_new").read_bytes() == b"hello\n"
     assert record.status == "committed"
@@ -339,7 +318,7 @@ def test_file_modes(tmp_path):
         _rendered("constant/Allrun", b"#!/bin/sh\necho hi\n",
                   exists_before=True, before_digest=before, mode=0o755),
     ])
-    case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+    case_transaction.commit_case_write(plan, driver_context=object())
     assert script.stat().st_mode & 0o777 == 0o755
 
 
@@ -347,7 +326,7 @@ def test_file_modes(tmp_path):
 def test_file_modes_an_unreadable_existing_file_is_a_transaction_error_not_a_leak(tmp_path):
     """R3 blocker 1 (2026-09-23): closest existing case to file modes, since it is one of those modes -- 0o000 -- that made the pre-existing file unreadable."""
     first = _plan(tmp_path, [_rendered("constant/a", b"one\n", mode=0o000)])
-    case_transaction.commit_case_write(first, driver_context=object(), execution_env=None)
+    case_transaction.commit_case_write(first, driver_context=object())
     before = case_write._digest_bytes(b"one\n")
     second = _plan(tmp_path, [
         _rendered("constant/a", b"two\n", exists_before=True, before_digest=before),
@@ -355,7 +334,7 @@ def test_file_modes_an_unreadable_existing_file_is_a_transaction_error_not_a_lea
     try:
         with pytest.raises(case_transaction.CaseTransactionError, match="constant/a"):
             case_transaction.commit_case_write(
-                second, driver_context=object(), execution_env=None,
+                second, driver_context=object(),
             )
     finally:
         (tmp_path / "constant" / "a").chmod(0o644)
@@ -381,7 +360,7 @@ def test_rollback_after_injected_failure(tmp_path):
     try:
         with pytest.raises(case_transaction.CaseTransactionError):
             case_transaction.commit_case_write(
-                plan, driver_context=object(), execution_env=None,
+                plan, driver_context=object(),
             )
         assert existing.read_bytes() == b"original\n"
     finally:
@@ -412,7 +391,7 @@ def test_interrupted_recovery(tmp_path, monkeypatch):
         _rendered("constant/b", b"two\n"),
     ])
     with pytest.raises(KeyboardInterrupt):
-        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+        case_transaction.commit_case_write(plan, driver_context=object())
     assert case_transaction.pending_transaction(tmp_path)
 
     record = case_transaction.recover_case_transaction(tmp_path)
@@ -444,7 +423,7 @@ def test_rollback_failure(tmp_path, monkeypatch):
     try:
         with pytest.raises(case_transaction.CaseTransactionError, match="rollback"):
             case_transaction.commit_case_write(
-                plan, driver_context=object(), execution_env=None,
+                plan, driver_context=object(),
             )
         assert case_transaction.pending_transaction(tmp_path)
     finally:
@@ -454,22 +433,6 @@ def test_rollback_failure(tmp_path, monkeypatch):
 # --------------------------------------------------------------------------
 # 11: stale input
 # --------------------------------------------------------------------------
-
-
-def test_stale_input(tmp_path):
-    """The precondition target still exists, but its content changed since the plan was made -- distinct from `missing_files`, where it vanished."""
-    (tmp_path / "constant").mkdir()
-    (tmp_path / "constant" / "a").write_bytes(b"changed since planning\n")
-    plan = _plan(
-        tmp_path,
-        [_rendered("constant/a", b"new\n", exists_before=True, before_digest="a" * 64)],
-        preconditions=[case_write.Precondition(
-            kind="file", target="constant/a", digest="a" * 64, must_be_absent=False,
-        )],
-    )
-    with pytest.raises(case_transaction.CaseTransactionError, match="constant/a"):
-        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
-    assert (tmp_path / "constant" / "a").read_bytes() == b"changed since planning\n"
 
 
 # --------------------------------------------------------------------------
@@ -525,7 +488,7 @@ def test_stale_build(tmp_path):
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")],
                  **{})
     plan = case_write.CaseWritePlan(
-        request=plan.request, files=plan.files, preconditions=plan.preconditions,
+        request=plan.request, files=plan.files,
         semantic_owner_id="org.a", stack_identity=current.capability_digest,
         created_at=plan.created_at,
     )
@@ -535,7 +498,7 @@ def test_stale_build(tmp_path):
 
     with pytest.raises(case_transaction.CaseTransactionError) as excinfo:
         case_transaction.commit_case_write(
-            plan, driver_context=_Context(), execution_env=None,
+            plan, driver_context=_Context(),
         )
     assert current.capability_digest in str(excinfo.value)
     assert other.capability_digest in str(excinfo.value)
@@ -544,7 +507,7 @@ def test_stale_build(tmp_path):
         identity = current
 
     case_transaction.commit_case_write(
-        plan, driver_context=_MatchingContext(), execution_env=None,
+        plan, driver_context=_MatchingContext(),
     )
     assert (tmp_path / "constant" / "a").exists()
 
@@ -575,39 +538,6 @@ def test_the_stack_digest_does_not_yet_bind_renderer_content(tmp_path):
 # --------------------------------------------------------------------------
 
 
-def test_changed_indirect_dependency(tmp_path):
-    """An `include` precondition's digest changed even though every case file the plan itself writes is untouched."""
-    (tmp_path / "constant").mkdir()
-    (tmp_path / "site").mkdir()
-    (tmp_path / "site" / "included").write_bytes(b"original include\n")
-    plan = _plan(
-        tmp_path, [_rendered("constant/a", b"new\n")],
-        preconditions=[case_write.Precondition(
-            kind="include", target="site/included",
-            digest=case_write._digest_bytes(b"original include\n"),
-            must_be_absent=False,
-        )],
-    )
-    (tmp_path / "site" / "included").write_bytes(b"changed include\n")
-    with pytest.raises(case_transaction.CaseTransactionError, match="site/included"):
-        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
-
-
-def test_changed_indirect_dependency_an_environment_value_too(tmp_path, monkeypatch):
-    """An indirect dependency is not only an included file: `"environment"` is a first-class `PRECONDITION_KINDS` member too."""
-    monkeypatch.setenv("OMNIDRIVER_CONFORMANCE_ENV_KEY", "planned-value")
-    plan = _plan(
-        tmp_path, [_rendered("constant/a", b"new\n")],
-        preconditions=[case_write.Precondition(
-            kind="environment", target="OMNIDRIVER_CONFORMANCE_ENV_KEY",
-            digest=case_write._digest_bytes(b"planned-value"), must_be_absent=False,
-        )],
-    )
-    monkeypatch.setenv("OMNIDRIVER_CONFORMANCE_ENV_KEY", "changed-since-planning")
-    with pytest.raises(case_transaction.CaseTransactionError, match="OMNIDRIVER_CONFORMANCE_ENV_KEY"):
-        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
-
-
 # --------------------------------------------------------------------------
 # 14: replay after an uncertain result
 # --------------------------------------------------------------------------
@@ -616,11 +546,11 @@ def test_changed_indirect_dependency_an_environment_value_too(tmp_path, monkeypa
 def test_replay_after_an_uncertain_result(tmp_path):
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     first = case_transaction.commit_case_write(
-        plan, driver_context=object(), execution_env=None, transaction_id="t-1",
+        plan, driver_context=object(), transaction_id="t-1",
     )
     (tmp_path / "constant" / "a").write_bytes(b"someone else edited this\n")
     second = case_transaction.commit_case_write(
-        plan, driver_context=object(), execution_env=None, transaction_id="t-1",
+        plan, driver_context=object(), transaction_id="t-1",
     )
     assert second.transaction_id == first.transaction_id
     assert second.status == "committed"
@@ -640,7 +570,7 @@ def test_competing_attempts(tmp_path):
     def _attempt():
         try:
             case_transaction.commit_case_write(
-                plan, driver_context=object(), execution_env=None,
+                plan, driver_context=object(),
             )
         except case_transaction.CaseTransactionError as exc:
             outcome["error"] = exc
@@ -654,7 +584,7 @@ def test_competing_attempts(tmp_path):
     assert not (tmp_path / "constant" / "a").exists()
 
     # Once the lease is released, the same plan commits cleanly.
-    case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+    case_transaction.commit_case_write(plan, driver_context=object())
     assert (tmp_path / "constant" / "a").read_bytes() == b"one\n"
 
 
@@ -670,7 +600,7 @@ def test_path_escape_and_symlinks(tmp_path):
     (tmp_path / "constant" / "escape").symlink_to(outside / "target")
     plan = _plan(tmp_path, [_rendered("constant/escape", b"x\n")])
     with pytest.raises(case_transaction.CaseTransactionError, match="symlink"):
-        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+        case_transaction.commit_case_write(plan, driver_context=object())
 
 
 def test_path_escape_a_relative_case_root_is_refused_at_construction(tmp_path):
@@ -681,26 +611,6 @@ def test_path_escape_a_relative_case_root_is_refused_at_construction(tmp_path):
             adapter_id="org.a", workflow="w", source_artifacts=(),
             parameters=(_parameter(),), requested_by="test",
         )
-
-
-def test_path_escape_and_symlinks_a_precondition_target_too(tmp_path):
-    """The symlink refusal proved for a *write* target has a mirror-image hole on the *read* side: a precondition must refuse a symlink, not dereference it."""
-    outside = tmp_path.parent / "outside_precondition_dep"
-    outside.mkdir(exist_ok=True)
-    swapped = outside / "swapped.txt"
-    swapped.write_bytes(b"attacker-controlled content\n")
-    (tmp_path / "constant").mkdir()
-    (tmp_path / "constant" / "dep").symlink_to(swapped)
-    plan = _plan(
-        tmp_path, [_rendered("constant/a", b"new\n")],
-        preconditions=[case_write.Precondition(
-            kind="file", target="constant/dep",
-            digest=case_write._digest_bytes(b"original trusted content\n"),
-            must_be_absent=False,
-        )],
-    )
-    with pytest.raises(case_transaction.CaseTransactionError, match="symlink"):
-        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
 
 
 # --------------------------------------------------------------------------
@@ -748,7 +658,7 @@ def test_post_write_evidence_unavailable(tmp_path):
     """An unverifiable write is committed and does not dispatch."""
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     record = case_transaction.commit_case_write(
-        plan, driver_context=object(), execution_env=None,
+        plan, driver_context=object(),
     )
     assert record.status == "committed"
     assert (tmp_path / "constant" / "a").exists()

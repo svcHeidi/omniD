@@ -246,8 +246,7 @@ class _InputWriterPlugin(MinimalTestPlugin):
             for p in request.parameters
         )
         return ResolvedMutation(
-            request=request, targets=targets, preconditions=(),
-            expected_effects=(), semantic_owner_id=self.plugin_id,
+            request=request, targets=targets, expected_effects=(), semantic_owner_id=self.plugin_id,
         )
 
     def get_rendered_formats(self):

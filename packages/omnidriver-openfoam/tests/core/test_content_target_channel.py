@@ -58,7 +58,7 @@ def test_a_content_target_renders_exactly_the_given_bytes(tmp_path):
     resolved = ResolvedMutation(
         request=_request(case_root),
         targets=(plan_verbatim_content("constant/electroProperties", _TEMPLATE_TEXT),),
-        preconditions=(), expected_effects=("author constant/electroProperties",),
+        expected_effects=("author constant/electroProperties",),
         semantic_owner_id="org.omnidriver.test",
     )
     rendered = _render(resolved, tmp_path)
@@ -76,7 +76,7 @@ def test_two_content_targets_on_one_document_are_refused(tmp_path):
             plan_verbatim_content("constant/electroProperties", _TEMPLATE_TEXT),
             plan_verbatim_content("constant/electroProperties", "different text\n"),
         ),
-        preconditions=(), expected_effects=(),
+        expected_effects=(),
         semantic_owner_id="org.omnidriver.test",
     )
     with pytest.raises(ValueError, match="authored once"):
@@ -93,7 +93,7 @@ def test_a_content_target_can_author_a_document_that_does_not_exist_yet(tmp_path
     resolved = ResolvedMutation(
         request=_request(case_root),
         targets=(plan_verbatim_content("constant/electroProperties", _TEMPLATE_TEXT),),
-        preconditions=(), expected_effects=(),
+        expected_effects=(),
         semantic_owner_id="org.omnidriver.test",
     )
     rendered = _render(resolved, tmp_path)
@@ -126,7 +126,7 @@ def test_a_non_content_patch_against_a_missing_document_is_still_refused(tmp_pat
                 "format": case_rendering.FORMAT,
             },
         ),
-        preconditions=(), expected_effects=(),
+        expected_effects=(),
         semantic_owner_id="org.omnidriver.test",
     )
     with pytest.raises(ValueError, match="system/controlDict"):
@@ -153,7 +153,7 @@ def test_a_content_target_plus_a_value_edit_on_the_same_document_lands_on_top(tm
                 "format": case_rendering.FORMAT,
             },
         ),
-        preconditions=(), expected_effects=(),
+        expected_effects=(),
         semantic_owner_id="org.omnidriver.test",
     )
     rendered = _render(resolved, tmp_path)
@@ -181,7 +181,7 @@ def test_before_digest_and_mode_are_preserved_when_the_document_already_existed(
     resolved = ResolvedMutation(
         request=_request(case_root),
         targets=(plan_verbatim_content("constant/electroProperties", _TEMPLATE_TEXT),),
-        preconditions=(), expected_effects=(),
+        expected_effects=(),
         semantic_owner_id="org.omnidriver.test",
     )
     rendered = _render(resolved, tmp_path)

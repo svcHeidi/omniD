@@ -557,10 +557,7 @@ class SolverPluginOptionalHooks(Protocol):
 
         ``execution_env`` is the selected runtime, for a renderer that must
         resolve includes or evaluate a directive to know what it is editing.
-        Declare every file read through it as a precondition on the
-        ``ResolvedMutation``, including files that were *absent* where their
-        presence would change which file is selected. Absent -> this provider
-        renders nothing."""
+        Absent -> this provider renders nothing."""
         ...
 
     # -- DictionaryCatalogCapability -------------------------------------------

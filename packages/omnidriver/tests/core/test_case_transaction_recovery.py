@@ -16,14 +16,14 @@ def _parameter():
     )
 
 
-def _plan(case_root: Path, files, preconditions=()):
+def _plan(case_root: Path, files):
     request = case_write.CaseMutationRequest(
         mode="clone_and_patch", case_root=case_root, adapter_id="org.a",
         workflow="w", source_artifacts=(), parameters=(_parameter(),),
         requested_by="test",
     )
     return case_write.CaseWritePlan(
-        request=request, files=tuple(files), preconditions=tuple(preconditions),
+        request=request, files=tuple(files),
         semantic_owner_id="org.a", stack_identity="0" * 64,
         created_at="2026-09-22T00:00:00Z",
     )
@@ -58,7 +58,7 @@ def test_an_interrupted_transaction_is_recoverable(tmp_path, monkeypatch):
         _rendered("constant/b", b"two\n"),
     ])
     with pytest.raises(KeyboardInterrupt):
-        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+        case_transaction.commit_case_write(plan, driver_context=object())
 
     # The journal survived; the case has not been restored yet.
     assert case_transaction.pending_transaction(tmp_path)
@@ -89,17 +89,17 @@ def test_an_unrecovered_journal_blocks_a_new_commit(tmp_path):
     })
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     with pytest.raises(case_transaction.CaseTransactionError, match="t-stuck"):
-        case_transaction.commit_case_write(plan, driver_context=object(), execution_env=None)
+        case_transaction.commit_case_write(plan, driver_context=object())
 
 
 def test_replaying_a_completed_transaction_returns_its_record(tmp_path):
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     first = case_transaction.commit_case_write(
-        plan, driver_context=object(), execution_env=None, transaction_id="t-1",
+        plan, driver_context=object(), transaction_id="t-1",
     )
     (tmp_path / "constant" / "a").write_bytes(b"someone else edited this\n")
     second = case_transaction.commit_case_write(
-        plan, driver_context=object(), execution_env=None, transaction_id="t-1",
+        plan, driver_context=object(), transaction_id="t-1",
     )
     assert second.transaction_id == first.transaction_id
     assert second.status == "committed"
@@ -111,12 +111,12 @@ def test_replaying_a_completed_transaction_returns_its_record(tmp_path):
 def test_a_replay_with_a_different_plan_under_one_id_is_refused(tmp_path):
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     case_transaction.commit_case_write(
-        plan, driver_context=object(), execution_env=None, transaction_id="t-2",
+        plan, driver_context=object(), transaction_id="t-2",
     )
     other = _plan(tmp_path, [_rendered("constant/a", b"different\n")])
     with pytest.raises(case_transaction.CaseTransactionError, match="t-2"):
         case_transaction.commit_case_write(
-            other, driver_context=object(), execution_env=None, transaction_id="t-2",
+            other, driver_context=object(), transaction_id="t-2",
         )
 
 
@@ -143,7 +143,7 @@ def test_a_rollback_that_itself_fails_leaves_the_journal_and_says_so(tmp_path, m
     try:
         with pytest.raises(case_transaction.CaseTransactionError, match="rollback"):
             case_transaction.commit_case_write(
-                plan, driver_context=object(), execution_env=None,
+                plan, driver_context=object(),
             )
         assert case_transaction.pending_transaction(tmp_path)
     finally:

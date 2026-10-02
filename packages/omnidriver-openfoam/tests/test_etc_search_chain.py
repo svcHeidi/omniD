@@ -157,7 +157,7 @@ def test_a_user_file_shadows_site_and_distribution(tmp_path):
 
 
 def test_every_candidate_is_reported_in_search_order(tmp_path):
-    """Absent candidates are recorded as preconditions too, since a file
+    """Absent candidates are reported too, since a file
     appearing later at a higher-priority location changes which file is read."""
     dirs = _layout(tmp_path)
     (dirs["dist"] / "caseDicts" / "x").write_text("vendor\n")

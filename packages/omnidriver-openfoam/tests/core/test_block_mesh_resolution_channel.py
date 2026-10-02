@@ -212,8 +212,7 @@ def _resolved_for(case_root: Path) -> ResolvedMutation:
         plan_block_mesh_resolution("system/blockMeshDict", "40 40 40", expected_blocks=3),
     )
     return ResolvedMutation(
-        request=request, targets=targets, preconditions=(),
-        expected_effects=("resize blockMeshDict", "set deltaT"),
+        request=request, targets=targets, expected_effects=("resize blockMeshDict", "set deltaT"),
         semantic_owner_id="org.omnidriver.test",
     )
 
@@ -278,8 +277,7 @@ def test_the_renderer_still_refuses_the_wrong_expected_blocks(tmp_path):
         plan_block_mesh_resolution("system/blockMeshDict", "40 40 40", expected_blocks=1),
     )
     resolved = ResolvedMutation(
-        request=request, targets=targets, preconditions=(),
-        expected_effects=(), semantic_owner_id="org.omnidriver.test",
+        request=request, targets=targets, expected_effects=(), semantic_owner_id="org.omnidriver.test",
     )
     with pytest.raises(KeyError, match="Expected to update 1 hex blocks"):
         case_rendering.render_patch_case_files(
@@ -308,8 +306,7 @@ def test_the_renderer_refuses_a_missing_block_mesh_dict(tmp_path):
         plan_block_mesh_resolution("system/blockMeshDict", "40 40 40", expected_blocks=1),
     )
     resolved = ResolvedMutation(
-        request=request, targets=targets, preconditions=(),
-        expected_effects=(), semantic_owner_id="org.omnidriver.test",
+        request=request, targets=targets, expected_effects=(), semantic_owner_id="org.omnidriver.test",
     )
     with pytest.raises(ValueError, match="system/blockMeshDict"):
         case_rendering.render_patch_case_files(
@@ -330,8 +327,7 @@ def test_two_hex_targets_on_one_document_are_refused_as_ambiguous(tmp_path):
         plan_block_mesh_resolution("system/blockMeshDict", "20 20 20", expected_blocks=3),
     )
     resolved = ResolvedMutation(
-        request=request, targets=targets, preconditions=(),
-        expected_effects=(), semantic_owner_id="org.omnidriver.test",
+        request=request, targets=targets, expected_effects=(), semantic_owner_id="org.omnidriver.test",
     )
     with pytest.raises(ValueError, match="rewritten once"):
         case_rendering.render_patch_case_files(

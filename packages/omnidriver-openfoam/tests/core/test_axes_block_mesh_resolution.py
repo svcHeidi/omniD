@@ -417,7 +417,7 @@ def test_the_renderer_still_refuses_the_wrong_expected_blocks_independently_of_t
             # independently of the axis.
             plan_block_mesh_resolution("system/blockMeshDict", "20 20 20", expected_blocks=1),
         ),
-        preconditions=(), expected_effects=(), semantic_owner_id="org.omnidriver.test",
+        expected_effects=(), semantic_owner_id="org.omnidriver.test",
     )
 
     with pytest.raises(KeyError, match="Expected to update 1 hex blocks"):

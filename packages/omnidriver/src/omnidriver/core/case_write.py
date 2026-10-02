@@ -30,19 +30,7 @@ from .contracts.dictionary import VALUE_KINDS, validate_value_shape
 #: serialized under one version is not readable under another: a reader that
 #: silently accepts an older payload is a reader that fills a missing field
 #: with a default nobody reviewed.
-PLAN_SCHEMA_VERSION = 1
-
-PRECONDITION_KINDS = frozenset({
-    "file",              # a case file that must have this digest
-    "include",           # a file the renderer read through an include directive
-    "source_artifact",   # a mesh or template the synthesis consumed
-    "environment",       # an environment value the resolution depended on
-    "absence",           # a location that must stay empty, because a file
-                         # appearing there changes which file is selected
-})
-
-#: A renderer may declare these; the shipped renderers declare none, and
-#: ``case_transaction._check_preconditions`` rechecks whatever a plan carries.
+PLAN_SCHEMA_VERSION = 2
 
 MUTATION_MODES = frozenset({"clone_and_patch", "synthesize"})
 
@@ -52,9 +40,7 @@ MUTATION_MODES = frozenset({"clone_and_patch", "synthesize"})
 #: assertion plus "...and if the key is absent, create it" -- the typed
 #: counterpart of `mutators.update_foam_entry`'s own `add_if_missing`.
 #: ``remove`` asserts the key does not exist and carries no value at all
-#: (enforced in `ParameterAssignment.__post_init__`, the same "digest and
-#: must_be_absent are different claims" reasoning `Precondition` already
-#: applies). One vocabulary, not three types: a caller that wants to upsert
+#: (enforced in `ParameterAssignment.__post_init__`). One vocabulary, not three types: a caller that wants to upsert
 #: or delete still builds a `ParameterAssignment`, just with a different
 #: `operation`.
 PARAMETER_OPERATIONS = frozenset({"set", "ensure", "remove"})
@@ -535,41 +521,6 @@ class RenderedFile:
 
 
 @dataclass(frozen=True)
-class Precondition:
-    """One fact that must still hold when the plan is committed."""
-
-    kind: str
-    target: str
-    digest: str | None
-    must_be_absent: bool
-
-    def __post_init__(self) -> None:
-        if self.kind not in PRECONDITION_KINDS:
-            raise ValueError(
-                f"a precondition may not guess its kind: {self.kind!r} is not "
-                f"one of {sorted(PRECONDITION_KINDS)}"
-            )
-        if self.must_be_absent and self.digest:
-            raise ValueError(
-                f"precondition on {self.target!r} requires the target to be "
-                f"absent and also to have a digest; those are different claims"
-            )
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "kind": self.kind, "target": self.target,
-            "digest": self.digest, "must_be_absent": self.must_be_absent,
-        }
-
-    @classmethod
-    def from_json(cls, payload: Mapping[str, Any]) -> "Precondition":
-        return cls(
-            kind=payload["kind"], target=payload["target"],
-            digest=payload["digest"], must_be_absent=payload["must_be_absent"],
-        )
-
-
-@dataclass(frozen=True)
 class CaseWritePlan:
     """Everything that will happen, reviewable before any of it does.
 
@@ -588,7 +539,6 @@ class CaseWritePlan:
 
     request: CaseMutationRequest
     files: tuple[RenderedFile, ...]
-    preconditions: tuple[Precondition, ...]
     semantic_owner_id: str
     stack_identity: str
     created_at: str
@@ -601,7 +551,6 @@ class CaseWritePlan:
         # already approved it, silently changing `plan_digest` after review.
         # See the analogous comment on ParameterAssignment.
         object.__setattr__(self, "files", tuple(self.files))
-        object.__setattr__(self, "preconditions", tuple(self.preconditions))
         object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
         # Checked here too, not only in `from_json`, so a plan constructed
         # directly (not read back from a persisted payload) can't skirt
@@ -631,7 +580,6 @@ class CaseWritePlan:
             "schema_version": self.schema_version,
             "request": self.request.to_json(),
             "files": [rendered.to_json() for rendered in self.files],
-            "preconditions": [p.to_json() for p in self.preconditions],
             "semantic_owner_id": self.semantic_owner_id,
             "stack_identity": self.stack_identity,
             "created_at": self.created_at,
@@ -683,9 +631,6 @@ class CaseWritePlan:
         return cls(
             request=CaseMutationRequest.from_json(payload["request"]),
             files=tuple(RenderedFile.from_json(item) for item in payload["files"]),
-            preconditions=tuple(
-                Precondition.from_json(item) for item in payload["preconditions"]
-            ),
             semantic_owner_id=payload["semantic_owner_id"],
             stack_identity=payload["stack_identity"],
             created_at=payload["created_at"],
@@ -764,27 +709,22 @@ class ResolvedMutation:
     ``formats()`` derives a value from it that neither producer hands over
     directly.
 
-    ``preconditions`` and ``semantic_owner_id``, by contrast, are passed
-    straight through unchanged by both producers
-    (``openfoam/case_rendering.py::patch_mutation``,
-    ``cardiacfoam/dict_builder.py``'s synthesis resolver) into
-    ``CaseWritePlan`` -- expected of a resolve/render boundary, not itself a
-    defect.
+    ``semantic_owner_id``, by contrast, is passed straight through unchanged
+    by both producers into ``CaseWritePlan`` -- expected of a resolve/render
+    boundary, not itself a defect.
     """
 
     request: CaseMutationRequest
     targets: tuple[Mapping[str, Any], ...]
-    preconditions: tuple[Precondition, ...]
     expected_effects: tuple[str, ...]
     semantic_owner_id: str
 
     def __post_init__(self) -> None:
         # Coerced and deep-frozen the same as every other declared-tuple
         # field in this module: `targets` holds plain mappings -- unlike
-        # `RenderedFile`/`Precondition`, which are themselves frozen
+        # `RenderedFile`, which is itself a frozen
         # dataclasses -- so it needs `_freeze`, not just `tuple()`.
         object.__setattr__(self, "targets", tuple(_freeze(target) for target in self.targets))
-        object.__setattr__(self, "preconditions", tuple(self.preconditions))
         object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
 
     def formats(self) -> tuple[str, ...]:

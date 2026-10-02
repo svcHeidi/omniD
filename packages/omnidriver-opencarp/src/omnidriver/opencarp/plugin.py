@@ -100,7 +100,7 @@ class OpenCARPPlugin:
             for p in request.parameters
         )
         return ResolvedMutation(
-            request=request, targets=targets, preconditions=(),
+            request=request, targets=targets,
             expected_effects=tuple(f"set {t['key']} in {t['document']}" for t in targets),
             semantic_owner_id=self.plugin_id,
         )

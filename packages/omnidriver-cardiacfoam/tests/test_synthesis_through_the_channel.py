@@ -235,7 +235,7 @@ def test_single_cell_solver_block_mesh_dict_is_written_through_the_channel(tmp_p
     assert block_mesh_targets == {"system/blockMeshDict": single_cell_block_mesh_dict_text().encode()}
     assert not any(f.path.startswith("constant/polyMesh/") for f in plan.files)
 
-    record = commit_case_write(plan, driver_context=context, execution_env=None)
+    record = commit_case_write(plan, driver_context=context)
     assert record.status == "committed"
     assert (tmp_path / "system" / "blockMeshDict").read_text() == single_cell_block_mesh_dict_text()
     assert not (tmp_path / "constant" / "polyMesh").exists()
