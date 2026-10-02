@@ -62,10 +62,12 @@ VIRTUAL_ENV=/tmp/wheelenv uv pip install -q "/tmp/wheeltest/omnidriver-*.whl[pos
 /tmp/wheelenv/bin/python -m pytest packages/omnidriver/tests -q   # 0 failed
 ```
 
-**No pytest test runs a solver or reads a solver's native tree.** The only
-test that meets an OpenFOAM install is the six `native`-skipped probes of
-omnidriver's own dictionary reader against `foamDictionary` and `foamEtcFile`,
-which run when a bashrc is sourced and say nothing of any solver. The
+**No pytest test runs a solver.** The only tests that meet an OpenFOAM install
+are six probes of omnidriver's own dictionary reader against `foamDictionary` and
+`foamEtcFile`, which run when a bashrc is sourced and say nothing of any solver.
+Thirteen older files read real tutorials when this checkout sits inside the
+native repository (`skip_without_monorepo`) and skip otherwise; they are not
+part of any gate. The
 solvers are in development: their authors add required keys, rename models and
 rebuild on purpose, and a test pinned to their current state would fail for
 doing so. Pytest tests omnidriver itself: unit tests, the toy conformance
