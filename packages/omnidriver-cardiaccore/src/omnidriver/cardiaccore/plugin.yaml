@@ -50,7 +50,7 @@ provides:
   - record_key_validation
 # The C++ source the key scanner reads (one mechanism with cardiacFOAM's,
 # omnidriver-openfoam's dict_keys_scanner): supplied, never discovered. The
-# variable is the native cardiacCore tree the native suite already takes;
+# variable is the native cardiacCore tree;
 # `relative` is that repository's own layout. Every strict plan compares the
 # catalog (catalogs/inputs.py) with it.
 cxx_mapping:

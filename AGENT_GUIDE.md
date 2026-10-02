@@ -676,8 +676,8 @@ comparisons=...)` to associate. Core verifies the association itself
 digests — it never trusts the report's say-so about which case it covers.
 
 **Example: openCARP vs openCARP, two resolutions, at the paper's points**
-(`packages/omnidriver-opencarp/tests/test_quantity_comparison_native.py`,
-proof for `benchmarks/niederer2011.json`). An agent runs the sweep, reads
+(`omnidriver check --plugin opencarp`'s C14 runs it against
+`benchmarks/niederer2011.json`). An agent runs the sweep, reads
 each case's own artifact id off its run document, writes points from the
 reference (already in the reader's frame — F3, `docs/solver-learning/opencarp.md`),
 and states the pairing and tolerance itself:
@@ -722,9 +722,8 @@ not the goal.
 
 ### Comparing two solvers on the Niederer benchmark
 
-The worked example is
-`packages/omnidriver-cardiacfoam/tests/test_niederer_cross_solver_native.py`.
-It needs both native environments, and its evidence is
+The worked example is `benchmarks/niederer2011.json` compared against each
+solver's `niederer2011` record (`omnidriver check`'s C13 and C14). Its evidence is
 `docs/solver-learning/cardiacfoam.md` section X. These are the agent's
 steps. Core does none of them for you.
 

@@ -240,9 +240,9 @@ name rather than guessed.
 | plugin | `CardiacFoamPlugin`, requires OpenFOAM env | `OpenCARPPlugin`, alone | `CardiacCorePlugin`, requires OpenFOAM env |
 | records | 10 | 1 | 0 (4 factory workflows) |
 | key catalog | hand-curated, `source_refs` to C++ | generated from `openCARP +Help` (266 parameters) | hand-curated, one manual scan |
-| drift gate | C++ scanner in the native test only; `rtst_scanner` behind a silent skip | `test_catalog_native.py` against the binary | none |
+| drift gate | `omnidriver catalog --uncatalogued/--unread` and every strict plan scan the supplied C++ | `omnidriver check` against the binary | same scan |
 | result reader | activation probes (`cellPoint`) | LAT reader (interpolating) | none |
-| conformance | all 10 records parametrized in `test_conformance_native.py` | `niedererNVersion` | none |
+| conformance | `omnidriver check` over every record's declared study | `niedererNVersion` | `omnidriver check` |
 
 Declared and checkable: plugins, records, readers, openCARP's catalog.
 Prose or tribal: how cardiacFOAM's catalog was built (by reading C++), and
