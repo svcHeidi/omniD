@@ -94,17 +94,14 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
             assert not location.is_relative_to(repository), location
 
         assert "cardiacfoam" in discover_plugins()
-        # `DriverContext.identity` is a `StackIdentity` (one `ProviderIdentity`
-        # per composed provider under `.providers`, ordered least-specific
-        # first) -- it has no singular `.id` of its own. Corrected 2026-09-22
-        # (final whole-branch review, Finding 3): this raised `AttributeError`
-        # until now, unnoticed because this whole file is `@pytest.mark.slow`.
+        # `DriverContext.identity` is a `StackIdentity`, one `ProviderIdentity`
+        # per provider, least specific first; it has no singular `.id`.
         assert load_plugin_context("cardiacfoam").identity.to_json()["providers"][-1]["id"] == "org.cardiacfoam"
-        assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().generated_directory_names
-        assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().instance_directory_pattern
+        assert openfoam_environment_context().stack.call("get_case_runtime_conventions").generated_directory_names
+        assert openfoam_environment_context().stack.call("get_case_runtime_conventions").instance_directory_pattern
         assert "blockMesh" in openfoam_environment_context().stack.call("get_environment_commands")
-        assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().generated_directory_names
-        assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().instance_directory_pattern
+        assert load_plugin_context("cardiacfoam").stack.call("get_case_runtime_conventions").generated_directory_names
+        assert load_plugin_context("cardiacfoam").stack.call("get_case_runtime_conventions").instance_directory_pattern
         assert "blockMesh" in load_plugin_context("cardiacfoam").stack.call("get_environment_commands")
         assert files("omnidriver.cardiacfoam").joinpath(
             "fixtures/template/constant/electroProperties"
@@ -115,7 +112,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         assert "cardiaccore" in discover_plugins()
         # Same migration as the cardiacFoam assertion above.
         assert load_plugin_context("cardiaccore").identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
-        assert load_plugin_context("cardiaccore").capabilities.case_runtime_conventions.conventions().generated_directory_names
+        assert load_plugin_context("cardiaccore").stack.call("get_case_runtime_conventions").generated_directory_names
         assert "blockMesh" in load_plugin_context("cardiaccore").stack.call("get_environment_commands")
 
         # Core has no path-name default. In a neutral staging call, these are

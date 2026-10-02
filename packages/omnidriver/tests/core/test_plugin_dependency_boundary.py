@@ -43,10 +43,10 @@ def test_core_never_imports_an_environment_adapter() -> None:
     assert offenders == []
 
 
-def test_production_consumers_do_not_bypass_capability_bundle() -> None:
+def test_production_consumers_reach_a_plugin_through_the_stack() -> None:
     offenders: list[str] = []
     for path in _PACKAGE_ROOT.rglob("*.py"):
-        if "tests" in path.parts or path.name in {"plugin_interface.py", "plugin_capabilities.py"}:
+        if "tests" in path.parts or path.name == "plugin_interface.py":
             continue
         text = path.read_text()
         if "driver_context.plugin." in text:
@@ -55,7 +55,7 @@ def test_production_consumers_do_not_bypass_capability_bundle() -> None:
 
 
 def test_core_executable_literals_do_not_encode_adapter_conventions() -> None:
-    """Executable Core code must consume conventions through capabilities."""
+    """Executable Core code must consume conventions through the stack."""
     forbidden = (
         "Allrun",
         "Allclean",
@@ -110,7 +110,7 @@ ADAPTER_PACKAGES = (
 
 
 def test_no_adapter_reaches_into_the_context_providers():
-    """Adapters go through `.capabilities` too."""
+    """Adapters go through the stack too."""
     offenders = []
     for package in ADAPTER_PACKAGES:
         for path in Path(package).rglob("*.py"):
