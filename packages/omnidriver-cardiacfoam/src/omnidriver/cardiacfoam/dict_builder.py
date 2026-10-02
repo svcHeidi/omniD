@@ -594,7 +594,7 @@ def _selector_parameters(
         kind, typed_value = _typed_value(value)
         parameters.append(ParameterAssignment(
             qualified_id=f"{prefix}{key}", owner=PLUGIN_ID, document=document,
-            key_path=(key,), binding={}, value=typed_value, value_kind=kind,
+            key_path=(key,), value=typed_value, value_kind=kind,
             source="case",
         ))
     return parameters
@@ -608,7 +608,7 @@ def _override_parameters(
         kind, typed_value = _typed_value(value)
         parameters.append(ParameterAssignment(
             qualified_id=driver_path, owner=PLUGIN_ID, document=document,
-            key_path=(slot_key(driver_path),), binding={}, value=typed_value,
+            key_path=(slot_key(driver_path),), value=typed_value,
             value_kind=kind, source="case",
         ))
     return parameters
@@ -883,48 +883,41 @@ def build_case(
         # actually given, never both together by default).
         ParameterAssignment(
             qualified_id="$CARDIACFOAM.control.deltaT_base", owner=PLUGIN_ID,
-            document=_CONTROL_DOCUMENT, key_path=("deltaT_base",), binding={},
-            value=float(dt), value_kind="scalar",
+            document=_CONTROL_DOCUMENT, key_path=("deltaT_base",), value=float(dt), value_kind="scalar",
             source="case" if delta_t is not None else "template",
         ),
         ParameterAssignment(
             qualified_id="$CARDIACFOAM.control.endTime_base", owner=PLUGIN_ID,
-            document=_CONTROL_DOCUMENT, key_path=("endTime_base",), binding={},
-            value=float(et), value_kind="scalar",
+            document=_CONTROL_DOCUMENT, key_path=("endTime_base",), value=float(et), value_kind="scalar",
             source="case" if end_time is not None else "template",
         ),
         ParameterAssignment(
             qualified_id="$CARDIACFOAM.synthesis.overwrite", owner=PLUGIN_ID,
-            document=_SYNTHESIS_META_DOCUMENT, key_path=("overwrite",), binding={},
-            value=bool(overwrite), value_kind="boolean", source="case",
+            document=_SYNTHESIS_META_DOCUMENT, key_path=("overwrite",), value=bool(overwrite), value_kind="boolean", source="case",
         ),
         ParameterAssignment(
             qualified_id="$CARDIACFOAM.synthesis.include_allrun",
             owner=PLUGIN_ID, document=_SYNTHESIS_META_DOCUMENT,
-            key_path=("include_allrun",), binding={},
-            value=bool(include_allrun), value_kind="boolean",
+            key_path=("include_allrun",), value=bool(include_allrun), value_kind="boolean",
             source="case",
         ),
     )
     if delta_t is not None:
         parameters = (*parameters, ParameterAssignment(
             qualified_id="$CARDIACFOAM.control.deltaT_patch", owner=PLUGIN_ID,
-            document=_CONTROL_DOCUMENT, key_path=("deltaT_patch",), binding={},
-            value=float(delta_t), value_kind="scalar", source="case",
+            document=_CONTROL_DOCUMENT, key_path=("deltaT_patch",), value=float(delta_t), value_kind="scalar", source="case",
         ))
     if end_time is not None:
         parameters = (*parameters, ParameterAssignment(
             qualified_id="$CARDIACFOAM.control.endTime_patch", owner=PLUGIN_ID,
-            document=_CONTROL_DOCUMENT, key_path=("endTime_patch",), binding={},
-            value=float(end_time), value_kind="scalar", source="case",
+            document=_CONTROL_DOCUMENT, key_path=("endTime_patch",), value=float(end_time), value_kind="scalar", source="case",
         ))
     # dx is already refused above for a single-cell solver, so reaching
     # here with one means a spatially-resolved solver.
     if dx is not None:
         parameters = (*parameters, ParameterAssignment(
             qualified_id="$CARDIACFOAM.mesh.dx", owner=PLUGIN_ID,
-            document=_BLOCK_MESH_DOCUMENT, key_path=("dx",), binding={},
-            value=float(dx), value_kind="scalar", source="case",
+            document=_BLOCK_MESH_DOCUMENT, key_path=("dx",), value=float(dx), value_kind="scalar", source="case",
         ))
 
     source_artifacts = (

@@ -16,7 +16,7 @@ def _parameter():
     """The transaction executor itself does not read this parameter; it exists only to satisfy `CaseMutationRequest.__post_init__`."""
     return case_write.ParameterAssignment(
         qualified_id="$TEST.value", owner="org.a", document="constant/a",
-        key_path=("value",), binding={}, value=1.0, value_kind="scalar",
+        key_path=("value",), value=1.0, value_kind="scalar",
         source="case",
     )
 

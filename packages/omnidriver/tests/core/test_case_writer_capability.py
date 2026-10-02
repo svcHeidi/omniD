@@ -11,7 +11,7 @@ def _assignment(**overrides):
     fields = dict(
         qualified_id="$E.ionicModel", owner="org.a",
         document="constant/electroProperties", key_path=("ionicModel",),
-        binding={}, value="TT06", value_kind="word", source="case",
+        value="TT06", value_kind="word", source="case",
     )
     fields.update(overrides)
     return case_write.ParameterAssignment(**fields)

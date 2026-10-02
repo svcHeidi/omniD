@@ -837,7 +837,7 @@ def test_parameter_assignment_validated_defaults_none_and_round_trips_json():
     """M2: `validated` is tri-state -- `None` means "not stated", distinct from `False` ("checked, and found unvalidated")."""
     assignment = ParameterAssignment(
         qualified_id="q", owner="org.a", document="constant/a", key_path=("k",),
-        binding={}, value=1.0, value_kind="scalar", source="case",
+        value=1.0, value_kind="scalar", source="case",
     )
     assert assignment.validated is None
     restored = ParameterAssignment.from_json(assignment.to_json())
@@ -845,25 +845,17 @@ def test_parameter_assignment_validated_defaults_none_and_round_trips_json():
 
     unvalidated = ParameterAssignment(
         qualified_id="q2", owner="org.a", document="constant/a", key_path=("k2",),
-        binding={}, value=1.0, value_kind="scalar", source="case", validated=False,
+        value=1.0, value_kind="scalar", source="case", validated=False,
     )
     assert ParameterAssignment.from_json(unvalidated.to_json()).validated is False
 
     validated = ParameterAssignment(
         qualified_id="q3", owner="org.a", document="constant/a", key_path=("k3",),
-        binding={}, value=1.0, value_kind="scalar", source="case", validated=True,
+        value=1.0, value_kind="scalar", source="case", validated=True,
     )
     assert ParameterAssignment.from_json(validated.to_json()).validated is True
 
 
-def test_parameter_assignment_from_json_of_an_old_record_is_none_not_true():
-    """A plan payload written before this field existed has no `validated` key at all -- absence must deserialize as None ("not stated"), never as True (which would assert a catalog check that never happened)."""
-    payload = {
-        "qualified_id": "q", "owner": "org.a", "document": "constant/a",
-        "key_path": ["k"], "binding": {}, "value": 1.0, "value_kind": "scalar",
-        "source": "case",
-    }
-    assert ParameterAssignment.from_json(payload).validated is None
 
 
 def test_parameter_assignment_refuses_a_string_for_validated():
@@ -871,7 +863,7 @@ def test_parameter_assignment_refuses_a_string_for_validated():
     with pytest.raises((TypeError, ValueError)):
         ParameterAssignment(
             qualified_id="q", owner="org.a", document="constant/a", key_path=("k",),
-            binding={}, value=1.0, value_kind="scalar", source="case",
+            value=1.0, value_kind="scalar", source="case",
             validated="false",
         )
 

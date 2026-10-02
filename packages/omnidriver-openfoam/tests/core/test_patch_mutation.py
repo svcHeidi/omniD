@@ -35,7 +35,6 @@ def _hex_cell_counts_parameter(*, key_path, value=(20, 20, 20)) -> ParameterAssi
         owner=OWNER,
         document="system/blockMeshDict.3D",
         key_path=key_path,
-        binding={},
         value=value,
         value_kind="integer_list",
         source="case",
@@ -71,7 +70,6 @@ def test_patch_mutation_and_render_a_real_three_block_document(tmp_path: Path):
         owner=OWNER,
         document="system/blockMeshDict.3D",
         key_path=("hex_cell_counts", "3"),
-        binding={},
         value=(20, 20, 20),
         value_kind="integer_list",
         source="case",
@@ -121,8 +119,7 @@ def test_patch_mutation_refuses_a_wrongly_declared_block_count(tmp_path: Path):
 ])
 def test_a_typed_value_is_rendered_as_the_text_openfoam_reads(value_kind, value, rendered):
     parameter = ParameterAssignment(
-        qualified_id="k", owner=OWNER, document="system/d", key_path=("k",), binding={},
-        value=value, value_kind=value_kind, source="case",
+        qualified_id="k", owner=OWNER, document="system/d", key_path=("k",), value=value, value_kind=value_kind, source="case",
     )
 
     assert _target_for_parameter(parameter)["value"] == rendered
@@ -130,8 +127,7 @@ def test_a_typed_value_is_rendered_as_the_text_openfoam_reads(value_kind, value,
 
 def test_a_remove_carries_no_value_and_another_mode_is_refused(tmp_path: Path):
     removal = ParameterAssignment(
-        qualified_id="k", owner=OWNER, document="system/d", key_path=("k",), binding={},
-        value=None, value_kind="word", source="case", operation="remove",
+        qualified_id="k", owner=OWNER, document="system/d", key_path=("k",), value=None, value_kind="word", source="case", operation="remove",
     )
     request = CaseMutationRequest(
         mode="clone_and_patch", case_root=tmp_path, adapter_id=OWNER,

@@ -11,7 +11,7 @@ from omnidriver.core import case_transaction, case_write
 def _parameter():
     return case_write.ParameterAssignment(
         qualified_id="$TEST.value", owner="org.a", document="constant/a",
-        key_path=("value",), binding={}, value=1.0, value_kind="scalar",
+        key_path=("value",), value=1.0, value_kind="scalar",
         source="case",
     )
 

@@ -18,7 +18,7 @@ def _request():
             case_write.ParameterAssignment(
                 qualified_id="$ELECTRO.ionicModel", owner="org.cardiacfoam",
                 document="constant/electroProperties", key_path=("ionicModel",),
-                binding={}, value="TT06", value_kind="word", source="case",
+                value="TT06", value_kind="word", source="case",
             ),
         ),
         requested_by="test",
@@ -72,9 +72,8 @@ def test_a_frozen_plan_has_no_mutable_interior():
     plan = _plan()
     with pytest.raises(Exception):
         plan.files = ()
-    parameter = plan.request.parameters[0]
-    with pytest.raises(TypeError):
-        parameter.binding["injected"] = "value"
+    with pytest.raises(AttributeError):
+        plan.request.parameters[0].qualified_id = "tampered"
 
 
 def test_a_dict_valued_parameter_is_frozen_too():
@@ -82,7 +81,7 @@ def test_a_dict_valued_parameter_is_frozen_too():
     assignment = case_write.ParameterAssignment(
         qualified_id="$ELECTRO.coeffs", owner="org.a",
         document="constant/electroProperties", key_path=("coeffs",),
-        binding={}, value={"value": 1.0, "dimensions": (0, -3, 0, 0, 0, 1, 0)},
+        value={"value": 1.0, "dimensions": (0, -3, 0, 0, 0, 1, 0)},
         value_kind="dimensioned_scalar", source="template",
     )
     with pytest.raises(TypeError):
@@ -119,7 +118,7 @@ def test_the_digest_is_stable_across_processes():
                 case_write.ParameterAssignment(
                     qualified_id="$E.coeffs", owner="org.a",
                     document="constant/electroProperties", key_path=("coeffs",),
-                    binding={}, value={
+                    value={
                         "value": (3.0, 1.0, 2.0), "dimensions": (0, 0, 0, 0, 0, 0, 0),
                     },
                     value_kind="dimensioned_tensor", source="template",
@@ -203,7 +202,7 @@ def test_a_list_passed_as_parameters_is_coerced_and_the_duplicate_check_survives
     conductivity_dup = case_write.ParameterAssignment(
         qualified_id="$E.ionicModel", owner="org.a",
         document="constant/electroProperties", key_path=("ionicModel",),
-        binding={}, value="TT06", value_kind="word", source="case",
+        value="TT06", value_kind="word", source="case",
     )
     original = [conductivity_dup]
     request = case_write.CaseMutationRequest(
@@ -222,7 +221,7 @@ def test_a_list_passed_as_key_path_cannot_retroactively_change_the_slot():
     assignment = case_write.ParameterAssignment(
         qualified_id="$E.ionicModel", owner="org.a",
         document="constant/electroProperties", key_path=key_path,
-        binding={}, value="TT06", value_kind="word", source="case",
+        value="TT06", value_kind="word", source="case",
     )
     assert isinstance(assignment.key_path, tuple)
     key_path.append("extra")
@@ -253,14 +252,6 @@ def test_a_plans_expected_effects_round_trips_through_json():
     assert restored.plan_digest == with_effects.plan_digest
 
 
-def test_a_plan_payload_written_before_expected_effects_existed_defaults_to_empty():
-    plan = _plan()
-    payload = plan.to_json()
-    del payload["expected_effects"]
-    restored = case_write.CaseWritePlan.from_json(payload)
-    assert restored.expected_effects == ()
-
-
 def test_expected_effects_order_does_not_change_the_digest():
     """`expected_effects` is positionally aligned with construction-time target order, not a keyed structure -- like `files`/`request.parameters`."""
     plan = _plan()
@@ -280,9 +271,7 @@ def test_a_case_write_record_carries_its_committed_parameters_and_expected_effec
     )
     assert record.parameters[0]["qualified_id"] == plan.request.parameters[0].qualified_id
     assert record.expected_effects == ("set 'ionicModel' in constant/electroProperties",)
-    # Round-trips through JSON without a nested-mappingproxy serialization
-    # failure -- a parameter's own `binding`/`allowed_bindings` mappings are
-    # frozen one level deeper than `committed`/`evidence` ever were.
+    # Round-trips through JSON without a nested-mappingproxy serialization failure.
     payload = json.loads(json.dumps(record.to_json()))
     assert payload["parameters"][0]["qualified_id"] == plan.request.parameters[0].qualified_id
     with pytest.raises(TypeError):
@@ -355,11 +344,11 @@ def test_plan_digest_is_insensitive_to_file_and_parameter_order():
     second_file = _file(path="constant/electroConductivity", content=b"df 0.1;\n")
     first_param = case_write.ParameterAssignment(
         qualified_id="$E.a", owner="org.a", document="constant/electroProperties",
-        key_path=("a",), binding={}, value="x", value_kind="word", source="case",
+        key_path=("a",), value="x", value_kind="word", source="case",
     )
     second_param = case_write.ParameterAssignment(
         qualified_id="$E.b", owner="org.a", document="constant/electroProperties",
-        key_path=("b",), binding={}, value="y", value_kind="word", source="case",
+        key_path=("b",), value="y", value_kind="word", source="case",
     )
 
     def _request_with(*params):

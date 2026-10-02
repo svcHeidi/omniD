@@ -8,7 +8,7 @@ record's native case is never written in place. Everything in this module
 runs against a disposable staged clone and stops at *proposing* patches --
 ``AxisPatch``, ``SourcedPatch`` -- which know a document, a key path, a
 value and how validated the adapter considers it, but nothing about
-``owner``/``workflow``/bindings, the identity fields a real
+``owner``/``workflow``, the identity fields a real
 ``case_write.ParameterAssignment`` needs to actually commit.
 ``patches_to_parameters`` is the one seam between the two: it promotes a
 merged, conflict-checked set of ``SourcedPatch`` into real
@@ -743,7 +743,7 @@ class AxisPatch:
     """One value an axis (or a direct study key) proposes to write.
 
     Deliberately its own type, not ``case_write.ParameterAssignment``: an
-    axis is pure and knows nothing about ``owner``/``workflow``/bindings --
+    axis is pure and knows nothing about ``owner``/``workflow`` --
     only a document, a key path, and a value. ``patches_to_parameters``
     promotes a merged, conflict-checked set of these into real
     ``ParameterAssignment``s.
@@ -1317,7 +1317,6 @@ def patches_to_parameters(
             owner=owner,
             document=sourced.patch.document,
             key_path=sourced.patch.key_path,
-            binding={},
             value=sourced.patch.value,
             value_kind=sourced.patch.value_kind,
             source="case",

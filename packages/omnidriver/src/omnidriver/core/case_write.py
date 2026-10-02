@@ -117,13 +117,9 @@ class ParameterAssignment:
     owner: str
     document: str
     key_path: tuple[str, ...]
-    binding: Mapping[str, str]
     value: Any
     value_kind: str
     source: str
-    allowed_bindings: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
-    unit: str = ""
-    evidence_refs: tuple[str, ...] = ()
     operation: str = "set"
     #: Whether the adapter that resolved this key checked it against a real
     #: catalog. A solver-owned key (checked against that solver's own
@@ -148,7 +144,6 @@ class ParameterAssignment:
         # ran against the pre-append `slot()`, silently invalidating a check
         # that had already passed.
         object.__setattr__(self, "key_path", tuple(self.key_path))
-        object.__setattr__(self, "evidence_refs", tuple(self.evidence_refs))
         _check_case_relative("a parameter's document", self.document)
         if not self.key_path:
             raise ValueError(f"parameter {self.qualified_id!r} names no key")
@@ -176,8 +171,7 @@ class ParameterAssignment:
             )
         # `remove` asserts absence, a different claim from "has this value"
         # -- carrying a value alongside it would be two assertions on one
-        # field, the same way `Precondition` refuses `digest` together with
-        # `must_be_absent`. `set`/`ensure` still require a value; refusing
+        # field. `set`/`ensure` still require a value; refusing
         # `None` here first gives a direct answer instead of a
         # shape-mismatch message about `None` not fitting
         # `"scalar"`/`"boolean"`/etc.
@@ -187,8 +181,7 @@ class ParameterAssignment:
                     f"parameter {self.qualified_id!r} declares operation "
                     f"'remove' but also a value ({self.value!r}); removal "
                     f"asserts the key is absent, which is a different claim "
-                    f"from 'has this value' -- Precondition refuses the same "
-                    f"combination for `must_be_absent`/`digest`"
+                    f"from 'has this value'"
                 )
         elif self.value is None:
             raise ValueError(
@@ -216,34 +209,14 @@ class ParameterAssignment:
                     f"{self.value_kind!r} but its value does not fit: "
                     f"{'; '.join(shape_reasons)}"
                 )
-        for placeholder, bound in self.binding.items():
-            allowed = self.allowed_bindings.get(placeholder)
-            if allowed is None:
-                raise ValueError(
-                    f"parameter {self.qualified_id!r} binds {placeholder!r} but "
-                    f"declares no allowed values for it; an undeclared binding "
-                    f"writes a key no utility reads"
-                )
-            if bound not in allowed:
-                raise ValueError(
-                    f"parameter {self.qualified_id!r} binds {placeholder!r} to "
-                    f"{bound!r}, which is not one of {list(allowed)}"
-                )
         object.__setattr__(self, "value", _freeze(self.value))
-        object.__setattr__(self, "binding", _freeze(self.binding))
-        object.__setattr__(
-            self, "allowed_bindings",
-            MappingProxyType({
-                key: tuple(values) for key, values in sorted(self.allowed_bindings.items())
-            }),
-        )
 
     def slot(self) -> str:
         """The address this assignment occupies, document scope included."""
         return f"{self.document}::{'.'.join(self.expanded_key_path())}"
 
     def expanded_key_path(self) -> tuple[str, ...]:
-        return tuple(self.binding.get(segment, segment) for segment in self.key_path)
+        return self.key_path
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -251,16 +224,10 @@ class ParameterAssignment:
             "owner": self.owner,
             "document": self.document,
             "key_path": list(self.key_path),
-            "binding": dict(self.binding),
             "expanded_key_path": list(self.expanded_key_path()),
             "value": _json_value(self.value),
             "value_kind": self.value_kind,
             "source": self.source,
-            "allowed_bindings": {
-                key: list(values) for key, values in self.allowed_bindings.items()
-            },
-            "unit": self.unit,
-            "evidence_refs": list(self.evidence_refs),
             "operation": self.operation,
             "validated": self.validated,
         }
@@ -272,25 +239,11 @@ class ParameterAssignment:
             owner=payload["owner"],
             document=payload["document"],
             key_path=tuple(payload["key_path"]),
-            binding=dict(payload["binding"]),
             value=payload["value"],
             value_kind=payload["value_kind"],
             source=payload["source"],
-            allowed_bindings={
-                key: tuple(values)
-                for key, values in payload.get("allowed_bindings", {}).items()
-            },
-            unit=payload.get("unit", ""),
-            # Absent in a plan written before this field existed: every such
-            # assignment was implicitly a `set`, so that is the neutral
-            # default here, the same "no field means the prior, only
-            # behaviour" reasoning `unit`/`evidence_refs` already use.
-            operation=payload.get("operation", "set"),
-            evidence_refs=tuple(payload.get("evidence_refs", ())),
-            # `None` ("not stated"), never `True`, for a plan payload written
-            # before this field existed -- absence must not be read as an
-            # assertion that a catalog check happened.
-            validated=payload.get("validated"),
+            operation=payload["operation"],
+            validated=payload["validated"],
         )
 
 
@@ -635,11 +588,7 @@ class CaseWritePlan:
             stack_identity=payload["stack_identity"],
             created_at=payload["created_at"],
             schema_version=version,
-            # Absent in a plan payload written before this field existed: an
-            # empty tuple is the neutral default, the same "no field means
-            # the prior, only behaviour" reasoning
-            # `ParameterAssignment.from_json` uses for `operation`.
-            expected_effects=tuple(payload.get("expected_effects", ())),
+            expected_effects=tuple(payload["expected_effects"]),
         )
 
 

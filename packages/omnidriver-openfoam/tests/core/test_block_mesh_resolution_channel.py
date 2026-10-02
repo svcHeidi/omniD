@@ -22,7 +22,7 @@ def _delta_t_assignment(value: float) -> ParameterAssignment:
     hex-rewrite target; which document/key it addresses is incidental."""
     return ParameterAssignment(
         qualified_id="deltaT", owner="test", document="system/controlDict",
-        key_path=("deltaT",), binding={}, value=value, value_kind="scalar",
+        key_path=("deltaT",), value=value, value_kind="scalar",
         source="case",
     )
 

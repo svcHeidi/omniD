@@ -44,8 +44,7 @@ def _case(tmp_path: Path) -> Path:
 def _assignment(*, key_path, value, value_kind="scalar", operation="set") -> ParameterAssignment:
     return ParameterAssignment(
         qualified_id=".".join(key_path), owner="test",
-        document="constant/electroProperties", key_path=key_path, binding={},
-        value=value, value_kind=value_kind, source="case", operation=operation,
+        document="constant/electroProperties", key_path=key_path, value=value, value_kind=value_kind, source="case", operation=operation,
     )
 
 

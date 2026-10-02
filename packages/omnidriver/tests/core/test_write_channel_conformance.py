@@ -62,7 +62,7 @@ def test_every_conformance_case_has_a_test():
 def _parameter(**overrides):
     fields = dict(
         qualified_id="$TEST.value", owner="org.a", document="constant/a",
-        key_path=("value",), binding={}, value=1.0, value_kind="scalar",
+        key_path=("value",), value=1.0, value_kind="scalar",
         source="case",
     )
     fields.update(overrides)

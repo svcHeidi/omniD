@@ -13,7 +13,6 @@ def _assignment(**overrides):
         owner="org.cardiaccore",
         document="system/setCardiacConductivityDict",
         key_path=("df",),
-        binding={},
         value=0.1,
         value_kind="scalar",
         source="case",
@@ -97,31 +96,6 @@ def test_an_absolute_document_path_is_refused():
 def test_a_document_path_escaping_the_case_is_refused():
     with pytest.raises(ValueError, match="escape"):
         _assignment(document="../outside/dict")
-
-
-def test_a_dynamic_binding_must_be_declared_not_inferred():
-    """`<ventKey>` must not accept `banana`: the segment must be checked, not merely substituted."""
-    with pytest.raises(ValueError, match="banana"):
-        _assignment(
-            qualified_id="$PURKINJE_TREE.<ventKey>.seed",
-            key_path=("<ventKey>", "seed"),
-            binding={"<ventKey>": "banana"},
-            value=[1.0, 2.0, 3.0],
-            value_kind="vector3",
-            allowed_bindings={"<ventKey>": ("lv", "rv")},
-        )
-
-
-def test_a_declared_binding_is_accepted_and_expanded():
-    assignment = _assignment(
-        qualified_id="$PURKINJE_TREE.<ventKey>.seed",
-        key_path=("<ventKey>", "seed"),
-        binding={"<ventKey>": "lv"},
-        value=[1.0, 2.0, 3.0],
-        value_kind="vector3",
-        allowed_bindings={"<ventKey>": ("lv", "rv")},
-    )
-    assert assignment.expanded_key_path() == ("lv", "seed")
 
 
 # --- A parameter value is typed data, never rendered text: the closed
@@ -289,14 +263,6 @@ def test_remove_round_trips_through_json():
     assert payload["value"] is None
     restored = case_write.ParameterAssignment.from_json(payload)
     assert restored == assignment
-
-
-def test_a_plan_written_before_operation_existed_reads_back_as_set():
-    """`from_json` on a payload with no `operation` key -- what every plan written before this field existed looks like -- must read back as `set`, not raise and not invent a different default silently."""
-    payload = _assignment().to_json()
-    del payload["operation"]
-    restored = case_write.ParameterAssignment.from_json(payload)
-    assert restored.operation == "set"
 
 
 def test_operation_changes_the_assignment_digest():
