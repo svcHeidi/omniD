@@ -56,11 +56,11 @@ def test_the_same_stack_is_stable():
     )
 
 
-def test_to_json_names_who_answered_each_capability():
+def test_to_json_names_who_answered_each_member():
     a = _pid("org.a")
     identity = provider_identity.build_stack_identity(
-        providers=(a,), resolutions={"dictionaries": ("org.a", "v")},
+        providers=(a,), resolutions={"get_dict_entries": ("org.a", "v")},
     )
     payload = identity.to_json()
-    assert payload["resolutions"]["dictionaries"] == "org.a"
+    assert payload["resolutions"]["get_dict_entries"] == "org.a"
     assert [p["id"] for p in payload["providers"]] == ["org.a"]

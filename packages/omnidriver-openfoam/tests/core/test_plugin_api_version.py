@@ -16,10 +16,5 @@ def test_openfoam_environment_plugin_is_v2() -> None:
     assert context.identity.providers[0].api_version == "2"
 
 
-def test_openfoam_environment_plugin_satisfies_the_full_protocol() -> None:
-    # Not `isinstance(plugin, SolverPlugin)`: that Protocol lists
-    # `get_solver_commands`/`get_auxiliary_commands`, solver vocabulary an
-    # environment adapter must not know (core/ARCHITECTURE.md). `validate_plugin`
-    # derives the required set from the capability seams' `:status:` tiers,
-    # where both those hooks are optional-neutral.
+def test_openfoam_environment_plugin_satisfies_the_contract() -> None:
     validate_plugin(OpenFOAMEnvironmentPlugin())  # must not raise
