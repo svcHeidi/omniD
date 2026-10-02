@@ -71,7 +71,9 @@ only, and the all-packages row excludes both markers.
 
 **Both native shapes run a solver in parallel:** conformance C13 runs the
 target's declared quantity serial and at N = 2 and compares them, and C14
-compares it across a two-case sweep. **The two MPIs must never mix:** each
+compares it across a two-case sweep; a target that declares no quantity passes
+both and says so. `test_parallel_evidence_native.py` in each package proves the
+run really used two ranks. **The two MPIs must never mix:** each
 solver's shell puts only its own MPI first on `PATH` (OpenFOAM's from its
 bashrc, openCARP's from `OPENCARP_MPI_BIN`), and preflight refuses the other
 one by name (`openfoam_mpi_launcher_mismatch`,
@@ -121,7 +123,7 @@ A skip here hides exactly what the guard exists to find.
 | a key or model the C++ reads and the catalog lacks is an `uncatalogued` note, never a failure, and a study may set the key at exactly the path the scan places its read, whether or not the case holds it; a catalog claim an anchored read refutes fails the plan | `test_cxx_scan_native.py` (`native`): `test_keys_added_to_the_cxx_plan_are_uncatalogued_and_settable`, `test_a_new_key_is_refused_at_a_path_the_cxx_does_not_read_or_with_the_wrong_type`, `test_a_model_a_scanned_selection_table_registers_plans_uncatalogued`; `test_dict_keys_scanner.py` (openfoam) |
 | a solver's shell is declared in its manifest and rendered from supplied values only; a launcher from the other solver's MPI is refused | `test_environment_and_machine.py`; `test_an_mpirun_from_another_mpi_family_is_refused` (openfoam); openCARP's `opencarp_mpi_launcher_mismatch` (`native_opencarp`) |
 | core names no OpenFOAM layout beyond its recorded, shrinking debt | `scripts/check-core-shape.py` (baseline `scripts/core-shape-baseline.txt`; new tokens never added) |
-| every conformance target passes C1-C14 (toy, openCARP, cardiacFOAM, cardiacCore), including C11 (restaging a run case carries nothing the run wrote and drops nothing authored), C12 (every declared output format has a reader whose declaration is valid), C13 (a serial run and a parallel run give the same value of a declared quantity) and C14 (a declared quantity compares across a two-case sweep); every migrated record joins its table of targets | `omnidriver.conformance`, parametrized per package (toy in core; openCARP `native_opencarp`; cardiacFOAM `native`, `test_conformance_native.py`, run from a shell with OpenFOAM sourced and `OMNIDRIVER_NATIVE_TUTORIALS` at a clean native tree) |
+| every conformance target passes C1-C14 (toy, openCARP, cardiacFOAM, cardiacCore), including C11 (restaging a run case carries nothing the run wrote and drops nothing authored), C12 (every declared output format has a reader whose declaration is valid), C13 (a serial run and a parallel run give the same value of a declared quantity) and C14 (a declared quantity compares across a two-case sweep), both vacuous for a target that declares no quantity; every migrated record joins its table of targets | `omnidriver.conformance`, parametrized per package (toy in core; openCARP `native_opencarp`; cardiacFOAM `native`, `test_conformance_native.py`, run from a shell with OpenFOAM sourced and `OMNIDRIVER_NATIVE_TUTORIALS` at a clean native tree) |
 
 ## One reality
 
