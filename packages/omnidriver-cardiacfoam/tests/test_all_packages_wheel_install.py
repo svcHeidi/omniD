@@ -100,13 +100,11 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         # (final whole-branch review, Finding 3): this raised `AttributeError`
         # until now, unnoticed because this whole file is `@pytest.mark.slow`.
         assert load_plugin_context("cardiacfoam").identity.to_json()["providers"][-1]["id"] == "org.cardiacfoam"
-        assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
+        assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().generated_directory_names
         assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().instance_directory_pattern
-        assert openfoam_environment_context().capabilities.case_runtime_conventions.conventions().case_discovery_ignored_directory_names == ("postProcessing", "logs")
         assert "blockMesh" in openfoam_environment_context().capabilities.command_authorization.environment_commands()
-        assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
+        assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().generated_directory_names
         assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().instance_directory_pattern
-        assert load_plugin_context("cardiacfoam").capabilities.case_runtime_conventions.conventions().case_discovery_ignored_directory_names == ("postProcessing", "logs")
         assert "blockMesh" in load_plugin_context("cardiacfoam").capabilities.command_authorization.environment_commands()
         assert files("omnidriver.cardiacfoam").joinpath(
             "fixtures/template/constant/electroProperties"
@@ -117,7 +115,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         assert "cardiaccore" in discover_plugins()
         # Same migration as the cardiacFoam assertion above.
         assert load_plugin_context("cardiaccore").identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
-        assert load_plugin_context("cardiaccore").capabilities.case_runtime_conventions.conventions().output_collection_relpath == "postProcessing"
+        assert load_plugin_context("cardiaccore").capabilities.case_runtime_conventions.conventions().generated_directory_names
         assert "blockMesh" in load_plugin_context("cardiaccore").capabilities.command_authorization.environment_commands()
 
         # Core has no path-name default. In a neutral staging call, these are
