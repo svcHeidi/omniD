@@ -953,7 +953,8 @@ def build_parser() -> argparse.ArgumentParser:
             "study's is refused. Absent: serial. '--parallel' leaves the "
             "process count to the solver layer, which reads it from the "
             "case or the scheduler's allocation (SLURM_NTASKS); '--parallel "
-            "N' also hands it N, for a layer with no other source. Refused "
+            "N' states N, which a layer whose case states a count must find "
+            "equal to it. Refused "
             "by name where the stack has no parallel form, or where N, the "
             "case and the allocation disagree."
         ),

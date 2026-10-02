@@ -10,10 +10,11 @@ from pathlib import Path
 import pytest
 from foamlib import FoamFile
 
-from omnidriver.cardiacfoam.activation_probes import ActivationProbeReader
+from omnidriver.cardiacfoam.activation_probes import ACTIVATION_PROBES_FORMAT, ActivationProbeReader
 from omnidriver.core.quantities import ReadRequest, converted, read_quantities
 from omnidriver.openfoam.probes import parse_probe_series
-from cardiacfoam_native import NIEDERER_2011_RELPATH, native_tutorials_root, niederer_run, require_sourced_openfoam
+from omnidriver.conformance import require_commands
+from cardiacfoam_native import NIEDERER_2011_RELPATH, native_tutorials_root, niederer_run
 
 pytestmark = pytest.mark.native
 
@@ -30,8 +31,8 @@ def run(tmp_path_factory):
 @pytest.fixture(scope="module")
 def copy(run, tmp_path_factory) -> Path:
     """A copy of the run's case, so ``postProcess`` never writes into the run the other tests read."""
-    require_sourced_openfoam("postProcess")
-    case_root, _ = run
+    require_commands("postProcess")
+    case_root = run.case_root
     target = tmp_path_factory.mktemp("copy") / "case"
     shutil.copytree(case_root, target)
     return target
@@ -49,7 +50,7 @@ def _native_probe_locations() -> list[tuple[float, float, float]]:
 
 
 def test_the_probe_file_is_read_as_seconds_at_the_probe_location(run):
-    case_root, artifact = run
+    case_root, artifact = run.case_root, run.artifact(ACTIVATION_PROBES_FORMAT)
     quantities = {q.name: q for q in read_quantities(ActivationProbeReader(), case_root, artifact, ReadRequest(names=NAMES))}
     assert list(quantities) == list(NAMES)
     header = [at for _, at in parse_probe_series((case_root / artifact.path_pattern).read_text(), source="run").locations]
@@ -64,7 +65,7 @@ def test_the_probe_file_is_read_as_seconds_at_the_probe_location(run):
 
 def test_a_probe_never_reached_is_not_reached(run):
     """At dx 0.5 mm and 0.015 s only probe 0 (inside the stimulus) has activated; the rest hold cardiacFOAM's -1."""
-    case_root, artifact = run
+    case_root, artifact = run.case_root, run.artifact(ACTIVATION_PROBES_FORMAT)
     series = parse_probe_series((case_root / artifact.path_pattern).read_text(), source="run")
     assert series.rows[-1][1:] == (-1.0,) * 8
     for q in read_quantities(ActivationProbeReader(), case_root, artifact, ReadRequest(names=NAMES[1:])):
@@ -91,7 +92,7 @@ def test_a_probe_outside_the_mesh_is_marked_not_found(copy):
 
 def test_the_committed_fixtures_are_what_the_solver_writes(run):
     """The unit tests' fixture (``test_activation_probes.py``) is this run's own probe output and ``system/Niedererpoints``."""
-    case_root, _ = run
+    case_root = run.case_root
     for fixture in sorted(p for p in READER_FIXTURE.rglob("*") if p.is_file()):
         relpath = fixture.relative_to(READER_FIXTURE)
         assert (case_root / relpath).read_text() == fixture.read_text(), relpath

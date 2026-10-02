@@ -1,4 +1,4 @@
-"""C1-C12. Each check is self-contained: it builds its own context, stages
+"""C1-C14. Each check is self-contained: it builds its own context, stages
 its own copy, and returns a verdict naming what it saw. No check skips; a
 check that cannot run is a failure saying why. Checks are thread-parallel
 within one process: the scratch root is supplied explicitly
@@ -18,7 +18,13 @@ from typing import Any, Callable, Mapping
 
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.plugin_interface import load_plugin_context
-from omnidriver.core.quantities import ReaderDeclarationError, check_reader
+from omnidriver.core.experiments import inspect_sweep_experiment
+from omnidriver.core.quantities import (
+    Quantity, ReadRequest, ReaderDeclarationError, check_reader, convert, experiment_comparisons, read_quantities,
+)
+from omnidriver.core.runtime import mpi
+from omnidriver.core.runtime.models import data_artifact_from_json
+from omnidriver.core.runtime.postprocess_phase import build_sweep_context
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from omnidriver.core.runtime.record_surface import lists_key
 from omnidriver.core.runtime.record_execution import commit_record_case
@@ -29,6 +35,7 @@ from omnidriver.core.strict_planning import strict_plan
 from omnidriver.core.sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
 from omnidriver.core.tutorial_records import PLAIN_FILE_FORMAT, TutorialRecordError
 
+from .harness import sweep_run, sweep_spec
 from .target import CheckVerdict, ConformanceTarget
 
 _PLAN_DIAGNOSTIC_GROUPS = (
@@ -165,10 +172,10 @@ def check_patch_preserves(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C4", not problems, "; ".join(problems) or "patched one key; its sibling is unchanged")
 
 
-def _plan(target: ConformanceTarget, ctx):
+def _plan(target: ConformanceTarget, ctx, study: Mapping[str, Any] = {}):
     return strict_plan(
         target.record,
-        overrides={"cases_root": str(target.cases_root), **dict(target.base_study)},
+        overrides={"cases_root": str(target.cases_root), **dict(target.base_study), **study},
         scratch_root=target.scratch_root,
         inputs=target.inputs,
         driver_context=ctx,
@@ -187,10 +194,9 @@ def _plan_errors(report) -> list[str]:
 
 def _child_env(target: ConformanceTarget) -> dict[str, str]:
     """The environment a child process (or an env-taking call) receives: the
-    caller's, the target's overlay, and the target's scratch root -- set in
-    this copy only, never in ``os.environ``."""
+    caller's and the target's scratch root -- set in this copy only, never in
+    ``os.environ``."""
     env = dict(os.environ)
-    env.update(target.environment)
     env[SCRATCH_ENV_VAR] = str(target.scratch_root)
     return env
 
@@ -283,26 +289,15 @@ def check_sweep(target: ConformanceTarget) -> CheckVerdict:
         shutil.rmtree(work)
     work.mkdir(parents=True)
     base = {k: v for k, v in target.base_study.items() if k != target.sweep_name}
-    spec = {
-        "base": {"entry": target.record, "cases_root": str(target.cases_root), **base},
-        "sweep": {"mode": "cross_product", "independent": {target.sweep_name: list(target.sweep_values)}},
-    }
-    spec_path = work / "sweep.json"
-    spec_path.write_text(json.dumps(spec))
-    input_args = [arg for name, path in target.inputs.items() for arg in ("--input", f"{name}={path}")]
     try:
-        proc = subprocess.run(
-            [sys.executable, "-m", "omnidriver", "sweep-run", "--plugin", target.plugin,
-             "--spec", str(spec_path), "--output-dir", str(work / "out"),
-             "--scratch-dir", str(target.scratch_root),
-             "--case-timeout-s", str(target.timeout_s), *input_args],
-            capture_output=True, text=True, env=_child_env(target), timeout=target.timeout_s,
+        proc, payload = sweep_run(
+            target.plugin, sweep_spec(target.record, target.cases_root, base, {target.sweep_name: target.sweep_values}),
+            work=work, scratch_dir=target.scratch_root, inputs=target.inputs, case_timeout_s=target.timeout_s,
+            env=_child_env(target), timeout_s=target.timeout_s,
         )
     except subprocess.TimeoutExpired:
         return _verdict("C7", False, f"sweep timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
-    try:
-        payload = json.loads(proc.stdout)
-    except ValueError:
+    if payload is None:
         return _verdict("C7", False, f"sweep printed no JSON (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}")
     problems = []
     if payload.get("completed_count") != 2 or payload.get("failed_count"):
@@ -360,14 +355,25 @@ def _levels(diagnostics) -> list[tuple[str, str]]:
     return out
 
 
-def check_environment(target: ConformanceTarget) -> CheckVerdict:
-    """C9: preflight is clean in the supplied environment, and names the
-    solver when the solver cannot be found.
+def _planned_programs(workflow_dag) -> list[str]:
+    """The programs a plan runs, a launcher's payload named in its place."""
+    programs = []
+    for step in workflow_dag.get("steps", ()):
+        command = step["command"]
+        program = mpi.program(step.get("args", ())) if command in mpi.LAUNCHERS else command
+        if program and program not in programs:
+            programs.append(program)
+    return programs
 
-    "Names" means quotes the command as a token (:func:`_quotes`), after the
+
+def check_environment(target: ConformanceTarget) -> CheckVerdict:
+    """C9: preflight is clean in the supplied environment, and names a
+    program the plan runs when it cannot be found.
+
+    "Names" means quotes the program as a token (:func:`_quotes`), after the
     empty PATH this check supplied is removed from each message -- a bare
     substring match would pass whenever the scratch path itself happened to
-    contain the solver's name (e.g. ``~/openCARP-runs``).
+    contain a program's name (e.g. ``~/openCARP-runs``).
     """
     ctx = _context(target)
     report = _plan(target, ctx)
@@ -379,12 +385,13 @@ def check_environment(target: ConformanceTarget) -> CheckVerdict:
     empty = target.scratch_root / "conformance" / "C9-empty-path"
     empty.mkdir(parents=True, exist_ok=True)
     broken = [m for level, m in _levels(preflight.diagnostics(report.workflow_dag, env={**env, "PATH": str(empty)}, driver_context=ctx)) if level == "error"]
+    programs = _planned_programs(report.workflow_dag)
     problems = []
     if clean:
         problems.append(f"errors in the supplied environment: {clean}")
-    if not any(_quotes(m.replace(str(empty), ""), target.solver_command) for m in broken):
-        problems.append(f"with {target.solver_command!r} off PATH, preflight said {broken or 'nothing'}")
-    return _verdict("C9", not problems, "; ".join(problems) or "clean; names the missing solver")
+    if not any(_quotes(m.replace(str(empty), ""), program) for m in broken for program in programs):
+        problems.append(f"with {', '.join(map(repr, programs))} off PATH, preflight said {broken or 'nothing'}")
+    return _verdict("C9", not problems, "; ".join(problems) or "clean; names a missing program")
 
 
 #: What ``get_record_key_catalog`` requires of every entry. ``value_kind``
@@ -553,6 +560,161 @@ def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C12", not problems, "; ".join(problems) or f"readers declared for {formats} (declaration checked, not read)")
 
 
+def _artifact_and_quantities(target: ConformanceTarget, ctx, report) -> tuple[dict[str, Any], dict[str, Quantity]]:
+    """A planned and run case's document, and the declared quantities read from it."""
+    declared = target.quantity
+    document = json.loads(_run_document_path(report).read_text())
+    artifact = data_artifact_from_json(
+        next(raw for raw in document["expectedArtifacts"] if raw["format"] == declared.artifact_format)
+    )
+    reader = ctx.capabilities.runtime_evidence.artifact_value_reader(declared.artifact_format)
+    points = {}
+    if reader.takes_points:
+        points = {
+            name: tuple(convert(c, declared.at_unit, reader.coordinate_unit) for c in xyz)
+            for name, xyz in declared.at.items()
+        }
+    quantities = read_quantities(
+        reader, Path(report.launch["case_root"]), artifact, ReadRequest(names=tuple(declared.at), points=points),
+    )
+    return document, {q.name: q for q in quantities}
+
+
+def _run_for_quantities(target: ConformanceTarget, ctx, study: Mapping[str, Any], label: str):
+    """Plan and run the target under ``study``; the run document and the declared quantities, or a failed verdict's detail."""
+    report = _plan(target, ctx, study)
+    if report.status != "ok":
+        return f"the {label} plan failed: {_plan_errors(report)}"
+    try:
+        proc, payload = _execute(target, ctx, report)
+    except subprocess.TimeoutExpired:
+        return f"the {label} run timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)"
+    if payload is None or payload.get("status") != "ok":
+        return f"the {label} run did not complete (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}"
+    return _artifact_and_quantities(target, ctx, report)
+
+
+def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
+    """C13: a serial run and a parallel run of the record give the same value
+    of every declared quantity, within the target's ``parallel_tolerance``,
+    and the parallel run says it asked for those ranks.
+
+    A target that declares no quantity passes and says so."""
+    ctx = _context(target)
+    _record(ctx, target.record)
+    declared = target.quantity
+    if declared is None:
+        return _verdict("C13", True, "the target declares no quantity, so there is nothing to compare")
+    serial = _run_for_quantities(target, ctx, declared.study, "serial")
+    if isinstance(serial, str):
+        return _verdict("C13", False, serial)
+    parallel_study = {**declared.study, **declared.parallel_study, "parallel": declared.ranks}
+    parallel = _run_for_quantities(target, ctx, parallel_study, "parallel")
+    if isinstance(parallel, str):
+        return _verdict("C13", False, parallel)
+    (serial_doc, serial_values), (parallel_doc, parallel_values) = serial, parallel
+    problems = []
+    if "parallel" in serial_doc["resolvedEntry"]:
+        problems.append("the serial run's document records a parallel request")
+    requested = (parallel_doc["resolvedEntry"].get("parallel") or {}).get("requested")
+    if requested != declared.ranks:
+        problems.append(f"the parallel run's document records request {requested!r}, not {declared.ranks}")
+    if serial_doc["workflowDag"] == parallel_doc["workflowDag"]:
+        problems.append("the parallel run planned the serial steps")
+    for name, s in serial_values.items():
+        p = parallel_values[name]
+        if (s.status, s.unit, s.sampled_at) != (p.status, p.unit, p.sampled_at):
+            problems.append(f"{name!r}: serial reads {s.status} {s.sampled_at} {s.unit}, parallel {p.status} {p.sampled_at} {p.unit}")
+        elif s.status == "evaluated" and abs(p.value - s.value) > declared.parallel_tolerance:
+            problems.append(f"{name!r}: serial {s.value}, parallel {p.value}, beyond {declared.parallel_tolerance} {s.unit}")
+    if not any(q.status == "evaluated" for q in serial_values.values()):
+        problems.append("no declared quantity is evaluated in the serial run, so nothing was compared")
+    return _verdict(
+        "C13", not problems,
+        "; ".join(problems) or f"{len(serial_values)} quantit(ies) agree between serial and {declared.ranks} ranks",
+    )
+
+
+def check_quantity_across_sweep(target: ConformanceTarget) -> CheckVerdict:
+    """C14: the declared quantity compares across a two-case sweep of the
+    target's sweep axis, end to end as an agent would: ``sweep-run``,
+    ``compare`` on the target's reference, the report attached to each case.
+    The comparison must read both sides of at least one pair; whether the two
+    resolutions agree is physics, not conformance.
+
+    A target that declares no quantity passes and says so."""
+    _record(_context(target), target.record)
+    declared = target.quantity
+    if declared is None:
+        return _verdict("C14", True, "the target declares no quantity, so there is nothing to compare")
+    work = target.scratch_root / "conformance" / "C14"
+    if work.exists():
+        shutil.rmtree(work)
+    base = {k: v for k, v in {**target.base_study, **declared.study}.items() if k != target.sweep_name}
+    try:
+        proc, payload = sweep_run(
+            target.plugin,
+            sweep_spec(target.record, target.cases_root, base, {target.sweep_name: declared.sweep_values}),
+            work=work, scratch_dir=target.scratch_root, inputs=target.inputs, case_timeout_s=target.timeout_s,
+            env=_child_env(target), timeout_s=target.timeout_s,
+        )
+    except subprocess.TimeoutExpired:
+        return _verdict("C14", False, f"sweep timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
+    if payload is None or payload.get("completed_count") != 2 or payload.get("failed_count"):
+        return _verdict("C14", False, f"cannot compare: the sweep did not complete both cases (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}")
+    output = work / "out"
+    cases = build_sweep_context(output).cases
+    runs = {}
+    for label, value in zip(("first", "second"), declared.sweep_values):
+        case = next(c for c in cases if c.resolved_axis_values[target.sweep_name] == value)
+        document = json.loads((output / case.run_document_path).read_text())
+        artifact = next(a for a in document["expectedArtifacts"] if a["format"] == declared.artifact_format)
+        runs[label] = {
+            "plugin": target.plugin, "sweep_output": str(output), "case_id": case.case_id,
+            "artifact_id": artifact["artifact_id"],
+            "points": {"unit": declared.at_unit, "at": {name: list(xyz) for name, xyz in declared.at.items()}},
+            "max_sampling_offset": declared.max_sampling_offset,
+        }
+    request = work / "request.json"
+    request.write_text(json.dumps({
+        "schema_version": 1, "reference": str(declared.reference),
+        "tolerance": {"kind": "absolute", "value": declared.tolerance, "unit": declared.tolerance_unit,
+                      "rationale": "declared before either run was read; a self-comparison across the target's "
+                                   "sweep, not a benchmark acceptance claim"},
+        "both_not_reached": declared.both_not_reached,
+        "runs": runs,
+        "pairs": [{"reference_label": label, "left": {"run": "first", "quantity": name},
+                   "right": {"run": "second", "quantity": name}} for label, name in declared.pairs.items()],
+    }))
+    report_path = work / "report.json"
+    try:
+        compare = subprocess.run(
+            [sys.executable, "-m", "omnidriver", "compare", "--comparison-request", str(request), "--report", str(report_path)],
+            capture_output=True, text=True, env=_child_env(target), timeout=target.timeout_s,
+        )
+    except subprocess.TimeoutExpired:
+        return _verdict("C14", False, f"compare timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
+    if compare.returncode != 0:
+        return _verdict("C14", False, f"compare exited {compare.returncode}: {compare.stdout[-800:]} {compare.stderr[-800:]}")
+    report = json.loads(report_path.read_text())
+    metrics = report["metrics"]
+    problems = []
+    if report["status"] not in {"passed", "failed"}:
+        problems.append(f"report status {report['status']!r}")
+    if {m["reference_label"] for m in metrics} != set(declared.pairs):
+        problems.append(f"the report compares {sorted(m['reference_label'] for m in metrics)}, the target pairs {sorted(declared.pairs)}")
+    if off := [m["reference_label"] for m in metrics if m["status"] == "sampled_off_point"]:
+        problems.append(f"sampled off the declared point: {off}")
+    if not any(m["left"]["status"] == m["right"]["status"] == "evaluated" for m in metrics):
+        problems.append("no pair is evaluated on both sides, so the comparison read nothing")
+    experiment = inspect_sweep_experiment(output, comparisons=experiment_comparisons(report_path, sweep_output=output))
+    if {c.comparison.association_status for c in experiment.cases} != {"run_verified"}:
+        problems.append(f"the report is not attached to both cases as run_verified: {[c.comparison.association_status for c in experiment.cases]}")
+    elif {c.comparison.status for c in experiment.cases} != {report["status"]}:
+        problems.append("a case carries a comparison status other than the report's")
+    return _verdict("C14", not problems, "; ".join(problems) or f"{len(metrics)} pair(s) compared, report {report['status']}")
+
+
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C1": check_load,
     "C2": check_describe_noop,
@@ -566,6 +728,8 @@ CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
     "C10": check_discoverable,
     "C11": check_restage_is_clean,
     "C12": check_readable_quantities,
+    "C13": check_parallel_agrees,
+    "C14": check_quantity_across_sweep,
 }
 
 

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
 import shlex
 from dataclasses import asdict, dataclass, field
-from pathlib import Path, PurePath
+from pathlib import PurePath
 from typing import Any, Iterable
 
 from .artifacts import DRIVER_PRODUCED_BY
+from . import mpi
 from .models import DataArtifact
 from omnidriver.core.plugin_profile import entrypoint_relpaths
 
@@ -43,27 +43,6 @@ def case_script_commands(driver_context: Any | None) -> frozenset[str]:
     return frozenset(conventions.case_script_commands) | frozenset(
         entrypoint_relpaths(driver_context)
     )
-
-
-# MPI launcher recognition: generic to any parallel workflow step (OpenMPI,
-# MPICH, ...), not OpenFOAM-specific.
-_MPI_LAUNCHERS = frozenset({"mpirun", "mpiexec", "orterun"})
-_MPI_VALUE_FLAGS = frozenset({"-np", "-n", "--np"})
-
-
-def _unwrap_mpi_program(args: tuple[str, ...]) -> str | None:
-    """Return the wrapped program from an MPI launcher's args, or None."""
-    index = 0
-    while index < len(args):
-        token = args[index]
-        if token in _MPI_VALUE_FLAGS:
-            index += 2
-            continue
-        if token.startswith("-"):
-            index += 1
-            continue
-        return token
-    return None
 
 
 @dataclass(frozen=True)
@@ -541,8 +520,8 @@ def validate_workflow_commands(
             ))
             continue
         if _is_authorized(command, driver_context):
-            if command in _MPI_LAUNCHERS:
-                payload = _unwrap_mpi_program(tuple(step.get("args", ()) or ()))
+            if command in mpi.LAUNCHERS:
+                payload = mpi.program(step.get("args", ()) or ())
                 if payload is not None and not _is_authorized(payload, driver_context):
                     diagnostics.append(WorkflowDiagnostic(
                         level="error",

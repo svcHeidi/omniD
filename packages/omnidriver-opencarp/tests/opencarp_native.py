@@ -1,166 +1,68 @@
-"""Supplied inputs for native openCARP tests. Nothing here is discovered:
-the tutorials tree comes from OMNIDRIVER_OPENCARP_TUTORIALS, and the binary
-from the ambient PATH and DYLD_LIBRARY_PATH."""
+"""Supplied inputs for native openCARP tests, and the conformance target
+table. Nothing here is discovered: the tutorials tree comes from
+OMNIDRIVER_OPENCARP_TUTORIALS, and the binary from the ambient PATH and
+DYLD_LIBRARY_PATH."""
 from __future__ import annotations
 
 import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any, Mapping
 
-import pytest
+from omnidriver.conformance import (
+    ConformanceTarget, QuantityTarget, RecordRun, NativeEnvironmentError, record_run, record_sweep, supplied_tree,
+)
+from omnidriver.core.quantities import load_point_reference
+from omnidriver.opencarp.lat_reader import LAT_FORMAT
 
 NIEDERER_RELPATH = "02_EP_tissue/03E_study_resolution"
+LAT_PATH = "out/init_acts_vm_act-thresh.dat"
+REFERENCE = Path(__file__).resolve().parents[3] / "benchmarks" / "niederer2011.json"
 
 
 def opencarp_tutorials_root() -> Path:
-    value = os.environ.get("OMNIDRIVER_OPENCARP_TUTORIALS")
-    if not value:
-        pytest.fail(
-            "OMNIDRIVER_OPENCARP_TUTORIALS is not set. A @pytest.mark.native_opencarp test "
-            "needs openCARP's tutorials tree supplied explicitly, e.g.\n"
-            "  OMNIDRIVER_OPENCARP_TUTORIALS=/usr/local/lib/opencarp/share/tutorials "
-            "DYLD_LIBRARY_PATH=/opt/homebrew/lib pytest packages/omnidriver-opencarp/tests -m native_opencarp"
-        )
-    root = Path(value)
-    if not (root / NIEDERER_RELPATH / "nversion.par").is_file():
-        pytest.fail(f"OMNIDRIVER_OPENCARP_TUTORIALS={value!r} has no {NIEDERER_RELPATH}/nversion.par")
-    return root
+    return supplied_tree("OMNIDRIVER_OPENCARP_TUTORIALS", contains=f"{NIEDERER_RELPATH}/nversion.par")
 
 
 def require_opencarp_binary() -> None:
     binary = shutil.which("openCARP")
     if binary is None:
-        pytest.fail("openCARP is not on PATH")
+        raise NativeEnvironmentError("openCARP is not on PATH")
     proc = subprocess.run([binary, "-buildinfo"], capture_output=True, text=True)
     if "GIT tag" not in proc.stdout:
-        pytest.fail("openCARP cannot start (on macOS, set DYLD_LIBRARY_PATH to the directory "
-                    "holding libsundials_cvode; evidence A4-A6): " + proc.stderr[-400:])
-
-
-import json
-import subprocess
-import sys
-from dataclasses import dataclass
-from typing import Any, Mapping
-
-from omnidriver.core.runtime.models import DataArtifact, data_artifact_from_json
-from omnidriver.core.runtime.postprocess_phase import build_sweep_context
-
-from omnidriver.conformance import ConformanceTarget
-
-LAT_PATH = "out/init_acts_vm_act-thresh.dat"
+        raise NativeEnvironmentError(
+            "openCARP cannot start (on macOS, set DYLD_LIBRARY_PATH to the directory "
+            "holding libsundials_cvode; evidence A4-A6): " + proc.stderr[-400:]
+        )
 
 
 def niederer_sweep(tmp_path: Path, *, dx_values: tuple[float, ...], tend: float,
-                   extra: Mapping[str, Any] | None = None,
-                   allow_missing_declared_artifact: bool = False) -> Path:
-    """Run niedererNVersion over ``dx_values`` through ``omnidriver sweep-run``
-    (dt 50 us). Returns the sweep's output directory.
-
-    By default any case that does not complete fails the caller loudly --
-    including a missing declared artifact, e.g. the LAT file absent at
-    ``all = 0`` (an actual solver or staging defect). Only
-    ``test_the_per_event_layout_is_refused_by_name`` passes
-    ``allow_missing_declared_artifact=True``: with ``lats[0].all = 1`` the
-    declared per-node LAT file is *expected* to be missing (openCARP writes
-    a different file instead), and reconciliation marks that case
-    failed even though the solver itself exited 0 -- see
-    ``_only_a_declared_artifact_is_missing``. Every other caller must not
-    silently tolerate a missing artifact."""
+                   extra: Mapping[str, Any] | None = None, tolerate_missing: tuple[str, ...] = ()) -> Path:
+    """``niedererNVersion`` over ``dx_values`` (dt 50 us), through ``omnidriver sweep-run``."""
     require_opencarp_binary()
-    spec = {
-        "base": {"entry": "niedererNVersion", "cases_root": str(opencarp_tutorials_root()),
-                 "nversion.par:tend": tend, "nversion.par:dt": 50.0, **(extra or {})},
-        "sweep": {"mode": "cross_product", "independent": {"dx": list(dx_values)}},
-    }
-    spec_path = tmp_path / "sweep.json"
-    spec_path.write_text(json.dumps(spec))
-    output = tmp_path / "sweep"
-    proc = subprocess.run(
-        [sys.executable, "-m", "omnidriver", "sweep-run", "--plugin", "opencarp", "--spec", str(spec_path),
-         "--output-dir", str(output), "--scratch-dir", str(tmp_path / "scratch")],
-        capture_output=True, text=True, timeout=600,
+    return record_sweep(
+        tmp_path, plugin="opencarp", record="niedererNVersion", cases_root=opencarp_tutorials_root(),
+        sweep={"dx": dx_values}, study={"nversion.par:tend": tend, "nversion.par:dt": 50.0, **(extra or {})},
+        tolerate_missing=tolerate_missing, timeout_s=600,
     )
-    try:
-        payload = json.loads(proc.stdout)
-    except ValueError:
-        pytest.fail(f"sweep-run printed no JSON (rc={proc.returncode}): {proc.stderr[-2000:]}")
-    for case in payload.get("cases", ()):
-        if case.get("status") == "completed":
-            continue
-        if allow_missing_declared_artifact and _only_a_declared_artifact_is_missing(case):
-            continue
-        pytest.fail(f"sweep-run failed (rc={proc.returncode}): {proc.stdout[-2000:]} {proc.stderr[-2000:]}")
-    if not payload.get("cases"):
-        pytest.fail(f"sweep-run produced no cases (rc={proc.returncode}): {proc.stdout[-2000:]} {proc.stderr[-2000:]}")
-    return output
-
-
-def _only_a_declared_artifact_is_missing(case: Mapping[str, Any]) -> bool:
-    """Whether ``case`` failed for exactly the reason
-    ``test_the_per_event_layout_is_refused_by_name`` exercises: the solver
-    exited fine, but the LAT artifact (``LAT_PATH``) specifically is absent, so
-    reconciliation -- not a crash, a timeout or a refused patch -- marked the
-    case failed. Anything else (``materialization_error``, ``plan_error``,
-    ``timeout_error``) is a genuine failure and stays fatal, per the
-    no-fallbacks rule: this only widens what counts as an *expected* shape,
-    it never silences an unexplained one. A different missing artifact, such
-    as ``out/vm.igb``, is checked by ``predicted_path`` and stays fatal."""
-    if case.get("status") != "failed":
-        return False
-    if case.get("materialization_error") or case.get("plan_error") or case.get("timeout_error"):
-        return False
-    reconciliation = case.get("artifact_reconciliation")
-    if not reconciliation or reconciliation.get("missing_count", 0) <= 0:
-        return False
-    missing = [a for a in reconciliation.get("artifacts", ()) if a.get("status") == "missing"]
-    return bool(missing) and all(a.get("predicted_path") == LAT_PATH for a in missing)
-
-
-@dataclass(frozen=True)
-class NiedererRun:
-    output_dir: Path
-    case_id: str
-    case_root: Path
-    lat_artifact: DataArtifact
 
 
 def niederer_run(tmp_path: Path, *, dx: float, tend: float, extra: Mapping[str, Any] | None = None,
-                 allow_missing_declared_artifact: bool = False) -> NiedererRun:
-    output = niederer_sweep(tmp_path, dx_values=(dx,), tend=tend, extra=extra,
-                            allow_missing_declared_artifact=allow_missing_declared_artifact)
-    (case,) = build_sweep_context(output).cases
-    document = json.loads((output / case.run_document_path).read_text())
-    artifact = next(data_artifact_from_json(raw) for raw in document["expectedArtifacts"]
-                    if raw["path_pattern"] == LAT_PATH)
-    return NiedererRun(output, case.case_id, Path(case.case_root), artifact)
-
-
-def niederer_conformance_target(tmp_path: Path) -> ConformanceTarget:
-    """Coarse and short, so the native tier stays seconds long."""
+                 tolerate_missing: tuple[str, ...] = ()) -> RecordRun:
     require_opencarp_binary()
-    return ConformanceTarget(
-        plugin="opencarp",
-        record="niedererNVersion",
-        cases_root=opencarp_tutorials_root(),
-        scratch_root=tmp_path / "scratch",
-        base_study={"dx": 1000.0, "nversion.par:tend": 10.0, "nversion.par:dt": 50.0},
-        patch=("nversion.par:gregion[0].g_il", 0.2),
-        untouched=("nversion.par", ("gregion[0]", "g_it")),
-        sweep_name="dx",
-        sweep_values=(1000.0, 500.0),
-        unknown_name="nversion.par:gregion[0].g_ill",
-        solver_command="openCARP",
-        environment={},
+    return record_run(
+        tmp_path, plugin="opencarp", record="niedererNVersion", cases_root=opencarp_tutorials_root(),
+        sweep={"dx": (dx,)}, study={"nversion.par:tend": tend, "nversion.par:dt": 50.0, **(extra or {})},
+        tolerate_missing=tolerate_missing, timeout_s=600,
     )
 
 
 def require_opencarp_mpi_launcher() -> None:
     """The ``mpirun`` first on PATH starts one MPI world of openCARP processes
-    (see docs/solver-learning/opencarp.md), checked up front so a wrong
-    environment fails naming the fix, not as a failed sweep case whose
-    preflight message stayed in its child process."""
+    (docs/solver-learning/opencarp.md), checked up front so a wrong environment
+    fails naming the fix, not as a failed case whose preflight message stayed
+    in its child process."""
     from omnidriver.opencarp.parallel import launcher_diagnostics
 
     require_opencarp_binary()
@@ -169,9 +71,40 @@ def require_opencarp_mpi_launcher() -> None:
     if shutil.which("mpirun") is None:
         problems.append("no mpirun on PATH")
     if problems:
-        pytest.fail(
+        raise NativeEnvironmentError(
             "the parallel openCARP tests need the launcher of the MPI openCARP was built against "
             "first on PATH (for a bundled-MPICH install, <openCARP prefix>/lib/petsc/bin) and, "
             "where the host name does not resolve, HYDRA_IFACE=lo0: " + "; ".join(problems)
         )
 
+
+# Coarse and short, so the native tier stays seconds long. The quantity runs
+# at dx 500 um to 150 ms so that all nine points activate; N = 2 differs from
+# serial only in the last digit the LAT file prints (six decimals), a
+# five-thousandth of dt.
+TARGETS: dict[str, dict[str, Any]] = {
+    "niedererNVersion": dict(
+        base_study={"dx": 1000.0, "nversion.par:tend": 10.0, "nversion.par:dt": 50.0},
+        patch=("nversion.par:gregion[0].g_il", 0.2),
+        untouched=("nversion.par", ("gregion[0]", "g_it")),
+        sweep_name="dx",
+        sweep_values=(1000.0, 500.0),
+        unknown_name="nversion.par:gregion[0].g_ill",
+    ),
+}
+
+
+def conformance_target(record: str, tmp_path: Path) -> ConformanceTarget:
+    require_opencarp_mpi_launcher()
+    reference = load_point_reference(REFERENCE)
+    at = {label: point.coordinates for label, point in reference.points.items() if point.coordinates is not None}
+    return ConformanceTarget(
+        plugin="opencarp", record=record, cases_root=opencarp_tutorials_root(), scratch_root=tmp_path / "scratch",
+        quantity=QuantityTarget(
+            artifact_format=LAT_FORMAT, reference=REFERENCE, pairs={label: label for label in at}, at=at,
+            at_unit=reference.length_unit, max_sampling_offset=0.001,
+            study={"dx": 500.0, "nversion.par:tend": 150.0, "nversion.par:dt": 50.0},
+            sweep_values=(500.0, 250.0), tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-5,
+        ),
+        **TARGETS[record],
+    )

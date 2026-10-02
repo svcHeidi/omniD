@@ -50,10 +50,18 @@ class TestRecordParallelForm(unittest.TestCase):
     def test_a_study_that_changes_the_dictionary_changes_n(self) -> None:
         self.assertEqual(self._form(2)[1]["args"][:2], ["-np", "2"])
 
-    def test_a_supplied_count_is_refused_the_dictionary_states_it(self) -> None:
+    def test_a_supplied_count_that_agrees_with_the_dictionary_is_accepted(self) -> None:
+        self.assertEqual(self._form("6", request=6)[1]["args"][:2], ["-np", "6"])
+
+    def test_a_supplied_count_that_disagrees_with_the_dictionary_is_refused_by_name(self) -> None:
         with self.assertRaises(ValueError) as caught:
-            self._form("6", request=6)
+            self._form("6", request=4)
         self.assertIn("system/decomposeParDict:numberOfSubdomains", str(caught.exception))
+
+    def test_a_request_that_is_not_true_or_a_count_is_refused(self) -> None:
+        for bad in (0, -1, 2.0, "2", False):
+            with self.assertRaises(ValueError):
+                self._form("6", request=bad)
 
     def test_a_case_without_the_dictionary_is_refused_by_name(self) -> None:
         with self.assertRaises(ValueError) as caught:

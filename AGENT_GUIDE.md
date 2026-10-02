@@ -427,14 +427,14 @@ value is refused by name, never merged. Absent or `false` is serial. A sweep
 axis `"parallel": [false, true]` runs one case of each.
 
 - `parallel: true` / `--parallel`: the solver layer finds N itself.
-- `parallel: N` / `--parallel N`: also hands it N, for a layer whose case
-  states no count.
+- `parallel: N` / `--parallel N`: states N. A layer whose case states a count
+  refuses an N that differs from it; a layer whose case states none uses it.
 
 What each layer does with it:
 
 | stack | parallel form | where N comes from |
 |---|---|---|
-| OpenFOAM (cardiacFOAM) | `<solve>.decompose` (`decomposePar -force`) → `<solve>` as `mpirun -np N cardiacFoam -parallel` → `<solve>.reconstruct` (`reconstructPar`); the steps after the solve (`postProcess -latestTime`) run on the reconstructed case | the staged case's `system/decomposeParDict:numberOfSubdomains`, read as the run will see it. Set N with that study key; `parallel: N` is refused, because the dictionary already states it. The decompose step consumes the dictionary, so provenance fingerprints it |
+| OpenFOAM (cardiacFOAM) | `<solve>.decompose` (`decomposePar -force`) → `<solve>` as `mpirun -np N cardiacFoam -parallel` → `<solve>.reconstruct` (`reconstructPar`); the steps after the solve (`postProcess -latestTime`) run on the reconstructed case | the staged case's `system/decomposeParDict:numberOfSubdomains`, read as the run will see it. Set N with that study key; `parallel: N` must equal it, or the plan is refused naming both. The decompose step consumes the dictionary, so provenance fingerprints it |
 | openCARP | `<solve>` as `mpirun -np N openCARP ...`; outputs keep their names, node order and location (`docs/solver-learning/opencarp.md` I7) | the scheduler's allocation for `parallel: true`, or the `N` you supply. `true` outside a scheduler is refused. The `mpirun` first on PATH must be the launcher of the MPI openCARP was built against; preflight refuses another MPI's (`opencarp_mpi_launcher_mismatch`, I2, I5) |
 
 `describe --entry <record> --parallel` previews the form before anything runs:
@@ -477,8 +477,8 @@ solver starts, naming both numbers.
 
 **Refused by name:** a stack with no parallel form (`get_parallel_steps`); a
 record whose selected steps run no declared solve command
-(`get_solve_step_commands`); `parallel: null`; OpenFOAM given a count, or a
-case with no `numberOfSubdomains`; openCARP given `true` with no allocation, or
+(`get_solve_step_commands`); `parallel: null`; OpenFOAM given a count that differs from
+`numberOfSubdomains`, or a case with no `numberOfSubdomains`; openCARP given `true` with no allocation, or
 a count that disagrees with one; a malformed `SLURM_NTASKS`; `--parallel` for
 an entry that is not a tutorial record, or with `--run-document`.
 
@@ -1342,7 +1342,7 @@ alongside this contract and the plugin-builder skill referenced above.
 complete example of a plugin outside OpenFOAM entirely, read
 `packages/omnidriver-opencarp/src/omnidriver/opencarp/plugin.py`
 (`OpenCARPPlugin`) — it implements the full contract with none of the four
-optional dictionary members and passes conformance C1–C12 against the real
+optional dictionary members and passes conformance C1–C14 against the real
 openCARP v18.1 binary.
 
 ### Key Optional Hooks (`SolverPluginOptionalHooks`, probed with `getattr`)
@@ -1413,7 +1413,7 @@ omnidriver --plugin mysolver plan --strict --entry <tutorial_or_case_path>
 - `omnidriver/openfoam/environment.py` (`OpenFOAMEnvironmentPlugin`) — closest
   in-repo example of a plugin with no domain-specific semantics
 - `omnidriver/opencarp/plugin.py` (`OpenCARPPlugin`) — the complete
-  non-OpenFOAM plugin example, passing C1–C12 against the real binary
+  non-OpenFOAM plugin example, passing C1–C14 against the real binary
 - `omnidriver/cardiacfoam/cardiacfoam_plugin.py` — full v2 reference
   (`omnidriver.plugins` is the entry-point group name, not a package; the
   real path is `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/cardiacfoam_plugin.py`)

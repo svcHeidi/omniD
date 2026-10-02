@@ -69,13 +69,14 @@ openCARP's native tests carry `native_opencarp`, a marker distinct from
 cardiacFOAM's `native`: `-m native` collects cardiacFOAM's native tests
 only, and the all-packages row excludes both markers.
 
-**Both native shapes run a solver in parallel:**
-`test_parallel_native.py` in each package runs one record serial and at
-N = 2 and compares P1-P9. **The two MPIs must never mix:** each solver's shell
-puts only its own MPI first on `PATH` (OpenFOAM's from its bashrc, openCARP's
-from `OPENCARP_MPI_BIN`), and preflight refuses the other one by name
-(`openfoam_mpi_launcher_mismatch`, `opencarp_mpi_launcher_mismatch`). Inside a
-Slurm allocation, `SLURM_NTASKS` must equal 2 for these tests. One example,
+**Both native shapes run a solver in parallel:** conformance C13 runs the
+target's declared quantity serial and at N = 2 and compares them, and C14
+compares it across a two-case sweep. **The two MPIs must never mix:** each
+solver's shell puts only its own MPI first on `PATH` (OpenFOAM's from its
+bashrc, openCARP's from `OPENCARP_MPI_BIN`), and preflight refuses the other
+one by name (`openfoam_mpi_launcher_mismatch`,
+`opencarp_mpi_launcher_mismatch`). Inside a Slurm allocation, `SLURM_NTASKS`
+must equal 2 for these checks. One example,
 the whole cardiacFOAM shape:
 
 ```bash
@@ -119,7 +120,7 @@ A skip here hides exactly what the guard exists to find.
 | a strict plan reads C++ only at a supplied source root (`cxx_mapping.source_root`), scans it when supplied, and says `plugin_cxx_source_not_supplied` once when not | `test_truth_layer_queries.py`; against the real trees `test_strict_planning.py::test_every_strict_plan_scans_the_supplied_source`, `test_rtst_enum_contract.py` (`native`) and cardiacCore's `test_dict_key_scanner_native.py` (`native_cardiaccore`) |
 | a solver's shell is declared in its manifest and rendered from supplied values only; a launcher from the other solver's MPI is refused | `test_environment_and_machine.py`; `test_an_mpirun_from_another_mpi_family_is_refused` (openfoam); openCARP's `opencarp_mpi_launcher_mismatch` (`native_opencarp`) |
 | core names no OpenFOAM layout beyond its recorded, shrinking debt | `scripts/check-core-shape.py` (baseline `scripts/core-shape-baseline.txt`; new tokens never added) |
-| every conformance target passes C1-C12 (toy, openCARP, cardiacFOAM), including C11 (restaging a run case carries nothing the run wrote and drops nothing authored) and C12 (every declared output format has a reader whose declaration is valid); cardiacFOAM's `restitutionCurves` passes all twelve, and every migrated record joins its parametrization | `omnidriver.conformance`, parametrized per package (toy in core; openCARP `native_opencarp`; cardiacFOAM `native`, `test_conformance_native.py`, run from a shell with OpenFOAM sourced and `OMNIDRIVER_NATIVE_TUTORIALS` at a clean native tree) |
+| every conformance target passes C1-C14 (toy, openCARP, cardiacFOAM, cardiacCore), including C11 (restaging a run case carries nothing the run wrote and drops nothing authored), C12 (every declared output format has a reader whose declaration is valid), C13 (a serial run and a parallel run give the same value of a declared quantity) and C14 (a declared quantity compares across a two-case sweep); every migrated record joins its table of targets | `omnidriver.conformance`, parametrized per package (toy in core; openCARP `native_opencarp`; cardiacFOAM `native`, `test_conformance_native.py`, run from a shell with OpenFOAM sourced and `OMNIDRIVER_NATIVE_TUTORIALS` at a clean native tree) |
 
 ## One reality
 
