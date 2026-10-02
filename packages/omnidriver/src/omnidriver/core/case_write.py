@@ -682,6 +682,8 @@ def resolve_mutation(driver_context: Any, request: CaseMutationRequest) -> "Reso
     caught, and a resolver that reads makes a dry run depend on case state.
     """
     stack = driver_context.stack
+    if not stack.implements("resolve_case_mutation"):
+        raise stack.refusal("resolve_case_mutation")
     supported = stack.call("get_supported_mutation_modes")
     if request.mode not in supported:
         raise ValueError(

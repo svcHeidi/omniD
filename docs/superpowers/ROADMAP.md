@@ -148,9 +148,10 @@ boundary: `check-import-boundaries.py` (no cardiac imports) and
 recorded debt is one entry, in `core/runtime/generic_case.py`, so deleting
 the factory path takes it to zero.
 
-**Plugins** stack. A plugin declares `requires:` and `provides:`, and core
-composes an ordered stack per capability. cardiacFOAM and cardiacCore each
-require the OpenFOAM environment provider. openCARP stands alone.
+**Plugins** stack. A plugin declares `requires:`, and core composes an
+ordered stack per contract member (`provider_stack.MEMBERS`); every member
+but the identity is optional. cardiacFOAM and cardiacCore each require the
+OpenFOAM environment provider. openCARP stands alone.
 
 **Tutorials are pointers.** The native case is the default. A record
 (`TutorialRecord`) holds the native case path, its workflow steps (command,
