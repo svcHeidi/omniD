@@ -110,8 +110,7 @@ def overall_status(statuses: Iterable[str], *, both_not_reached: str) -> tuple[s
     with ``"fail"`` it does, exactly like any other failing status. Either
     way, the report is never ``passed`` unless at least one pair is
     ``within_tolerance`` -- otherwise nothing was compared numerically, and
-    the status is ``unavailable``, not a vacuous ``passed`` (the defect a
-    report full of ``both_not_reached`` pairs used to have)."""
+    the status is ``unavailable``, not a vacuous ``passed``."""
     if both_not_reached not in {"agree", "fail"}:
         raise ValueError(f"both_not_reached must be 'agree' or 'fail', not {both_not_reached!r}")
     statuses = tuple(statuses)

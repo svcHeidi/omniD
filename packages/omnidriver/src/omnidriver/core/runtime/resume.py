@@ -1,6 +1,6 @@
 """Bind persisted checkpoints to the workflow and observed input evidence.
 
-The snapshot describes a checkpoint, not a build attestation; legacy state
+The snapshot describes a checkpoint, not a build attestation; state
 without evidence is readable but cannot resume.
 """
 from __future__ import annotations

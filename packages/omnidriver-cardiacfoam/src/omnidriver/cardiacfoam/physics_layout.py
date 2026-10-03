@@ -31,8 +31,7 @@ handling (``cli._context_from_entry``'s ``except TutorialRecordError``,
 around every ``strict_plan`` call) exactly the way any other named refusal
 does, instead of becoming a traceback. Only the *detectors'* own parse of
 ``electroProperties`` (``detection.detect_myocardium_solver_name``, which
-raises a plain ``KeyError``) is left for ``planning_policy`` to swallow, as
-it did before A7.
+raises a plain ``KeyError``) is left to its caller.
 
 For FSI later: cardiacFoam's ``physicsModel::New`` also accepts the aliases
 ``solid``->``solidModel``, ``fluid``->``fluidModel``,

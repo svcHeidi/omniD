@@ -1,7 +1,6 @@
 """What one solver hands the conformance suite, and what each check returns.
 
 Everything here is supplied by the caller; the suite discovers nothing.
-See docs/superpowers/specs/2026-09-25-solver-conformance-and-opencarp-design.md §4.
 """
 from __future__ import annotations
 

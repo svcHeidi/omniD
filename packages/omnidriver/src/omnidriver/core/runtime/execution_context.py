@@ -1,7 +1,7 @@
 """Neutral path resolver for strict_plan().
 
 Takes the already-built ``TutorialSpec`` directly: no re-resolution of the
-entry, and no dependency on the legacy CLI's action vocabulary.
+entry, and no dependency on the CLI's action vocabulary.
 """
 
 from __future__ import annotations

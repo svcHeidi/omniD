@@ -1,6 +1,4 @@
-"""Results as comparable quantities (solver-neutral).
-
-Design: docs/superpowers/specs/2026-09-26-results-as-quantities-design.md."""
+"""Results as comparable quantities (solver-neutral)."""
 from .comparison import (
     CHECKER_ID, CHECKER_VERSION, Tolerance, compare_pair, experiment_comparisons, overall_status,
     run_quantity_comparison,

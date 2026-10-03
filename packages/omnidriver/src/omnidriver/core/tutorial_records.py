@@ -1,8 +1,5 @@
 """A tutorial record: data, not a factory -- and the axis contract it draws on.
 
-See ``docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md``
-for the design this module implements.
-
 **Why this is a separate module from ``core.case_write``.** A tutorial
 record's native case is never written in place. Everything in this module
 runs against a disposable staged clone and stops at *proposing* patches --

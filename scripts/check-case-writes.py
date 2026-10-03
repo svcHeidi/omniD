@@ -1,23 +1,18 @@
 #!/usr/bin/env python3
-"""Enforce design §5's "records and axes write nothing" rule as a CI gate.
+"""Enforce "records and axes write nothing" as a CI gate.
 
-docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md §5:
+A static gate, like ``scripts/check-import-boundaries.py``, with an empty
+waiver list: tutorial registrations and axis modules may not import or
+call a writer (``update_foam_entry``, ``apply_*_overrides``, ``shutil``,
+``write_text``, ``open(..., "w")``). Axes return patches and command
+arguments; only ``commit_case_write`` writes a case.
 
-  A static gate, like ``scripts/check-import-boundaries.py``, with an empty
-  waiver list: tutorial registrations and axis modules may not import or
-  call a writer (``update_foam_entry``, ``apply_*_overrides``, ``shutil``,
-  ``write_text``, ``open(..., "w")``). Axes return patches and command
-  arguments; only ``commit_case_write`` writes a case.
-
-This scans EXACTLY the two directories where records and axes live --
-nowhere else. Both are new and empty apart from ``__init__.py`` as of this
-gate's introduction; every tutorial-record axis (OpenFOAM's generic ones,
-cardiacFOAM's solver-specific ones) and every cardiacFOAM tutorial-record
-registration lands under one of these two trees, by construction (design
-§3's package table), never elsewhere.
+This scans the directories where records and axes live (OpenFOAM's generic
+axes, and each solver package's records) and the writer-free planner module,
+and nowhere else.
 
 Like ``check-import-boundaries.py``, this list may only SHRINK -- and here
-it starts, and stays, empty. If you find yourself wanting to add a waiver,
+it is, and stays, empty. If you find yourself wanting to add a waiver,
 the fix is to route the write through ``commit_case_write`` instead, not to
 waive this gate (CLAUDE.md: "If you find yourself wanting to add a waiver,
 you are solving the wrong problem").

@@ -28,7 +28,7 @@ special case:
 reason for a (file, token) pair whose count did not change; a new pair or a
 changed count is written with the placeholder reason ``TODO-reason``, which
 a maintainer must replace by hand. The normal check fails, naming the line,
-while any ``TODO-reason`` remains (C-I2): a guard whose own maintenance flag
+while any ``TODO-reason`` remains: a guard whose own maintenance flag
 can silently erase or bless debt is weaker than the invariant it claims to
 enforce.
 """

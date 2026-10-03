@@ -7,7 +7,7 @@ An agent writes ``ionicConstantOverrides`` using names from
 (``src/genericWriter/ionicModelIO.C:245-255``), so a stale catalog means a run
 that dies -- or a name that silently resolves to something else.
 
-A 2026-08-11 audit established that no static rule describes the naming:
+No static rule describes the naming:
 
 * ``AC_``-prefixed: AlievPanfilov, Courtemanche, Fabbri, Gaur, Grandi,
   PerisYague, Stewart, ToRORd_dynCl, Trovato.

@@ -165,7 +165,7 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
 class DictEntry:
     driver_path: str
     description: str
-    # No default: a default here (previously "literal", then "word") hides a
+    # No default: a default here hides a
     # missing declaration from grep and review, since a field that always has
     # some value looks declared either way. Placed before every field that
     # still defaults, since a dataclass field with no default cannot follow

@@ -1,6 +1,5 @@
 """A value read from a result, with everything needed to judge it.
 
-Design: docs/superpowers/specs/2026-09-26-results-as-quantities-design.md §3.
 Nothing here names a solver or a physical quantity. A reader declares the
 unit of what it returns, its sentinels (raw values meaning "never reached"),
 its sampling rule and the unit of its coordinates. Core resolves sentinels

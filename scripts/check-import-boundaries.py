@@ -59,7 +59,7 @@ CARDIACFOAM_SRC = REPO_ROOT / "packages/omnidriver-cardiacfoam/src/omnidriver/ca
 
 
 def _adapter_package_roots() -> dict[str, Path]:
-    """Every adapter's ``omnidriver.<name>`` package, found on disk (B-I2).
+    """Every adapter's ``omnidriver.<name>`` package, found on disk.
 
     An adapter is any ``packages/<dist>/src/omnidriver/<name>/__init__.py``
     outside core's own distribution. Deriving this, rather than listing it,
@@ -153,7 +153,7 @@ def main() -> int:
         )
         return 1
 
-    # Core may import no adapter at all, and never foamlib (derived, B-I2).
+    # Core may import no adapter at all, and never foamlib (derived).
     core_forbidden = ("foamlib", *sorted(adapters))
     for path in CORE_SRC.rglob("*.py"):
         found.extend(_check_file(path, core_forbidden, CORE_SRC))

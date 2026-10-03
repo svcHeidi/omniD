@@ -187,16 +187,13 @@ def _check_render_exists_before(
 
     ``render_case_files``'s own contract (``plugin_interface.py``) says a
     renderer "reads the case ... to patch an existing file" through
-    ``snapshot_root``, "an isolated copy core provides". Nothing used to
-    verify that a renderer's ``exists_before``/``before_digest`` claim about
-    a document actually agreed with the real case -- a renderer that
+    ``snapshot_root``, "an isolated copy core provides". A renderer that
     (wrongly) believed a document was brand new, when the case already held
-    one with other keys in it, silently produced a ``RenderedFile`` whose
+    one with other keys in it, would produce a ``RenderedFile`` whose
     committed bytes hold ONLY the keys that renderer touched, discarding
     every sibling key the moment ``_write_one`` replaces the file. This is
     the generic, solver-agnostic guard: it does not know what a document
-    means, only whether the claim about its prior existence matches disk,
-    the same "recheck against the filesystem before any write" posture.
+    means, only whether the claim about its prior existence matches disk.
     """
     for rendered in files:
         target = targets[rendered.path]

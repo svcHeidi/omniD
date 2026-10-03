@@ -1333,7 +1333,7 @@ def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(t
 
 
 def test_commit_record_case_preserves_sibling_keys_in_a_multi_key_document(tmp_path):
-    """P2 fix (docs/superpowers/specs/2026-09-24-tutorials-are-pointers- design.md, "Owner decisions" dated 2026-09-25): before this fix, `commit_record_case` handed the renderer an EMPTY `snapshot_root`, so a renderer that patches one key in a document holding others (this test's `_RecordCaseWriterPlugin.render_case_files`, which reads `snapshot_root/<document>` and merges on top of whatever it finds there -- the same shape `tests/plugins/e2e_record_plugin.py ::ToyStack` uses) silently treated every pre-existing document as brand new, losing every sibling key the moment its render committed."""
+    """The renderer reads the case's existing documents from `snapshot_root`, so a patch to one key keeps its siblings."""
     _native_case(tmp_path, {
         "constant/mesh.json": {"cells": "1", "material": "myocardium"},
     })

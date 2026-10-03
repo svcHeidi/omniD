@@ -16,8 +16,7 @@ from typing import Any, Mapping
 #: the stack (which providers, their versions, their order) or the
 #: composition result changes. ``composition_rule_version``/``resolutions``
 #: add no detection power on top of it, but let a diagnostic name which
-#: aspect of the stack moved -- the specificity the retired single-plugin
-#: id/version/api_version comparison gave. ``providers`` is deliberately
+#: aspect of the stack moved. ``providers`` is deliberately
 #: EXCLUDED: each entry embeds ``source`` (an install/import path), and
 #: comparing it wholesale would flag reloading the same provider from a
 #: different source as a mismatch, which it is not.
