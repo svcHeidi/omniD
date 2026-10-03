@@ -453,11 +453,13 @@ def _is_authorized(command: str, driver_context: Any) -> bool:
     """The ONE definition of "authorized" for a bare command name, applied
     both to a step's own command and, for an MPI launcher, the program it
     wraps -- no second, independent notion of "authorized" for either."""
-    if (
-        command in CORE_NEUTRAL_COMMANDS
-        or command in case_script_commands(driver_context)
-        or find_script(command, driver_context) is not None
-    ):
+    return _is_declared(command, driver_context) or find_script(command, driver_context) is not None
+
+
+def _is_declared(command: str, driver_context: Any) -> bool:
+    """Whether the command is a core, case-script, plugin, utility or installed
+    environment command: everything authorized except a repository script."""
+    if command in CORE_NEUTRAL_COMMANDS or command in case_script_commands(driver_context):
         return True
     if driver_context is None:
         return False
@@ -523,6 +525,17 @@ def validate_workflow_commands(
                 message=(
                     f"Workflow command {command!r} is an explicit path; only "
                     "adapter-declared case scripts may be given as a path."
+                ),
+                field=step_id,
+            ))
+            continue
+        if find_script(command, driver_context) is not None and _is_declared(command, driver_context):
+            diagnostics.append(WorkflowDiagnostic(
+                level="error",
+                code="ambiguous_workflow_command",
+                message=(
+                    f"Workflow command {command!r} names a script of the repository's scripts folder and also "
+                    "a core, case-script, plugin, utility or installed command; rename the script"
                 ),
                 field=step_id,
             ))

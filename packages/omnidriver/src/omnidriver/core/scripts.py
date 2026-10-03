@@ -1,5 +1,5 @@
-"""A solver repository's helper scripts: listed with a usage line, and runnable
-as a workflow step.
+"""A solver repository's helper scripts: listed with a usage line read from
+the file, never by running it, and runnable as a workflow step.
 
 The repository is the truth: its ``omnidriver.toml`` names the scripts folder,
 the CLI puts the repository on the ``DriverContext``, and nothing here
@@ -12,16 +12,13 @@ import ast
 import os
 import re
 import shutil
-import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 _SCRIPT_SUFFIXES = {".py", ".sh"}
 _SKIPPED_DIRECTORIES = {"__pycache__", "tests"}
-_HELP_TIMEOUT_S = 10
-# A script that never mentions an option parser has no `--help` to ask for.
-_PARSES_OPTIONS = re.compile(r"argparse|optparse|getopt|--help")
+NO_USAGE = "no usage line"
 _DESCRIPTION_HEADING = re.compile(r"^#\s*Description\s*$")
 _USAGE_TEXT = re.compile(r"""\busage:\s*(.+?)\s*(?:["'](?:\s|$)|$)""", re.IGNORECASE | re.MULTILINE)
 
@@ -93,37 +90,21 @@ def _static_usage(path: Path, text: str) -> str | None:
     return match.group(1).replace("$0", path.name) if match else None
 
 
-def _help_usage(path: Path, text: str, environ: Mapping[str, str]) -> str | None:
-    """The first line of ``--help``, asked only of a script that parses options."""
-    if not _PARSES_OPTIONS.search(text):
-        return None
-    try:
-        completed = subprocess.run(
-            (*script_argv(path, environ), "--help"), capture_output=True, text=True,
-            timeout=_HELP_TIMEOUT_S, stdin=subprocess.DEVNULL, check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired, ScriptError):
-        return None
-    return _first_line(completed.stdout) if completed.returncode == 0 else None
-
-
-def list_scripts(driver_context: Any, environ: Mapping[str, str]) -> list[dict[str, str | None]]:
-    """Every script in the repository's scripts folder with its usage line: the
-    docstring's or header's first line when the file states one, else the first
-    line of ``--help`` (run under ``environ``'s ``PATH``), else ``None``. Empty
-    when the context supplies no folder."""
+def list_scripts(driver_context: Any) -> list[dict[str, str]]:
+    """Every script ``find_script`` would return from the repository's scripts
+    folder, with the first line of its docstring or header or its ``usage:``
+    line, else ``NO_USAGE``. Nothing is run. Empty when the context has no
+    repository."""
     root = _scripts_folder(driver_context)
     if root is None or not root.is_dir():
         return []
     listed = []
     for path in sorted(root.rglob("*")):
-        relative = path.relative_to(root)
-        if any(part in _SKIPPED_DIRECTORIES for part in relative.parts) or not _is_script(path, root):
-            continue
-        text = path.read_text(errors="replace")
-        listed.append({
-            "name": relative.as_posix(),
-            "path": str(path),
-            "usage": _static_usage(path, text) or _help_usage(path, text, environ),
-        })
+        name = path.relative_to(root).as_posix()
+        script = find_script(name, driver_context)
+        if script is not None:
+            listed.append({
+                "name": name, "path": str(script),
+                "usage": _static_usage(script, script.read_text(errors="replace")) or NO_USAGE,
+            })
     return listed

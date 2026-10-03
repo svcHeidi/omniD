@@ -68,10 +68,11 @@ A solver repository keeps its helper scripts in the folder its `omnidriver.toml`
 names (`applications/scripts`). `describe` lists them under `scripts`, beside
 `records`, each with its `name`, absolute `path` and `usage` line. The usage
 line is the first line of the script's docstring, the line under a
-`# Description` heading in its header comment, a `usage:` line in its text, or,
-for a script that parses options and states none of these, the first line of
-`--help` (the only time a script is executed while listing, with a timeout).
-omnidriver keeps no catalogue of them: the folder is the truth.
+`# Description` heading in its header comment, or a `usage:` line in its text;
+a script that states none says `no usage line`. Listing reads the files and
+runs none, and lists only what a step may run: a symlink that leaves the folder
+is neither listed nor runnable. omnidriver keeps no catalogue of them: the
+folder is the truth.
 
 Use one in two ways. When a record fails and a script looks relevant (a
 coordinate convention, a seed placement, a coverage report), run it by hand
@@ -79,7 +80,9 @@ after reading its `--help`. A record may also name a script as a step command
 (`("place_purkinje_seeds.py", "--write", ".")`); it is then authorized like any
 other command and runs from the case directory under the `python3` on the
 stack's own `PATH` (a non-Python script runs through its shebang). A name not
-in the supplied folder is refused as an unknown command.
+in the supplied folder is refused as an unknown command, and so is a script
+that shares its name with a case script, a plugin command or an installed
+command (`ambiguous_workflow_command`): rename the script.
 
 ## Preferred strict agent loop
 

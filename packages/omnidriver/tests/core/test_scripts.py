@@ -17,7 +17,7 @@ from omnidriver.core.repository import Repository
 from omnidriver.core.runtime.workflow import validate_workflow_commands
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
-from omnidriver.core.scripts import ScriptError, find_script, list_scripts, script_argv
+from omnidriver.core.scripts import NO_USAGE, ScriptError, find_script, list_scripts, script_argv
 from plugins.toy import TOY_PLUGIN, ToyStack, write_toy_native_case
 
 SHEBANG_HEADER = "# Description\n#     Sums the numbers it is given.\n#\n#------\n"
@@ -59,26 +59,53 @@ def context(scripts):
 
 
 def test_every_script_is_listed_with_the_usage_line_its_file_states(context):
-    listed = {item["name"]: item["usage"] for item in list_scripts(context, os.environ)}
+    listed = {item["name"]: item["usage"] for item in list_scripts(context)}
     assert listed == {
-        "argparsed.py": "usage: argparsed.py [-h]",
+        "argparsed.py": NO_USAGE,
         "docstring.py": "Convert a thing.",
         "folder/tool.py": "Sums the numbers it is given.",
         "header.sh": "Sums the numbers it is given.",
-        "silent.py": None,
+        "silent.py": NO_USAGE,
         "usage.sh": "usage.sh <case> <step>",
     }
 
 
-def test_a_script_that_states_no_usage_and_parses_no_options_is_never_executed(scripts, context, tmp_path):
+def test_listing_runs_no_script_however_it_mentions_help_or_option_parsing(scripts, context, tmp_path):
     marker = tmp_path / "ran"
-    (scripts / "silent.py").write_text(f"open({str(marker)!r}, 'w').close()\n")
-    list_scripts(context, os.environ)
+    touch = f"open({str(marker)!r}, 'w').close()\n"
+    (scripts / "silent.py").write_text(touch)
+    (scripts / "argparsed.py").write_text("import argparse\n" + touch)
+    (scripts / "mentions.sh").write_text(f"#!/bin/sh\n# pass --help to see more\ntouch {marker}\n")
+    (scripts / "mentions.sh").chmod(0o755)
+    list_scripts(context)
     assert not marker.exists()
 
 
+def test_a_symlink_that_leaves_the_folder_is_neither_listed_nor_found(scripts, context, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "evil.py").write_text('"""Outside."""\n')
+    (scripts / "linked.py").symlink_to(outside / "evil.py")
+    (scripts / "linked_dir").symlink_to(outside, target_is_directory=True)
+    (scripts / "inside_link.py").symlink_to(scripts / "docstring.py")
+    names = {item["name"] for item in list_scripts(context)}
+    assert "inside_link.py" in names
+    assert not {"linked.py", "linked_dir/evil.py"} & names
+    assert find_script("linked.py", context) is None and find_script("linked_dir/evil.py", context) is None
+
+
 def test_nothing_is_listed_when_no_folder_is_supplied():
-    assert list_scripts(driver_context(ToyStack(), source="test:scripts"), os.environ) == []
+    assert list_scripts(driver_context(ToyStack(), source="test:scripts")) == []
+
+
+@pytest.mark.parametrize("shadowed", ["run-test-case", "touch"])
+def test_a_script_named_like_a_case_script_or_command_is_refused_not_preferred(scripts, context, shadowed):
+    from plugins.toy import E2EFolderPlugin
+
+    _executable(scripts / shadowed, "#!/bin/sh\n")
+    stack = dataclasses.replace(driver_context(E2EFolderPlugin(), source="test:scripts"), repository=context.repository)
+    [refusal] = validate_workflow_commands(_dag(shadowed, []), driver_context=stack)
+    assert refusal.code == "ambiguous_workflow_command" and shadowed in refusal.message
 
 
 @pytest.mark.parametrize("name", ["../outside.py", "/etc/passwd", "tests/test_x.py", "folder/library.py", "README.md", ".hidden.py", "missing.py"])

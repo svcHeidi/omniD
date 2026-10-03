@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
@@ -95,7 +94,7 @@ def describe_entry(
     return {
         "entry": {"entry_name": record.name, "entry_path": record.native_case_relpath},
         "records": sorted(driver_context.stack.call("get_tutorial_records")),
-        "scripts": list_scripts(driver_context, os.environ),
+        "scripts": list_scripts(driver_context),
         "plugin_catalogs": _plugin_catalogs(driver_context),
         "record_preview": preview,
         "record_surface": surface,
