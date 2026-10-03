@@ -477,6 +477,22 @@ class TestBuildCase(unittest.TestCase):
             build_case(_MONODOMAIN, case_dir=case_dir, driver_context=_CTX)
             self.assertEqual((case_dir / "system" / "blockMeshDict").read_text(), "// custom mesh\n")
 
+    def test_system_dictionaries_of_an_existing_case_are_kept_unless_overwritten(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from omnidriver.cardiacfoam.case_builder import build_case
+
+        with tempfile.TemporaryDirectory() as temp:
+            case_dir = Path(temp) / "case"
+            (case_dir / "system").mkdir(parents=True)
+            for name in ("controlDict", "fvSchemes", "fvSolution"):
+                (case_dir / "system" / name).write_text(f"// mine: {name}\n")
+            build_case(_MONODOMAIN, case_dir=case_dir, driver_context=_CTX)
+            for name in ("controlDict", "fvSchemes", "fvSolution"):
+                self.assertEqual((case_dir / "system" / name).read_text(), f"// mine: {name}\n")
+            build_case(_MONODOMAIN, case_dir=case_dir, driver_context=_CTX, overwrite=True)
+            self.assertIn("application     cardiacFoam;", (case_dir / "system" / "controlDict").read_text())
+
     def test_time_step_and_end_time_reach_the_control_dict(self) -> None:
         case_dir, _ = self._build(_SINGLE_CELL, delta_t=0.001, end_time=0.002)
         text = (case_dir / "system" / "controlDict").read_text()

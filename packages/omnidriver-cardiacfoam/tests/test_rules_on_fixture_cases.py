@@ -62,3 +62,15 @@ def test_a_misspelled_key_is_a_warning_and_never_fails_the_plan(tmp_path):
     assert report.status == "ok"
     warnings = [d for d in report.plugin_diagnostics if d.code == "uncatalogued_case_dict_key"]
     assert [(d.field, d.level) for d in warnings] == [("writeFrequenc", "warning")]
+
+
+def test_a_misspelled_myocardium_solver_is_refused_as_a_missing_solver(tmp_path):
+    cases_root = tmp_path / "tutorials"
+    shutil.copytree(TUTORIALS, cases_root)
+    ep = cases_root / "electrophysiologyProtocols" / "singleCell" / "constant" / "electroProperties"
+    ep.write_text(ep.read_text().replace("myocardiumSolver ", "myocardiumSolvr ", 1))
+    with pytest.raises(TutorialRecordError, match="names no myocardiumSolver"):
+        strict_plan(
+            "singleCell", overrides={"cases_root": str(cases_root)},
+            scratch_root=tmp_path / "scratch", driver_context=load_plugin_context("cardiacfoam"),
+        )

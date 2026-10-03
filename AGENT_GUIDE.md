@@ -1193,7 +1193,7 @@ omnidriver run --strict --plugin cardiacfoam --case <dir> --scratch-dir <scratch
   supplied reports `plugin_cxx_source_not_supplied`: the required keys the
   C++ adds were not checked.
 - `--option`: `dx` (metres, isotropic cell size), `deltaT`, `endTime`.
-  `--overwrite` replaces the dictionaries of an existing case.
+  `--overwrite` replaces the dictionaries of an existing case; without it a case that already holds `electroProperties` is refused, and one that holds only `system/` files keeps its `controlDict`, `fvSchemes` and `fvSolution`.
 
 The command commits one journaled write: `constant/electroProperties` and
 `physicsProperties`, `system/fvSchemes`, `fvSolution`, `controlDict`, a
@@ -1204,7 +1204,7 @@ code 1, when one is an error.
 
 The mesh is a generic slab sized by `dx`, which must divide it evenly
 (`cell_counts_from_dx` refuses rounding); `singleCellSolver` gets one cell and
-refuses `dx`. An existing `system/blockMeshDict` is kept. A short `endTime`
+refuses `dx`. An existing `system/blockMeshDict` is always kept. A short `endTime`
 still writes its last time step. The case holds only what the catalogue
 places: keys the built solver requires that the catalogue lacks are yours to
 `--set` (for example `$ELECTRO_MODEL_COEFFS.sealedHeartBoundary` and

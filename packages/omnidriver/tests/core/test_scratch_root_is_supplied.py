@@ -233,3 +233,44 @@ def test_a_sweep_output_dir_wins_and_needs_no_scratch(tmp_path):
             "--output-dir", str(tmp_path / "out"),
         ]) == 0
     assert [Path(c.kwargs["output_dir"]) for c in runner.call_args_list] == [tmp_path / "out"] * 2
+
+
+# --- core as a whole ----------------------------------------------------------
+
+#: The two places that name an ambient directory, and why: the CLI's last-step
+#: default for the cases root, and `--fresh`'s refusal to wipe the home directory.
+_AMBIENT_DIRECTORY_EXEMPT = {("cli.py", "resolve_cases_root"), ("core/runtime/fresh.py", "check_fresh_deletion_allowed")}
+
+
+def _ambient_directory_uses() -> list[tuple[str, str, str]]:
+    import ast
+
+    import omnidriver.core
+
+    package = Path(omnidriver.core.__file__).resolve().parent.parent
+    found = []
+    for path in sorted(package.rglob("*.py")):
+        tree = ast.parse(path.read_text())
+        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and node.id == "__file__":
+                used = "__file__"
+            elif isinstance(node, ast.Attribute) and node.attr in {"cwd", "home", "getcwd"} and (
+                getattr(node.value, "id", None) in {"Path", "os"}
+            ):
+                used = f"{node.value.id}.{node.attr}"
+            else:
+                continue
+            owner = node
+            while owner in parents and not isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                owner = parents[owner]
+            found.append((path.relative_to(package).as_posix(), getattr(owner, "name", "<module>"), used))
+    return found
+
+
+def test_core_never_invents_a_filesystem_root():
+    """Core reads no directory from its own location, the working directory or the home directory,
+    except where a supplied value is refused or the CLI's documented last default applies."""
+    uses = _ambient_directory_uses()
+    assert {use[:2] for use in uses} == _AMBIENT_DIRECTORY_EXEMPT, "the scan finds the exemptions it names"
+    assert [use for use in uses if use[:2] not in _AMBIENT_DIRECTORY_EXEMPT] == []

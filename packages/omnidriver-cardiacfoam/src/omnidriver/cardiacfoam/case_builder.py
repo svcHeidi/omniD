@@ -640,6 +640,9 @@ runTimeModifiable false;
 # The build
 # --------------------------------------------------------------------------
 
+#: What a case that already holds `system/` keeps, unless the caller asked to overwrite.
+_KEPT_UNLESS_OVERWRITTEN = frozenset({"system/blockMeshDict", "system/fvSchemes", "system/fvSolution", "system/controlDict"})
+
 _OPTIONS = {"dx": "isotropic cell size of the default mesh, metres", "deltaT": "time step, s", "endTime": "end time, s"}
 
 
@@ -659,9 +662,9 @@ def build_case(
     rules a record's case passes.
 
     Writes ``constant/electroProperties`` and ``physicsProperties``,
-    ``system/fvSchemes``, ``fvSolution``, ``controlDict`` and an ``Allrun``
-    (``blockMesh`` then ``cardiacFoam``), and a ``system/blockMeshDict`` unless
-    the directory already has one. The mesh is a generic slab, sized by ``dx``
+    ``system/fvSchemes``, ``fvSolution``, ``controlDict``, ``blockMeshDict``
+    and an ``Allrun`` (``blockMesh`` then ``cardiacFoam``); a ``system/``
+    file the directory already holds is kept unless ``overwrite``. The mesh is a generic slab, sized by ``dx``
     (metres); a single-cell solver gets one cell and refuses ``dx``.
 
     Raises:
@@ -699,7 +702,7 @@ def build_case(
         source_artifacts=(f"cardiacfoam.dict_entries:electro:{solver}", "cardiacfoam.dict_entries:physics"),
         driver_context=driver_context,
         executable=frozenset({"Allrun"}),
-        keep_existing=frozenset({"system/blockMeshDict"}),
+        keep_existing=_KEPT_UNLESS_OVERWRITTEN if not overwrite else frozenset({"system/blockMeshDict"}),
     )
     found = list(driver_context.stack.call("validate_run_semantics", case_dir))
     found += [diagnostic(
