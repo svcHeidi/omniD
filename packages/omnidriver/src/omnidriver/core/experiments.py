@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from .runtime.postprocess_phase import CaseRecord, SweepContext, build_sweep_context
+from .runtime.case_records import CaseRecord, SweepContext, build_sweep_context
 
 
 _COMPARISON_STATUSES = frozenset({"passed", "failed", "unavailable", "not_requested", "unknown"})

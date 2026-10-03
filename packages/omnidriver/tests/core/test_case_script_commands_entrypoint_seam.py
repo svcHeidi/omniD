@@ -10,7 +10,6 @@ from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
 from omnidriver.core.runtime.provenance_inputs import _is_case_local_script
 from omnidriver.core.runtime.workflow import (
-    CASE_SCRIPT_COMMANDS,
     case_script_commands,
     validate_workflow_commands,
 )
@@ -52,13 +51,13 @@ def _write_executable(path: Path, content: str = "#!/bin/sh\n") -> None:
     path.chmod(0o755)
 
 
-def test_case_script_commands_defaults_to_the_fixed_set_with_no_context() -> None:
-    assert case_script_commands(None) == CASE_SCRIPT_COMMANDS
+def test_case_script_commands_is_empty_with_no_context() -> None:
+    assert case_script_commands(None) == frozenset()
 
 
 def test_a_foreign_plugins_declared_entrypoint_is_included(tmp_path: Path) -> None:
     ctx = driver_context(_ForeignEntrypointPlugin(), source="test")
-    assert case_script_commands(ctx) == CASE_SCRIPT_COMMANDS | {"run.sh"}
+    assert case_script_commands(ctx) == {"run.sh"}
 
 
 def test_declared_entrypoint_resolves_case_locally(tmp_path: Path) -> None:
@@ -130,6 +129,6 @@ def test_build_capability_manifest_advertises_a_custom_case_script_set() -> None
     assert manifest["allowed_commands"]["case_scripts"] == ["run.sh"]
 
 
-def test_build_capability_manifest_defaults_to_the_fixed_set() -> None:
+def test_build_capability_manifest_defaults_to_no_case_scripts() -> None:
     manifest = build_capability_manifest()
-    assert manifest["allowed_commands"]["case_scripts"] == sorted(CASE_SCRIPT_COMMANDS)
+    assert manifest["allowed_commands"]["case_scripts"] == []

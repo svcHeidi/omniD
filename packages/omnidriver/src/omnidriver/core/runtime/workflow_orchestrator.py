@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 #: The workflow-state record's filename, named once here instead of
 #: restated as a literal at each write/read site (``cli.py``,
-#: ``postprocess_phase.py``, ``step_execution.py``, ``sweep_runner.py``,
+#: ``case_records.py``, ``step_execution.py``, ``sweep_runner.py``,
 #: ``execution_context.py``, ``run_discovery.py``,
 #: ``runtime_records.CORE_RUNTIME_RECORDS`` and ``fresh._OMNIDRIVER_MARKER_NAMES``).
 STATE_FILENAME = "workflow_state.json"
@@ -45,13 +45,12 @@ def backoff_delay(attempt: int, backoff_seconds: float, *, cap_seconds: float = 
     return min(backoff_seconds * (2 ** (attempt - 1)), cap_seconds)
 
 
-def _resolve_policy(step: dict[str, Any], default_max_attempts: int) -> tuple[int, float, bool]:
+def _resolve_policy(step: dict[str, Any]) -> tuple[int, float, bool]:
     policy = step.get("retry_policy") or {}
-    safe_to_retry = policy.get("safe_to_retry") is True
     return (
-        policy.get("max_attempts", default_max_attempts if safe_to_retry else 1),
+        policy.get("max_attempts", 1),
         policy.get("backoff_seconds", 0),
-        safe_to_retry,
+        policy.get("safe_to_retry") is True,
     )
 
 
@@ -62,9 +61,7 @@ def run_workflow(
     case_root: Path,
     output_dir: Path,
     expected_artifacts: tuple = (),
-    default_max_attempts: int = 1,
     max_total_attempts: int | None = None,
-    classification_overrides: dict[str, str] | None = None,
     runner: Callable[..., Any] = run_workflow_step,
     sleep: Callable[[float], None] = time.sleep,
     state_path: Path | None = None,
@@ -82,18 +79,16 @@ def run_workflow(
             )
         return _run_workflow_locked(
             workflow_dag, workflow_state, case_root=case_root, output_dir=output_dir,
-            expected_artifacts=expected_artifacts, default_max_attempts=default_max_attempts,
-            max_total_attempts=max_total_attempts,
-            classification_overrides=classification_overrides, runner=runner,
+            expected_artifacts=expected_artifacts,
+            max_total_attempts=max_total_attempts, runner=runner,
             sleep=sleep, state_path=state_path, env=env, driver_context=driver_context,
         )
     with acquire_case_lease(case_root):
         with acquire_attempt_lease(output_dir):
             return _run_workflow_locked(
                 workflow_dag, workflow_state, case_root=case_root, output_dir=output_dir,
-                expected_artifacts=expected_artifacts, default_max_attempts=default_max_attempts,
-                max_total_attempts=max_total_attempts,
-                classification_overrides=classification_overrides, runner=runner,
+                expected_artifacts=expected_artifacts,
+                max_total_attempts=max_total_attempts, runner=runner,
                 sleep=sleep, state_path=state_path, env=env, driver_context=driver_context,
             )
 
@@ -105,9 +100,7 @@ def _run_workflow_locked(
     case_root: Path,
     output_dir: Path,
     expected_artifacts: tuple = (),
-    default_max_attempts: int = 1,
     max_total_attempts: int | None = None,
-    classification_overrides: dict[str, str] | None = None,
     runner: Callable[..., Any] = run_workflow_step,
     sleep: Callable[[float], None] = time.sleep,
     state_path: Path | None = None,
@@ -156,10 +149,8 @@ def _run_workflow_locked(
         if step_state.status != "failed":
             continue
 
-        classification = classify_failure(step_state, overrides=classification_overrides)
-        max_attempts, backoff_seconds, safe_to_retry = _resolve_policy(
-            _step_by_id(workflow_dag, step_id), default_max_attempts
-        )
+        classification = classify_failure(step_state)
+        max_attempts, backoff_seconds, safe_to_retry = _resolve_policy(_step_by_id(workflow_dag, step_id))
         budget_available = max_total_attempts is None or total_attempts < max_total_attempts
         if (
             classification == "retryable"

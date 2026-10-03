@@ -533,7 +533,7 @@ otherwise be rediscovered.
 - `scan-dict-keys.py` is invoked nowhere -- not CI, not a test, not a caller --
   though it is the front end to the scanner the cardiaccore input catalogue
   cites as its provenance.
-- `equivalence_protocol.yaml` has no executed reader. Its consumer computes
+- retired equivalence_protocol.yaml has no executed reader. Its consumer computes
   `Path(omnidriver.__file__)` against a PEP 420 namespace package, so it raises
   before doing anything, and both tests that touch it monkeypatch it out.
   **Fixed 2026-09-25:** `dual_run.check_protocol` now has an executed reader

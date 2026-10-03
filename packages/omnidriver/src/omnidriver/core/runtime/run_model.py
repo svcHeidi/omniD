@@ -34,8 +34,6 @@ class RunDocument:
     name: str
     status: Status
     version: str = "3"
-    createdAt: str = ""
-    lastModified: str = ""
     intent: dict[str, Any] = field(default_factory=dict)
     plugin: dict[str, str] | None = None
     resolvedEntry: dict[str, Any] | None = None
@@ -44,18 +42,11 @@ class RunDocument:
     launch: dict[str, Any] | None = None
     expectedArtifacts: list[dict[str, Any]] = field(default_factory=list)
     validation: dict[str, Any] = field(default_factory=dict)
-    results: dict[str, Any] | None = None
-    reports: dict[str, Any] | None = None
-    terminalStatusValues: list[str] = field(
-        default_factory=lambda: ["completed", "failed"]
-    )
 
     def to_json(self) -> dict[str, Any]:
         data = asdict(self)
         if data.get("version") != "3":
             raise ValueError("RunDocument.to_json emits only version '3'")
-        if data.get("reports") is None:
-            data.pop("reports", None)
         if data.get("plugin") is None:
             data.pop("plugin", None)
         jsonschema.validate(data, _SCHEMA)
@@ -69,8 +60,6 @@ class RunDocument:
             name=data["name"],
             status=data["status"],
             version=data.get("version", "3"),
-            createdAt=data.get("createdAt", ""),
-            lastModified=data.get("lastModified", ""),
             intent=data.get("intent", {}),
             plugin=data.get("plugin"),
             resolvedEntry=data.get("resolvedEntry"),
@@ -79,9 +68,4 @@ class RunDocument:
             launch=data.get("launch"),
             expectedArtifacts=data.get("expectedArtifacts", []),
             validation=data.get("validation", {}),
-            results=data.get("results"),
-            reports=data.get("reports"),
-            terminalStatusValues=data.get(
-                "terminalStatusValues", ["completed", "failed"]
-            ),
         )

@@ -17,7 +17,7 @@ from ..experiments import ComparisonRequest, read_json_object
 from ..plugin_interface import load_plugin_context
 from ..provider_identity import stack_identity_mismatch
 from ..runtime.models import DataArtifact, data_artifact_from_json
-from ..runtime.postprocess_phase import CaseRecord, build_sweep_context
+from ..runtime.case_records import CaseRecord, build_sweep_context
 from ..runtime.reconciler import reconcile_artifacts
 from .errors import QuantityComparisonError, QuantityError
 from .model import Point, Quantity, ReadRequest, not_evaluated

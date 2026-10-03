@@ -6,12 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core.runtime.postprocess_phase import (
+from omnidriver.core.runtime.case_records import (
     CaseRecord,
     build_standalone_case_record,
     build_sweep_context,
-    run_postprocess_phase,
-    run_postprocessing_module,
     write_case_record,
 )
 from omnidriver.core.runtime.sweep_manifest import CaseManifestEntry, SweepManifest, write_manifest
@@ -70,13 +68,6 @@ def test_standalone_record_does_not_inventory_outputs(tmp_path: Path) -> None:
     )
     assert record.status == "completed"
     assert "output_files" not in record.to_json()
-
-
-def test_core_postprocess_is_explicitly_not_configured(tmp_path: Path) -> None:
-    _manifest(tmp_path)
-    context = build_sweep_context(tmp_path)
-    assert run_postprocess_phase(entry="case", output_dir=tmp_path).status == "not_configured"
-    assert run_postprocessing_module(context, task="measure activation").status == "not_configured"
 
 
 def test_case_record_write_has_only_declared_evidence(tmp_path: Path) -> None:

@@ -10,7 +10,7 @@ from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.attempt_lease import (
     ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME,
 )
-from omnidriver.core.runtime.postprocess_phase import CASE_RECORD_FILENAME
+from omnidriver.core.runtime.case_records import CASE_RECORD_FILENAME
 from omnidriver.core.runtime.record_execution import record_generated_relpaths
 from omnidriver.core.runtime.run_document_exec import RUN_DOCUMENT_FILENAME
 from omnidriver.core.runtime.sweep_manifest import SWEEP_MANIFEST_FILENAME

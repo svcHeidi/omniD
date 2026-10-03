@@ -419,15 +419,14 @@ while True:
 `workflow_state.json` is written by the strict workflow orchestrator and
 updated after every step, so the read above is safe at any instant.
 
-## Post-processing phase (brain + module)
+## Reading a finished sweep
 
-The execution engine hands off to the postprocessing phase once a workflow or sweep reaches a terminal state. This is split into two independent pieces:
-
-1. **The brain (`build_sweep_context`)**: Reads the sweep's own record (`sweep_manifest.json`), verifies it against what is actually on disk, and returns a single grounded `SweepContext`.
-2. **The postprocessing module (`run_postprocessing_module`)**: A separate function that receives the `SweepContext` and a task. It always refuses (`not_configured`) rather than guessing an undeclared generic analysis task -- there is no automatic per-case script discovery.
-
-If an agent needs deeper reasoning than the flat summary, it reads one case's
-`workflow_state.json` from the `workflow_state_path` the `SweepContext` records for it.
+`build_sweep_context` (`core/runtime/case_records.py`) reads the sweep's own
+record (`sweep_manifest.json`) and returns one `SweepContext`: each case's
+status, resolved axis values and `workflow_state_path`. Core never inspects
+solver output. If an agent needs deeper reasoning than the flat summary, it
+reads one case's `workflow_state.json` from the path the `SweepContext` records
+for it.
 
 ### Post-processing utilities
 
@@ -989,7 +988,7 @@ These are real limitations; the agent must not assume them:
 
 - **Automatic retry** is mechanical and bounded. `run --strict` retries a step
   whose failure is classified *retryable* (currently `workflow_step_timeout`) up
-  to its `retry_policy.max_attempts` (or the run's `default_max_attempts`), with
+  to its `retry_policy.max_attempts`, with
   exponential backoff (`retry_policy.backoff_seconds`). Fatal failures
   (`missing_artifacts`, exec errors, generic nonzero exit / FOAM FATAL ERROR) are
   never retried. Between retryable attempts the persisted `workflow_state.json` is
@@ -1074,7 +1073,7 @@ Implement what your solver has; omit the rest. Do not write stubs.
 |---|---|---|
 | join a stack | — | `get_profile` (case files, C++ mapping, environment connection, `requires`) |
 | `describe`, `catalog` | — | `get_tutorial_records`, `get_record_key_catalog`, `get_agent_guidance`, `get_named_catalogs`, `get_dict_entries`, `get_dictionary_catalog`, `get_owned_documents`, `get_dict_key_scanner` |
-| strict plan | — (no `get_environment_diagnostics` is an `environment_capability_unavailable` error in the plan) | the command members, `validate_configuration`, `predict_data_artifacts`, `get_plan_diagnostics`, `inspect_effective_configuration`, `get_case_runtime_conventions` |
+| strict plan | — (no `get_environment_diagnostics` is an `environment_capability_unavailable` error in the plan) | the command members, `predict_data_artifacts`, `get_plan_diagnostics`, `inspect_effective_configuration`, `get_case_runtime_conventions` |
 | run a record case | `get_record_key_validator`, `get_case_value_comparator`, `get_config_value_reader` | `validate_run_semantics`, `get_loaded_environment`, `get_configured_environment`, `explain_step_failure`, `get_log_redaction_patterns`, the provenance members |
 | write a case (a study patch) | `resolve_case_mutation` + `get_supported_mutation_modes`, `render_case_files` + `get_rendered_formats` (each pair from one provider) | — |
 | run in parallel | `get_parallel_steps` | `get_solve_step_commands` |

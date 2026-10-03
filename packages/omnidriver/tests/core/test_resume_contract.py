@@ -179,8 +179,6 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
         "version": "3",
         "id": "embedded-state",
         "name": "embedded-state",
-        "createdAt": "",
-        "lastModified": "",
         "status": "planned",
         "resolvedEntry": None,
         "workflowDag": workflow_dag,
@@ -188,7 +186,6 @@ def test_run_document_embedded_completed_state_refuses_changed_inputs(tmp_path) 
         "launch": {"caseRoot": str(case_root), "outputDir": "output"},
         "expectedArtifacts": [],
         "validation": {},
-        "terminalStatusValues": ["completed", "failed"],
     }
     doc_path.write_text(json.dumps(doc))
 

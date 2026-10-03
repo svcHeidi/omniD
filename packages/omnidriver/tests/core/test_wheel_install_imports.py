@@ -118,11 +118,10 @@ with tempfile.TemporaryDirectory() as raw:
     initial = initial_workflow_state(dag)
     document = {
         "version": "3", "id": "wheel-resume", "name": "wheel-resume",
-        "createdAt": "", "lastModified": "", "status": "planned",
+        "status": "planned",
         "resolvedEntry": None, "workflowDag": dag, "workflowState": initial.to_json(),
         "launch": {"caseRoot": str(case_root), "outputDir": "output"},
         "expectedArtifacts": [], "validation": {},
-        "terminalStatusValues": ["completed", "failed"],
     }
     document_path = root / "run.json"
     document_path.write_text(json.dumps(document))

@@ -31,7 +31,6 @@ def test_run_dispatch_context_and_incomplete_budget(tmp_path, monkeypatch, capsy
         return run_workflow_step(*args, **kwargs)
 
     monkeypatch.setattr(cli, "run_workflow", partial(run_workflow, runner=runner))
-    monkeypatch.setattr(cli, "run_postprocess_phase", lambda **kwargs: pytest.fail("incomplete run postprocessed"))
     execution = cli._ExecutionContext(
         entry_label="local", workflow_dag=dag, planned_state=initial_workflow_state(dag),
         case_root=tmp_path, output_dir=tmp_path / "output", expected_artifacts=(),
@@ -43,6 +42,5 @@ def test_run_dispatch_context_and_incomplete_budget(tmp_path, monkeypatch, capsy
     assert payload["status"] != "ok"
     assert payload["workflow_state"]["status"] == "pending"
     assert "maximum total step attempts" in payload["error"]
-    assert payload["postprocess"]["status"] == "skipped"
     assert len(received) == budget
     assert all(value is context for value in received)

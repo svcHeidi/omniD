@@ -165,9 +165,6 @@ class _CollatedLayoutPlugin:
             },
         )
 
-    def validate_configuration(self, spec):
-        return ()
-
     def validate_run_semantics(self, context):
         return ()
 

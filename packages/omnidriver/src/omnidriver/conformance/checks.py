@@ -23,7 +23,7 @@ from omnidriver.core.quantities import (
 )
 from omnidriver.core.runtime import mpi
 from omnidriver.core.runtime.models import data_artifact_from_json
-from omnidriver.core.runtime.postprocess_phase import build_sweep_context
+from omnidriver.core.runtime.case_records import build_sweep_context
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from omnidriver.core.runtime.record_surface import lists_key
 from omnidriver.core.runtime.record_execution import commit_record_case

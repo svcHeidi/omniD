@@ -64,7 +64,7 @@ stream's 5.4b" is stale.
 | frames and pairing | **no frame-conversion functions anywhere.** Orientation and pairing (e.g. cardiacFOAM probe 0 = P1) are the agent's step. It writes each solver's inputs from the reference (openCARP sampling points; cardiacFOAM probes, which already exist in `system/Niedererpoints`) and states the pairing in its comparison request. Rotating cardiacFOAM's native case is not needed |
 | units | not hardcoded per solver. Each reader **declares** the unit of what it returns, and core converts with a small table. Sentinels (`-1` = never activated) are resolved **before** any conversion |
 | sampling | handled with care and **reported, never hidden**. Every value carries its sampling rule (cell-containing, node) and the coordinates the solver says it sampled, so a wrong pairing or rotation is visible in the report |
-| stale references | cardiacFOAM's stale Niederer tolerance rows and reference paths (`equivalence_protocol.yaml`, `regression_equivalence/registry.py`) are fixed with the tutorial stream's `niederer2011` migration (its step 5.4b), not here. (Renamed 2026-09-26 from `niederer2012`: the benchmark is Niederer et al. 2011.) |
+| stale references | cardiacFOAM's stale Niederer tolerance rows and reference paths (retired equivalence_protocol.yaml, `regression_equivalence/registry.py`) are fixed with the tutorial stream's `niederer2011` migration (its step 5.4b), not here. (Renamed 2026-09-26 from `niederer2012`: the benchmark is Niederer et al. 2011.) |
 
 **Corrected 2026-09-26 (Task 6, forced by evidence):** the "reference" row
 above says the reference holds "the paper's coordinates ... and the

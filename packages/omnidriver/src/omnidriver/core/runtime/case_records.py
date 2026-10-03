@@ -1,6 +1,6 @@
-"""Solver-neutral records for completed runs.
+"""Solver-neutral durable records of a run: one case's record and a sweep's context.
 
-Core records requests and execution state; an adapter supplies any declared result inspection."""
+Core records requests and execution state; it never inspects solver outputs."""
 from __future__ import annotations
 
 import json
@@ -16,28 +16,6 @@ from .workflow_orchestrator import STATE_FILENAME
 #: of restated as a literal at each write site (``cli.py``,
 #: ``sweep_runner.py``, ``runtime_records.CORE_RUNTIME_RECORDS``).
 CASE_RECORD_FILENAME = "case_record.json"
-
-
-@dataclass(frozen=True)
-class PostprocessOutcome:
-    status: str
-    message: str
-
-    def to_json(self) -> dict[str, Any]:
-        return {"status": self.status, "message": self.message}
-
-
-def _not_configured() -> PostprocessOutcome:
-    return PostprocessOutcome(
-        status="not_configured",
-        message="Core does not inspect solver outputs; select an adapter analysis capability.",
-    )
-
-
-def run_postprocess_phase(*, entry: str | None, output_dir: Path) -> PostprocessOutcome:
-    """Report that no implicit Core output analysis is configured."""
-    del entry, output_dir
-    return _not_configured()
 
 
 @dataclass(frozen=True)
@@ -180,8 +158,3 @@ def build_sweep_context(
         cases=tuple(records),
     )
 
-
-def run_postprocessing_module(context: SweepContext, *, task: str) -> PostprocessOutcome:
-    """Refuse an undeclared generic analysis task rather than guessing one."""
-    del context, task
-    return _not_configured()

@@ -7,18 +7,9 @@ from __future__ import annotations
 RETRYABLE_CODES = frozenset({"workflow_step_timeout"})
 
 
-def classify_failure(step_state, *, overrides: dict[str, str] | None = None) -> str:
-    """Return "retryable" or "fatal" for a failed step.
-
-    overrides maps a diagnostic code to a forced classification -- the
-    extension seam for agent reclassification. The mechanical retry path
-    never populates it.
-    """
-    overrides = overrides or {}
+def classify_failure(step_state) -> str:
+    """Return "retryable" or "fatal" for a failed step."""
     for diagnostic in step_state.diagnostics:
-        code = diagnostic.get("code")
-        if code in overrides:
-            return overrides[code]
-        if code in RETRYABLE_CODES:
+        if diagnostic.get("code") in RETRYABLE_CODES:
             return "retryable"
     return "fatal"

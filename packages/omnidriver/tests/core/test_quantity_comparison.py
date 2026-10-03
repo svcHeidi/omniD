@@ -14,7 +14,7 @@ import pytest
 from omnidriver.core import plugin_discovery
 from omnidriver.core.experiments import inspect_sweep_experiment
 from omnidriver.core.quantities import QuantityComparisonError, experiment_comparisons, run_quantity_comparison
-from omnidriver.core.runtime.postprocess_phase import build_sweep_context
+from omnidriver.core.runtime.case_records import build_sweep_context
 from plugins.toy import (
     DIFFERENT_VERSION_QUANTITY_TOY_PLUGIN, GRID_FORMAT, NO_WHERE_READER_PLUGIN, QUANTITY_TOY_PLUGIN,
     RAISING_READER_PLUGIN, write_quantity_toy_case, write_toy_reference, write_toy_sweep,

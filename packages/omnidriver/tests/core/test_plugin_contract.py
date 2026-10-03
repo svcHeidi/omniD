@@ -119,13 +119,13 @@ def test_the_stack_hands_back_the_providers_own_callable_and_its_exceptions():
         def get_config_value_reader(self):
             return read
 
-        def validate_configuration(self, spec):
+        def validate_run_semantics(self, case_root):
             raise RuntimeError("same failure")
 
     stack = driver_context(Reader(), source="test").stack
     assert stack.call("get_config_value_reader") is read
     with pytest.raises(RuntimeError, match="same failure"):
-        stack.call("validate_configuration", None)
+        stack.call("validate_run_semantics", None)
 
 
 def test_identity_records_which_provider_answers_each_member():

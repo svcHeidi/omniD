@@ -45,4 +45,4 @@ where = ["src"]
 include = ["omnidriver*"]
 
 [tool.setuptools.package-data]
-"omnidriver.schemas" = ["run-document.json", "sweep-spec.schema.json", "point-reference.schema.json", "quantity-comparison.schema.json"]
+"omnidriver.schemas" = ["run-document.json", "point-reference.schema.json", "quantity-comparison.schema.json"]

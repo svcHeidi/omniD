@@ -54,27 +54,18 @@ def main() -> int:
     if result.returncode != 0:
         failures.append(f"CLI --help exited {result.returncode}: {result.stderr[:300]}")
 
-    # 4. The sweep-spec schema ships inside the installed package; a
+    # 4. The run-document schema ships inside the installed package; a
     #    repository-only schemas/ file would pass every other check here.
     try:
         import importlib.resources as _resources
         import json as _json
 
-        payload = (
-            _resources.files("omnidriver.schemas")
-            .joinpath("sweep-spec.schema.json")
-            .read_text()
+        schema = _json.loads(
+            _resources.files("omnidriver.schemas").joinpath("run-document.json").read_text()
         )
-        schema = _json.loads(payload)
-        schema_id = schema.get("$id", "")
-        if not schema_id.rsplit("/", 1)[-1].startswith("v"):
-            failures.append(
-                f"sweep-spec.schema.json $id {schema_id!r} does not end in a version"
-            )
-        else:
-            print(f"sweep-spec schema present   : $id={schema_id}")
+        print(f"run-document schema present : {schema['title']}")
     except Exception as exc:  # noqa: BLE001
-        failures.append(f"sweep-spec.schema.json unreadable from the wheel: {exc}")
+        failures.append(f"run-document.json unreadable from the wheel: {exc}")
 
     if failures:
         print("\nFAILED:")

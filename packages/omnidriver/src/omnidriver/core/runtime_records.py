@@ -9,7 +9,7 @@ from dataclasses import replace
 from .case_transaction import _JOURNAL_RELATIVE_PATH
 from .plugin_interface import CaseRuntimeConventions
 from .runtime.attempt_lease import ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME
-from .runtime.postprocess_phase import CASE_RECORD_FILENAME
+from .runtime.case_records import CASE_RECORD_FILENAME
 from .runtime.run_document_exec import RUN_DOCUMENT_FILENAME
 from .runtime.sweep_manifest import SWEEP_MANIFEST_FILENAME
 from .runtime.workflow_orchestrator import STATE_FILENAME, WORKFLOW_LOGS_DIRNAME

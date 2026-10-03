@@ -5,11 +5,6 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from .workflow import STEP_STATUS_VALUES
-
-
-WORKFLOW_STATE_STATUS_VALUES = STEP_STATUS_VALUES
-
 
 @dataclass(frozen=True)
 class WorkflowStepState:

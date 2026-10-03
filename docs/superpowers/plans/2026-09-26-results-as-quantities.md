@@ -86,7 +86,7 @@ reader to start here, and there was no table). Built from `git log`.
   - a changed request is a new report, and the request's digest is in it.
 - Claims about a solver come from the real binary. Every probe goes into its evidence log (command, observed output, conclusion). Fixtures cannot settle a claim about external behaviour, and no test uses invented geometry: openCARP reader tests read files that `mesher` and `openCARP` wrote.
 - The native tree is never written. Every run stages a copy under the scratch root.
-- **Stale cardiacFOAM Niederer references are not fixed here.** The tolerance rows and reference paths in `equivalence_protocol.yaml` and `regression_equivalence/registry.py` belong to the tutorial stream's `niederer2011` migration (its step 5.4b).
+- **Stale cardiacFOAM Niederer references are not fixed here.** The tolerance rows and reference paths in retired equivalence_protocol.yaml and `regression_equivalence/registry.py` belong to the tutorial stream's `niederer2011` migration (its step 5.4b).
 - Evaluate defaults lazily (CLAUDE.md). Name a symbol, not a line number. Correct a docstring or comment claim with a date; do not silently overwrite it.
 - Verify in all shapes before any "done":
   - all packages;

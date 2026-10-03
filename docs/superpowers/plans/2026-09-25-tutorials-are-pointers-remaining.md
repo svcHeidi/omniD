@@ -430,12 +430,12 @@ Added 2026-09-26: what else step C must do, now that topic A has landed.
   | stream | touches | waits on |
   |---|---|---|
   | tutorials (this plan) | `omnidriver-cardiacfoam`, `omnidriver-openfoam` (§5e P2), small neutral core additions if the owner agrees (§5g Q2–Q5), the native branch | §5e P1 |
-  | rename `niederer2011` | the cardiacFOAM tutorial and test names, `equivalence_protocol.yaml`'s `source_reference`, docs | nothing; in flight |
+  | rename `niederer2011` | the cardiacFOAM tutorial and test names, retired equivalence_protocol.yaml's `source_reference`, docs | nothing; in flight |
   | conformance Tasks 14–15 | `records/restitution_curves.py`, `cardiacfoam_plugin.py`, `introspection`, `conformance/checks.py` (C10 grammar), `plugin.yaml`, `openfoam-environment.yaml` | nothing (§5f) |
   | topic B Tasks 7–8 | `openfoam/probes.py`, `cardiacfoam/activation_probes.py`, `runtime_evidence.py`, the `niederer2011` record | this plan's 5.4b-N |
 
   Several files are shared by these streams: `records/__init__.py`,
-  `tutorials/registry.py`, `ids.py`, `display.py`, `equivalence_protocol.yaml`,
+  `tutorials/registry.py`, `ids.py`, `display.py`, retired equivalence_protocol.yaml,
   `tests/regression_equivalence/registry.py` and
   `test_registered_tutorials_need_no_repository.py`. A change to any of them
   is a small commit that rebases, and is never held in a long-lived branch.
@@ -875,7 +875,7 @@ only. Its uncommitted diff renames the six `source_reference` lines and
 `registry.py`'s entry name and reference file. Whatever R leaves, 5.4b-N
 does, in one commit with the evidence below.
 
-**`equivalence_protocol.yaml`** (repo root; schema v1; header: "Do not edit a
+**retired equivalence_protocol.yaml** (repo root; schema v1; header: "Do not edit a
 tolerance after seeing a comparison result; add a new row with its own
 rationale"):
 - **The six rows with `case_dir: NiedererEtAl2011/NiedererEtAl2011verification`
@@ -921,7 +921,7 @@ rationale"):
 
 **Not stale:**
 - `benchmarks/niederer2011.json`: it has no case path, and its frame maps to the native probes via `(x, 7−z, y)`;
-- `equivalence_protocol.yaml`'s `data_file` path.
+- retired equivalence_protocol.yaml's `data_file` path.
 
 ## 5e. Order and parallelism (added 2026-09-26)
 

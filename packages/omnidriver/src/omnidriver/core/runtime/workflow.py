@@ -26,9 +26,6 @@ CORE_NEUTRAL_COMMANDS = frozenset(
     }
 )
 
-# Core itself declares no case-local command names; adapters provide them
-# through runtime conventions.
-CASE_SCRIPT_COMMANDS = frozenset()
 
 def case_script_commands(driver_context: Any | None) -> frozenset[str]:
     """Bare command names that may resolve to a case-LOCAL executable, for

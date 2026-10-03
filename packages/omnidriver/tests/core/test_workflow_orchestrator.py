@@ -140,28 +140,12 @@ def test_fatal_failure_does_not_retry(tmp_path):
     assert outcome.steps[0]["attempts"] == 1
 
 
-def test_default_max_attempts_cannot_enable_retry_without_step_safety_policy(tmp_path):
-    runner, _ = _make_runner([
-        ("failed", 1, ["workflow_step_timeout"]),
-        ("completed", 0, []),
-    ])
-    outcome = run_workflow(
-        _dag(retry_policy={}),  # empty policy -> falls back to default
-        _initial_state(),
-        case_root=tmp_path, output_dir=tmp_path,
-        default_max_attempts=2,
-        runner=runner, sleep=lambda s: None,
-    )
-    assert outcome.state.status == "failed"
-    assert outcome.steps[0]["attempts"] == 1
-
-
 def test_max_attempts_one_bails_on_first_failure(tmp_path):
     runner, calls = _make_runner([
         ("failed", 1, ["workflow_step_timeout"]),
     ])
     outcome = run_workflow(
-        _dag(retry_policy={}),  # default_max_attempts default is 1
+        _dag(retry_policy={}),
         _initial_state(),
         case_root=tmp_path, output_dir=tmp_path,
         runner=runner, sleep=lambda s: None,

@@ -29,19 +29,3 @@ def test_exec_error_is_fatal():
 
 def test_generic_failure_no_code_is_fatal():
     assert classify_failure(_failed_step()) == "fatal"
-
-
-def test_override_forces_fatal_code_to_retryable():
-    result = classify_failure(
-        _failed_step("missing_artifacts"),
-        overrides={"missing_artifacts": "retryable"},
-    )
-    assert result == "retryable"
-
-
-def test_override_forces_retryable_code_to_fatal():
-    result = classify_failure(
-        _failed_step("workflow_step_timeout"),
-        overrides={"workflow_step_timeout": "fatal"},
-    )
-    assert result == "fatal"

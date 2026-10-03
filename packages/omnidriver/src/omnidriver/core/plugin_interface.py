@@ -150,9 +150,6 @@ class SolverPlugin(Protocol):
         """The commands that run the solve step, the one a parallel run rewrites."""
 
     # -- planning and validation ----------------------------------------------
-    def validate_configuration(self, spec: "TutorialSpec") -> tuple["StrictDiagnostic", ...]:
-        """What this provider objects to in a resolved spec."""
-
     def validate_run_semantics(self, case_root: Path) -> tuple["StrictDiagnostic", ...]:
         """The rules the resolved case at ``case_root`` breaks; an error
         refuses the record case before anything runs."""

@@ -15,7 +15,6 @@ from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
 if TYPE_CHECKING:
     from omnidriver.core.contracts.dictionary import DictEntry
-    from omnidriver.core.planning_types import StrictDiagnostic
     from omnidriver.core.runtime.models import TutorialSpec, DataArtifact
 
 
@@ -188,23 +187,6 @@ class CardiacFoamPlugin:
         from omnidriver.cardiacfoam.records import TUTORIAL_RECORDS
 
         return TUTORIAL_RECORDS
-
-    def validate_configuration(self, spec: TutorialSpec) -> tuple[StrictDiagnostic, ...]:
-        from pathlib import Path
-        from omnidriver.cardiacfoam.detection import detect_myocardium_solver_name
-        from omnidriver.core.planning_types import diagnostic as _diagnostic
-
-        diagnostics = []
-        case_root = Path(spec.case_root)
-        electro_path = case_root / "constant" / "electroProperties"
-
-        if electro_path.exists():
-            try:
-                detect_myocardium_solver_name(electro_path)
-            except KeyError as exc:
-                diagnostics.append(_diagnostic("error", "missing_solver", str(exc), source=str(electro_path)))
-
-        return tuple(diagnostics)
 
     def validate_run_semantics(self, case_root):
         """The catalogue's relations and cardiacFOAM's cross-field rules,

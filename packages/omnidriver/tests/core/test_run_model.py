@@ -25,8 +25,6 @@ def _valid_run_dict():
         "version": "3",
         "id": "run-0001",
         "name": "demo",
-        "createdAt": "2026-04-20T10:00:00Z",
-        "lastModified": "2026-04-20T10:00:00Z",
         "status": "draft",
         "validation": {},
         "resolvedEntry": None,
@@ -34,7 +32,6 @@ def _valid_run_dict():
         "workflowState": None,
         "launch": None,
         "expectedArtifacts": [],
-        "terminalStatusValues": ["completed", "failed"],
     }
 
 

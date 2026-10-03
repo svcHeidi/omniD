@@ -93,6 +93,5 @@ def test_is_launchable_no_blocking_reason_when_launchable() -> None:
     ],
 )
 def test_is_execution_successful_matches_strict_success_contract(workflow_status, expected) -> None:
-    # Mirrors WORKFLOW_STATE_STATUS_VALUES in core/runtime/workflow.py: only
-    # "completed" is a success terminal state at this boundary.
+    # Only "completed" is a success terminal state at this boundary.
     assert is_execution_successful(workflow_status) is expected

@@ -6,7 +6,6 @@ import typing
 import unittest
 
 from omnidriver.core.runtime.models import (
-    CORE_ARTIFACT_FORMATS,
     ArtifactFormat,
     DataArtifact,
 )
@@ -86,14 +85,6 @@ class TestArtifactFormatIsOpen(unittest.TestCase):
     def test_artifact_format_is_a_plain_string_type(self) -> None:
         self.assertIs(ArtifactFormat, str)
         self.assertEqual(typing.get_args(ArtifactFormat), ())
-
-    def test_core_artifact_formats_match_documented_set(self) -> None:
-        self.assertEqual(
-            CORE_ARTIFACT_FORMATS, frozenset({"json_summary", "log"}),
-            "CORE_ARTIFACT_FORMATS changed — update every DataArtifact core "
-            "predicts for itself (runtime/artifacts.py) before changing this "
-            "assertion.",
-        )
 
     def test_a_plugin_owned_format_string_is_accepted_without_validation(self) -> None:
         """DataArtifact does not validate .format at all -- a plugin is free to use vocabulary core has never heard of (e.g. a FEniCS plugin's "xdmf_sequence")."""

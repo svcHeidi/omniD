@@ -15,10 +15,9 @@ from .core.runtime.remediation import build_candidate_remediations
 from .core.runtime.workflow_runner import run_workflow_step, _step_state_by_id
 from .core.runtime.workflow_orchestrator import run_workflow
 from .core.runtime.workflow_state import workflow_state_from_json
-from .core.runtime.postprocess_phase import (
+from .core.runtime.case_records import (
     CASE_RECORD_FILENAME,
     build_standalone_case_record,
-    run_postprocess_phase,
     write_case_record,
 )
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
@@ -297,15 +296,6 @@ def _execute_run(
     payload["artifact_reconciliation"] = _reconciliation_payload(
         case_root, expected_artifacts, driver_context=driver_context,
     )
-    if status == "ok":
-        payload["postprocess"] = run_postprocess_phase(
-            entry=entry_label, output_dir=output_dir,
-        ).to_json()
-    else:
-        payload["postprocess"] = {
-            "status": "skipped",
-            "message": f"workflow did not complete (status={status}); postprocess not run",
-        }
     case_record = build_standalone_case_record(
         entry=entry_label, case_root=case_root, setup_root=setup_root, output_dir=output_dir,
     )

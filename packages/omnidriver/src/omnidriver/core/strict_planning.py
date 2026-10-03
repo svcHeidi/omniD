@@ -121,14 +121,11 @@ def _utility_produces_by_command(
     )
 
 
-def _artifact_diagnostics(
-    spec,
+def _workflow_command_diagnostics(
     workflow_dag: dict[str, Any] | None,
     driver_context: "DriverContext",
 ) -> tuple[StrictDiagnostic, ...]:
     diagnostics: list[StrictDiagnostic] = []
-
-    diagnostics.extend(driver_context.stack.call("validate_configuration", spec))
 
     for diagnostic in validate_workflow_commands(
         workflow_dag, driver_context=driver_context,
@@ -313,7 +310,7 @@ def _strict_plan_for_spec(
         expected_artifacts=artifacts,
         driver_context=driver_context,
     )
-    artifact_diagnostics = _artifact_diagnostics(spec, workflow_dag, driver_context)
+    artifact_diagnostics = _workflow_command_diagnostics(workflow_dag, driver_context)
     env_diagnostics = driver_context.stack.call(
         "get_environment_diagnostics",
         workflow_dag,

@@ -73,7 +73,6 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     "get_utility_manifests": ("map", None),
     "get_solve_step_commands": ("set", None),
     # planning and validation
-    "validate_configuration": ("sequence", None),
     "validate_run_semantics": ("sequence", None),
     "predict_data_artifacts": ("sequence", None),
     "get_plan_diagnostics": ("sequence", None),

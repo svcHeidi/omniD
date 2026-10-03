@@ -16,7 +16,7 @@ from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_ca
 from omnidriver.core.tutorial_records import TutorialRecordError, lookup_record, sort_study_name
 from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
-from .postprocess_phase import CASE_RECORD_FILENAME, build_sweep_context, run_postprocessing_module
+from .case_records import CASE_RECORD_FILENAME, build_sweep_context
 from .record_execution import (
     commit_and_build_record_spec,
     record_case_members,
@@ -193,7 +193,7 @@ def _record_sweep_plan(
 
 def _record_sweep_run(
     record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
-    output_dir: Path, case_timeout_s: float | None, task: str,
+    output_dir: Path, case_timeout_s: float | None,
     cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
@@ -324,14 +324,7 @@ def _record_sweep_run(
         manifest.updated_at = utc_now()
         write_manifest(manifest_path, manifest)
 
-    context = build_sweep_context(output_dir, persist_case_records=True)
-    if failed_count == 0:
-        postprocess = run_postprocessing_module(context, task=task).to_json()
-    else:
-        postprocess = {
-            "status": "skipped",
-            "message": f"sweep had {failed_count} failed case(s); postprocess not run",
-        }
+    build_sweep_context(output_dir, persist_case_records=True)
 
     return {
         "case_count": len(resolved_cases),
@@ -339,7 +332,6 @@ def _record_sweep_run(
         "failed_count": failed_count,
         "skipped_count": 0,
         "cases": case_summaries,
-        "postprocess": postprocess,
     }
 
 
@@ -627,16 +619,13 @@ def sweep_run(
     max_cases: int = 200,
     case_timeout_s: float | None = None,
     fresh: bool = False,
-    task: str = "summarize",
     cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
-    """Run every case in a sweep spec, then post-process the results.
+    """Run every case in a sweep spec and record the sweep.
 
-    ``cli_study``/``inputs``: as :func:`sweep_plan`. ``task`` plays no part
-    in the sweep loop itself; it is only handed to the post-processing module
-    at the end.
+    ``cli_study``/``inputs``: as :func:`sweep_plan`.
     """
     sweep_spec = _load_spec(spec_path)
     check_case_count_cap(sweep_spec, max_cases=max_cases)
@@ -672,6 +661,6 @@ def sweep_run(
         )
     return _record_sweep_run(
         record, cases_root, sweep_spec, output_dir=output_dir,
-        case_timeout_s=case_timeout_s, task=task, cli_study=cli_study,
+        case_timeout_s=case_timeout_s, cli_study=cli_study,
         inputs=inputs, driver_context=driver_context,
     )
