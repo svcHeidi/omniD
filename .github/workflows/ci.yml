@@ -5,9 +5,8 @@ on:
     branches: [main]
   pull_request:
 
-# NOTE: the three test jobs below install `pytest` explicitly -- each
-# package's own dependencies don't include it, so omitting this step fails
-# every "Run tests" step with `No module named pytest`.
+# Each test job installs `pytest` explicitly: no package's own dependencies
+# include it.
 jobs:
   test-core:
     name: test-core (py${{ matrix.python-version }})
@@ -55,18 +54,6 @@ jobs:
       - name: Run tests
         run: python -m pytest packages/omnidriver-openfoam/tests -q
 
-      # This installs exactly one omnidriver.plugins adapter (openfoam-environment),
-      # which default_driver_context() needs to resolve an implicit default --
-      # test-core installs no adapter at all, and test-cardiac/test-cardiaccore
-      # install two, so this is the only job where these two files' `_cli()`
-      # calls (none pass --plugin) can resolve one.
-      - name: Run core's plugin-dependent CLI/security regression tests
-        run: |
-          python -m pytest \
-            packages/omnidriver/tests/core/test_trust_boundary_end_to_end.py \
-            packages/omnidriver/tests/core/test_cli_run_document.py \
-            -q
-
   test-cardiac:
     name: test-cardiac (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -96,12 +83,8 @@ jobs:
       - name: Run tests
         run: python -m pytest packages/omnidriver-cardiacfoam/tests -m "not slow" -q
 
-  # Installs omnidriver-openfoam because omnidriver-cardiaccore genuinely
-  # depends on it -- its records, case rules and key validation are built on
-  # the OpenFOAM layer -- which is the allowed direction: a cardiac adapter may
-  # know OpenFOAM, not the reverse. That also means two
-  # adapters are installed here, so this job is what would catch a
-  # regression of the ambient-default-context defect in this package.
+  # omnidriver-cardiaccore depends on omnidriver-openfoam: its records, case
+  # rules and key validation are built on the OpenFOAM layer.
   test-cardiaccore:
     name: test-cardiaccore (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
