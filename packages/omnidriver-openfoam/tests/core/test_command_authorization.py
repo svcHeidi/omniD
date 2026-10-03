@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from omnidriver.core.runtime.workflow import validate_workflow_commands
-from omnidriver.openfoam.environment import openfoam_environment_context
+from omnidriver.core.plugin_interface import load_plugin_context
 
 
 def _dag(command: str) -> dict:
@@ -17,12 +17,12 @@ def _dag(command: str) -> dict:
 
 def test_openfoam_environment_authorizes_its_declared_commands() -> None:
     assert validate_workflow_commands(
-        _dag("blockMesh"), driver_context=openfoam_environment_context(),
+        _dag("blockMesh"), driver_context=load_plugin_context("openfoam-environment"),
     ) == ()
 
 
 def test_openfoam_allrun_family_is_authorized() -> None:
-    context = openfoam_environment_context()
+    context = load_plugin_context("openfoam-environment")
     for command in ("Allrun", "Allclean", "Allrun.pre", "./Allrun.post"):
         assert validate_workflow_commands(_dag(command), driver_context=context) == ()
 
@@ -35,7 +35,7 @@ def test_an_installed_openfoam_app_is_authorized(monkeypatch) -> None:
     errors = [
         diagnostic
         for diagnostic in validate_workflow_commands(
-            _dag("someInstalledApp"), driver_context=openfoam_environment_context(),
+            _dag("someInstalledApp"), driver_context=load_plugin_context("openfoam-environment"),
         )
         if diagnostic.level == "error"
     ]
@@ -54,7 +54,7 @@ def test_only_apps_in_openfoam_app_bins_are_authorized() -> None:
         os.environ["PATH"] = f"{appbin}{os.pathsep}{previous_path}"
         os.environ["FOAM_APPBIN"] = str(appbin)
         try:
-            context = openfoam_environment_context()
+            context = load_plugin_context("openfoam-environment")
             assert validate_workflow_commands(_dag("testOpenFOAMApp"), driver_context=context) == ()
             errors = [
                 item for item in validate_workflow_commands(_dag("notAnOpenFOAMApp"), driver_context=context)

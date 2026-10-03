@@ -7,7 +7,7 @@ import pytest
 
 from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
-from omnidriver.core.runtime.models import DataArtifact, expand_path_pattern
+from omnidriver.core.runtime.models import DataArtifact
 from omnidriver.core.runtime.reconciler import declared_instance_names, reconcile_artifacts
 from plugins.toy import ToyProvider
 
@@ -48,7 +48,6 @@ def test_declared_instances_are_exactly_what_the_plugins_pattern_matches(tmp_pat
 def test_the_time_vocabulary_is_gone():
     with pytest.raises(ValueError, match="time"):
         DataArtifact(artifact_id="a", path_pattern="{time}/x", format="x")
-    assert expand_path_pattern("{instance}/x", instance="7") == "7/x"
     assert not hasattr(DataArtifact(artifact_id="a", path_pattern="x", format="x"), "time_indexed")
     assert not hasattr(CaseRuntimeConventions(), "time_directory_name_pattern")
 

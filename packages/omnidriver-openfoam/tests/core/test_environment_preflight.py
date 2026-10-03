@@ -8,7 +8,7 @@ import shutil
 import pytest
 
 from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
-from omnidriver.openfoam.environment import openfoam_environment_context
+from omnidriver.core.plugin_interface import load_plugin_context
 from omnidriver.openfoam.environment_preflight import (
     _environment_diagnostics,
     _required_executables,
@@ -254,7 +254,7 @@ def test_case_script_commands_are_not_path_checked(clean_env):
     # Allrun/Allclean/etc are case-local scripts resolved relative to
     # caseRoot at execution time, never on PATH by design.
     clean_env.setattr(shutil, "which", _which_factory(set()))
-    diags = _diags(_dag("Allrun"), openfoam_environment_context())
+    diags = _diags(_dag("Allrun"), load_plugin_context("openfoam-environment"))
     assert "missing_executable" not in {d.code for d in diags}
 
 

@@ -5,8 +5,6 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from omnidriver.core.plugin_interface import driver_context as make_driver_context
-
 from .case_runtime_conventions import openfoam_case_runtime_conventions
 from .command_authorization import is_installed_openfoam_application, openfoam_runtime_commands
 from .profile import load_openfoam_profile
@@ -216,11 +214,3 @@ class OpenFOAMEnvironmentPlugin:
         raise ValueError(
             f"OpenFOAM environment renders no case files for creation mode {mode!r}"
         )
-
-
-def openfoam_environment_context():
-    """Build the explicit OpenFOAM environment context for local callers."""
-
-    return make_driver_context(
-        OpenFOAMEnvironmentPlugin(), source="adapter:openfoam-environment"
-    )

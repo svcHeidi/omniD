@@ -10,7 +10,7 @@ import pytest
 from omnidriver.core.runtime.resume import validate_resume
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state, workflow_state_from_json
-from omnidriver.openfoam.environment import openfoam_environment_context
+from omnidriver.core.plugin_interface import load_plugin_context
 
 
 def _completed(tmp_path):
@@ -34,7 +34,7 @@ def _completed(tmp_path):
         log_dir=output / "optional-logs",
         state_path=output / "optional-state.json",
         env={},
-        driver_context=openfoam_environment_context(),
+        driver_context=load_plugin_context("openfoam-environment"),
     )
     return dag, output, result.state
 
@@ -53,7 +53,7 @@ def test_optional_include_absence_resumes_but_appearance_refuses(tmp_path) -> No
         log_dir=output / "optional-logs",
         state_path=output / "optional-state.json",
         env={},
-        driver_context=openfoam_environment_context(),
+        driver_context=load_plugin_context("openfoam-environment"),
     )
     saved = workflow_state_from_json(
         json.loads((output / "optional-state.json").read_text())
@@ -63,7 +63,7 @@ def test_optional_include_absence_resumes_but_appearance_refuses(tmp_path) -> No
         saved,
         dag,
         case_root=tmp_path,
-        driver_context=openfoam_environment_context(),
+        driver_context=load_plugin_context("openfoam-environment"),
         env={},
     )
     optional.parent.mkdir()
@@ -73,6 +73,6 @@ def test_optional_include_absence_resumes_but_appearance_refuses(tmp_path) -> No
             saved,
             dag,
             case_root=tmp_path,
-            driver_context=openfoam_environment_context(),
+            driver_context=load_plugin_context("openfoam-environment"),
             env={},
         )

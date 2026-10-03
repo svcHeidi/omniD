@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from omnidriver.core.plugin_interface import validate_plugin
-from omnidriver.openfoam.environment import (
-    OpenFOAMEnvironmentPlugin,
-    openfoam_environment_context,
-)
+from omnidriver.core.plugin_interface import load_plugin_context, validate_plugin
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 
 def test_openfoam_environment_plugin_is_v3() -> None:
     # StackIdentity carries no singular api_version, only one per provider
     # on StackIdentity.providers; a single-plugin context is a one-entry stack.
-    context = openfoam_environment_context()
+    context = load_plugin_context("openfoam-environment")
     assert context.identity.providers[0].api_version == "3"
 
 

@@ -67,10 +67,8 @@ class DataArtifact:
     included, not only directories at the case root."""
 
     def __post_init__(self) -> None:
-        # Catch typos like {caseId} or {run_id} at construction so they never
-        # be finalized. Expansion-time validation alone is
-        # not enough: an agent may read path_pattern literally without ever
-        # calling expand_path_pattern.
+        # Catch typos like {caseId} or {run_id} at construction: an agent may
+        # read path_pattern literally, so validating at expansion is not enough.
         _validate_path_pattern(self.path_pattern)
 
 
@@ -87,39 +85,6 @@ def _validate_path_pattern(pattern: str) -> None:
                 f"unknown placeholder {{{name}}} in path pattern {pattern!r}; "
                 f"recognised placeholders are {sorted(_KNOWN_PATH_PLACEHOLDERS)}"
             )
-
-
-def expand_path_pattern(
-    pattern: str,
-    *,
-    case_id: str | None = None,
-    instance: str | None = None,
-) -> str:
-    """Substitute ``{case_id}`` and ``{instance}`` placeholders in a path pattern.
-
-    The set of recognised placeholders is closed (see
-    :data:`_KNOWN_PATH_PLACEHOLDERS`). Encountering an unknown ``{foo}`` token
-    raises ``ValueError`` so authors cannot silently introduce a third
-    placeholder convention.
-
-    Passing an unused keyword (e.g., ``instance=`` when the pattern has no
-    ``{instance}``) is tolerated — callers compose artifacts uniformly and
-    should not have to inspect every pattern before invoking the helper.
-    """
-    _validate_path_pattern(pattern)
-    values = {"case_id": case_id, "instance": instance}
-
-    def _resolve(match: re.Match[str]) -> str:
-        name = match.group(1)
-        value = values[name]
-        if value is None:
-            raise ValueError(
-                f"path pattern {pattern!r} references {{{name}}} but no "
-                f"{name}= was supplied"
-            )
-        return value
-
-    return _PATH_PATTERN_PLACEHOLDER.sub(_resolve, pattern)
 
 
 #: Exactly the JSON keys :class:`DataArtifact` reconstructs from -- the same

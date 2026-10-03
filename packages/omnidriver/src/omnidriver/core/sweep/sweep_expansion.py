@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from importlib import resources
 from itertools import product
 from math import prod
 from typing import Any, Callable
@@ -10,20 +8,6 @@ from typing import Any, Callable
 
 class SweepValidationError(ValueError):
     """Raised for any sweep spec problem caught before materialization runs."""
-
-
-def load_sweep_spec_schema() -> dict[str, Any]:
-    """The versioned JSON Schema a `sweep.json` document validates against.
-
-    Ships inside the installed package (``omnidriver.schemas``), not a
-    repository-only ``schemas/`` directory, which is absent from every wheel.
-    """
-    payload = (
-        resources.files("omnidriver.schemas")
-        .joinpath("sweep-spec.schema.json")
-        .read_text()
-    )
-    return json.loads(payload)
 
 
 @dataclass(frozen=True)

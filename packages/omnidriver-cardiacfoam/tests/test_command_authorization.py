@@ -7,9 +7,8 @@ from __future__ import annotations
 import pytest
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
-from omnidriver.core.plugin_interface import driver_context as _driver_context
+from omnidriver.core.plugin_interface import driver_context as _driver_context, load_plugin_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-from omnidriver.openfoam.environment import openfoam_environment_context
 from omnidriver.core.runtime.workflow import validate_workflow_commands
 
 # Supplied, not discovered: with a second adapter installed there is no default.
@@ -47,7 +46,7 @@ def test_cardiac_utilities_come_from_the_plugin() -> None:
     context = _CTX
     manifests = context.stack.call("get_utility_manifests")
     assert "listCellModelsVariables" in manifests
-    generic = openfoam_environment_context()
+    generic = load_plugin_context("openfoam-environment")
     assert generic.stack.call("get_utility_manifests") == {}
 
 

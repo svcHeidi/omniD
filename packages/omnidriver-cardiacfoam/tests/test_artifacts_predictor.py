@@ -13,7 +13,6 @@ from omnidriver.core.runtime.artifacts import predict_data_artifacts as _predict
 from omnidriver.core.runtime.models import (
     DataArtifact,
     TutorialSpec,
-    expand_path_pattern,
 )
 
 
@@ -415,49 +414,6 @@ class TestPredictorManufacturedFdaRoundTrip(unittest.TestCase):
                 f"expected at least one monodomain_* derived artifact, got: {derived_ids}",
             )
             self.assertIn("exact_error_norm", derived_ids)
-
-
-class TestPredictorPathPatternContract(unittest.TestCase):
-    """Every solver handler must emit patterns that round-trip through expand_path_pattern."""
-
-    def _all_solver_fixtures(self) -> list[tuple[str, callable]]:
-        return [
-            ("singleCellSolver",
-             lambda case_root: _write_single_cell_electro_properties(case_root)),
-            ("monodomainSolver",
-             lambda case_root: _write_pde_electro_properties(
-                 case_root, solver="monodomainSolver", ionic_model="TNNP")),
-            ("bidomainSolver",
-             lambda case_root: _write_pde_electro_properties(
-                 case_root, solver="bidomainSolver", ionic_model="TNNP")),
-            ("eikonalSolver",
-             lambda case_root: _write_eikonal_electro_properties(case_root)),
-        ]
-
-    def test_every_handler_emits_expandable_patterns(self) -> None:
-        for solver_name, writer in self._all_solver_fixtures():
-            with self.subTest(solver=solver_name), tempfile.TemporaryDirectory() as temp:
-                case_root = Path(temp) / "case"
-                case_root.mkdir()
-                writer(case_root)
-                spec = _make_spec(case_root)
-                artifacts = predict_data_artifacts(case_root, spec)
-                self.assertGreater(
-                    len(artifacts), 0,
-                    f"{solver_name} produced no artifacts — fixture/handler mismatch",
-                )
-                for artifact in artifacts:
-                    expanded = expand_path_pattern(
-                        artifact.path_pattern,
-                        case_id="probeCase",
-                        instance="0.001",
-                    )
-                    self.assertIsInstance(expanded, str)
-                    self.assertNotIn(
-                        "{", expanded,
-                        f"{solver_name} pattern {artifact.path_pattern!r} expanded "
-                        f"to {expanded!r} but still contains a brace",
-                    )
 
 
 class TestPredictorGracefulFallback(unittest.TestCase):

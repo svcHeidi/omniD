@@ -84,7 +84,6 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         from importlib.resources import files
 
         from omnidriver.core.plugin_discovery import discover_plugins
-        from omnidriver.openfoam.environment import openfoam_environment_context
         from omnidriver.core.plugin_interface import load_plugin_context
         from omnidriver.core.runtime.sweep_runner import _stage_entry_case
 
@@ -97,9 +96,9 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         # `DriverContext.identity` is a `StackIdentity`, one `ProviderIdentity`
         # per provider, least specific first; it has no singular `.id`.
         assert load_plugin_context("cardiacfoam").identity.to_json()["providers"][-1]["id"] == "org.cardiacfoam"
-        assert openfoam_environment_context().stack.call("get_case_runtime_conventions").generated_directory_names
-        assert openfoam_environment_context().stack.call("get_case_runtime_conventions").instance_directory_pattern
-        assert "blockMesh" in openfoam_environment_context().stack.call("get_environment_commands")
+        assert load_plugin_context("openfoam-environment").stack.call("get_case_runtime_conventions").generated_directory_names
+        assert load_plugin_context("openfoam-environment").stack.call("get_case_runtime_conventions").instance_directory_pattern
+        assert "blockMesh" in load_plugin_context("openfoam-environment").stack.call("get_environment_commands")
         assert load_plugin_context("cardiacfoam").stack.call("get_case_runtime_conventions").generated_directory_names
         assert load_plugin_context("cardiacfoam").stack.call("get_case_runtime_conventions").instance_directory_pattern
         assert "blockMesh" in load_plugin_context("cardiacfoam").stack.call("get_environment_commands")

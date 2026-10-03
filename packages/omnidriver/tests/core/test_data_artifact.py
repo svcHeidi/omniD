@@ -9,7 +9,6 @@ from omnidriver.core.runtime.models import (
     CORE_ARTIFACT_FORMATS,
     ArtifactFormat,
     DataArtifact,
-    expand_path_pattern,
 )
 
 
@@ -102,59 +101,6 @@ class TestArtifactFormatIsOpen(unittest.TestCase):
             artifact_id="a", path_pattern="p", format="xdmf_sequence",
         )
         self.assertEqual(artifact.format, "xdmf_sequence")
-
-
-class TestExpandPathPattern(unittest.TestCase):
-    """Path-pattern placeholders ({case_id}, {instance}) are the only documented substitution language."""
-
-    def test_no_placeholders_returns_pattern_unchanged(self) -> None:
-        out = expand_path_pattern("postProcessing/probes.dat", case_id="c1")
-        self.assertEqual(out, "postProcessing/probes.dat")
-
-    def test_substitutes_case_id(self) -> None:
-        out = expand_path_pattern("results/{case_id}/log", case_id="caseA")
-        self.assertEqual(out, "results/caseA/log")
-
-    def test_substitutes_time(self) -> None:
-        out = expand_path_pattern(
-            "postProcessing/probes/{instance}/Vm", case_id="c1", instance="0.01"
-        )
-        self.assertEqual(out, "postProcessing/probes/0.01/Vm")
-
-    def test_substitutes_both_placeholders(self) -> None:
-        out = expand_path_pattern(
-            "out/{case_id}/{instance}/field", case_id="c2", instance="0.5"
-        )
-        self.assertEqual(out, "out/c2/0.5/field")
-
-    def test_repeated_placeholder_is_substituted_everywhere(self) -> None:
-        out = expand_path_pattern("{case_id}/{case_id}.log", case_id="x")
-        self.assertEqual(out, "x/x.log")
-
-    def test_missing_case_id_for_pattern_that_needs_it_raises(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
-            expand_path_pattern("results/{case_id}/log", case_id=None)
-        self.assertIn("case_id", str(ctx.exception))
-
-    def test_missing_time_for_pattern_that_needs_it_raises(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
-            expand_path_pattern(
-                "postProcessing/{instance}/Vm", case_id="c1", instance=None
-            )
-        self.assertIn("instance", str(ctx.exception))
-
-    def test_unknown_placeholder_raises(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
-            expand_path_pattern("out/{foo}/x", case_id="c1")
-        self.assertIn("foo", str(ctx.exception))
-        self.assertIn("unknown placeholder", str(ctx.exception).lower())
-
-    def test_unused_kwargs_are_tolerated(self) -> None:
-        """Passing instance= when the pattern has no {instance} is not an error."""
-        out = expand_path_pattern(
-            "postProcessing/static.csv", case_id="c1", instance="0.01"
-        )
-        self.assertEqual(out, "postProcessing/static.csv")
 
 
 if __name__ == "__main__":

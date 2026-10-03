@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from importlib.resources import files
 
 import jsonschema
 import pytest
@@ -10,8 +11,12 @@ from omnidriver.core.sweep.sweep_expansion import (
     SweepValidationError,
     check_case_count_cap,
     expand_sweep,
-    load_sweep_spec_schema,
 )
+
+
+def load_sweep_spec_schema() -> dict:
+    return json.loads(files("omnidriver.schemas").joinpath("sweep-spec.schema.json").read_text())
+
 
 #: AGENT_GUIDE.md, "Sweeping a parameter grid" (generic/from-scratch mode).
 GENERIC_MODE_EXAMPLE = {
@@ -90,10 +95,7 @@ def test_missing_sweep_key_fails_the_schema():
 
 def test_the_schema_is_readable_from_an_installed_wheel():
     """A repository-only schema file is absent from every wheel."""
-    from importlib.resources import files
-
-    payload = files("omnidriver.schemas").joinpath("sweep-spec.schema.json").read_text()
-    assert json.loads(payload)["$schema"]
+    assert load_sweep_spec_schema()["$schema"]
 
 
 def test_the_schema_carries_a_version():
