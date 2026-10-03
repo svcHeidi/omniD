@@ -69,11 +69,11 @@ class _FakePlugin(ToyProvider):
         rules = (
             CaseFileRule(
                 path="system/controlDict", kind="test_configuration",
-                role="x-test.configuration", required="always",
+                role="test.configuration", required="always",
             ),
             CaseFileRule(
                 path="constant", kind="test_input_directory",
-                role="x-test.input_directory", required="always",
+                role="test.input_directory", required="always",
             ),
         )
         return PluginProfile(

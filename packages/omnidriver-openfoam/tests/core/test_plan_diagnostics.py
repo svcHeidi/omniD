@@ -167,7 +167,7 @@ def test_the_dictionaries_checked_follow_the_adapters_case_file_rules_not_a_dire
     (case_root / "config").mkdir(parents=True)
     (case_root / "config" / "solver.yaml").write_text("solver: demo\n")
     rules = (CaseFileRule(
-        path="config/solver.yaml", kind="configuration", role="x-neutral.configuration", required="always",
+        path="config/solver.yaml", kind="configuration", role="neutral.configuration", required="always",
     ),)
     provider = _Provider(SimpleNamespace(cxx_mapping=None, case_files=rules, requires=()))
     provider.get_owned_documents = lambda: frozenset({"solver.yaml"})

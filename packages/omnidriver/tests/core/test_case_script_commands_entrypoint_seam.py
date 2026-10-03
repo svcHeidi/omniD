@@ -28,7 +28,7 @@ class _ForeignEntrypointPlugin(ToyProvider):
             case_files=(
                 CaseFileRule(
                     path="run.sh", kind="case_script",
-                    role="x-test.case_script", required="conditional",
+                    role="test.case_script", required="conditional",
                 ),
             ),
             cxx_mapping=None,

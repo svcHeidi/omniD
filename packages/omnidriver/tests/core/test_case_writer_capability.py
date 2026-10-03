@@ -56,20 +56,6 @@ def test_two_providers_claiming_one_format_are_refused():
         _context(_Renderer(), _SecondRenderer())
 
 
-class _SemanticOnly:
-    """A more-specific provider that renders nothing -- only resolves."""
-
-    plugin_id = "org.semantic"
-
-    def get_profile(self):
-        return _Profile()
-
-    def resolve_case_mutation(self, request, *, driver_context):
-        return case_write.ResolvedMutation(
-            request=request, targets=(), expected_effects=(), semantic_owner_id=self.plugin_id,
-        )
-
-
 def test_resolution_must_not_touch_the_filesystem(tmp_path, monkeypatch):
     """A dry run is non-destructive only if resolution is pure."""
 

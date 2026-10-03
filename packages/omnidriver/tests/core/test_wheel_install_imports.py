@@ -86,7 +86,7 @@ with tempfile.TemporaryDirectory() as raw:
         "    def get_profile(self):\\n"
         "        return PluginProfile(\\n"
         "            Path(__file__), self.plugin_id, self.plugin_api_version,\\n"
-        "            (CaseFileRule('inputs/config.txt', 'text', 'x-test.input', 'conditional'),),\\n"
+        "            (CaseFileRule('inputs/config.txt', 'text', 'test.input', 'conditional'),),\\n"
         "            None, {},\\n"
         "        )\\n"
         "    def get_case_runtime_conventions(self):\\n"

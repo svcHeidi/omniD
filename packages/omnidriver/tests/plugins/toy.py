@@ -71,7 +71,7 @@ class ToyProvider:
 
     def get_profile(self) -> PluginProfile:
         rules = () if self._entrypoint is None else (
-            CaseFileRule(path=self._entrypoint, kind="case_script", role="x-test.case_script", required="conditional"),
+            CaseFileRule(path=self._entrypoint, kind="case_script", role="test.case_script", required="conditional"),
         )
         return _profile(self, rules)
 
@@ -299,7 +299,7 @@ class ResumeTestPlugin(DeclaredCasePlugin):
 
     def get_profile(self) -> PluginProfile:
         return _profile(self, (CaseFileRule(
-            path="system/settings", kind="test_configuration", role="x-test.configuration", required="always",
+            path="system/settings", kind="test_configuration", role="test.configuration", required="always",
         ),))
 
 

@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from omnidriver.core.plugin_profile import (
-    ESCAPE_ROLE_PREFIX,
     CaseFileRule,
     PluginProfile,
     load_plugin_profile,
@@ -87,15 +86,14 @@ def test_a_core_role_loads(tmp_path) -> None:
     assert loaded.case_files[0].role == "plugin.configuration"
 
 
-# --- Escape tier: a role for an environment core has no vocabulary for ---
+# --- An environment's own role namespace ---
 #
 # get_profile() is a required SolverPlugin member, so a plugin whose profile
-# YAML declares e.g. `fenics.mesh_file` must load rather than fail with
-# `ValueError: unknown case-file role 'fenics.mesh_file'`.
+# YAML declares e.g. `fenics.mesh_file` must load.
 
 
-def test_an_escape_role_for_a_foreign_environment_loads(tmp_path) -> None:
-    """The acceptance test for the hard block: a role naming an environment core has never heard of (FEniCS) must load, not raise."""
+def test_a_role_in_a_foreign_environments_namespace_loads(tmp_path) -> None:
+    """A role naming an environment core has never heard of (FEniCS) loads."""
     profile = tmp_path / "plugin.yaml"
     profile.write_text(
         "schema_version: 1\n"
@@ -106,11 +104,11 @@ def test_an_escape_role_for_a_foreign_environment_loads(tmp_path) -> None:
         "  dictionaries:\n"
         "    - path: mesh.xml\n"
         "      kind: openfoam_dictionary\n"
-        "      role: x-fenics.mesh_file\n"
+        "      role: fenics.mesh_file\n"
         "      required: always\n"
     )
     loaded = load_plugin_profile(profile)
-    assert loaded.case_files[0].role == "x-fenics.mesh_file"
+    assert loaded.case_files[0].role == "fenics.mesh_file"
 
 
 @pytest.mark.parametrize(
@@ -119,9 +117,12 @@ def test_an_escape_role_for_a_foreign_environment_loads(tmp_path) -> None:
         "plugin.configuraton",     # misspelled Core-owned role
         "case.regression",         # unknown Core-owned role
         "control_dict",            # missing the namespace entirely
+        "fenics",                  # no leaf segment at all
+        ".mesh_file",              # empty namespace
+        "fenics.",                 # empty leaf
     ],
 )
-def test_a_typo_in_a_known_namespace_still_raises_under_the_escape_tier(
+def test_a_malformed_role_or_a_typo_in_a_core_namespace_raises(
     tmp_path, bad_role: str,
 ) -> None:
     """Core-owned role namespaces remain closed at load time."""
@@ -142,46 +143,15 @@ def test_a_typo_in_a_known_namespace_still_raises_under_the_escape_tier(
         load_plugin_profile(profile)
 
 
-@pytest.mark.parametrize(
-    "bad_escape_role",
-    [
-        "x-plugin.configuration",   # shadows a reserved namespace
-        "x-case.documentation",     # shadows a reserved namespace
-        "x-fenics",                 # no leaf segment at all
-        "x-.mesh_file",             # empty namespace
-        "x-fenics.",                # empty leaf
-    ],
-)
-def test_a_malformed_or_shadowing_escape_role_still_raises(
-    tmp_path, bad_escape_role: str,
-) -> None:
-    """The `x-` marker cannot shadow a Core-owned namespace."""
-    profile = tmp_path / "plugin.yaml"
-    profile.write_text(
-        "schema_version: 1\n"
-        "plugin:\n"
-        "  id: org.example.badescape\n"
-        '  api_version: "3"\n'
-        "case_profile:\n"
-        "  dictionaries:\n"
-        "    - path: some/file\n"
-        "      kind: openfoam_dictionary\n"
-        f"      role: {bad_escape_role}\n"
-        "      required: always\n"
-    )
-    with pytest.raises(ValueError, match="invalid case-file role"):
-        load_plugin_profile(profile)
-
-
 def test_a_non_openfoam_role_survives_driver_context_end_to_end() -> None:
-    """Beyond the loader: a hand-built PluginProfile (as a real plugin's get_profile() would return, whether or not it was sourced from YAML) carrying an escape-tier role must be accepted by driver_context(...), and the rule must come back out of the stack's profile intact -- proving the seam works all the way through, not just at parse time."""
+    """Beyond the loader: a hand-built PluginProfile (as a real plugin's get_profile() would return, whether or not it was sourced from YAML) carrying a foreign-namespace role must be accepted by driver_context(...), and the rule must come back out of the stack's profile intact -- proving the seam works all the way through, not just at parse time."""
     from omnidriver.core.plugin_interface import driver_context
     from plugins.toy import ToyProvider
 
     fenics_rule = CaseFileRule(
         path="mesh.xml",
         kind="openfoam_dictionary",
-        role=f"{ESCAPE_ROLE_PREFIX}fenics.mesh_file",
+        role="fenics.mesh_file",
         required="always",
     )
 

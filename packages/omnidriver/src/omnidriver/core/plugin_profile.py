@@ -123,22 +123,15 @@ KNOWN_ROLES: frozenset[str] = frozenset({
 })
 
 #: Reserved first-segment words: namespaces whose leaf core validates against
-#: ``KNOWN_ROLES``. Such a role is never eligible for the escape tier below,
-#: so a typo in one is refused rather than swallowed.
+#: ``KNOWN_ROLES``, so a typo in one is refused rather than taken for an
+#: environment's own namespace.
 _RESERVED_ROLE_NAMESPACES: frozenset[str] = frozenset({"plugin", "case"})
-
-#: Escape tier for a foreign-environment role; an adapter may instead declare
-#: its own namespace (``fenics.mesh_file``) and validate its vocabulary.
-ESCAPE_ROLE_PREFIX = "x-"
 
 
 def _is_valid_environment_role(role: str) -> bool:
     """True for an adapter-owned ``namespace.leaf`` role name."""
     namespace, separator, leaf = role.partition(".")
-    if not separator or not namespace or not leaf:
-        return False
-    effective_namespace = namespace[len(ESCAPE_ROLE_PREFIX):] if namespace.startswith(ESCAPE_ROLE_PREFIX) else namespace
-    if not effective_namespace or effective_namespace in _RESERVED_ROLE_NAMESPACES:
+    if not separator or not namespace or not leaf or namespace in _RESERVED_ROLE_NAMESPACES:
         return False
     return all(part.replace("_", "").replace("-", "").isalnum() for part in (namespace, leaf))
 

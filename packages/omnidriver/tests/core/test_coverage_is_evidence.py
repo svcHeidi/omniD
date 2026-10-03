@@ -23,10 +23,6 @@ def _plan(tmp_path: Path):
     )
 
 
-def _stage(report, name: str):
-    return next(item for item in report.simulation_audit if item.stage == name)
-
-
 def test_only_the_stages_every_solver_has_are_scored(tmp_path: Path) -> None:
     """A check that depends on a solver's file formats is a plugin diagnostic, not a stage."""
     report = _plan(tmp_path)
