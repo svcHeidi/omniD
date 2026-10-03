@@ -1,6 +1,6 @@
 """Evidence-labelled input catalog for cardiacCore preprocessing utilities.
 
-Each entry is backed by a native read; the scar utilities are off main (c53a0d7), so their ``source_refs`` carry ``scar-branch:`` (docs/solver-learning/cardiaccore.md, K5).
+Each entry is backed by a native read; the scar utilities are off main, so their ``source_refs`` carry ``scar-branch:`` (docs/solver-learning/cardiaccore.md, K5).
 """
 
 from __future__ import annotations

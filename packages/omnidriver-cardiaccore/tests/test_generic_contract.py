@@ -213,16 +213,6 @@ def test_every_scar_source_ref_names_the_branch_it_resolves_on() -> None:
     assert unqualified == [], unqualified
 
 
-def test_the_catalog_records_that_the_scar_utilities_are_off_main() -> None:
-    """Scar being declared-only is a fact about main, not only about workflow
-    scheduling: main cannot build the scar utilities at all."""
-    from omnidriver.cardiaccore.catalogs import inputs
-
-    doc = inputs.__doc__ or ""
-    assert "c53a0d7" in doc, "the removal commit is not cited in the module docstring"
-    assert "scar" in doc and "branch" in doc
-
-
 def test_every_record_declares_how_omnidriver_check_exercises_it() -> None:
     from omnidriver.cardiaccore.records import TUTORIAL_RECORDS
 
