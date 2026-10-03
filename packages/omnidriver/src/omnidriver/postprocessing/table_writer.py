@@ -1,43 +1,11 @@
-"""Standard tabular output with metadata envelope."""
+"""Standard tabular output with a comment envelope: entry name, units and a UTC timestamp."""
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-
-
-@dataclass(init=False)
-class TableMetadata:
-    """Metadata envelope attached to every entry table output: entry name,
-    a column-name-to-unit mapping, and a UTC ISO-8601 timestamp (auto-filled
-    if empty).
-    """
-
-    entry: str
-    units: dict[str, str] = field(default_factory=dict)
-    generated_at: str = ""
-
-    def __init__(
-        self,
-        entry: str | None = None,
-        units: dict[str, str] | None = None,
-        generated_at: str = "",
-        *,
-        tutorial: str | None = None,
-    ) -> None:
-        resolved_entry = entry if entry is not None else tutorial
-        if resolved_entry is None:
-            raise TypeError("TableMetadata requires 'entry' or legacy 'tutorial'")
-        self.entry = resolved_entry
-        self.units = dict(units or {})
-        self.generated_at = generated_at
-        self.__post_init__()
-
-    def __post_init__(self) -> None:
-        if not self.generated_at:
-            self.generated_at = datetime.now(timezone.utc).isoformat()
 
 
 class TableWriter:
@@ -49,14 +17,18 @@ class TableWriter:
         output_dir: str | Path,
         filename_stem: str,
         label: str,
-        metadata: TableMetadata,
+        entry: str,
+        units: Mapping[str, str] | None = None,
     ) -> list[dict[str, Any]]:
         """Write *rows* as ``<filename_stem>.csv`` and ``<filename_stem>.html``
-        under ``output_dir``, each prefixed by a metadata envelope. ``rows``
-        may be empty (only the envelope is written). Returns two artifact
-        dicts (csv, html) with keys ``path`` (a relative filename), ``label``,
-        ``kind`` and ``format``.
+        under ``output_dir``, each prefixed by an envelope naming *entry*, the
+        column-name-to-unit mapping *units* and the UTC time of writing.
+        ``rows`` may be empty (only the envelope is written). Returns two
+        artifact dicts (csv, html) with keys ``path`` (a relative filename),
+        ``label``, ``kind`` and ``format``.
         """
+        units = dict(units or {})
+        generated_at = datetime.now(timezone.utc).isoformat()
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -66,9 +38,9 @@ class TableWriter:
         fieldnames: list[str] = list(rows[0].keys()) if rows else []
 
         lines: list[str] = [
-            f"# entry: {metadata.entry}",
-            f"# generated_at: {metadata.generated_at}",
-            f"# units: {json.dumps(metadata.units)}",
+            f"# entry: {entry}",
+            f"# generated_at: {generated_at}",
+            f"# units: {json.dumps(units)}",
         ]
         if fieldnames:
             lines.append(",".join(fieldnames))
@@ -86,9 +58,9 @@ class TableWriter:
             ".meta{color:#555;margin-bottom:14px;font-size:13px;line-height:1.6}",
             "</style></head><body>",
             "<div class='meta'>",
-            f"<strong>entry:</strong> {metadata.entry}&nbsp;&nbsp;",
-            f"<strong>generated_at:</strong> {metadata.generated_at}<br>",
-            f"<strong>units:</strong> {json.dumps(metadata.units)}",
+            f"<strong>entry:</strong> {entry}&nbsp;&nbsp;",
+            f"<strong>generated_at:</strong> {generated_at}<br>",
+            f"<strong>units:</strong> {json.dumps(units)}",
             "</div>",
             "<table><thead><tr>",
         ]

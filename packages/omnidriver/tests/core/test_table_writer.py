@@ -5,7 +5,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
-from omnidriver.postprocessing.table_writer import TableMetadata, TableWriter
+from omnidriver.postprocessing.table_writer import TableWriter
 
 
 class TestTableWriter(unittest.TestCase):
@@ -16,11 +16,10 @@ class TestTableWriter(unittest.TestCase):
                 {"case_id": "case_A", "DX_mm": 0.1, "activation_ms": 42.3},
                 {"case_id": "case_B", "DX_mm": 0.2, "activation_ms": 55.1},
             ]
-            meta = TableMetadata(
-                entry="TestTutorial",
+            TableWriter.write(
+                rows, output_dir, "test_summary", "Test label", "TestTutorial",
                 units={"activation_ms": "ms", "DX_mm": "mm"},
             )
-            artifacts = TableWriter.write(rows, output_dir, "test_summary", "Test label", meta)
 
             csv_path = output_dir / "test_summary.csv"
             self.assertTrue(csv_path.exists())
@@ -36,8 +35,7 @@ class TestTableWriter(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp)
             rows = [{"col_a": "x", "col_b": 1}]
-            meta = TableMetadata(entry="HtmlTest", units={"col_b": "ms"})
-            TableWriter.write(rows, output_dir, "html_test", "HTML label", meta)
+            TableWriter.write(rows, output_dir, "html_test", "HTML label", "HtmlTest", units={"col_b": "ms"})
 
             html_text = (output_dir / "html_test.html").read_text()
             self.assertIn("HtmlTest", html_text)
@@ -47,10 +45,7 @@ class TestTableWriter(unittest.TestCase):
     def test_returns_two_artifacts_with_correct_schema(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp)
-            meta = TableMetadata(entry="ArtifactTest", units={})
-            artifacts = TableWriter.write(
-                [{"x": 1}], output_dir, "art_stem", "Art label", meta
-            )
+            artifacts = TableWriter.write([{"x": 1}], output_dir, "art_stem", "Art label", "ArtifactTest")
             self.assertEqual(len(artifacts), 2)
             by_format = {a["format"]: a for a in artifacts}
             self.assertIn("csv", by_format)
@@ -63,27 +58,25 @@ class TestTableWriter(unittest.TestCase):
     def test_handles_empty_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp)
-            meta = TableMetadata(entry="EmptyTest", units={})
-            artifacts = TableWriter.write([], output_dir, "empty_stem", "Empty", meta)
+            artifacts = TableWriter.write([], output_dir, "empty_stem", "Empty", "EmptyTest")
             self.assertEqual(len(artifacts), 2)
             csv_text = (output_dir / "empty_stem.csv").read_text()
             self.assertIn("# entry: EmptyTest", csv_text)
 
-    def test_metadata_autofills_generated_at(self) -> None:
-        meta = TableMetadata(entry="T", units={})
-        self.assertNotEqual(meta.generated_at, "")
-        # Must be a parseable ISO-8601 string
-        datetime.fromisoformat(meta.generated_at)
-
-    def test_metadata_preserves_explicit_generated_at(self) -> None:
-        meta = TableMetadata(entry="T", units={}, generated_at="2026-01-01T00:00:00+00:00")
-        self.assertEqual(meta.generated_at, "2026-01-01T00:00:00+00:00")
+    def test_the_envelope_records_a_parseable_utc_timestamp(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            TableWriter.write([{"a": 1}], tmp, "stem", "L", "T")
+            line = next(
+                line for line in (Path(tmp) / "stem.csv").read_text().splitlines()
+                if line.startswith("# generated_at: ")
+            )
+            stamp = datetime.fromisoformat(line.removeprefix("# generated_at: "))
+            self.assertEqual(stamp.utcoffset().total_seconds(), 0)
 
     def test_artifact_paths_are_relative_filenames(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp)
-            meta = TableMetadata(entry="T", units={})
-            artifacts = TableWriter.write([{"a": 1}], output_dir, "stem", "L", meta)
+            artifacts = TableWriter.write([{"a": 1}], output_dir, "stem", "L", "T")
             for a in artifacts:
                 # path must be just the filename, not absolute
                 self.assertFalse(Path(a["path"]).is_absolute())
