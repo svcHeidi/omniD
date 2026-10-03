@@ -6,6 +6,8 @@ on:
       - "omnidriver-v*"
       - "omnidriver-openfoam-v*"
       - "omnidriver-cardiacfoam-v*"
+      - "omnidriver-cardiaccore-v*"
+      - "omnidriver-opencarp-v*"
 
 jobs:
   build-and-release:

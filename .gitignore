@@ -18,5 +18,4 @@ dynamicCode/
 .DS_Store
 
 # The owner's machine configuration (absolute local paths); never tracked.
-driverfoam-runtime.yaml
 omnidriver-runtime.yaml

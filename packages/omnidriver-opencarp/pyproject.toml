@@ -7,7 +7,7 @@ name = "omnidriver-opencarp"
 version = "0.1.0"
 description = "openCARP cardiac electrophysiology plugin for OmniD, driven as binary + .par + mesh."
 requires-python = ">=3.11"
-dependencies = ["omnidriver>=0.1.0"]
+dependencies = ["omnidriver~=0.1.0"]
 
 [project.entry-points."omnidriver.plugins"]
 opencarp = "omnidriver.opencarp.plugin:OpenCARPPlugin"
