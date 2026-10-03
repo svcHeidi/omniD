@@ -1,4 +1,4 @@
-"""The plugin AGENT_GUIDE.md shows as the smallest one loads, describes, plans and passes C1."""
+"""The plugin AGENT_GUIDE.md shows as the smallest one loads, describes, plans, reports its environment and passes C1."""
 
 from __future__ import annotations
 
@@ -60,6 +60,8 @@ def test_the_guides_minimal_plugin_loads_describes_and_plans(tmp_path, monkeypat
     (cases / "demo").mkdir(parents=True)
     code, described = _cli("describe", "--plugin", selector, "--cases-root", str(cases), "--entry", "demo")
     assert code == 0, described
+    code, environment = _cli("env", "--plugin", selector)
+    assert code == 0, environment
     code, planned = _cli(
         "plan", "--strict", "--plugin", selector, "--cases-root", str(cases),
         "--scratch-dir", str(tmp_path / "scratch"), "--entry", "demo",
