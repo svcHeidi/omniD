@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import shlex
@@ -15,6 +14,7 @@ from typing import Any, Callable, Mapping
 
 from ..plugin_profile import replica_directory_globs
 from ..scripts import find_script, script_argv
+from .transaction_mechanics import atomic_write_json
 from .workflow import case_script_commands
 from .attempt_lease import (
     AttemptLeaseError,
@@ -59,13 +59,6 @@ def _host_facts(command, args, env, driver_context) -> dict[str, Any]:
         connection, _ = stack_connection(driver_context)
         declared = tuple(variable.name for variable in connection.supplied)
     return host_facts(command, args, env, declared_variables=declared)
-
-
-def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.tmp")
-    tmp.write_text(json.dumps(payload, indent=2) + "\n")
-    os.replace(tmp, path)
 
 
 def _step_by_id(workflow_dag: dict[str, Any], step_id: str) -> dict[str, Any]:
@@ -404,7 +397,7 @@ def run_workflow_step(
         failed_step_id=None,
     )
     if state_path is not None:
-        _atomic_write_json(Path(state_path), running_state.to_json())
+        atomic_write_json(Path(state_path), running_state.to_json())
 
     required_artifacts = tuple(
         artifact for artifact in expected_artifacts
@@ -556,7 +549,7 @@ def run_workflow_step(
             case_root, workflow_dag, driver_context, env
         ))
     if state_path is not None:
-        _atomic_write_json(Path(state_path), final_state.to_json())
+        atomic_write_json(Path(state_path), final_state.to_json())
 
     return WorkflowStepRunResult(
         state=final_state,

@@ -13,7 +13,8 @@ from .attempt_lease import (
     attempt_lease_is_held,
     case_lease_is_held,
 )
-from .workflow_runner import _atomic_write_json, _step_by_id, _step_state_by_id, run_workflow_step
+from .transaction_mechanics import atomic_write_json
+from .workflow_runner import _step_by_id, _step_state_by_id, run_workflow_step
 from .workflow_state import WorkflowRunState, WorkflowStepState, replace_step_state
 
 
@@ -124,7 +125,7 @@ def _run_workflow_locked(
     while workflow_state.current_step_id is not None and workflow_state.status == "pending":
         if max_total_attempts is not None and total_attempts >= max_total_attempts:
             # A zero budget must never dispatch, even once another step is ready.
-            _atomic_write_json(resolved_state_path, workflow_state.to_json())
+            atomic_write_json(resolved_state_path, workflow_state.to_json())
             break
         step_id = workflow_state.current_step_id
         total_attempts += 1
@@ -175,7 +176,7 @@ def _run_workflow_locked(
                 completed_steps=workflow_state.completed_steps,
                 failed_step_id=None,
             )
-            _atomic_write_json(resolved_state_path, resumable.to_json())
+            atomic_write_json(resolved_state_path, resumable.to_json())
             workflow_state = resumable
             sleep(backoff_delay(step_state.attempt, backoff_seconds))
             continue

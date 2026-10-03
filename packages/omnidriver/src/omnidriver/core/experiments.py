@@ -231,7 +231,7 @@ def _inspect_case(
     *,
     comparison_limits: ComparisonReportLimits,
 ) -> ExperimentCase:
-    state = _read_json_object(Path(record.workflow_state_path))
+    state = read_json_object(Path(record.workflow_state_path))
     execution_status = str(state.get("status", record.status)) if state else record.status
     steps = tuple(
         dict(step) for step in state.get("steps", ())
@@ -263,7 +263,7 @@ def _expected_artifacts(context: SweepContext, record: CaseRecord) -> tuple[dict
         return ()
     path = Path(record.run_document_path)
     path = path if path.is_absolute() else Path(context.output_dir) / path
-    document = _read_json_object(path)
+    document = read_json_object(path)
     raw_artifacts = document.get("expectedArtifacts", ())
     if not isinstance(raw_artifacts, list):
         return ()
@@ -470,7 +470,7 @@ def _bounded_json(
     return "<unsupported JSON value>", True
 
 
-def _read_json_object(path: Path) -> dict[str, Any]:
+def read_json_object(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):

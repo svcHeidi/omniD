@@ -70,20 +70,6 @@ def _structural_text(line: str) -> str:
     return re.sub(r'"(?:\\.|[^"\\])*"', lambda m: " " * len(m.group()), _strip_inline_comment(line))
 
 
-def _normalize_scope(scope: str | list[str] | tuple[str, ...] | None) -> list[str]:
-    if scope is None:
-        return []
-    if isinstance(scope, str):
-        normalized = scope.strip()
-        if not normalized:
-            raise ValueError("scope cannot be an empty string")
-        return [normalized]
-    normalized = [str(item).strip() for item in scope]
-    if not normalized or any(not item for item in normalized):
-        raise ValueError("scope must contain one or more non-empty names")
-    return normalized
-
-
 def _explode_inline_blocks_with_spans(
     lines: list[str],
 ) -> list[tuple[str, int, int, int]]:
@@ -242,7 +228,7 @@ def _resolve_search_region(
     lines: list[str],
     scope: str | list[str] | tuple[str, ...] | None,
 ) -> tuple[int, int]:
-    scope_path = _normalize_scope(scope)
+    scope_path = foam_backend.normalize_scope(scope)
     if not scope_path:
         return 0, len(lines)
 

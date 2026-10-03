@@ -14,7 +14,7 @@ ScopeArg = str | list[str] | tuple[str, ...] | None
 
 
 
-def _normalize_scope(scope: ScopeArg) -> tuple[str, ...]:
+def normalize_scope(scope: ScopeArg) -> tuple[str, ...]:
     if scope is None:
         return ()
     if isinstance(scope, str):
@@ -151,7 +151,7 @@ def update_entry(
     of ``scope``."""
     _require_file(file_path)
     _reject_directive_shaped(value)
-    path = tuple(_normalize_scope(scope)) + (key,)
+    path = normalize_scope(scope) + (key,)
 
     coerced = coerce_value(value)
     if isinstance(coerced, Dimensioned) and _dimensioned_component_count(coerced) > 1:
@@ -228,7 +228,7 @@ def remove_dict(
     blank-line class ``update_entry`` already has to handle.
     """
     _require_file(file_path)
-    path = tuple(_normalize_scope(scope)) + (dict_name,)
+    path = normalize_scope(scope) + (dict_name,)
 
     before = file_path.read_text()
     foam_file = FoamFile(file_path)

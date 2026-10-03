@@ -13,7 +13,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from ..experiments import ComparisonRequest
+from ..experiments import ComparisonRequest, read_json_object
 from ..plugin_interface import load_plugin_context
 from ..provider_identity import stack_identity_mismatch
 from ..runtime.models import DataArtifact, data_artifact_from_json
@@ -126,14 +126,6 @@ def _resolve(base: Path, raw: str) -> Path:
     return path if path.is_absolute() else base / path
 
 
-def _json_object(path: Path) -> dict[str, Any]:
-    try:
-        payload = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
 def _location(base: Path, runs: Mapping[str, Any], side: Mapping[str, str]) -> tuple[str, str, str, str]:
     """What ``side`` names regardless of the run key it spells: sweep output, case, artifact and quantity."""
     run = runs[side["run"]]
@@ -215,7 +207,7 @@ def _points(name: str, raw: Mapping[str, Any], reader: Any, names: tuple[str, ..
 
 
 def _run_evidence(case: CaseRecord) -> dict[str, str] | None:
-    state = _json_object(Path(case.workflow_state_path))
+    state = read_json_object(Path(case.workflow_state_path))
     snapshot = state.get("resume_snapshot")
     digest = state.get("workflow_digest")
     aggregate = snapshot.get("aggregate_digest") if isinstance(snapshot, Mapping) else None
@@ -235,7 +227,7 @@ def _resolve_run(name: str, raw: Mapping[str, Any], *, base: Path, reference_uni
         raise QuantityComparisonError(
             f"run {name!r}: sweep {sweep_output} has no case {raw['case_id']!r}; it has {sorted(c.case_id for c in context.cases)}"
         )
-    document = _json_object(_resolve(sweep_output, case.run_document_path or ""))
+    document = read_json_object(_resolve(sweep_output, case.run_document_path or ""))
     if not document:
         raise QuantityComparisonError(f"run {name!r}: case {case.case_id!r} has no readable run document")
     try:
