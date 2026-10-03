@@ -508,6 +508,12 @@ solver, environment or machine connection clear. **Kind:** *owner decision*,
   cardiacFOAM runs cleanly, with a pseudo-ECG a factor of 1000 off. It
   belongs with item 11 (SI and units).
 
+- **cardiacCore's ring-closure check assumes one apicobasal convention.**
+  `applications/scripts/coordinate_ring_check.py` (native branch
+  `omnid/applications-scripts`) takes `apicobasal` 0 as the base. The committed
+  idealized heart has 0 at the apex, so the check fails on it. It should read
+  the case's `coordinatesConventionDict`, as coordinate systems are inputs.
+
 **Later, not scheduled:**
 - the cross-adapter workflow: one run using cardiacCore and cardiacFOAM
   steps (spec `2026-09-18-cross-adapter-workflow-design.md`), after item 4;

@@ -46,7 +46,7 @@ Tracks within a wave touch disjoint files and can run in parallel. Every track l
 6. **One edit format (G4).**
 7. **One reality in the OpenFOAM layer (G6),** shared route helpers (G11), OpenFOAM supplied only (G12), and plan diagnostics through one hook (G5).
 
-**Wave 1 landed** `6b9ff91`. **Wave 2 landed** with the `omnidriver check` command and the pre-run rules.
+**Wave 1 landed** `6b9ff91`. **Wave 2 landed** with the `omnidriver check` command and the pre-run rules. **Wave 3 landed**: package source 30,467 non-blank lines, tests 29,824.
 
 **Wave 3**
 8. **The plugin contract collapsed (G2).**
