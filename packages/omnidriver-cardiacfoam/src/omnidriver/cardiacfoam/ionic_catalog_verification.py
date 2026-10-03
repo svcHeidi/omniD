@@ -191,6 +191,7 @@ def find_listCellModelsVariables_binary(env: Mapping[str, str] | None = None) ->
 def _synthesize_case(case_dir: Path, model: str, entry: Any) -> None:
     """Build a single-cell case for one ionic model with the case builder."""
     from omnidriver.cardiacfoam.case_builder import build_case
+    from omnidriver.core.plugin_interface import load_plugin_context
 
     # The selector takes a tissue the model itself defines; the others are
     # applied through heterogeneity.
@@ -209,6 +210,8 @@ def _synthesize_case(case_dir: Path, model: str, entry: Any) -> None:
     built = build_case(
         {"myocardiumSolver": "singleCellSolver", "ionicModel": model, "tissue": tissues[0]},
         case_dir=case_dir, electro_overrides=overrides or None, overwrite=True,
+        # The probe takes no context; the stack it checks is this package's, under its own entry-point name.
+        driver_context=load_plugin_context("cardiacfoam"),
     )
     if built["status"] != "ok":
         raise ValueError("; ".join(item["message"] for item in built["diagnostics"] if item["level"] == "error"))

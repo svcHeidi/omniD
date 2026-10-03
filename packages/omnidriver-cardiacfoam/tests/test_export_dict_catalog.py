@@ -12,15 +12,12 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 SCRIPT = REPO / "scripts" / "export-dict-catalog.py"
-# The exporter runs in a child interpreter that cannot be handed a DriverContext,
-# and with several adapters installed there is no ambient default, so name it.
-PLUGIN = ("--plugin", "cardiacfoam")
 
 
 def test_exporter_writes_grouped_json(tmp_path):
     out = tmp_path / "catalog.json"
     subprocess.run(
-        [sys.executable, str(SCRIPT), "--out", str(out), *PLUGIN],
+        [sys.executable, str(SCRIPT), "--out", str(out)],
         cwd=REPO, check=True,
     )
     data = json.loads(out.read_text())
@@ -42,7 +39,7 @@ def test_exporter_writes_grouped_json(tmp_path):
 def test_multi_phase_entry_appears_in_every_declared_phase(tmp_path):
     out = tmp_path / "catalog.json"
     subprocess.run(
-        [sys.executable, str(SCRIPT), "--out", str(out), *PLUGIN],
+        [sys.executable, str(SCRIPT), "--out", str(out)],
         cwd=REPO, check=True,
     )
     data = json.loads(out.read_text())

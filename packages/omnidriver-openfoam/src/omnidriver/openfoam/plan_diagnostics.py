@@ -74,7 +74,7 @@ def _owned_dict_relpaths(case_root: Path, driver_context: Any) -> tuple[str, ...
     would be pure noise. Each document the plugin names is matched against
     the profile's declared case-file rules."""
     relpaths: list[str] = []
-    documents = driver_context.stack.call("get_dict_entry_catalog")
+    documents = driver_context.stack.call("get_owned_documents")
     rules = driver_context.stack.call("get_profile").case_files
     for document in documents:
         for rule in rules:

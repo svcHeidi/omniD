@@ -411,7 +411,7 @@ class TestBuildCase(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         case_dir = Path(temp.name) / "case"
-        return case_dir, build_case(selectors, case_dir=case_dir, **kwargs)
+        return case_dir, build_case(selectors, case_dir=case_dir, driver_context=_CTX, **kwargs)
 
     def test_writes_every_input_and_an_executable_allrun(self) -> None:
         case_dir, result = self._build(_MONODOMAIN)
@@ -430,7 +430,9 @@ class TestBuildCase(unittest.TestCase):
         from omnidriver.cardiacfoam.case_builder import build_case
 
         with tempfile.TemporaryDirectory() as temp, self.assertRaises(ValueError):
-            build_case({"myocardiumSolver": "eikonalSolver", "ionicModel": "TNNP"}, case_dir=Path(temp) / "case")
+            build_case(
+                {"myocardiumSolver": "eikonalSolver", "ionicModel": "TNNP"}, case_dir=Path(temp) / "case", driver_context=_CTX,
+            )
         self.assertFalse((Path(temp) / "case" / "constant").exists())
 
     def test_an_existing_case_is_replaced_only_with_consent(self) -> None:
@@ -443,8 +445,8 @@ class TestBuildCase(unittest.TestCase):
             (case_dir / "constant").mkdir(parents=True)
             (case_dir / "constant" / "electroProperties").write_text("# pre-existing\n")
             with self.assertRaises(FileExistsError):
-                build_case(_SINGLE_CELL, case_dir=case_dir)
-            build_case(_SINGLE_CELL, case_dir=case_dir, overwrite=True)
+                build_case(_SINGLE_CELL, case_dir=case_dir, driver_context=_CTX)
+            build_case(_SINGLE_CELL, case_dir=case_dir, overwrite=True, driver_context=_CTX)
             self.assertIn("myocardiumSolver singleCellSolver;", (case_dir / "constant" / "electroProperties").read_text())
 
     def test_an_override_no_catalogue_entry_places_is_refused_not_dropped(self) -> None:
@@ -472,7 +474,7 @@ class TestBuildCase(unittest.TestCase):
             case_dir = Path(temp) / "case"
             (case_dir / "system").mkdir(parents=True)
             (case_dir / "system" / "blockMeshDict").write_text("// custom mesh\n")
-            build_case(_MONODOMAIN, case_dir=case_dir)
+            build_case(_MONODOMAIN, case_dir=case_dir, driver_context=_CTX)
             self.assertEqual((case_dir / "system" / "blockMeshDict").read_text(), "// custom mesh\n")
 
     def test_time_step_and_end_time_reach_the_control_dict(self) -> None:
@@ -501,23 +503,22 @@ class TestBuildCase(unittest.TestCase):
             case_dir = Path(temp) / "case"
             with mock.patch.object(case_transaction, "_write_one", die_on_third):
                 with self.assertRaises(case_transaction.CaseTransactionError):
-                    build_case(_SINGLE_CELL, case_dir=case_dir)
+                    build_case(_SINGLE_CELL, case_dir=case_dir, driver_context=_CTX)
             self.assertFalse((case_dir / "constant" / "electroProperties").exists())
 
     def test_the_cli_entry_point_splits_the_physics_type_from_the_selectors(self) -> None:
         import tempfile
         from pathlib import Path
         from omnidriver.cardiacfoam.case_builder import build
-        from omnidriver.cardiacfoam.own_context import own_driver_context
 
         with tempfile.TemporaryDirectory() as temp:
             result = build(
-                own_driver_context(), Path(temp) / "case", select={**_SINGLE_CELL, "type": "electroModel"},
+                _CTX, Path(temp) / "case", select={**_SINGLE_CELL, "type": "electroModel"},
                 set_values={}, options={"endTime": "0.5"}, overwrite=False,
             )
             self.assertEqual(result["status"], "ok", result["diagnostics"])
             with self.assertRaisesRegex(ValueError, "unknown build option"):
-                build(own_driver_context(), Path(temp) / "other", select=_SINGLE_CELL, set_values={},
+                build(_CTX, Path(temp) / "other", select=_SINGLE_CELL, set_values={},
                       options={"mesh": "1"}, overwrite=False)
 
 

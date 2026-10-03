@@ -9,6 +9,7 @@ from omnidriver.core.plugin_interface import (
     validate_plugin,
 )
 from omnidriver.core.contracts.dictionary import DictEntry
+from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
 
 class _Plugin:
@@ -30,15 +31,15 @@ class _Plugin:
 
     @property
     def plugin_api_version(self) -> str:
-        return "2"
+        return "3"
 
-    def get_dict_entry_catalog(self):
+    def get_dictionary_catalog(self):
         # A per-instance-distinguishable answer: proves context isolation.
-        return {self._tutorial_name: ()}
+        return DictionaryCatalog({self._tutorial_name: ()})
 
 
 def _named_factory(context) -> str:
-    (name,) = context.stack.call("get_dict_entry_catalog")
+    (name,) = context.stack.call("get_dictionary_catalog").documents
     return name
 
 
@@ -92,12 +93,10 @@ def test_driver_context_rejects_duplicate_catalog_paths() -> None:
         driver_context(plugin, source="test")
 
 
-def test_context_identity_binds_resolved_manifest_and_dictionary_vocabulary() -> None:
+def test_context_identity_binds_the_dictionary_vocabulary() -> None:
     plugin = _Plugin("example.identity", "identity")
     baseline = driver_context(plugin, source="test").identity.capability_digest
 
-    plugin.get_capabilities = lambda: {"accepted": ["utilityA"]}
-    manifest_changed = driver_context(plugin, source="test").identity.capability_digest
     plugin.get_dict_entries = lambda: (
         DictEntry(
             driver_path="system/controlDict:endTime", description="end time",
@@ -106,4 +105,4 @@ def test_context_identity_binds_resolved_manifest_and_dictionary_vocabulary() ->
     )
     vocabulary_changed = driver_context(plugin, source="test").identity.capability_digest
 
-    assert baseline != manifest_changed != vocabulary_changed
+    assert baseline != vocabulary_changed

@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Mapping
 
 from omnidriver.conformance import ConformanceTarget, QuantityTarget, RankEvidence
-from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
 from omnidriver.core.conformance_study import ConformanceStudy
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
@@ -290,9 +289,6 @@ class DeclaredCasePlugin(ToyProvider):
 
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         return CaseRuntimeConventions(case_entrypoints=("run-test-case",), case_script_commands=("run-test-case",))
-
-    def get_capabilities(self):
-        return build_capability_manifest(plugin_commands=frozenset(), utility_manifests={}, samplable_fields={})
 
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None) -> tuple:
         return ()

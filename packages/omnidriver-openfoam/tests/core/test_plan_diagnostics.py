@@ -170,6 +170,6 @@ def test_the_dictionaries_checked_follow_the_adapters_case_file_rules_not_a_dire
         path="config/solver.yaml", kind="configuration", role="x-neutral.configuration", required="always",
     ),)
     provider = _Provider(SimpleNamespace(cxx_mapping=None, case_files=rules, requires=()))
-    provider.get_dict_entry_catalog = lambda: {"solver.yaml": ()}
+    provider.get_owned_documents = lambda: frozenset({"solver.yaml"})
     context = SimpleNamespace(stack=ProviderStack((provider,)))
     assert _owned_dict_relpaths(case_root, context) == ("config/solver.yaml",)

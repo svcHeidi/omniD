@@ -4,18 +4,10 @@ catalog, so a hint never points an agent at a key the driver cannot set."""
 from __future__ import annotations
 
 from omnidriver.core.runtime.remediation import STATIC_REMEDIATION_HINTS, RemediationHint
-from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
-from omnidriver.core.plugin_interface import driver_context as _driver_context
-from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
     PHYSICS_PROPERTY_ENTRIES,
-)
-
-# Two adapters are installed, so there is no ambient default to discover.
-_CTX = _driver_context(
-    OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:remediation_catalog_addressability",
 )
 
 _PREFIX = "$ELECTRO_MODEL_COEFFS."
@@ -27,7 +19,7 @@ def _addressable_leaves() -> set[str]:
         leaves.add(e.driver_path)
     for e in PHYSICS_PROPERTY_ENTRIES:
         leaves.add(e.driver_path)
-    for group in get_electro_property_entry_groups(_CTX).values():
+    for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
         for e in group:
             dp = e.driver_path
             leaves.add(dp[len(_PREFIX):] if dp.startswith(_PREFIX) else dp)

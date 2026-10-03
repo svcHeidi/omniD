@@ -114,9 +114,6 @@ class SolverPlugin(Protocol):
         """The declarative profile (``plugin_profile.load_plugin_profile``):
         case files, C++ mapping, environment connection, ``requires``."""
 
-    def get_capabilities(self) -> dict[str, Any]:
-        """Domain entries core adds to the capability manifest as given."""
-
     def get_named_catalogs(self) -> dict[str, Any]:
         """Catalogs ``describe`` namespaces under ``plugin_catalogs``."""
 
@@ -127,11 +124,10 @@ class SolverPlugin(Protocol):
     def get_dictionary_catalog(self):
         """The same entries as a ``DictionaryCatalog``, by document name."""
 
-    def get_dict_groups(self) -> dict[str, tuple["DictEntry", ...]]:
-        """The entries by this provider's own group names."""
-
-    def get_dict_entry_catalog(self) -> dict[str, Any]:
-        """The entries arranged by document name, unserialized."""
+    def get_owned_documents(self) -> frozenset[str]:
+        """The documents whose every key the catalogue lists, so a case key
+        it lacks in one of them is reported; a document catalogued in part
+        (a few keys of ``controlDict``) is left out."""
 
     def get_dict_key_scanner(self):
         """A ``(source_root, *, allowlist_path, entries, cache_root, force) ->
@@ -366,11 +362,9 @@ def _provider_identity(provider: SolverPlugin, *, source: str) -> "ProviderIdent
     from .provider_identity import ProviderIdentity
     from .provider_stack import provider_profile
 
-    manifest = getattr(provider, "get_capabilities", None)
     payload = identity_jsonable({
         "profile_digest": provider_profile(provider).digest,
         "dictionary_entries": _declared_dict_entries(provider),
-        "manifest": manifest() if callable(manifest) else {},
     })
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return ProviderIdentity(

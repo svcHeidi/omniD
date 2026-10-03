@@ -12,7 +12,7 @@ from plugins.toy import toy_conformance_target
 from plugins.toy import ToyStack
 from plugins.toy import ToyProvider
 
-_NOW_OPTIONAL = ("get_dict_entries", "get_dict_groups", "get_dictionary_catalog")
+_NOW_OPTIONAL = ("get_dict_entries", "get_dictionary_catalog")
 
 
 @pytest.mark.parametrize("member", _NOW_OPTIONAL)
@@ -24,7 +24,6 @@ def test_the_toy_implements_none_of_them(member):
 def test_a_plugin_without_them_loads_and_composes_to_empty_answers():
     ctx = driver_context(ToyProvider(), source="test")
     assert ctx.stack.call("get_dict_entries") == ()
-    assert ctx.stack.call("get_dict_groups") == {}
     assert dict(ctx.stack.call("get_dictionary_catalog").documents) == {}
 
 
@@ -42,9 +41,6 @@ class _EmptyStubs(ToyProvider):
 
     def get_dictionary_catalog(self):
         return DictionaryCatalog({})
-
-    def get_dict_groups(self):
-        return {}
 
 
 def test_no_dictionary_entries_digests_exactly_as_an_empty_stub_did():

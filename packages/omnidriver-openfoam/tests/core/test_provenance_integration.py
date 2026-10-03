@@ -165,9 +165,6 @@ class _CollatedLayoutPlugin:
             },
         )
 
-    def get_capabilities(self):
-        return {}
-
     def validate_configuration(self, spec):
         return ()
 

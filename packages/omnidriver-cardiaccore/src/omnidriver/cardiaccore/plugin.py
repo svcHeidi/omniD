@@ -13,7 +13,7 @@ from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_profile import load_plugin_profile
 from omnidriver.core.utility_catalog import load_utility_manifests
 
-from .catalogs.inputs import CATALOG, CONDITIONAL_INPUTS, DOCUMENTS
+from .catalogs.inputs import CATALOG, CONDITIONAL_INPUTS
 from .catalogs.support_boundary import FIELD_CONVENTIONS, SUPPORT_BOUNDARY
 
 
@@ -60,8 +60,8 @@ class CardiacCorePlugin:
     def get_dictionary_catalog(self) -> DictionaryCatalog:
         return CATALOG
 
-    def get_dict_groups(self) -> dict[str, tuple[Any, ...]]:
-        return DOCUMENTS
+    def get_owned_documents(self) -> frozenset[str]:
+        return frozenset(CATALOG.documents)
 
     def validate_run_semantics(self, case_root: Path) -> tuple[Any, ...]:
         """The catalogue's relations over each utility dictionary the resolved
@@ -75,9 +75,6 @@ class CardiacCorePlugin:
 
     def get_utility_manifests(self) -> dict[str, Any]:
         return dict(_utility_manifests())
-
-    def get_dict_entry_catalog(self) -> dict[str, Any]:
-        return {name: list(entries) for name, entries in DOCUMENTS.items()}
 
     def get_named_catalogs(self) -> dict[str, Any]:
         # Caller annotations must not mutate declarations seen by later agents.

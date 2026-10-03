@@ -16,7 +16,7 @@ from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_c
 import functools
 
 # The manifest advertises the accept-surface, which is the union of both kinds
-# of authorized plugin command -- matching CardiacFoamPlugin.get_capabilities.
+# of authorized plugin command -- matching what `capability_manifest` composes.
 CARDIAC_AUTHORIZED_COMMANDS = CARDIAC_SOLVER_COMMANDS | CARDIAC_AUXILIARY_COMMANDS
 
 build_capability_manifest = functools.partial(

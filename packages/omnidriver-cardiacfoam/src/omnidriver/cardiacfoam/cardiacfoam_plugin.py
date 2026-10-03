@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from functools import lru_cache
 from pathlib import Path
 
-from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS, HETEROGENEITY_MODELS
+from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
     PHYSICS_PROPERTY_ENTRIES,
@@ -66,14 +66,11 @@ class CardiacFoamPlugin:
         configured_env, _error = configure_runtime_environment(env)
         return configured_env
 
-    def get_dict_groups(self) -> dict[str, tuple[DictEntry, ...]]:
-        return ELECTRO_PROPERTY_ENTRY_GROUPS
-
     def get_dict_entries(self) -> tuple[DictEntry, ...]:
         """The same entries :meth:`get_dictionary_catalog` holds, flat."""
         entries: list[DictEntry] = list(PHYSICS_PROPERTY_ENTRIES)
         entries.extend(CONTROL_DICT_ENTRIES)
-        for group in self.get_dict_groups().values():
+        for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
             entries.extend(group)
         return tuple(entries)
 
@@ -88,11 +85,6 @@ class CardiacFoamPlugin:
             "physicsProperties": PHYSICS_PROPERTY_ENTRIES,
             "controlDict": CONTROL_DICT_ENTRIES,
         })
-
-    def get_capabilities(self) -> dict:
-        """What only cardiacFoam adds to the capability manifest; the model
-        catalogues reach ``describe`` once, through :meth:`get_named_catalogs`."""
-        return {"heterogeneity_models": HETEROGENEITY_MODELS}
 
     def resolve_case_models(self, case_root: Path) -> dict:
         """Best-effort ``{"solver", "ionic_model", "active_tension"}`` from a
@@ -153,18 +145,9 @@ class CardiacFoamPlugin:
 
         return generated_output_globs(case_root, resolved_case)
 
-    def get_dict_entry_catalog(self) -> dict:
-        """Dictionary entries arranged by cardiacFoam's own document names.
-
-        ``physicsProperties`` is a flat sequence while ``electroProperties``
-        is grouped: that mirrors the two OpenFOAM dictionaries this solver
-        reads and is deliberately not a core convention."""
-        return {
-            "physicsProperties": list(self.get_dictionary_catalog().entries_for("physicsProperties")),
-            "electroProperties": {
-                group_name: list(entries) for group_name, entries in self.get_dict_groups().items()
-            },
-        }
+    @staticmethod
+    def get_owned_documents() -> frozenset[str]:
+        return frozenset({"electroProperties", "physicsProperties"})
 
     def get_named_catalogs(self) -> dict:
         """This plugin's own catalogs -- ionic models and active-tension

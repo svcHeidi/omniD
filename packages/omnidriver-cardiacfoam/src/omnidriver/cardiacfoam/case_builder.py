@@ -18,8 +18,6 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
-from omnidriver.cardiacfoam.own_context import own_driver_context
 from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
 from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.core.planning_types import diagnostic
@@ -38,6 +36,7 @@ from omnidriver.openfoam.plan_diagnostics import cxx_source_not_supplied
 from omnidriver.openfoam.record_key_validation import scanned_key
 
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from .dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from .record_key_validation import cardiacfoam_mapping
 from .validation import cross_field_diagnostics, infer_virtual_presence
 
@@ -70,7 +69,7 @@ def _all_electro_entries() -> list[DictEntry]:
         "ecg"
     ]
     out: list[DictEntry] = []
-    groups = get_electro_property_entry_groups(own_driver_context())
+    groups = ELECTRO_PROPERTY_ENTRY_GROUPS
     for k in ordered_keys:
         if k in groups:
             out.extend(groups[k])
@@ -399,7 +398,7 @@ def parse_electro_properties(
 ) -> dict[str, dict[str, str]]:
     """Parse an existing ``electroProperties`` file into selectors + overrides.
 
-    Reads the file using the same ``get_electro_property_entry_groups()`` catalog
+    Reads the file using the same ``ELECTRO_PROPERTY_ENTRY_GROUPS`` catalog
     that :func:`build_electro_properties` writes from. Returns a dict that
     round-trips through :func:`build_electro_properties`.
 
@@ -654,7 +653,7 @@ def build_case(
     delta_t: float = 1e-4,
     end_time: float = 1.0,
     dx: float | None = None,
-    driver_context: Any | None = None,
+    driver_context: Any,
 ) -> dict[str, Any]:
     """Write a runnable case into ``case_dir`` and judge it by the pre-run
     rules a record's case passes.
@@ -681,7 +680,6 @@ def build_case(
     single_cell = solver in SINGLE_CELL_SOLVERS
     if single_cell and dx is not None:
         raise ValueError(f"dx has no effect for myocardiumSolver={solver!r}: it has no geometry for dx to resolve")
-    context = driver_context if driver_context is not None else own_driver_context()
     uncatalogued = uncatalogued_entries(electro_overrides)
     electro_text = build_electro_properties(electro_selectors, overrides=electro_overrides, uncatalogued=uncatalogued)
     record = write_documents(
@@ -699,11 +697,11 @@ def build_case(
         },
         owner_id=PLUGIN_ID,
         source_artifacts=(f"cardiacfoam.dict_entries:electro:{solver}", "cardiacfoam.dict_entries:physics"),
-        driver_context=context,
+        driver_context=driver_context,
         executable=frozenset({"Allrun"}),
         keep_existing=frozenset({"system/blockMeshDict"}),
     )
-    found = list(context.stack.call("validate_run_semantics", case_dir))
+    found = list(driver_context.stack.call("validate_run_semantics", case_dir))
     found += [diagnostic(
         "info", "plugin_catalog_uncatalogued",
         f"{entry.driver_path} is not in the catalogue; the supplied C++ reads it as {entry.value_kind}, "
@@ -712,7 +710,7 @@ def build_case(
     ) for entry in uncatalogued]
     mapping = cardiacfoam_mapping()
     if mapping.source_root(os.environ) is None:
-        found.append(cxx_source_not_supplied(mapping, source=context.identity.resolutions["get_profile"]))
+        found.append(cxx_source_not_supplied(mapping, source=driver_context.identity.resolutions["get_profile"]))
     return {
         "status": "failed" if any(item.level == "error" for item in found) else "ok",
         "case_dir": str(case_dir),

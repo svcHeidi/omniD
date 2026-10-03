@@ -5,7 +5,7 @@ import typing
 import unittest
 from pathlib import Path
 
-from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
+from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from omnidriver.dict_entries import all_documented_driver_paths
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
@@ -57,7 +57,7 @@ class TestDictEntryCatalog(unittest.TestCase):
         self.assertIn("electroMechanicalModel", type_entry.enum_values)
 
         monodomain_entries = {
-            entry.driver_path: entry for entry in get_electro_property_entry_groups(_CTX)["monodomain"]
+            entry.driver_path: entry for entry in ELECTRO_PROPERTY_ENTRY_GROUPS["monodomain"]
         }
         self.assertEqual(
             monodomain_entries["$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMin"].value_kind,
@@ -68,7 +68,7 @@ class TestDictEntryCatalog(unittest.TestCase):
             "dimensioned_scalar",
         )
 
-        ecg_entries = {entry.driver_path: entry for entry in get_electro_property_entry_groups(_CTX)["ecg"]}
+        ecg_entries = {entry.driver_path: entry for entry in ELECTRO_PROPERTY_ENTRY_GROUPS["ecg"]}
         self.assertTrue(
             ecg_entries[
                 "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.electrodePositions.<electrode>"
@@ -77,7 +77,7 @@ class TestDictEntryCatalog(unittest.TestCase):
 
         active_tension = {
             entry.driver_path: entry
-            for entry in get_electro_property_entry_groups(_CTX)["active_tension"]
+            for entry in ELECTRO_PROPERTY_ENTRY_GROUPS["active_tension"]
         }
         self.assertIn(
             "LandNiedererTWorld",
@@ -103,7 +103,7 @@ class TestConductionSystemSchemaContract(unittest.TestCase):
     def setUp(self):
         self.entries = {
             e.driver_path: e
-            for e in get_electro_property_entry_groups(_CTX)["conduction_system"]
+            for e in ELECTRO_PROPERTY_ENTRY_GROUPS["conduction_system"]
         }
 
     def test_conduction_domain_selector_key_is_conductionSystemDomain(self):
@@ -175,7 +175,7 @@ class TestConductionSystemSchemaContract(unittest.TestCase):
     def test_personalized_templates_schema_and_source_fixture(self):
         ecg_entries = {
             entry.driver_path: entry
-            for entry in get_electro_property_entry_groups(_CTX)["ecg"]
+            for entry in ELECTRO_PROPERTY_ENTRY_GROUPS["ecg"]
         }
         prefix = (
             "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates."
@@ -214,7 +214,7 @@ class TestConductionSystemSchemaContract(unittest.TestCase):
     def test_nested_ecg_verification_model_is_a_supported_source_alias(self):
         entries = {
             entry.driver_path: entry
-            for entry in get_electro_property_entry_groups(_CTX)["ecg"]
+            for entry in ELECTRO_PROPERTY_ENTRY_GROUPS["ecg"]
         }
         prefix = "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel."
         for leaf in ("type", "enabled", "dimension", "referenceQuadratureOrder", "checkQuadratureOrders"):
@@ -241,7 +241,7 @@ class TestDomainCouplingSchemaContract(unittest.TestCase):
     def setUp(self):
         self.entries = {
             e.driver_path: e
-            for e in get_electro_property_entry_groups(_CTX)["domain_couplings"]
+            for e in ELECTRO_PROPERTY_ENTRY_GROUPS["domain_couplings"]
         }
 
     def test_coupler_selector_key_is_electroDomainCoupler(self):
@@ -275,7 +275,7 @@ class TestDomainCouplingSchemaContract(unittest.TestCase):
     def test_common_model_coeffs_owns_electrophysics_advance_scheme(self):
         common_entries = {
             e.driver_path: e
-            for e in get_electro_property_entry_groups(_CTX)["common_model_coeffs"]
+            for e in ELECTRO_PROPERTY_ENTRY_GROUPS["common_model_coeffs"]
         }
         self.assertIn(
             "$ELECTRO_MODEL_COEFFS.electrophysicsAdvanceScheme",
@@ -290,7 +290,7 @@ class TestDomainCouplingSchemaContract(unittest.TestCase):
 def test_existing_entries_in_catalog_have_empty_defaults() -> None:
     """Structured-constraint fields default empty; adopting them is opt-in per entry."""
     all_entries = list(PHYSICS_PROPERTY_ENTRIES)
-    for group in get_electro_property_entry_groups(_CTX).values():
+    for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
         all_entries.extend(group)
     assert len(all_entries) > 80
     for entry in all_entries:
@@ -597,7 +597,7 @@ if __name__ == "__main__":
 
 def _all_entries():
     yield from PHYSICS_PROPERTY_ENTRIES
-    for group in get_electro_property_entry_groups(_CTX).values():
+    for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
         yield from group
 
 

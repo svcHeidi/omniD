@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from omnidriver.dict_entries import DictEntry
-from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
+from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
     PHYSICS_PROPERTY_ENTRIES,
@@ -53,7 +53,7 @@ def _catalogue_rules(run):
 def _all_entries():
     yield from PHYSICS_PROPERTY_ENTRIES
     yield from CONTROL_DICT_ENTRIES
-    for group in get_electro_property_entry_groups(_CTX).values():
+    for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
         yield from group
 
 
@@ -897,7 +897,7 @@ Fixture-to-solver mapping (derived from each spec's defaults.ELECTRO_PROPERTIES_
 
 import pytest
 
-from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
+from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
     PHYSICS_PROPERTY_ENTRIES,
@@ -911,7 +911,7 @@ _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
 def _all_entries():
     yield from PHYSICS_PROPERTY_ENTRIES
     yield from CONTROL_DICT_ENTRIES
-    for group in get_electro_property_entry_groups(_CTX).values():
+    for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
         yield from group
 
 

@@ -5,14 +5,7 @@ Native ``mode`` is ``namedRegions`` or ``cellZoneRegions``; gradient axes are dy
 
 from __future__ import annotations
 
-from omnidriver.core.plugin_interface import driver_context as _driver_context
-from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.validation import cross_field_diagnostics
-
-_CTX = _driver_context(
-    OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:ionic_heterogeneity",
-)
 
 
 def _cross_field(config):
@@ -98,8 +91,8 @@ def test_manufactured_models_do_not_support_gradient_axis_heterogeneity():
 # dict_entries
 
 def _het_entries():
-    from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
-    return get_electro_property_entry_groups(_CTX)["ionic_heterogeneity"]
+    from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
+    return ELECTRO_PROPERTY_ENTRY_GROUPS["ionic_heterogeneity"]
 
 
 def _transmural_entries():

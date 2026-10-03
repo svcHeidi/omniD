@@ -83,14 +83,13 @@ def build_capability_manifest(
 
 
 def capability_manifest(driver_context) -> dict[str, Any]:
-    """The stack's accept-surface, plus what only a provider can add
-    (``get_capabilities``, a domain catalogue). Rebuilt on every call, so no
-    caller shares another's dict."""
+    """The stack's accept-surface. Rebuilt on every call, so no caller shares
+    another's dict."""
     from .runtime_records import case_runtime_conventions
 
     stack = driver_context.stack
     conventions = case_runtime_conventions(driver_context)
-    built = build_capability_manifest(
+    return build_capability_manifest(
         environment_commands=stack.call("get_environment_commands"),
         # Both kinds of authorized command; the solver/auxiliary split only
         # governs which may be credited with a run's artifacts.
@@ -100,5 +99,3 @@ def capability_manifest(driver_context) -> dict[str, Any]:
         samplable_fields={k: tuple(v) for k, v in stack.call("get_samplable_fields", {}).items()},
         case_script_commands=frozenset(conventions.case_script_commands) | frozenset(conventions.case_entrypoints),
     )
-    built.update(stack.call("get_capabilities"))
-    return built

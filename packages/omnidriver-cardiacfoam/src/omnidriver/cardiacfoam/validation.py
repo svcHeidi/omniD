@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from omnidriver.cardiacfoam.dict_entries_catalog import HETEROGENEITY_MODELS
 from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.openfoam.literals import switch_value
@@ -61,13 +62,7 @@ def infer_virtual_presence(ctx: dict[str, Any]) -> None:
     for existing_key in [key for key in ctx if key.startswith(_ECG_DOMAIN_PREFIX) and _PERSONALIZED_TEMPLATES_SUFFIX in key]:
         ctx[existing_key.split(_PERSONALIZED_TEMPLATES_SUFFIX)[0] + ".$personalizedTemplates_present"] = True
 
-    from omnidriver.cardiacfoam.dict_entries import get_heterogeneity_models
-    from omnidriver.cardiacfoam.own_context import own_driver_context
-
-    if (
-        ctx.get("myocardiumSolver") == "eikonalSolver"
-        or ctx.get("ionicModel") in get_heterogeneity_models(own_driver_context())
-    ):
+    if ctx.get("myocardiumSolver") == "eikonalSolver" or ctx.get("ionicModel") in HETEROGENEITY_MODELS:
         ctx["$ionicHeterogeneity_supported"] = True
 
 

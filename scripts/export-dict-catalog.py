@@ -16,8 +16,8 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_groups
 from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
 from omnidriver.cardiacfoam.active_tension_catalog import (
     ACTIVE_TENSION_MODEL_CATALOG,
@@ -26,10 +26,10 @@ from omnidriver.cardiacfoam.active_tension_catalog import (
 PHASES = ("anatomy", "physics", "stimulus", "solver")
 
 
-def _all_entries(context):
+def _all_entries():
     """Yield every ``DictEntry`` known to the backend, regardless of group."""
     entries: list[DictEntry] = list(PHYSICS_PROPERTY_ENTRIES)
-    for group in get_electro_property_entry_groups(context).values():
+    for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
         entries.extend(group)
     yield from entries
 
@@ -45,13 +45,9 @@ def _entry_to_record(e) -> dict:
     return d
 
 
-def build_catalog(plugin: str) -> dict:
-    from omnidriver.core.plugin_interface import load_plugin_context
-
-    context = load_plugin_context(plugin)
-
+def build_catalog() -> dict:
     by_phase: dict[str, list] = {p: [] for p in PHASES}
-    for e in _all_entries(context):
+    for e in _all_entries():
         if not e.phases:
             raise SystemExit(f"entry missing phases: {e.driver_path}")
         record = _entry_to_record(e)
@@ -77,17 +73,8 @@ def build_catalog(plugin: str) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="output JSON path")
-    parser.add_argument(
-        "--plugin",
-        required=True,
-        help=(
-            "Plugin whose dictionary entries to export: an installed plugin id, "
-            "or a trusted local-development import target "
-            "(module.path:PluginClass)."
-        ),
-    )
     args = parser.parse_args()
-    catalog = build_catalog(args.plugin)
+    catalog = build_catalog()
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(catalog, indent=2, sort_keys=True))

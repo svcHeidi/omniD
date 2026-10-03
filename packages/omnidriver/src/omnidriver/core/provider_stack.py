@@ -61,13 +61,11 @@ _WRITE = Needed("writing a case")
 #: answers what it returns; :class:`Needed` refuses by name.
 MEMBERS: dict[str, tuple[str, Any]] = {
     "get_profile": ("profile", None),
-    "get_capabilities": ("map", None),
     "get_named_catalogs": ("map", None),
     # dictionary vocabulary
     "get_dict_entries": ("sequence", None),
     "get_dictionary_catalog": ("catalog", None),
-    "get_dict_groups": ("map", None),
-    "get_dict_entry_catalog": ("map", None),
+    "get_owned_documents": ("set", None),
     "get_dict_key_scanner": ("single", None),
     # commands
     "get_solver_commands": ("set", None),
@@ -413,7 +411,7 @@ UNCLAIMED = "<unclaimed>"
 RESOLUTION_PLACEHOLDER = "-"
 
 #: Members whose resolved content is hashed into the stack digest.
-_DIGESTED = ("get_profile", "get_dict_entries", "get_capabilities")
+_DIGESTED = ("get_profile", "get_dict_entries")
 
 
 def content_digest(value) -> str:
