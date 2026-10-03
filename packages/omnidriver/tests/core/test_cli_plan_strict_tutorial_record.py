@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from omnidriver.cli import main
+from plugins.toy import write_quantity_toy_case
 
 
 def _native_toy_case(tmp_path: Path) -> Path:
@@ -203,3 +204,16 @@ def test_a_record_sweep_refusal_is_the_clis_json_failure(
     assert payload["action"] == action
     assert payload["spec"] == str(spec)
     assert fragment in payload["error"], payload["error"]
+
+
+def test_run_strict_entry_runs_a_record_whose_output_names_a_format(tmp_path, capsys):
+    cases_root = tmp_path / "native"
+    write_quantity_toy_case(cases_root, "a 1.5 0 0 0\n")
+
+    exit_code = main([
+        "run", "--strict", "--plugin", "plugins.toy:QuantityToyPlugin", "--entry", "toyQuantities",
+        "--cases-root", str(cases_root), "--scratch-dir", str(tmp_path / "scratch"),
+    ])
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0, payload
+    assert payload["workflow_state"]["status"] == "completed"

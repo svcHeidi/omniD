@@ -72,14 +72,15 @@ class ProducedPath(str):
     It *is* its path: a ``str`` equal to the path, so every reader of
     ``WorkflowStep.produces`` (the DAG's artifact ids, record staging,
     provenance, a JSON dump) sees paths exactly as before. The format rides
-    on the entry and is read only through :meth:`WorkflowStep.produced_format`:
+    on the entry as ``artifact_format``, so ``str.format`` stays callable, and
+    is read only through :meth:`WorkflowStep.produced_format`:
     a string operation on the path returns a plain ``str`` without it, and
     two entries compare equal by path alone. Core never interprets the
     format. It names the reader a plugin returns from
     ``get_artifact_value_reader``.
     """
 
-    format: str
+    artifact_format: str
 
     def __new__(cls, path: str, format: str) -> "ProducedPath":
         if not isinstance(path, str):
@@ -93,17 +94,17 @@ class ProducedPath(str):
                 f"produced path {path!r}: format {PLAIN_FILE_FORMAT!r} is what a plain path already means; write the path alone"
             )
         entry = super().__new__(cls, path)
-        entry.__dict__["format"] = format
+        entry.__dict__["artifact_format"] = format
         return entry
 
     def __setattr__(self, name: str, value: object) -> None:
         raise AttributeError(f"ProducedPath is immutable; cannot set {name!r}")
 
     def __reduce__(self):
-        return (ProducedPath, (str(self), self.format))
+        return (ProducedPath, (str(self), self.artifact_format))
 
     def __repr__(self) -> str:
-        return f"ProducedPath({str(self)!r}, format={self.format!r})"
+        return f"ProducedPath({str(self)!r}, format={self.artifact_format!r})"
 
 
 def _token_runs(tokens: Sequence[str], key: Sequence[str]) -> list[int]:
@@ -526,7 +527,7 @@ class WorkflowStep:
         """The declared format of one of this step's ``produces`` paths."""
         for entry in self.produces:
             if entry == path:
-                return entry.format if isinstance(entry, ProducedPath) else PLAIN_FILE_FORMAT
+                return entry.artifact_format if isinstance(entry, ProducedPath) else PLAIN_FILE_FORMAT
         raise TutorialRecordError(
             f"workflow step {self.step_id!r} does not produce {path!r}; it produces {[str(p) for p in self.produces]}"
         )
