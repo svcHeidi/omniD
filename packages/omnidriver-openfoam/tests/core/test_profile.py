@@ -20,7 +20,7 @@ def test_adapter_rejects_an_unsupported_openfoam_role(tmp_path) -> None:
     profile = tmp_path / "profile.yaml"
     profile.write_text(
         "schema_version: 1\n"
-        "plugin: {id: org.example.openfoam, api_version: '2'}\n"
+        "plugin: {id: org.example.openfoam, api_version: '3'}\n"
         "case_profile:\n"
         "  dictionaries:\n"
         "    - path: system/unknownDict\n"

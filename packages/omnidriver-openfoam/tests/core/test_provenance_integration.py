@@ -150,7 +150,7 @@ class _CollatedLayoutPlugin:
     plugin_name = "collated layout test plugin"
     plugin_id = "test.collated-layout"
     plugin_version = "1.0.0"
-    plugin_api_version = "2"
+    plugin_api_version = "3"
 
     def get_profile(self):
         from omnidriver.core.plugin_profile import PluginProfile

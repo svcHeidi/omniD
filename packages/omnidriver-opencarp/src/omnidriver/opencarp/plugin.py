@@ -27,7 +27,7 @@ class OpenCARPPlugin:
     plugin_name = "openCARP"
     plugin_id = "org.omnidriver.opencarp"
     plugin_version = "0.1.0"
-    plugin_api_version = "2"
+    plugin_api_version = "3"
 
     def get_profile(self):
         with resources.as_file(resources.files(__package__).joinpath("opencarp.yaml")) as path:

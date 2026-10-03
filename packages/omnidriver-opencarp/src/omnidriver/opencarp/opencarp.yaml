@@ -2,7 +2,7 @@
 schema_version: 1
 plugin:
   id: org.omnidriver.opencarp
-  api_version: "2"
+  api_version: "3"
 case_profile:
   dictionaries: []
 # openCARP's shell: nothing is sourced; its MPI's bin goes first on PATH.

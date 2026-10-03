@@ -9,7 +9,7 @@ from omnidriver.core import provider_identity
 
 def _pid(plugin_id, version="1.0", digest="d"):
     return provider_identity.ProviderIdentity(
-        id=plugin_id, version=version, api_version="2",
+        id=plugin_id, version=version, api_version="3",
         source="test", provider_digest=digest,
     )
 

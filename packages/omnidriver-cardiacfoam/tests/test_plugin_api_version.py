@@ -7,8 +7,8 @@ from omnidriver.core.plugin_interface import driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 
 
-def test_cardiacfoam_plugin_is_v2() -> None:
-    assert CardiacFoamPlugin().plugin_api_version == "2"
+def test_cardiacfoam_plugin_is_v3() -> None:
+    assert CardiacFoamPlugin().plugin_api_version == "3"
 
 
 def test_cardiacfoam_plugin_satisfies_the_full_protocol() -> None:

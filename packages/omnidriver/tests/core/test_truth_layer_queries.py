@@ -15,7 +15,7 @@ _TOY = "plugins.toy:ToyStack"
 def test_the_profile_names_a_variable_and_a_relation_never_a_path(tmp_path):
     profile = tmp_path / "plugin.yaml"
     profile.write_text(
-        "schema_version: 1\nplugin: {id: toy, api_version: '2'}\n"
+        "schema_version: 1\nplugin: {id: toy, api_version: '3'}\n"
         "cxx_mapping:\n  source_root: {variable: TOY_NATIVE_TREE, relative: ../src}\n"
         "  reviewed_allowlist: allowlist.json\n"
     )

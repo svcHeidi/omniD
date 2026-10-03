@@ -27,7 +27,7 @@ SLAB = '''int main(int argc, char *argv[])
 
 class _Provider:
     plugin_id = "toy"
-    plugin_api_version = "2"
+    plugin_api_version = "3"
 
     def __init__(self, profile):
         self._profile = profile

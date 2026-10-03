@@ -278,7 +278,7 @@ class SolverPlugin(Protocol):
 IDENTITY_MEMBERS = ("plugin_name", "plugin_id", "plugin_version", "plugin_api_version")
 
 #: The plugin contract versions this core drives.
-SUPPORTED_PLUGIN_API_VERSIONS: frozenset[str] = frozenset({"2"})
+SUPPORTED_PLUGIN_API_VERSIONS: frozenset[str] = frozenset({"3"})
 
 _PLUGIN_ID_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 

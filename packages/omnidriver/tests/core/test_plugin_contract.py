@@ -18,7 +18,7 @@ class _Bare:
     plugin_name = "Bare"
     plugin_id = "org.test.bare"
     plugin_version = "1"
-    plugin_api_version = "2"
+    plugin_api_version = "3"
 
 
 def _protocol_members() -> set[str]:

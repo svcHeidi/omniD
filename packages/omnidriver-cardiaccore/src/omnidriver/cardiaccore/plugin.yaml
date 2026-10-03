@@ -1,7 +1,7 @@
 schema_version: 1
 plugin:
   id: org.omnidriver.cardiaccore
-  api_version: "2"
+  api_version: "3"
 requires:
   - org.omnidriver.openfoam.environment
 # The C++ source the key scanner reads (one mechanism with cardiacFOAM's,

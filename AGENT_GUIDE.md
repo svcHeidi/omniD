@@ -1321,7 +1321,7 @@ A plugin is a stack of providers: a Python class implementing `SolverPlugin`
 openCARP stands alone).
 
 **Only the identity is required:** `plugin_name`, `plugin_id` (reverse-DNS,
-matching the profile), `plugin_version`, `plugin_api_version` (`"2"`). Every
+matching the profile), `plugin_version`, `plugin_api_version` (`"3"`). Every
 other member of `SolverPlugin` is optional. `provider_stack.MEMBERS` says
 how a stack composes each member across providers and what the stack answers
 when no provider implements it: an empty value for most, and a refusal naming
@@ -1345,7 +1345,7 @@ class MySolver:
     plugin_id = "org.example.mysolver"
     plugin_name = "MySolver"
     plugin_version = "0.1.0"
-    plugin_api_version = "2"
+    plugin_api_version = "3"
 
     def get_solver_commands(self):
         return frozenset({"mysolver"})
@@ -1372,7 +1372,11 @@ complete plugin outside OpenFOAM, read `OpenCARPPlugin`
 (`packages/omnidriver-opencarp/src/omnidriver/opencarp/plugin.py`); for an
 environment layer, `OpenFOAMEnvironmentPlugin`
 (`packages/omnidriver-openfoam/src/omnidriver/openfoam/environment.py`).
-`omnidriver check` runs the conformance checks C1–C14 against your solver.
+`omnidriver check` runs the conformance checks C1–C14 against your solver, but
+only for a record that sets `conformance=` (`TutorialRecord.conformance`, a
+`ConformanceStudy`): without it the record is reported `no_study`. Its patch
+and sweep need the four write members (`resolve_case_mutation`,
+`get_supported_mutation_modes`, `render_case_files`, `get_rendered_formats`).
 
 ### Files
 
@@ -1431,7 +1435,7 @@ omnidriver plan --strict --plugin mysolver --cases-root <tutorials> --scratch-di
   in-repo example of a plugin with no domain-specific semantics
 - `omnidriver/opencarp/plugin.py` (`OpenCARPPlugin`) — the complete
   non-OpenFOAM plugin example, passing C1–C14 against the real binary
-- `omnidriver/cardiacfoam/cardiacfoam_plugin.py` — full v2 reference
+- `omnidriver/cardiacfoam/cardiacfoam_plugin.py` — full reference
   (`omnidriver.plugins` is the entry-point group name, not a package; the
   real path is `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/cardiacfoam_plugin.py`)
 - `KEY_FILES.md` — navigational map for all reader types

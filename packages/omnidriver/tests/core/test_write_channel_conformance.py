@@ -470,7 +470,7 @@ def _stack_identity_for(providers) -> provider_identity.StackIdentity:
     resolved = provider_stack.resolutions(provider_stack.ProviderStack(ordered))
     identities = tuple(
         provider_identity.ProviderIdentity(
-            id=provider.plugin_id, version="1.0", api_version="2",
+            id=provider.plugin_id, version="1.0", api_version="3",
             source="test", provider_digest="d",
         )
         for provider in ordered

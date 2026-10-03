@@ -14,7 +14,7 @@ def _profile(tmp_path, payload):
 
 BASE = {
     "schema_version": 1,
-    "plugin": {"id": "org.example.thing", "api_version": "2"},
+    "plugin": {"id": "org.example.thing", "api_version": "3"},
     "case_profile": {"dictionaries": []},
 }
 

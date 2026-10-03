@@ -69,7 +69,7 @@ class OpenFOAMEnvironmentPlugin:
 
     @property
     def plugin_api_version(self) -> str:
-        return "2"
+        return "3"
 
     @staticmethod
     @lru_cache(maxsize=1)

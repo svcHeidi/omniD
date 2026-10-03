@@ -1,7 +1,7 @@
 schema_version: 1
 plugin:
   id: org.omnidriver.openfoam.environment
-  api_version: "2"
+  api_version: "3"
 case_profile:
   dictionaries:
     - path: system/controlDict

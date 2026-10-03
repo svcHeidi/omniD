@@ -54,7 +54,7 @@ class ToyProvider:
     plugin_name = "toy"
     plugin_id = "org.omnidriver.test-minimal"
     plugin_version = "1.0.0"
-    plugin_api_version = "2"
+    plugin_api_version = "3"
 
     def __init__(
         self, *, entrypoint: str | None = None, solver_commands=None, tutorial_records: dict | None = None,

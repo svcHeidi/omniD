@@ -43,7 +43,7 @@ def test_the_prefix_sources_first_then_exports_then_path():
 def test_a_manifest_names_only_supplied_variables(tmp_path):
     profile = tmp_path / "plugin.yaml"
     body = (
-        "schema_version: 1\nplugin: {id: toy, api_version: '2'}\nenvironment:\n"
+        "schema_version: 1\nplugin: {id: toy, api_version: '3'}\nenvironment:\n"
         "  supplied:\n    - {name: TOY_RC, required: true, why: sourced}\n"
     )
     profile.write_text(body + "  source: TOY_RC\n  mpi_launcher: mpirun\n")

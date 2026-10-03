@@ -57,7 +57,7 @@ def test_an_unknown_role_is_rejected_at_load(tmp_path) -> None:
         "schema_version: 1\n"
         "plugin:\n"
         "  id: org.example.test\n"
-        '  api_version: "2"\n'
+        '  api_version: "3"\n'
         "case_profile:\n"
         "  dictionaries:\n"
         "    - path: system/controlDict\n"
@@ -75,7 +75,7 @@ def test_a_core_role_loads(tmp_path) -> None:
         "schema_version: 1\n"
         "plugin:\n"
         "  id: org.example.test\n"
-        '  api_version: "2"\n'
+        '  api_version: "3"\n'
         "case_profile:\n"
         "  dictionaries:\n"
         "    - path: system/controlDict\n"
@@ -103,7 +103,7 @@ def test_an_escape_role_for_a_foreign_environment_loads(tmp_path) -> None:
         "schema_version: 1\n"
         "plugin:\n"
         "  id: org.example.fenics\n"
-        '  api_version: "2"\n'
+        '  api_version: "3"\n'
         "case_profile:\n"
         "  dictionaries:\n"
         "    - path: mesh.xml\n"
@@ -132,7 +132,7 @@ def test_a_typo_in_a_known_namespace_still_raises_under_the_escape_tier(
         "schema_version: 1\n"
         "plugin:\n"
         "  id: org.example.typo\n"
-        '  api_version: "2"\n'
+        '  api_version: "3"\n'
         "case_profile:\n"
         "  dictionaries:\n"
         "    - path: system/controlDict\n"
@@ -163,7 +163,7 @@ def test_a_malformed_or_shadowing_escape_role_still_raises(
         "schema_version: 1\n"
         "plugin:\n"
         "  id: org.example.badescape\n"
-        '  api_version: "2"\n'
+        '  api_version: "3"\n'
         "case_profile:\n"
         "  dictionaries:\n"
         "    - path: some/file\n"

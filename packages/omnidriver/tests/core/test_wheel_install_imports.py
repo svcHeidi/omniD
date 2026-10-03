@@ -82,7 +82,7 @@ with tempfile.TemporaryDirectory() as raw:
         "    plugin_name = 'wheel-neutral'\\n"
         "    plugin_id = 'org.omnidriver.wheel-neutral'\\n"
         "    plugin_version = '1'\\n"
-        "    plugin_api_version = '2'\\n"
+        "    plugin_api_version = '3'\\n"
         "    def get_profile(self):\\n"
         "        return PluginProfile(\\n"
         "            Path(__file__), self.plugin_id, self.plugin_api_version,\\n"
