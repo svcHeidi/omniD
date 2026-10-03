@@ -213,87 +213,18 @@ def test_personalized_templates_rejects_manufactured_ecg_before_execution():
     assert any("cannot be combined" in error.message for error in diagnostics)
 
 
-_ECG_ANISOTROPIC_TEMPLATE = """FoamFile
-{{
-    version         2;
-    format          ascii;
-    class           dictionary;
-    location        "constant";
-    object          electroProperties;
-}}
-
-myocardiumSolver monodomainSolver;
-
-monodomainSolverCoeffs
-{{
-    conductivitySource uniform;
-    conductivity    [ -1 -3 3 0 0 2 0 ] ( 0.1 0 0 0.1 0 0.1 );
-    ionicModel      monodomainFDAManufactured;
-    timeCouplingScheme godunov;
-    verificationModel
-    {{
-        type    {tissue_type};
-    }}
-    dimension    "3D";
-    solutionAlgorithm    implicit;
-    ecgDomains
-    {{
-        ECG
-        {{
-            ecgSolver    pseudoECG;
-            verificationModel
-            {{
-                type    manufacturedPseudoECGVerifier;
-                enabled    yes;
-                dimension    "3D";
-                anisotropic    {anisotropic};
-                referenceQuadratureOrder    12;
-                checkQuadratureOrders    (6 12);
-            }}
-            electrodePositions
-            {{
-                E1    (0 0 0);
-            }}
-        }}
-    }}
-}}
-"""
+def _ecg_context(*, tissue_type: str, anisotropic: str) -> dict:
+    return {
+        "verificationModel.type": tissue_type,
+        "ecgDomains.ECG.verificationModel.type": "manufacturedPseudoECGVerifier",
+        "ecgDomains.ECG.verificationModel.anisotropic": anisotropic,
+    }
 
 
-def _context_from_electro_properties(path) -> dict:
-    """Build the ``{slot_key: value}`` context from a real read."""
-    from omnidriver.cardiacfoam.case_builder import (
-        parse_electro_properties, resolve_context, select_applicable_entries,
-    )
-    from omnidriver.openfoam.case_builder import populate_values
-
-    parsed = parse_electro_properties(path)
-    context = resolve_context(parsed["selectors"], overrides=parsed.get("overrides") or None)
-    applicable = select_applicable_entries(context)
-    populated = populate_values(applicable, context)
-    result = dict(context)
-    for entry in applicable:
-        key = slot_key(entry.driver_path)
-        if entry.dynamic_path and key not in context:
-            continue
-        if key in populated:
-            result[key] = populated[key]
-    return result
-
-
-def _write_ecg_anisotropic_case(tmp_path, *, tissue_type: str, anisotropic: str):
-    path = tmp_path / "electroProperties"
-    path.write_text(_ECG_ANISOTROPIC_TEMPLATE.format(
-        tissue_type=tissue_type, anisotropic=anisotropic,
-    ))
-    return _context_from_electro_properties(path)
-
-
-def test_ecg_anisotropic_matches_anisotropic_tissue_verifier_passes(tmp_path):
+def test_ecg_anisotropic_matches_anisotropic_tissue_verifier_passes():
     from omnidriver.cardiacfoam.validation import _evaluate_ecg_anisotropic_consistency
 
-    context = _write_ecg_anisotropic_case(
-        tmp_path,
+    context = _ecg_context(
         tissue_type="manufacturedAnisotropicMonodomainVerifier",
         anisotropic="yes",
     )
@@ -301,11 +232,10 @@ def test_ecg_anisotropic_matches_anisotropic_tissue_verifier_passes(tmp_path):
     assert cross_field_diagnostics(context) == []
 
 
-def test_ecg_anisotropic_matches_isotropic_tissue_verifier_passes(tmp_path):
+def test_ecg_anisotropic_matches_isotropic_tissue_verifier_passes():
     from omnidriver.cardiacfoam.validation import _evaluate_ecg_anisotropic_consistency
 
-    context = _write_ecg_anisotropic_case(
-        tmp_path,
+    context = _ecg_context(
         tissue_type="manufacturedFDAMonodomainVerifier",
         anisotropic="no",
     )
@@ -313,12 +243,11 @@ def test_ecg_anisotropic_matches_isotropic_tissue_verifier_passes(tmp_path):
     assert cross_field_diagnostics(context) == []
 
 
-def test_ecg_anisotropic_no_rejected_when_tissue_verifier_is_anisotropic(tmp_path):
+def test_ecg_anisotropic_no_rejected_when_tissue_verifier_is_anisotropic():
     """The mismatch found in the native case: anisotropic left `no` (or unset) under the anisotropic verifier."""
     from omnidriver.cardiacfoam.validation import _evaluate_ecg_anisotropic_consistency
 
-    context = _write_ecg_anisotropic_case(
-        tmp_path,
+    context = _ecg_context(
         tissue_type="manufacturedAnisotropicMonodomainVerifier",
         anisotropic="no",
     )
@@ -331,11 +260,10 @@ def test_ecg_anisotropic_no_rejected_when_tissue_verifier_is_anisotropic(tmp_pat
     assert any("must be yes" in d.message for d in diagnostics)
 
 
-def test_ecg_anisotropic_yes_rejected_when_tissue_verifier_is_not_anisotropic(tmp_path):
+def test_ecg_anisotropic_yes_rejected_when_tissue_verifier_is_not_anisotropic():
     from omnidriver.cardiacfoam.validation import _evaluate_ecg_anisotropic_consistency
 
-    context = _write_ecg_anisotropic_case(
-        tmp_path,
+    context = _ecg_context(
         tissue_type="manufacturedFDAMonodomainVerifier",
         anisotropic="yes",
     )

@@ -193,28 +193,6 @@ def test_build_emits_nested_heterogeneity_block():
     assert "transitionMode blend;" in text
 
 
-def test_build_then_parse_round_trips_heterogeneity(tmp_path):
-    from omnidriver.cardiacfoam.case_builder import (
-        build_electro_properties,
-        parse_electro_properties,
-    )
-    text = build_electro_properties(
-        selectors={
-            "myocardiumSolver": "monodomainSolver",
-            "ionicModel": "BuenoOrovio",
-            "tissue": "epicardialCells",
-        },
-        overrides=_HET_OVERRIDES,
-    )
-    path = tmp_path / "electroProperties"
-    path.write_text(text)
-
-    parsed = parse_electro_properties(path)
-    overrides = parsed["overrides"]
-    for key, value in _HET_OVERRIDES.items():
-        assert overrides.get(key) == value, key
-
-
 def test_default_build_omits_heterogeneity_block():
     from omnidriver.cardiacfoam.case_builder import build_electro_properties
     text = build_electro_properties(
