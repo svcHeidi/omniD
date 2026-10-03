@@ -569,10 +569,11 @@ The test is whether an ambient truth exists at all:
 | the case / repository root | **No.** Nothing on the machine knows which case you meant. | Must be **supplied**. Discovering it invents an answer. |
 | MPI ranks, OpenMP threads, GPU devices | **Yes.** A scheduler allocated them; `SLURM_NTASKS`, `OMP_NUM_THREADS`, `CUDA_VISIBLE_DEVICES` are facts about the environment you were given. | **Discovery is correct** — provided the place looked in is declared, not hardcoded. |
 
-`specs/paths.repo_root_default()` is the first kind and is a defect: it walks
-up from the installed module's `__file__` and raises outside a checkout, so
-core cannot plan a case from a wheel install. Fixed by
-`docs/superpowers/specs/2026-09-04-a-case-is-a-path-design.md`.
+A case root is the first kind: core once walked up from its own `__file__` to
+find one and raised outside a checkout, so it could not plan a case from a
+wheel install. It takes the root as supplied now, and
+`test_core_never_invents_a_filesystem_root` guards it
+(`docs/superpowers/specs/2026-09-04-a-case-is-a-path-design.md`).
 
 `omnidriver-openfoam/parallel_execution.py`'s read of `numberOfSubdomains` is
 the second kind, and reading it is *right* — the case genuinely does say how

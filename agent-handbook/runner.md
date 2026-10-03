@@ -12,5 +12,5 @@ selected case and mode.
    run failure into an adapter redesign. Escalate a reproducible gap to the
    builder role.
 
-`AGENT_GUIDE.md` is optional historical operational context. Verify its paths
-and commands against the current CLI and installed package before using them.
+`AGENT_GUIDE.md` is optional operational context. Verify its paths and
+commands against the current CLI and installed package before using them.

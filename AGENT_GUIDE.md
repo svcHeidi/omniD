@@ -1,10 +1,10 @@
-# Historical cardiacFoam operational notes
+# Agent guide
 
-> **Not a current agent contract.** This file contains useful historical
-> cardiacFoam operational detail, including retired pre-omnidriver names and
-> host assumptions. Do not use it as a routing or implementation authority.
-> Start at [`AGENTS.md`](AGENTS.md), then verify any command here against the
-> current CLI, package, and selected adapter before use.
+The `omnidriver` CLI as it runs today: selecting a stack, planning, running and
+sweeping records, comparing results, `check`, and writing a plugin. Which
+document to read for a task is [`AGENTS.md`](AGENTS.md)'s routing, and
+`omnidriver --help` is the authority on a flag. Only the minimal plugin below
+is tested against the code; verify any other module path before relying on it.
 
 ## What the agent can do
 
@@ -583,7 +583,7 @@ configurations, for example probes that were not enabled.
 ## Comparing results as quantities
 
 Once two runs' declared artifacts hold quantities a plugin's reader
-understands (`RuntimeEvidenceCapability.artifact_value_reader`), an agent
+understands (`get_artifact_value_reader`), an agent
 compares them with `omnidriver compare` rather than parsing solver output
 itself. Core reads no result file on its own: everything — which runs, which
 artifact of each, where to sample, which reference, which pairs and the
@@ -633,7 +633,7 @@ loosened tolerance at a new report path, and a written report's request
 digest ties it to the request bytes that produced it, not to a time before
 any value was read. What core actually enforces is narrower: the report is
 written once (below), the request's digest is recorded in it, and
-(`omnidriver.quantities` reports specifically) `experiments.inspect_sweep_experiment`
+(`omnidriver.core.quantities` reports specifically) `experiments.inspect_sweep_experiment`
 recomputes the overall status from the report's own `metrics` rather than
 trusting a stated `status`. Writing the request *before* looking at
 results, and not writing a second one once the first result is
@@ -1306,12 +1306,6 @@ Once registered, drive it exclusively through `omnidriver`
 This section is for **plugin authors** — developers or AI agents who need to
 add support for a new solver to omnidriver. End-users running existing
 solvers do not need to read this section.
-
-> **Quickest path:** Follow the dedicated skill at
-> `.agents/skills/omnidriver-plugin-builder/SKILL.md` (**not present in this
-> repository** — it lives in the cardiacFoam monorepo, per `KEY_FILES.md`),
-> which contains a complete step-by-step workflow, a worked
-> `ShallowWaterPlugin` example, and a troubleshooting table.
 
 ### What a plugin is
 

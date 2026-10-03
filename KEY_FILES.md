@@ -20,14 +20,13 @@ repository root.
 | `packages/omnidriver/src/omnidriver/core/tutorial_records.py` | `TutorialRecord` and the record study contract; `case_folder_record()` builds the ad hoc one-step record `--case` runs. |
 | `benchmarks/` | Published, solver-neutral reference definitions (e.g. `niederer2011.json`) a comparison request cites by id; `scripts/check-benchmark-references.py` gates them. |
 | `ARCHITECTURE.md` | Deep architectural review: layer map, claim discipline, coupling analysis, runtime flow diagrams. Read the package-independence rules and "Provider composition" first. |
-| `CHANGELOG.md` | History of contract changes per phase. |
+| `CHANGELOG.md` | History of the retired flat `openfoam_driver/` tree, kept for reasoning, not for locations. |
 
 ---
 
 ## For Plugin Authors
 
-> **New to writing a plugin?** Follow `.agents/skills/omnidriver-plugin-builder/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo)
-> step by step — it contains the complete workflow, a contract cheat-sheet, and a worked example.
+> **New to writing a plugin?** Read `AGENT_GUIDE.md`, "Plugin Guide": the contract table and a minimal plugin that is tested against the code.
 
 | File | Role | Why you must read it |
 |---|---|---|
@@ -55,8 +54,6 @@ Solver"; `provider_stack.MEMBERS` is the authority.
 | File | Role |
 |---|---|
 | `AGENT_GUIDE.md` | Agent CLI reference: `omnidriver` commands, stack selection, RunDocument, case folders, sweeps, post-processing, plugin guide. |
-| `.agents/skills/omnidriver-assistant/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo) | Agent workflow skill: case scaffolding, sweep generation, strict diagnostics loop, post-processing. |
-| `.agents/skills/omnidriver-plugin-builder/SKILL.md` (**not present in this repository** — it lives in the cardiacFoam monorepo) | **Plugin builder skill:** complete step-by-step guide for integrating a new solver. |
 
 ### Environment Variables
 

@@ -136,7 +136,7 @@ A skip here hides exactly what the guard exists to find.
 | a resolved record case passes the catalogue's relations, the enum menus (the names the C++'s selection table registers when its source is supplied) and the cross-field rules before it runs, `omnidriver.openfoam.case_rules` being the one evaluator of them; a key the supplied C++ reads with no default in a class the case builds is refused when missing, and noted when the scan cannot tell whether the case builds the class; `step --apply` runs the same rules after its edit | `test_case_rules.py`, `test_cxx_requirements.py` (openfoam), `test_case_rules.py` (cardiacCore), the commit and apply tests in core's `test_tutorial_records.py` |
 | a solver's shell is declared in its manifest and rendered from supplied values only; a launcher from the other solver's MPI is refused | `test_environment_and_machine.py`; `test_an_mpirun_from_another_mpi_family_is_refused` (openfoam) |
 | core names no OpenFOAM layout beyond its recorded, shrinking debt | `scripts/check-core-shape.py` (baseline `scripts/core-shape-baseline.txt`; new tokens never added) |
-| every conformance check C1-C14 passes for the toy target, and C3 to C14 are each given a deliberately broken toy plugin it must catch (C1 and C2 fail only for a record the stack does not serve); a real solver's records are exercised by `omnidriver check`, which reports and never gates | `test_conformance_toy.py` (core); `test_check_command.py` (core) |
+| every conformance check C1-C14 passes for the toy target, and C3 to C14 are each given a deliberate break it must catch (a broken toy plugin; for C14, a quantity pair the target breaks; C1 and C2 fail only for a record the stack does not serve); a real solver's records are exercised by `omnidriver check`, which reports and never gates | `test_conformance_toy.py` (core); `test_check_command.py` (core) |
 
 ## One reality
 
@@ -159,13 +159,6 @@ stages.
 
 ## Traps
 
-**`from conftest import X` is unreliable.** Both packages' `tests` directories
-are reachable when the whole repo is collected, and **core's conftest wins**.
-A `from conftest import X` in the cardiac tree only works because core's
-conftest happens to define the same name
-(`test_conftest_imports_are_unambiguous` enforces it). For a package-specific
-helper, use a uniquely named module inside an importable package.
-
 **A test module that calls a raising function at import time cannot be
 skipped.** It errors during collection, before any marker applies. Use
 `conftest`'s `repo_root` / `skip_without_repo` (non-raising) rather than a
@@ -182,16 +175,14 @@ runtime, silently.
   `ARCHITECTURE.md`'s Rule 1. §12 is the supplied-vs-discovered rule.
 - `ARCHITECTURE.md` — the layer map.
 - `docs/superpowers/specs/` and `plans/` — design reasoning and executed plans.
-  **Start at `plans/`'s newest-dated file's own `## Status` table** for what is
-  done and what is open; each phase plan tracks its own tasks there, with
-  commit hashes for landed work.
+  **Start at `plans/2026-10-01-pass2-convergence.md`**: its `## Decisions` are
+  the owner's, and its `## Tracks` say what each piece of work was for; the
+  older plans are the executed record.
 
 - `AGENT_GUIDE.md` — the domain guide: planning, sweeping, post-processing,
-  and authoring a plugin or a tutorial. Its CLI walkthrough is accurate.
-  AGENT_GUIDE.md is not import-checked: the only test naming that file
-  asserts it links to `SECURITY.md`, nothing verifies its module paths
-  resolve. Verify an import before relying on it, and if you build that
-  guard, delete this sentence.
+  and authoring a plugin or a tutorial. Its minimal plugin is a tested fixture
+  (`test_agent_guide_plugin.py`); the rest is not import-checked, so verify a
+  module path before relying on it.
 
 **Read for reasoning, not for locations:** `CHANGELOG.md` and
 `MIGRATION_AUDIT_v2.md`, which describe the retired flat `openfoam_driver/`

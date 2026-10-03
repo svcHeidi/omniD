@@ -2,8 +2,7 @@
 
 Thank you for considering contributing to **OmniDriver**!
 
-This project is a typed planning, validation, provenance, and workflow orchestration layer for reproducible OpenFOAM simulation studies.
-(**Corrected 2026-09-19**: this file was still branded "driverFOAM" throughout — the tool is OmniDriver and its CLI is `omnidriver`, per `CLAUDE.md`.)
+This project is a typed planning, validation, provenance, and workflow orchestration layer for reproducible OpenFOAM and openCARP simulation studies.
 
 ## How Can I Contribute?
 
@@ -43,7 +42,7 @@ To suggest a feature:
 - We require Python >= 3.11. CI matrixes 3.11, 3.12 and 3.13.
 - Ensure all structural and semantic contracts are preserved (e.g. `run-document.json` schemas).
 
-**Running `pytest` once is not enough.** The suites must pass in four different
+**Running `pytest` once is not enough.** The suites must pass in three different
 shapes, and each catches something the others cannot — an editable install
 leaves the repository on `sys.path`, so a module that reads repo-relative state
 at import time still works, and that class of defect is visible only from a
@@ -52,12 +51,12 @@ environment; in short:
 
 | shape | catches |
 |---|---|
-| all four packages installed | ordinary regressions |
+| all packages installed | ordinary regressions |
 | core installed alone | core reaching into a sibling package |
 | **core installed from a built wheel** | core reading repo-relative state at import time |
 | `scripts/check-import-boundaries.py`, `scripts/check-case-writes.py`, `scripts/check-core-shape.py`, `scripts/check-benchmark-references.py` | import direction; a record module writing a case directly; core naming a new OpenFOAM layout token; a benchmark reference that fails to load |
 
-CI runs all four. The wheel shape is the one contributors skip and the one that
+CI runs each of them. The wheel shape is the one contributors skip and the one that
 has found the worst defects.
 
 If a guard test fails, fix the cause — do not weaken the guard and do not add a

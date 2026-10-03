@@ -207,8 +207,7 @@ OpenFOAM dictionary entry.  Reuse the established layers:
   validator has accepted the key.
 
 Discover and guard dictionary keys with the same layers before writing a
-catalog by hand (added 2026-09-16, after the cardiacCore adapter re-typed keys
-the scanner already finds):
+catalog by hand:
 
 - `openfoam.dict_keys_scanner.scan_source(src_root)` lists every dictionary
   read with its key, method, type, default, root, sub-dictionary scope

@@ -1,11 +1,11 @@
 # OmniDriver Architecture and Migration Goals
 
-This repository is the staging ground for the transition from a monolithic single-solver tool into the modular, universal **OmniDriver** ecosystem.
+This repository is **OmniDriver**: a solver-agnostic workflow engine in five packages, one per concern.
 
 ## The Grand Vision: Monorepo + Namespace Packages
-The engine is shifting from being an OpenFOAM-specific orchestrator to a universal scientific workflow engine capable of orchestrating deterministic continuous simulations (e.g., FEniCS, deal.II, OpenFOAM) and steering dynamic optimization loops via autonomous agents.
+The engine orchestrates deterministic continuous simulations (OpenFOAM and openCARP today) and can steer optimization loops through autonomous agents.
 
-To achieve this, the project is adopting a **Monorepo** structure paired with Python **Namespace Packages** (PEP 420). All the code lives in one GitHub repository, but it is published as five strictly decoupled `pip` packages.
+The project is a **Monorepo** paired with Python **Namespace Packages** (PEP 420). All the code lives in one GitHub repository, but it is published as five strictly decoupled `pip` packages.
 
 ### Directory Structure & Import Semantics
 Because `src/omnidriver/` will not contain an `__init__.py` file in any of the packages, Python treats it as a namespace. Users can install them independently but import them beautifully:
@@ -73,7 +73,7 @@ claim; run the command for the number:
 
 | | state |
 |---|---|
-| all packages installed | ✅ **0 failed** — `pytest packages/ -q -m "not slow"`. **Corrected 2026-09-18**: this row claimed ✅ **0 failed** before that date too, and that had never been measured. Three cardiacFoam modules resolved a `DriverContext` at import time, so with more than one adapter installed the run died during *collection*: pytest printed errors, not failures, and the absence of a failure count was read as zero failures. Behind the abort were 235 real failures, nearly all one cause — cardiacFoam's own source asking the `omnidriver.plugins` registry which adapter it was, which has no answer once a second adapter is installed. CI's `test-cardiac` job had been red on it continuously. The ✅ is now measured, and `test_adapter_never_asks_who_it_is` guards the cause. |
+| all packages installed | ✅ **0 failed** — `pytest packages/ -q -m "not slow"` |
 | core installed alone | ✅ **0 failed** — `pytest packages/omnidriver/tests -q` in a core-only venv |
 | core's whole suite against a built wheel | ✅ **0 failed** since 2026-09-04 — `scripts/check-wheel-artifact.py` plus the suite; see `CLAUDE.md`. Before that day it could not even be *collected*: eight modules looked the repository root up at import time and thirteen tests failed. |
 | core imported from a built wheel | ✅ guarded by `test_wheel_install_imports.py` |
@@ -149,22 +149,17 @@ Tracked as standalone notes in `future/`, each with its own status:
   as stated, is not the goal: `Allrun`, `system/controlDict` and
   `$FOAM_APPBIN` are one environment's *bindings* of concepts core legitimately
   owns. That document restates the rule as something checkable — core may name
-  a binding only where it is reached through a declared role, a capability
-  hook, or a documented, overridable default — and measures which of core's
+  a binding only where it is reached through a declared role, a provider
+  member, or a documented, overridable default — and measures which of core's
   bindings currently qualify. **Read it before acting on Rule 1 as written.**
 
   §5a landed in Phase 1: the role vocabulary is validated at profile load
   (`plugin_profile.KNOWN_ROLES`), and a case's entrypoint is resolved from the
   plugin's declared `openfoam.entrypoint` rule instead of a hardcoded `Allrun`.
-  Tier 3 (six items: `control_dict` start-time lookup, `processor*`
-  decomposition seam, `apply_overrides`'s crash, `ArtifactFormat` +
-  `utility_catalog` vocabulary, the `--openfoam-bashrc` rename) closed
-  2026-09-02. Tier 4 — the trust boundary, §5b — is the
+  Tier 3 closed 2026-09-02. Tier 4 — the trust boundary, §5b — is the
   `CASE_SCRIPT_COMMANDS` entrypoint slice only so far
   (`future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md`); `Allclean`/
-  `Allrun.pre`/`Allrun.post`, `CORE_NEUTRAL_COMMANDS`, and
-  `_is_installed_openfoam_app` remain open, and §6's
-  `GenericEnvironmentPlugin` rename stays blocked until Tier 4 is fully closed.
+  `Allrun.pre`/`Allrun.post` and `CORE_NEUTRAL_COMMANDS` remain open.
 
 ## Provider composition
 
@@ -208,6 +203,6 @@ a pair that one provider answers together: `resolve_case_mutation` with
 rendered format with two declarers.
 
 The stack identity records, per member, the most specific implementing
-provider (`<unclaimed>` when none), and digests the content of the profile,
-the dictionary entries and the manifest. A content change in another member,
+provider (`<unclaimed>` when none), and digests the content of the profile
+and the dictionary entries. A content change in another member,
 in an editable install with no version bump, is invisible to it.
