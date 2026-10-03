@@ -11,6 +11,8 @@ passes. ``build`` is the ``omnidriver build`` entry point.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
 from collections.abc import Mapping
 from pathlib import Path
@@ -20,6 +22,7 @@ from omnidriver.cardiacfoam.dict_entries import get_electro_property_entry_group
 from omnidriver.cardiacfoam.own_context import own_driver_context
 from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
 from omnidriver.core.contracts.dictionary import DictEntry
+from omnidriver.core.planning_types import diagnostic
 from omnidriver.openfoam.case_builder import (
     default_block_mesh_dict_text,
     populate_values,
@@ -29,9 +32,13 @@ from omnidriver.openfoam.case_builder import (
     value_token,
     write_documents,
 )
-from omnidriver.openfoam.case_rules import applicable_entries, forbidden_in, rule_diagnostics
+from omnidriver.openfoam.case_rules import applicable_entries, forbidden_in, match_dynamic_entry, rule_diagnostics
+from omnidriver.openfoam.literals import BOOLEAN_WORDS, parse_vector3_literal
+from omnidriver.openfoam.plan_diagnostics import cxx_source_not_supplied
+from omnidriver.openfoam.record_key_validation import scanned_key
 
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from .record_key_validation import cardiacfoam_mapping
 from .validation import cross_field_diagnostics, infer_virtual_presence
 
 PLUGIN_ID = "org.cardiacfoam"
@@ -152,11 +159,51 @@ def _check_no_forbidden_selectors(context: dict[str, Any]) -> None:
         )
 
 
+def _typed(text: str) -> Any:
+    """The value an override's text reads as: a Switch word, JSON, an OpenFOAM vector, else the word."""
+    if text in BOOLEAN_WORDS:
+        return BOOLEAN_WORDS[text]
+    try:
+        return json.loads(text)
+    except ValueError:
+        pass
+    try:
+        return list(parse_vector3_literal(text))
+    except ValueError:
+        return text
+
+
+def uncatalogued_entries(overrides: Mapping[str, str] | None) -> tuple[DictEntry, ...]:
+    """An entry for each override the catalogue lacks that the supplied C++
+    reads at exactly that path, of the kind the C++ reads.
+
+    Raises:
+        ValueError: an override neither the catalogue nor the C++ places, a
+            value the C++ would not read, or no C++ source supplied."""
+    catalogued = _all_electro_entries()
+    by_path = {entry.driver_path for entry in catalogued}
+    entries = []
+    for path, value in (overrides or {}).items():
+        if path in by_path or match_dynamic_entry(path, catalogued) is not None:
+            continue
+        try:
+            kind, _ = scanned_key(
+                _ELECTRO_DOCUMENT, tuple(path.split(".")), _typed(value), mapping=cardiacfoam_mapping(), entries=catalogued,
+            )
+        except KeyError as exc:
+            raise ValueError(f"build_electro_properties: {path!r} is not in the catalogue, and {exc.args[0]}") from None
+        entries.append(DictEntry(
+            driver_path=path, value_kind=kind, description="read by the supplied C++; the catalogue lacks it",
+        ))
+    return tuple(entries)
+
+
 def build_electro_properties(
     selectors: dict[str, str],
     *,
     overrides: dict[str, str] | None = None,
     typical_value_fallback: bool = True,
+    uncatalogued: tuple[DictEntry, ...] = (),
 ) -> str:
     """Synthesise a complete `electroProperties` dict from intent.
 
@@ -168,6 +215,8 @@ def build_electro_properties(
         typical_value_fallback: when True (default), applicable entries
             with no override fall back to `DictEntry.typical_value` if
             declared. When False, only explicit overrides count.
+        uncatalogued: the entries :func:`uncatalogued_entries` made for
+            overrides the catalogue lacks; they are written like any other.
 
     Returns:
         OpenFOAM-format text including the standard `FoamFile` preamble.
@@ -183,7 +232,7 @@ def build_electro_properties(
     # in this context, reject immediately rather than silently ignoring it.
     _check_no_forbidden_selectors(context)
 
-    entries = select_applicable_entries(context)
+    entries = [*select_applicable_entries(context), *uncatalogued]
     populated = populate_values(
         entries, context, typical_value_fallback=typical_value_fallback,
     )
@@ -627,16 +676,18 @@ def build_case(
     """
     case_dir = Path(case_dir).resolve()
     if (case_dir / _ELECTRO_DOCUMENT).exists() and not overwrite:
-        raise FileExistsError(f"{case_dir / _ELECTRO_DOCUMENT} already exists; pass overwrite to replace it")
+        raise FileExistsError(f"{case_dir / _ELECTRO_DOCUMENT} already exists; pass --overwrite to replace it")
     solver = electro_selectors.get("myocardiumSolver", "monodomainSolver")
     single_cell = solver in SINGLE_CELL_SOLVERS
     if single_cell and dx is not None:
         raise ValueError(f"dx has no effect for myocardiumSolver={solver!r}: it has no geometry for dx to resolve")
     context = driver_context if driver_context is not None else own_driver_context()
+    uncatalogued = uncatalogued_entries(electro_overrides)
+    electro_text = build_electro_properties(electro_selectors, overrides=electro_overrides, uncatalogued=uncatalogued)
     record = write_documents(
         case_dir,
         {
-            _ELECTRO_DOCUMENT: build_electro_properties(electro_selectors, overrides=electro_overrides),
+            _ELECTRO_DOCUMENT: electro_text,
             _PHYSICS_DOCUMENT: build_physics_properties(physics_selectors or {"type": "electroModel"}),
             "system/fvSchemes": _fv_schemes(solver),
             "system/fvSolution": _fv_solution(solver),
@@ -652,13 +703,22 @@ def build_case(
         executable=frozenset({"Allrun"}),
         keep_existing=frozenset({"system/blockMeshDict"}),
     )
-    found = context.stack.call("validate_run_semantics", case_dir)
+    found = list(context.stack.call("validate_run_semantics", case_dir))
+    found += [diagnostic(
+        "info", "plugin_catalog_uncatalogued",
+        f"{entry.driver_path} is not in the catalogue; the supplied C++ reads it as {entry.value_kind}, "
+        "so it is written as asked (omnidriver catalog --uncatalogued lists every read the catalogue lacks)",
+        field=entry.driver_path,
+    ) for entry in uncatalogued]
+    mapping = cardiacfoam_mapping()
+    if mapping.source_root(os.environ) is None:
+        found.append(cxx_source_not_supplied(mapping, source=context.identity.resolutions["get_profile"]))
     return {
         "status": "failed" if any(item.level == "error" for item in found) else "ok",
         "case_dir": str(case_dir),
         "files": [entry["path"] for entry in record.committed],
         "diagnostics": [
-            {"level": item.level, "field": item.field, "message": item.message} for item in found
+            {"level": item.level, "code": item.code, "field": item.field, "message": item.message} for item in found
         ],
     }
 

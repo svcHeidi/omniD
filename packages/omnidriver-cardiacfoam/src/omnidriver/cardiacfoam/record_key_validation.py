@@ -91,7 +91,7 @@ def _physics_match(key_path: "tuple[str, ...]"):
     return None if entry is None else (entry, {})
 
 
-def _cardiacfoam_mapping() -> Any:
+def cardiacfoam_mapping() -> Any:
     from .cardiacfoam_plugin import CardiacFoamPlugin
 
     return CardiacFoamPlugin.get_profile().cxx_mapping
@@ -113,7 +113,7 @@ record_key_validator = make_validator(
             scan=lambda key_path: key_path,
         ),
     },
-    mapping=_cardiacfoam_mapping,
+    mapping=cardiacfoam_mapping,
     owner="cardiacFOAM",
 )
 

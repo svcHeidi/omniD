@@ -114,6 +114,19 @@ def _describe_uncatalogued(item: dict) -> str:
     )
 
 
+def cxx_source_not_supplied(mapping: Any, *, source: str) -> StrictDiagnostic:
+    """Supplied, never discovered: an unsupplied root is reported as info, not
+    a warning, so an operation that needs no C++ scanning isn't flagged."""
+    return diagnostic(
+        "info",
+        "plugin_cxx_source_not_supplied",
+        f"C++ source not scanned: source root not supplied (set "
+        f"{mapping.source_root_variable}; the source is "
+        f"${mapping.source_root_variable}/{mapping.source_root_relative})",
+        source=source,
+    )
+
+
 def _report(driver_context: Any, mapping: Any, source_root: Path | None, scratch_root: Path | None) -> dict | None:
     scanner = driver_context.stack.call("get_dict_key_scanner")
     if scanner is None or mapping is None or source_root is None or not source_root.is_dir():
@@ -136,16 +149,7 @@ def _catalog_diagnostics(
         return ()
     cxx_mapping_source = driver_context.identity.resolutions["get_profile"]
     if source_root is None:
-        # Supplied, never discovered: an unsupplied root is reported as info,
-        # not a warning, so a plan that needs no C++ scanning isn't flagged.
-        return (diagnostic(
-            "info",
-            "plugin_cxx_source_not_supplied",
-            f"C++ source not scanned: source root not supplied (set "
-            f"{mapping.source_root_variable}; the source is "
-            f"${mapping.source_root_variable}/{mapping.source_root_relative})",
-            source=cxx_mapping_source,
-        ),)
+        return (cxx_source_not_supplied(mapping, source=cxx_mapping_source),)
     if report is None:
         return (diagnostic(
             "error",

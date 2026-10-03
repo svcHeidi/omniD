@@ -1181,9 +1181,14 @@ omnidriver run --strict --plugin cardiacfoam --case <dir> --scratch-dir <scratch
 - `--select NAME=VALUE`: the discriminators the catalogue branches on
   (`myocardiumSolver`, `ionicModel`, `tissue`, `conductivitySource`), and
   `type` for `physicsProperties` (default `electroModel`).
-- `--set PATH=VALUE`: a catalogue key by its driver path. A key no applicable
-  catalogue entry places is refused by name; `omnidriver catalog
-  --uncatalogued` lists what the C++ reads and the catalogue lacks.
+- `--set PATH=VALUE`: a catalogue key by its driver path. A key the catalogue
+  lacks is written as asked when the supplied C++ source (the variable
+  `omnidriver env` names) reads it at exactly that path, and reported as
+  `plugin_catalog_uncatalogued`; a key neither places is refused by name, as
+  is any key when no source is supplied. `omnidriver catalog --uncatalogued`
+  lists what the C++ reads and the catalogue lacks. A build with no source
+  supplied reports `plugin_cxx_source_not_supplied`: the required keys the
+  C++ adds were not checked.
 - `--option`: `dx` (metres, isotropic cell size), `deltaT`, `endTime`.
   `--overwrite` replaces the dictionaries of an existing case.
 
@@ -1199,8 +1204,9 @@ The mesh is a generic slab sized by `dx`, which must divide it evenly
 refuses `dx`. An existing `system/blockMeshDict` is kept. A short `endTime`
 still writes its last time step. The case holds only what the catalogue
 places: keys the built solver requires that the catalogue lacks are yours to
-`--set` or add, and a binary built from a different source than the scanned
-tree may require more.
+`--set` (for example `$ELECTRO_MODEL_COEFFS.sealedHeartBoundary` and
+`sealedWallTrace` of a bidomain case), and a binary built from a different
+source than the scanned tree may require more.
 
 The module is `omnidriver.cardiacfoam.case_builder`, and its OpenFOAM
 primitives are `omnidriver.openfoam.case_builder`. A solver package offers a

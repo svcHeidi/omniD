@@ -4,6 +4,8 @@ validator-clean by construction."""
 from __future__ import annotations
 
 import unittest
+
+import pytest
 from pathlib import Path
 
 from omnidriver.core.plugin_interface import driver_context as _driver_context
@@ -923,3 +925,59 @@ class TestRestitutionEikonalSolver1D(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# A verbatim excerpt of cardiacFOAM src/electroModels/myocardiumModels/bidomainSolver/bidomainSolver.C:
+# its constructor.
+BIDOMAIN_SOLVER_CXX = Path(__file__).resolve().parent / "fixtures" / "cxx" / "bidomainSolver.C"
+_BIDOMAIN = {"myocardiumSolver": "bidomainSolver", "ionicModel": "TNNP", "tissue": "epicardialCells"}
+_SEALED = "$ELECTRO_MODEL_COEFFS.sealedHeartBoundary"
+_TRACE = "$ELECTRO_MODEL_COEFFS.sealedWallTrace"
+
+
+def _native_tree(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "native" / "src" / "electroModels" / "myocardiumModels" / "bidomainSolver"
+    source.mkdir(parents=True)
+    (source / "bidomainSolver.C").write_text(BIDOMAIN_SOLVER_CXX.read_text())
+    (tmp_path / "native" / "tutorials").mkdir()
+    monkeypatch.setenv("OMNIDRIVER_NATIVE_TUTORIALS", str(tmp_path / "native" / "tutorials"))
+
+
+def test_a_key_the_cxx_reads_and_the_catalogue_lacks_is_built_under_its_coeffs_and_noted(tmp_path, monkeypatch) -> None:
+    from omnidriver.cardiacfoam.case_builder import build_case
+
+    _native_tree(tmp_path, monkeypatch)
+    built = build_case(
+        _BIDOMAIN, case_dir=tmp_path / "case", electro_overrides={_SEALED: "yes", _TRACE: "zeroGradient"},
+        driver_context=_CTX,
+    )
+    assert built["status"] == "ok", built["diagnostics"]
+    assert [(d["code"], d["field"]) for d in built["diagnostics"]] == [
+        ("plugin_catalog_uncatalogued", _SEALED), ("plugin_catalog_uncatalogued", _TRACE),
+    ]
+    text = (tmp_path / "case" / "constant" / "electroProperties").read_text()
+    coeffs = text.split("bidomainSolverCoeffs", 1)[1]
+    assert "sealedHeartBoundary yes;" in coeffs
+
+
+def test_an_override_neither_the_catalogue_nor_the_cxx_places_is_refused_by_name(tmp_path, monkeypatch) -> None:
+    from omnidriver.cardiacfoam.case_builder import build_case
+
+    _native_tree(tmp_path, monkeypatch)
+    for override, reason in (
+        ({"$ELECTRO_MODEL_COEFFS.sealedHeartBoundry": "true"}, "reads no key named 'sealedHeartBoundry'"),
+        ({_SEALED: "maybe"}, "read by the C\\+\\+ as Switch"),
+    ):
+        with pytest.raises(ValueError, match=reason):
+            build_case(_BIDOMAIN, case_dir=tmp_path / "case", electro_overrides=override, driver_context=_CTX)
+    assert not (tmp_path / "case").exists()
+
+
+def test_a_build_without_the_cxx_source_says_so_and_refuses_an_uncatalogued_key(tmp_path, monkeypatch) -> None:
+    from omnidriver.cardiacfoam.case_builder import build_case
+
+    monkeypatch.delenv("OMNIDRIVER_NATIVE_TUTORIALS", raising=False)
+    built = build_case(_BIDOMAIN, case_dir=tmp_path / "case", driver_context=_CTX)
+    assert [d["code"] for d in built["diagnostics"]] == ["plugin_cxx_source_not_supplied"]
+    with pytest.raises(ValueError, match="C\\+\\+ source is not supplied"):
+        build_case(_BIDOMAIN, case_dir=tmp_path / "other", electro_overrides={_SEALED: "true"}, driver_context=_CTX)
