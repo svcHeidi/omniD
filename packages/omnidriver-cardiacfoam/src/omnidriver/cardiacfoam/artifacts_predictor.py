@@ -50,7 +50,7 @@ def _exported_active_tension_variables(case_root: Path) -> tuple[str, ...]:
         return ("Ta",)
     return entry.recommended_exports
 
-def _instance_indexed_field_artifact(*, solver: str, field_name: str, ionic_model: str | None, description: str, optional: bool = False) -> DataArtifact:
+def _instance_indexed_field_artifact(*, solver: str, field_name: str, description: str) -> DataArtifact:
     artifact_id = f"{solver}_{field_name.lower()}_series"
     produced_by = {
         "monodomain": "monodomainSolver",
@@ -66,7 +66,6 @@ def _instance_indexed_field_artifact(*, solver: str, field_name: str, ionic_mode
         description=description,
         produced_by=produced_by,
         instance_indexed=True,
-        optional=optional,
     )
 
 def _predict_single_cell(case_root: Path, spec: TutorialSpec, ionic_model: str | None) -> tuple[DataArtifact, ...]:
@@ -91,7 +90,6 @@ def _predict_monodomain(case_root: Path, spec: TutorialSpec, ionic_model: str | 
     artifacts.append(_instance_indexed_field_artifact(
         solver="monodomain",
         field_name="Vm",
-        ionic_model=ionic_model,
         description=f"Membrane voltage Vm (monodomainSolver, ionicModel={ionic_model})",
     ))
     for var in _exported_ionic_variables(case_root, ionic_model):
@@ -100,7 +98,6 @@ def _predict_monodomain(case_root: Path, spec: TutorialSpec, ionic_model: str | 
         artifacts.append(_instance_indexed_field_artifact(
             solver="monodomain",
             field_name=var,
-            ionic_model=ionic_model,
             description=f"Ionic export {var} (monodomainSolver)",
         ))
     return tuple(artifacts)
@@ -117,7 +114,6 @@ def _predict_bidomain(case_root: Path, spec: TutorialSpec, ionic_model: str | No
         artifacts.append(_instance_indexed_field_artifact(
             solver="bidomain",
             field_name=field_name,
-            ionic_model=ionic_model,
             description=description,
         ))
     for var in _exported_ionic_variables(case_root, ionic_model):
@@ -126,7 +122,6 @@ def _predict_bidomain(case_root: Path, spec: TutorialSpec, ionic_model: str | No
         artifacts.append(_instance_indexed_field_artifact(
             solver="bidomain",
             field_name=var,
-            ionic_model=ionic_model,
             description=f"Ionic export {var} (bidomainSolver)",
         ))
     return tuple(artifacts)
@@ -136,7 +131,6 @@ def _predict_eikonal(case_root: Path, spec: TutorialSpec, ionic_model: str | Non
         _instance_indexed_field_artifact(
             solver="eikonal",
             field_name="activationTime",
-            ionic_model=None,
             description="Activation time (eikonalSolver)",
         ),
     )

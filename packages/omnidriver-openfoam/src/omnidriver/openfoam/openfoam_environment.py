@@ -78,12 +78,14 @@ def openfoam_bashrc(
     return sourced if sourced is not None and sourced.is_file() else None
 
 
+_BASHRC_SOURCE_TIMEOUT_S = 20.0
+
+
 def load_openfoam_environment(
     *,
     bashrc_path: str | Path | None = None,
     base_env: Mapping[str, str] | None = None,
     driver_context: Any | None = None,
-    timeout_s: float = 20.0,
 ) -> OpenFOAMEnvironment:
     """Return an environment suitable for strict OpenFOAM execution.
 
@@ -121,7 +123,7 @@ def load_openfoam_environment(
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=stderr_handle,
-                timeout=timeout_s,
+                timeout=_BASHRC_SOURCE_TIMEOUT_S,
                 check=False,
             )
     except subprocess.TimeoutExpired:
@@ -130,7 +132,7 @@ def load_openfoam_environment(
         return OpenFOAMEnvironment(
             env=env,
             bashrc=str(bashrc),
-            error=f"source {bashrc} timed out after {timeout_s:g} seconds",
+            error=f"source {bashrc} timed out after {_BASHRC_SOURCE_TIMEOUT_S:g} seconds",
         )
     except OSError as exc:
         for temp_path in temp_paths:

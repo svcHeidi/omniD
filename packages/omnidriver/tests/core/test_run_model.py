@@ -25,7 +25,7 @@ def _valid_run_dict():
         "version": "3",
         "id": "run-0001",
         "name": "demo",
-        "status": "draft",
+        "status": "planned",
         "validation": {},
         "resolvedEntry": None,
         "workflowDag": None,
@@ -50,7 +50,7 @@ def test_run_document_round_trip():
     doc = RunDocument.from_json(_valid_run_dict())
     back = doc.to_json()
     assert back["id"] == "run-0001"
-    assert back["status"] == "draft"
+    assert back["status"] == "planned"
     assert back["version"] == "3"
 
 
@@ -127,17 +127,15 @@ def test_schema_accepts_serialized_workflow_identity_and_resume_evidence(schema)
         "steps": [],
         "workflow_digest": "sha256:" + "a" * 64,
         "resume_snapshot": {
-                "schema_version": "2.4-sha256-streaming-256mib-verified-absence-stable-env",
+                "schema_version": "2.5-sha256-streaming-256mib-verified-absence-stable-env",
             "components": [{
                 "kind": "file",
                 "path": "system/controlDict",
                 "role": "required_input",
-                "origin": "case",
                 "method": "sha256",
                 "strength": "content",
                 "digest": "sha256:" + "e" * 64,
                 "size": 1,
-                "mtime_ns": 0,
                 "link_target": None,
             }],
             "workflow_digest": "sha256:" + "a" * 64,

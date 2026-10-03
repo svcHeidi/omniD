@@ -199,15 +199,11 @@ def resolve_runtime_dependencies(
     return tuple(dependencies.values())
 
 
-def extra_provenance_paths(
-    case_root: Path,
-    *,
-    env: Mapping[str, str] | None = None,
-) -> tuple[RuntimeDependency, ...]:
+def extra_provenance_paths(case_root: Path) -> tuple[RuntimeDependency, ...]:
     """Runtime dependencies the provenance snapshot must fingerprint beyond
     ``system/`` and ``constant/``: a missing required library is reported,
     never silently omitted."""
-    return resolve_runtime_dependencies(case_root, env=env)
+    return resolve_runtime_dependencies(case_root)
 
 
 def artifact_value_reader(artifact_format: str):

@@ -74,10 +74,9 @@ def load_run_document(path: str | Path) -> RunDocument:
 ALLOWED_RUNS_ROOT_ENV = "OMNIDRIVER_ALLOWED_RUNS_ROOT"
 
 
-def _allowed_runs_root(env: dict[str, str] | None = None) -> Path | None:
+def _allowed_runs_root() -> Path | None:
     """Resolved allowed-runs root, or None when unset/empty."""
-    source = env if env is not None else os.environ
-    value = source.get(ALLOWED_RUNS_ROOT_ENV)
+    value = os.environ.get(ALLOWED_RUNS_ROOT_ENV)
     if not value:
         return None
     return Path(value).resolve()

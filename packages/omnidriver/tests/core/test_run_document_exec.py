@@ -67,7 +67,7 @@ class TestLoadRunDocument(unittest.TestCase):
                 "version": version,
                 "id": "old",
                 "name": "archived",
-                "status": "draft",
+                "status": "planned",
             }
             with tempfile.TemporaryDirectory() as temp:
                 path = Path(temp) / "run.json"

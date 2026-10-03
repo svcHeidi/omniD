@@ -13,7 +13,7 @@ import jsonschema
 
 # Deliberately no ``Phase`` literal: a plugin's phase names are its own, which
 # keeps solver vocabulary out of this package.
-Status = Literal["draft", "queued", "planning", "planned", "running", "completed", "failed"]
+Status = Literal["planned", "failed"]
 
 _SCHEMA = json.loads(
     resources.files("omnidriver.schemas")

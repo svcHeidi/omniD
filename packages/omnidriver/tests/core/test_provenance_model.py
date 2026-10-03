@@ -43,12 +43,10 @@ def test_a_file_defaults_to_required_input(tmp_path: Path) -> None:
 def test_a_generated_file_the_solver_reads_is_still_a_required_input(
     tmp_path: Path,
 ) -> None:
-    """constant/polyMesh is written by blockMesh and read by the solver; origin must not decide severity."""
+    """constant/polyMesh is written by blockMesh and read by the solver."""
     target = tmp_path / "owner"
     target.write_text("mesh")
-    component = _component(target, tmp_path, role="required_input", origin="generated")
-    assert component.role == "required_input"
-    assert component.origin == "generated"
+    assert _component(target, tmp_path).role == "required_input"
 
 
 def test_a_snapshot_is_stable_across_repeated_computation(tmp_path: Path) -> None:
@@ -124,7 +122,7 @@ def test_a_file_over_the_threshold_is_streamed_and_content_hashed(tmp_path: Path
     assert component.method == "sha256"
     assert component.strength == "content"
     assert component.digest is not None
-    assert component.size == 10 and component.mtime_ns is not None
+    assert component.size == 10
 
 
 def test_a_content_hash_ignores_a_timestamp_only_touch(tmp_path: Path) -> None:

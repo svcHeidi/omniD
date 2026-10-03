@@ -9,7 +9,7 @@
     "id": {"type": "string", "minLength": 1},
     "name": {"type": "string", "minLength": 1},
     "status": {
-      "enum": ["draft", "queued", "planning", "planned", "running", "completed", "failed"]
+      "enum": ["planned", "failed"]
     },
     "intent": {
       "type": "object",
@@ -257,21 +257,18 @@
         "kind",
         "path",
         "role",
-        "origin",
         "method",
         "strength",
         "digest",
         "size",
-        "mtime_ns",
         "link_target"
       ],
       "properties": {
         "kind": {"type": "string", "minLength": 1},
         "path": {"type": "string"},
         "role": {"type": "string", "minLength": 1},
-        "origin": {"type": ["string", "null"]},
-        "method": {"enum": ["sha256", "metadata", "verified_absence", "unavailable"]},
-        "strength": {"enum": ["content", "metadata", "absence", "unavailable"]},
+        "method": {"enum": ["sha256", "verified_absence", "unavailable"]},
+        "strength": {"enum": ["content", "absence", "unavailable"]},
         "digest": {
           "anyOf": [
             {"$ref": "#/$defs/sha256Digest"},
@@ -279,7 +276,6 @@
           ]
         },
         "size": {"type": ["integer", "null"], "minimum": 0},
-        "mtime_ns": {"type": ["integer", "null"], "minimum": 0},
         "link_target": {"type": ["string", "null"]}
       },
       "additionalProperties": false
@@ -296,7 +292,7 @@
         "is_complete"
       ],
       "properties": {
-        "schema_version": {"const": "2.4-sha256-streaming-256mib-verified-absence-stable-env"},
+        "schema_version": {"const": "2.5-sha256-streaming-256mib-verified-absence-stable-env"},
         "components": {
           "type": "array",
           "items": {"$ref": "#/$defs/provenanceComponent"}

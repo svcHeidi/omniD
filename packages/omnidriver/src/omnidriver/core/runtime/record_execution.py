@@ -738,8 +738,6 @@ def commit_and_build_record_spec(
     staged_case_root: Path,
     study_by_source: Mapping[str, Mapping[str, Any]],
     driver_context: "DriverContext",
-    execution_env: Any | None = None,
-    requested_by: str = "tutorial_record",
     inputs: Mapping[str, str | Path] | None = None,
 ) -> tuple[RecordCommitResult, Any]:
     """Stage and commit one record case and build its ``TutorialSpec``: the
@@ -748,8 +746,7 @@ def commit_and_build_record_spec(
     """
     commit_result = commit_record_case(
         record, cases_root=cases_root, staged_case_root=staged_case_root,
-        study_by_source=study_by_source, driver_context=driver_context,
-        execution_env=execution_env, requested_by=requested_by, inputs=inputs,
+        study_by_source=study_by_source, driver_context=driver_context, inputs=inputs,
     )
     spec = record_case_spec(
         record, case_id=case_id, staged_case_root=staged_case_root,

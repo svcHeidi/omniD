@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-SCHEMA_VERSION = "2.4-sha256-streaming-256mib-verified-absence-stable-env"
+SCHEMA_VERSION = "2.5-sha256-streaming-256mib-verified-absence-stable-env"
 """Encodes the hashing and read policy, not just the field layout.
 
 Large required inputs use the same SHA-256 content identity as small inputs,
@@ -25,10 +25,9 @@ class ProvenanceComponent:
     """One fingerprinted filesystem entry (or degraded/unavailable stand-in)
     that a workflow run consumes or produces.
 
-    ``role`` drives severity and defaults to ``"required_input"``. ``origin``
-    is diagnostic only. ``strength`` is honest about how much the fingerprint
-    actually proves: ``"content"`` (sha256 of the bytes), ``"metadata"``
-    (a weak stat-based fingerprint), ``"verified_absence"`` (a declared optional
+    ``role`` drives severity and defaults to ``"required_input"``.
+    ``strength`` is honest about how much the fingerprint actually proves:
+    ``"content"`` (sha256 of the bytes), ``"absence"`` (a declared optional
     input was observed absent), or ``"unavailable"`` (could not be stat'd
     or read at all).  A verified absence is complete identity evidence: a
     later appearance changes that component and invalidates resume.
@@ -37,12 +36,10 @@ class ProvenanceComponent:
     kind: str
     path: str
     role: str = "required_input"
-    origin: str | None = None
     method: str = "unavailable"
     strength: str = "unavailable"
     digest: str | None = None
     size: int | None = None
-    mtime_ns: int | None = None
     link_target: str | None = None
 
 
@@ -110,8 +107,6 @@ def component_for_path(
     *,
     kind: str,
     relative_to: Path,
-    role: str = "required_input",
-    origin: str | None = None,
 ) -> ProvenanceComponent:
     """Fingerprint a single filesystem entry, stat'ing and hashing it once.
 
@@ -155,31 +150,24 @@ def component_for_path(
         return ProvenanceComponent(
             kind=resolved_kind,
             path=rel_path,
-            role=role,
-            origin=origin,
             method="unavailable",
             strength="unavailable",
             digest=None,
             size=None,
-            mtime_ns=None,
             link_target=link_target,
         )
 
     size = stat_result.st_size
-    mtime_ns = stat_result.st_mtime_ns
 
     def _build(method: str, strength: str, digest: str | None) -> ProvenanceComponent:
         """One construction site for all three outcomes, so a new field can't be added to only some of them."""
         return ProvenanceComponent(
             kind=resolved_kind,
             path=rel_path,
-            role=role,
-            origin=origin,
             method=method,
             strength=strength,
             digest=digest,
             size=size,
-            mtime_ns=mtime_ns,
             link_target=link_target,
         )
 
@@ -198,17 +186,15 @@ def component_for_path(
 
 
 def _component_digest_payload(component: ProvenanceComponent) -> dict[str, Any]:
-    """Content identity ignores mtime; weak metadata identity must include it, since metadata alone is insufficient evidence of unchanged bytes."""
+    """The identity of one component: content and absence evidence, never a timestamp."""
     return {
         "kind": component.kind,
         "path": component.path,
         "role": component.role,
-        "origin": component.origin,
         "method": component.method,
         "strength": component.strength,
         "digest": component.digest,
         "size": component.size,
-        "mtime_ns": component.mtime_ns if component.strength == "metadata" else None,
         "link_target": component.link_target,
     }
 
@@ -289,8 +275,7 @@ def compare(
     for the non-file scalars so the aggregate digest can never move without
     ``compare()`` reporting something an agent can act on.
 
-    File components are matched by ``(kind, path)``. Content identity ignores
-    mtime; metadata identity includes it. Order follows ``after.components`` for
+    File components are matched by ``(kind, path)``. Order follows ``after.components`` for
     added/modified, then ``before.components`` for removed, then the two
     synthetic scalar diffs -- source order throughout, never sorted.
 

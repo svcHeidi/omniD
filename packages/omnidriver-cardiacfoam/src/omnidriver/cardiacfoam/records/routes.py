@@ -29,12 +29,10 @@ def block_mesh_step(consumes: tuple[str, ...], *, default_dict: str | None = Non
     )
 
 
-def solve_step(
-    produces: tuple, *, consumes: tuple[str, ...] = (), step_id: str = "solve",
-) -> WorkflowStep:
+def solve_step(produces: tuple, *, consumes: tuple[str, ...] = ()) -> WorkflowStep:
     """``cardiacFoam``, reading :data:`SOLVE_DOCUMENTS` and ``consumes``."""
     return WorkflowStep(
-        step_id=step_id, command=("cardiacFoam",),
+        step_id="solve", command=("cardiacFoam",),
         consumes=SOLVE_DOCUMENTS + consumes, produces=produces,
     )
 

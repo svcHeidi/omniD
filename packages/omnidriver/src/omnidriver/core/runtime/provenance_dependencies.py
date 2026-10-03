@@ -63,7 +63,6 @@ def component_for_verified_absence(dependency: RuntimeDependency) -> ProvenanceC
             strength="absence",
             digest=None,
             size=None,
-            mtime_ns=None,
             link_target=None,
         )
     return ProvenanceComponent(

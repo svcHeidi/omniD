@@ -89,7 +89,7 @@ def _target(
 def check_report(
     driver_context: "DriverContext", *, plugin: str, cases_root: Path, scratch_root: Path,
     records: Sequence[str] = (), check_ids: Sequence[str] = (), inputs: Mapping[str, str] | None = None,
-    benchmarks: Path | None = None, regression: bool = False, regression_timeout_s: float = REGRESSION_TIMEOUT_S,
+    benchmarks: Path | None = None, regression: bool = False,
 ) -> dict[str, Any]:
     """Run ``check_ids`` (all when empty) over ``records`` (every record that
     declares a study when empty) and report each verdict, in the order run.
@@ -142,7 +142,7 @@ def check_report(
             native_case = cases_root / record.native_case_relpath
             script = regression_script(driver_context, native_case)
             entry["regression"] = (
-                _regression(script, native_case, scratch_root / record.name / "regression", regression_timeout_s)
+                _regression(script, native_case, scratch_root / record.name / "regression", REGRESSION_TIMEOUT_S)
                 if script is not None else {"status": "no_script", "detail": "the native case has no regression script"}
             )
     counts = [verdict["passed"] for entry in reported for verdict in entry.get("checks", ())]
