@@ -1,6 +1,3 @@
 """Core shared modules for the omnidriver orchestrator.
 
-Deliberately no eager re-exports here. Import submodules directly: ``from
-omnidriver.core.introspection import describe_entry``, not ``from
-omnidriver.core import describe_entry``.
-"""
+No eager re-exports: import submodules directly, as ``from omnidriver.core.introspection import describe_entry``."""

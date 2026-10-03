@@ -1,9 +1,6 @@
-"""C1-C14. Each check is self-contained: it builds its own context, stages
-its own copy, and returns a verdict naming what it saw. No check skips; a
-check that cannot run is a failure saying why. Checks are thread-parallel
-within one process: the scratch root is supplied explicitly
-(``specs.paths.resolve_scratch_root``) rather than read from ``os.environ``.
-"""
+"""C1-C14. Each check is self-contained: it builds its own context, stages its own copy, and returns a verdict.
+
+No check skips; a check that cannot run is a failure saying why."""
 from __future__ import annotations
 
 import dataclasses
@@ -97,18 +94,12 @@ def check_describe_noop(target: ConformanceTarget) -> CheckVerdict:
 
 
 def _quotes(message: str, name: str) -> bool:
-    """Whether ``message`` quotes ``name`` as a whole token: ``'n'``, ``"n"``
-    or `` `n` ``. :func:`_names`' first rule, and C9's only one."""
+    """Whether ``message`` quotes ``name`` whole: ``'n'``, ``"n"`` or `` `n` ``."""
     return any(f"{q}{name}{q}" in message for q in ("'", '"', "`"))
 
 
 def _names(message: str, name: str) -> bool:
-    """Whether ``message`` names ``name`` as a whole token, not merely
-    contains it: a short unknown name such as
-    ``"x"`` is a substring of almost any message. Quoted (``'n'``, ``"n"``,
-    `` `n` ``) always counts; otherwise ``name`` must not continue into a
-    longer identifier or ``document:dotted.path`` on either side. A
-    sentence-ending ``.`` does not continue a token; ``.inner`` does."""
+    """Whether ``message`` names ``name`` as a whole token; a short name such as ``"x"`` is a substring of almost any message."""
     if _quotes(message, name):
         return True
     token = rf"(?<![\w.:/\-]){re.escape(name)}(?![\w:/\-]|\.\w)"
@@ -199,9 +190,7 @@ def _plan_errors(report) -> list[str]:
 
 
 def _child_env(target: ConformanceTarget) -> dict[str, str]:
-    """The environment a child process (or an env-taking call) receives: the
-    caller's and the target's scratch root -- set in this copy only, never in
-    ``os.environ``."""
+    """The caller's environment plus the target's scratch root, set in the copy only, never in ``os.environ``."""
     env = dict(os.environ)
     env[SCRATCH_ENV_VAR] = str(target.scratch_root)
     return env
@@ -227,8 +216,7 @@ def check_strict_plan(target: ConformanceTarget) -> CheckVerdict:
 
 
 def _missing_required(reconciliation: Mapping[str, Any]) -> list[str]:
-    """Ids of the non-optional artifacts a reconciliation found missing. One
-    rule for C6 and C7: an absent optional artifact fails neither."""
+    """Ids of the non-optional artifacts a reconciliation found missing (C6 and C7)."""
     return [
         a["artifact_id"] for a in reconciliation.get("artifacts", ())
         if a["status"] == "missing" and not a.get("optional")
@@ -595,8 +583,7 @@ def _artifact_and_quantities(target: ConformanceTarget, ctx, report) -> tuple[di
 def _run_for_quantities(
     target: ConformanceTarget, ctx, study: Mapping[str, Any], label: str, env: Mapping[str, str] = {},
 ):
-    """Plan and run the target under ``study``; the run document, the declared quantities and the
-    run's case root and step logs, or a failed verdict's detail."""
+    """The run document, declared quantities, case root and step logs of ``study``'s run, or a failure's detail."""
     report = _plan(target, ctx, study)
     if report.status != "ok":
         return f"the {label} plan failed: {_plan_errors(report)}"
@@ -771,10 +758,7 @@ _StatEntry = tuple[bool, int, int]
 
 
 def _tree_stat(root: Path) -> dict[str, _StatEntry]:
-    """``relpath -> (is_dir, size, mtime_ns)`` for every file and directory
-    under ``root``, the root itself included as ``"."``. Stat, not bytes:
-    a real native tutorials tree is large, and this runs around every
-    check. An absent root is an empty snapshot, so its creation shows."""
+    """``relpath -> (is_dir, size, mtime_ns)`` under ``root`` (itself ``"."``); stat, not bytes, as the native tree is large."""
     if not root.exists():
         return {}
     snapshot: dict[str, _StatEntry] = {}

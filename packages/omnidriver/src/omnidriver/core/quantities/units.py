@@ -1,9 +1,6 @@
-"""Unit normalisation: a small declared table, nothing inferred.
+"""Unit normalisation: a small declared table, nothing inferred, ASCII spellings.
 
-Each unit maps to (dimension, integer factor in the dimension's smallest
-unit), so a conversion is one exact multiply/divide. An unlisted unit, or
-a conversion between dimensions, is refused by name. Spellings are ASCII.
-"""
+Each unit maps to (dimension, integer factor in the dimension's smallest unit), so a conversion is one exact multiply or divide; an unlisted unit or a cross-dimension conversion is refused by name."""
 from __future__ import annotations
 
 from typing import Final

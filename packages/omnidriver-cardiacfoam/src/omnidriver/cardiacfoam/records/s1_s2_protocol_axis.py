@@ -1,25 +1,4 @@
-"""The S1-S2 protocol axis.
-
-The whole protocol is one mapping value, not four separate axes/keys:
-``endTime``/``writeAfterTime`` are derived from all four numbers together
-(``s1_interval_ms``, ``n_s1``, ``s2_interval_ms``, ``n_s2``), and an axis must
-not read a value like ``s2_interval_ms`` back off the staged case if a study
-set it as a separate direct key. Requiring every number as part of one study
-value is the only way to compute the derived times without that back door. A
-sweep that varies ``s2_interval_ms`` per case therefore varies the whole
-protocol mapping per case.
-
-The arithmetic below is reproduced exactly, not re-derived::
-
-    write_after_time_s = (s1_interval_ms * (n_s1 - 1)) / 1000.0 - 2.0
-    end_time = (
-        (s1_interval_ms * (n_s1 - 1) + s2_interval_ms * n_s2) / 1000.0 + 2.0
-    )
-
-Both magic constants (``-2.0``, the "start writing 2s before the end of the
-S1 phase" offset; ``+2.0``, the end-time buffer) are kept as literals, not
-exposed as new axis parameters.
-"""
+"""The S1-S2 protocol axis: one mapping value that sets the stimulus keys and derives ``endTime`` and ``writeAfterTime``."""
 
 from __future__ import annotations
 
@@ -28,10 +7,12 @@ from typing import Any, Mapping
 
 from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult
 
+# The protocol is one mapping, not four axes: `endTime` and `writeAfterTime`
+# derive from all four numbers together, and the axis must not read one back
+# off the staged case. A sweep over `s2_interval_ms` varies the whole mapping.
 _REQUIRED_KEYS = ("s1_interval_ms", "n_s1", "s2_interval_ms", "n_s2")
 
-#: The old module's own literals (module docstring has the full reasoning);
-#: kept exactly, not exposed as new axis parameters.
+#: Start writing 2 s before the end of the S1 phase; end 2 s after the last S2.
 _WRITE_AFTER_TIME_OFFSET_S = -2.0
 _END_TIME_BUFFER_S = 2.0
 
@@ -57,21 +38,10 @@ def s1_s2_protocol_axis(
     ``system/controlDict:endTime`` and ``<scope>.writeAfterTime``.
 
     ``electro_document`` is the case-relative document the ``<solver>Coeffs``
-    ``scope`` lives in (``restitutionCurves`` uses
-    ``"constant/electroProperties"``/``("singleCellSolverCoeffs",)``, the
-    same as :func:`omnidriver.cardiacfoam.records.ionic_model_axis
-    .ionic_model_axis`'s own parameters for the same tutorial).
-    ``endTime`` is always written to ``system/controlDict`` -- OpenFOAM's
-    own document, not this tutorial's -- so it is not parameterised by
-    ``electro_document``.
+    ``scope`` lives in. ``endTime`` is always written to
+    ``system/controlDict``.
 
-    The axis declares ``value_kind="mapping"`` -- checked by
-    ``tutorial_records.resolve_case_patches`` before ``resolve`` ever runs,
-    so a non-mapping study value (a list, a bare number) is refused by
-    core's own generic shape check before reaching this module's code.
-
-    Refuses by name: the protocol mapping is missing one of its four
-    required keys (module-level ``_REQUIRED_KEYS``).
+    Refuses by name a protocol mapping missing one of its four required keys.
     """
 
     def resolve(value: Any, staged_case_root: Path) -> AxisResult:

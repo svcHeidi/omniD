@@ -125,7 +125,7 @@ def test_snake_case_spelling_of_a_camel_case_token_counts(tmp_path: Path):
 
 
 def test_foam_underscore_stays_an_unbounded_substring_match(tmp_path: Path):
-    """FOAM_ deliberately has no left boundary: it must still catch OPENFOAM_-style constants (review: a boundary would stop catching those)."""
+    """FOAM_ deliberately has no left boundary: it must still catch OPENFOAM_-style constants; a boundary would stop catching those."""
     core = tmp_path / "core"
     core.mkdir()
     (core / "m.py").write_text('X = "OPENFOAM_RUN_ROOT"\n')
@@ -154,7 +154,7 @@ def test_processor_gets_a_left_boundary(tmp_path: Path):
     assert "x1" in lines[0]
 
 
-# --- C-I2: --write-baseline must preserve reasons, and TODO-reason must fail the gate. ---
+# --- --write-baseline must preserve reasons, and TODO-reason must fail the gate. ---
 
 
 def test_write_baseline_preserves_reason_for_an_unchanged_pair(tmp_path: Path):

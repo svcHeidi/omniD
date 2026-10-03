@@ -143,7 +143,7 @@ def test_rewrite_hex_block_lines_against_the_real_fixture(tmp_path):
 
 
 def test_rewrite_hex_block_lines_against_a_1d_single_block_fixture():
-    """The other real shape every migrated tutorial's block mesh has: a
+    """The other real shape every tutorial's block mesh has: a
     single `hex (` line, not three (e.g. the
     `cable1DRestitution`/`cable1DCVConvergence` records' shared native case,
     `electrophysiologyProtocols/cableProtocol/monodomain1DCableCV`)."""
@@ -170,7 +170,7 @@ def test_wrong_expected_blocks_still_refuses_against_the_real_fixture(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# The new path: `plan_block_mesh_resolution` (pure) + the patch renderer
+# `plan_block_mesh_resolution` (pure) + the patch renderer
 # (reads the real case, rewrites, validates `expected_blocks`).
 # --------------------------------------------------------------------------
 

@@ -113,12 +113,7 @@ def _run_workflow_locked(
     env: dict[str, str] | None = None,
     driver_context: DriverContext | None = None,
 ) -> WorkflowRunOutcome:
-    """Run pending steps to completion, retrying retryable failures.
-
-    ``max_total_attempts`` caps step executions across the whole call, including
-    retries; zero executes no steps and ``None`` leaves only each step's own
-    ``max_attempts`` in force.
-    """
+    """Run pending steps, retrying retryable failures; ``max_total_attempts`` caps executions including retries."""
     if max_total_attempts is not None and max_total_attempts < 0:
         raise ValueError("max_total_attempts must be non-negative")
     resolved_state_path = state_path or (output_dir / STATE_FILENAME)

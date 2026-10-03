@@ -293,13 +293,12 @@ def test_case_script_step_preserves_dyld_vars_through_shell_hop() -> None:
     # On macOS, /bin/sh is SIP-protected: the OS silently strips inherited
     # DYLD_* env vars before a shebang-interpreted script's own body runs,
     # even though `env=` correctly carried them into the subprocess call.
-    # A case-local script is exactly such a shebang script, so
-    # invoking it directly with env=execution_env used to lose
-    # DYLD_LIBRARY_PATH silently, crashing cardiacFoam with "Library not
-    # loaded" deep inside the script. This test proves the value the real
-    # script sees matches what was passed in `env`, on whatever platform CI
-    # runs on -- the macOS-specific failure mode this guards against can
-    # only be observed by actually running on macOS (verified manually).
+    # A case-local script is exactly such a shebang script, so invoking it
+    # directly with env=execution_env would lose DYLD_LIBRARY_PATH silently
+    # and the solver would fail with "Library not loaded" inside the script.
+    # This test proves the value the script sees matches what was passed in
+    # `env`, on whatever platform CI runs on -- the macOS-specific failure
+    # mode can only be observed by actually running on macOS.
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
         script = root / "run-case"
@@ -335,8 +334,8 @@ def test_case_script_invocation_embeds_dyld_vars_literally_in_argv() -> None:
     # process must carry DYLD_* values as literal text (surviving even
     # if the OS strips them from the *inherited* environment of the shell
     # that's about to exec them), not rely solely on `env=`.
-    # Process ownership now uses Popen, so retain this as the pure argv
-    # boundary rather than replacing Popen with a test double.
+    # Process ownership uses Popen, so this tests the pure argv boundary
+    # rather than replacing Popen with a test double.
     from omnidriver.core.runtime.workflow_runner import _argv_for_execution
 
     argv = _argv_for_execution(

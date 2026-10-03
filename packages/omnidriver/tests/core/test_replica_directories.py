@@ -1,5 +1,5 @@
-"""Replica directories are plugin-declared vocabulary
-(spec 2026-09-26-core-generality-design.md §2, A2). A stack that declares
+"""Replica directories are plugin-declared vocabulary.
+A stack that declares
 none (openCARP) treats a processor0/ like any other directory."""
 from __future__ import annotations
 

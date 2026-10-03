@@ -1,45 +1,6 @@
-"""Verify the static ionic catalog against what the solver actually exposes.
+"""Verify the static ionic catalog against the names the built solver exposes.
 
-Why this cannot be done statically
-----------------------------------
-An agent writes ``ionicConstantOverrides`` using names from
-``IONIC_MODEL_CATALOG``. An unknown name is a **FatalError** at solver startup
-(``src/genericWriter/ionicModelIO.C:245-255``), so a stale catalog means a run
-that dies -- or a name that silently resolves to something else.
-
-No static rule describes the naming:
-
-* ``AC_``-prefixed: AlievPanfilov, Courtemanche, Fabbri, Gaur, Grandi,
-  PerisYague, Stewart, ToRORd_dynCl, Trovato.
-* **Unprefixed**: BuenoOrovio, TNNP, and the three FDA manufactured
-  verification models.
-* **Mixed within one model**: TWorld carries 273 ``AC_*`` constants and exactly
-  one that is not -- ``gnalTissueScale``
-  (``src/ionicModels/TWorld/TWorld_2024.H:729``).
-
-The split is by *provenance*: CellML-generated constants get ``AC_``,
-hand-added ones do not. So it grows whenever someone hand-adds a constant, and
-any rule written down is wrong the next time that happens. The only durable
-answer is to ask the built solver.
-
-What makes this authoritative
------------------------------
-``listCellModelsVariables.C:161`` prints ``model.constantVariableNames()``,
-which is a thin wrapper (``src/ionicModels/ionicModel/ionicModel.H:518``) over
-``ioConstantNames()`` (``:526``) -- the same array handed to the override
-matcher at ``src/ionicModels/ionicModel/ionicModel.C:98``. The utility's output
-*is* the override vocabulary, not a parallel description of it.
-
-Running it
-----------
-``omnidriver check --plugin cardiacfoam --record singleCell`` runs it as a
-probe, from the shell ``omnidriver env`` prepares, with the utility built::
-
-    (cd applications/utilities/listCellModelsVariables && wmake)
-
-Without the utility on ``PATH`` every model reports ``skipped`` and
-``all_match`` is ``False``. **A skip is never a pass.**
-"""
+Run as the ``omnidriver check`` probe; without the utility on ``PATH`` every model is ``skipped``, and a skip is never a pass."""
 
 from __future__ import annotations
 
@@ -53,6 +14,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+# An unknown override name is a FatalError at solver startup, and no static
+# rule describes the names: most carry an AC_ prefix (CellML-generated
+# constants), hand-added ones do not, and one model mixes both (TWorld's
+# gnalTissueScale). The utility prints the same constant names the solver's
+# override matcher accepts, so it is the authority.
 _UTILITY = "listCellModelsVariables"
 
 # Sections the report exposes, in the order the utility prints them.
@@ -113,12 +79,9 @@ class VerificationResult:
 def parse_report_text(text: str) -> dict[str, Any]:
     """Parse a listCellModelsVariables report into name lists.
 
-    The regexes match the real output format at
-    ``listCellModelsVariables.C:168-198``. Note ``algebraic`` entries carry
-    no ``-->`` value, unlike constants and states.
-
-    Unparseable text yields empty lists rather than raising -- the caller
-    surfaces that as a mismatch, so garbage can never read as agreement.
+    ``algebraic`` entries carry no ``-->`` value, unlike constants and states.
+    Unparseable text yields empty lists rather than raising, so the caller
+    reports a mismatch and garbage never reads as agreement.
     """
     result: dict[str, Any] = {
         "ionic_model": None,
@@ -220,8 +183,7 @@ def _synthesize_case(case_dir: Path, model: str, entry: Any) -> None:
 def _verify_one(
     model: str, entry: Any, binary: Path, case_root: Path, env: Mapping[str, str] | None,
 ) -> ModelVerificationResult:
-    """Run the utility for one model. A per-model failure is reported as that
-    model's status, never raised -- one awkward model must not blind the rest."""
+    """Run the utility for one model; a failure is that model's status, never raised, so it cannot blind the rest."""
     case_dir = case_root / model
     try:
         _synthesize_case(case_dir, model, entry)

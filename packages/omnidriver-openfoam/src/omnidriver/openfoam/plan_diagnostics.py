@@ -69,10 +69,7 @@ def _scanned_reader(driver_context: Any, source_root: Path, scratch_root: Path |
 
 
 def _owned_dict_relpaths(case_root: Path, driver_context: Any) -> tuple[str, ...]:
-    """The case dictionaries the catalogue addresses: only those may be
-    checked for keys it lacks -- warning about keys in an uncatalogued file
-    would be pure noise. Each document the plugin names is matched against
-    the profile's declared case-file rules."""
+    """The case dictionaries the catalogue addresses, the only ones checked for keys it lacks."""
     relpaths: list[str] = []
     documents = driver_context.stack.call("get_owned_documents")
     rules = driver_context.stack.call("get_profile").case_files
@@ -142,9 +139,7 @@ def _report(driver_context: Any, mapping: Any, source_root: Path | None, scratch
 def _catalog_diagnostics(
     driver_context: Any, mapping: Any, source_root: Path | None, report: dict | None,
 ) -> tuple[StrictDiagnostic, ...]:
-    """The catalogue compared with the C++, never failing the plan: a warning
-    per disagreement, a note per catalogued key the C++ no longer reads and a
-    note per uncatalogued read."""
+    """The catalogue compared with the C++, never failing the plan: warnings for disagreements, notes for unread and uncatalogued keys."""
     if mapping is None:
         return ()
     cxx_mapping_source = driver_context.identity.resolutions["get_profile"]

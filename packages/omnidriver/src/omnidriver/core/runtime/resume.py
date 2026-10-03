@@ -1,8 +1,6 @@
 """Bind persisted checkpoints to the workflow and observed input evidence.
 
-The snapshot describes a checkpoint, not a build attestation; state
-without evidence is readable but cannot resume.
-"""
+The snapshot describes a checkpoint, not a build attestation; state without evidence cannot resume."""
 from __future__ import annotations
 
 import hashlib
@@ -24,7 +22,7 @@ if TYPE_CHECKING:
 # ``load_openfoam_environment`` uses this path only to communicate a sourced
 # environment from a helper shell back to Python.  A fresh temporary filename
 # is created every load, and it is never inherited by the workflow command as
-# a solver setting.  Hashing it made an unchanged public CLI invocation
+# a solver setting.  Hashing it would make an unchanged CLI invocation
 # spuriously non-resumable.
 _VOLATILE_ENVIRONMENT_KEYS = frozenset({"_DRIVER_ENV_FILE"})
 

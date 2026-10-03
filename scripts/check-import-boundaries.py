@@ -1,34 +1,7 @@
 #!/usr/bin/env python3
-"""Enforce ARCHITECTURE.md's package-independence rules as a CI gate.
+"""Fail when a package imports across the layering ARCHITECTURE.md forbids; ``if TYPE_CHECKING:`` imports are exempt.
 
-Rules (see ARCHITECTURE.md "Architectural Rules"):
-  1. omnidriver.core must not import omnidriver.openfoam, omnidriver.cardiacfoam
-     or omnidriver.cardiaccore, and must never import foamlib directly.
-  2. omnidriver.openfoam must not import omnidriver.cardiacfoam or
-     omnidriver.cardiaccore.
-  3. No adapter imports omnidriver.opencarp, and omnidriver.opencarp imports
-     no other adapter nor foamlib.
-
-Core's forbidden list is *derived* from every adapter package under
-``packages/*/src/omnidriver/`` rather than listed by hand, and any adapter
-package with no block of its own below fails the gate by name -- so a new
-adapter cannot land without a rule for it.
-
-A cardiac adapter may import omnidriver.openfoam -- that is the direction the
-layering allows, and omnidriver-cardiaccore does exactly that for
-``read_foam_entry``/``update_foam_entry``. What is forbidden is the reverse.
-
-Whoever adds a new adapter package must add its rule to ``adapter_rules`` in
-``main()``; a package this script has never heard of is a package it
-silently exempts.
-
-Every Core module, including ``core/compatibility.py``, must remain independent
-of OpenFOAM, cardiacFOAM, and foamlib at runtime. Compatibility behavior is
-neutral or explicitly refuses unsupported operations; it must not recover a
-solver dependency through an import waiver.
-
-Imports inside ``if TYPE_CHECKING:`` blocks are never runtime imports, so
-they're exempt everywhere.
+Core imports no adapter nor foamlib; openfoam no cardiac adapter; opencarp no other adapter nor foamlib, and none imports opencarp.
 """
 
 from __future__ import annotations
@@ -39,32 +12,22 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# The WHOLE core package, not just its core/ subdirectory: scanning only
-# core/ would miss packages/omnidriver/src/omnidriver/*.py, where cli.py
-# hard-imports omnidriver.openfoam at module scope -- breaking
-# `import omnidriver.cli` in a core-only install.
+# The whole core package, not only core/: top-level modules such as cli.py
+# must import cleanly in a core-only install too.
 CORE_SRC = REPO_ROOT / "packages/omnidriver/src/omnidriver"
 OPENFOAM_SRC = REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam"
-# CLAUDE.md's package table states what cardiaccore must not know about:
-# "cardiacFoam solver semantics". The two cardiac adapters are siblings, and a
-# direct import between them would make one adapter's vocabulary a silent
-# dependency of the other -- the producer/consumer seam between them is meant
-# to be declared and mediated, not imported.
+# The two cardiac adapters are siblings: a direct import would make one
+# adapter's vocabulary a silent dependency of the other, so the seam between
+# them is declared, not imported.
 CARDIACCORE_SRC = REPO_ROOT / "packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore"
-# openCARP is a fifth, independent adapter (packages/omnidriver-opencarp):
-# neither OpenFOAM nor either cardiac adapter's vocabulary belongs in it, and
-# it must not import foamlib either -- it drives a different binary entirely.
+# openCARP drives a different binary: no OpenFOAM, cardiac or foamlib import
+# belongs in it.
 OPENCARP_SRC = REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp"
 CARDIACFOAM_SRC = REPO_ROOT / "packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam"
 
 
 def _adapter_package_roots() -> dict[str, Path]:
-    """Every adapter's ``omnidriver.<name>`` package, found on disk.
-
-    An adapter is any ``packages/<dist>/src/omnidriver/<name>/__init__.py``
-    outside core's own distribution. Deriving this, rather than listing it,
-    is what lets core's rule cover a package nobody remembered to add here.
-    """
+    """Every adapter's ``omnidriver.<name>`` package, found on disk outside core's distribution."""
     core_dist = CORE_SRC.parent.parent
     return {
         f"omnidriver.{init.parent.name}": init.parent
@@ -72,12 +35,8 @@ def _adapter_package_roots() -> dict[str, Path]:
         if init.parent.parent.parent.parent != core_dist
     }
 
-# Waived violations. This list may only SHRINK: a new violation fails the
-# gate, and a waiver that no longer matches anything fails it too, so this
-# list cannot rot into a stale exemption.
-#
-# It is empty: core contains no runtime cardiac import at all, so this gate
-# asserts the rule outright rather than recording exceptions to it.
+# Waived violations; the list is empty and may only shrink. A waiver that
+# matches nothing fails the gate, so it cannot rot into a stale exemption.
 KNOWN_VIOLATIONS: frozenset[str] = frozenset()
 
 
@@ -165,9 +124,8 @@ def main() -> int:
     waived = {key for key, _ in found if key in KNOWN_VIOLATIONS}
     violations = [msg for key, msg in found if key not in KNOWN_VIOLATIONS]
 
-    # A waiver matching nothing means the violation was fixed (good) or moved
-    # (bad) -- either way the list is out of date and must be corrected, or it
-    # decays into the same false reassurance the narrow scope gave for months.
+    # A waiver matching nothing means the violation was fixed or moved; either
+    # way the list is out of date.
     stale = sorted(KNOWN_VIOLATIONS - waived)
     if stale:
         print("Stale entries in KNOWN_VIOLATIONS -- these no longer match anything:\n")

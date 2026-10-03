@@ -1,9 +1,6 @@
 """Schema-checked declarative metadata supplied by a trusted solver plugin.
 
-Profiles deliberately describe files and C++/Python catalog provenance only.
-They are not an execution language: workflow execution and solver semantics
-remain Python responsibilities behind the core security boundary.
-"""
+Profiles describe files and C++/Python catalog provenance only, not an execution language; execution and solver semantics stay in Python behind core's security boundary."""
 
 from __future__ import annotations
 
@@ -125,16 +122,13 @@ KNOWN_ROLES: frozenset[str] = frozenset({
     "case.regression_test",
 })
 
-#: Reserved first-segment words. These are the namespaces core actually
-#: validates the leaf of (against ``KNOWN_ROLES`` above); a role using one of
-#: them is never eligible for the escape tier below, even if the exact
-#: string is not in ``KNOWN_ROLES`` -- that is precisely the typo case the
-#: escape tier must NOT swallow.
+#: Reserved first-segment words: namespaces whose leaf core validates against
+#: ``KNOWN_ROLES``. Such a role is never eligible for the escape tier below,
+#: so a typo in one is refused rather than swallowed.
 _RESERVED_ROLE_NAMESPACES: frozenset[str] = frozenset({"plugin", "case"})
 
-#: Compatibility marker for existing foreign-environment profiles. New
-#: adapters may declare their own namespace directly (``fenics.mesh_file``);
-#: their adapter validates its vocabulary.
+#: Escape tier for a foreign-environment role; an adapter may instead declare
+#: its own namespace (``fenics.mesh_file``) and validate its vocabulary.
 ESCAPE_ROLE_PREFIX = "x-"
 
 

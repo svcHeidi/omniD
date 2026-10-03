@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 """Export ``dict_entries`` and the ionic / active-tension catalogs to JSON.
 
-The exporter reads ``DictEntry`` objects and fans each one out into one record
-per phase the entry declares. An entry tagged ``phases={"anatomy", "physics"}``
-therefore appears in BOTH the ``anatomy`` and ``physics`` buckets; each emitted
-record carries a single ``phase`` field equal to its bucket and preserves the
-full ``phases`` list for validation and agent consumers.
+An entry is emitted once per phase it declares, with a single ``phase`` field and the full ``phases`` list.
 """
 
 from __future__ import annotations
@@ -35,11 +31,7 @@ def _all_entries():
 
 
 def _entry_to_record(e) -> dict:
-    """Flatten a ``DictEntry`` to a JSON record.
-
-    ``phases`` arrives as a ``frozenset`` (unordered, not JSON-serialisable);
-    we emit a sorted list so the catalog JSON is stable across runs.
-    """
+    """Flatten a ``DictEntry`` to a JSON record; ``phases`` is sorted so the output is stable."""
     d = asdict(e)
     d["phases"] = sorted(e.phases)
     return d
@@ -51,9 +43,7 @@ def build_catalog() -> dict:
         if not e.phases:
             raise SystemExit(f"entry missing phases: {e.driver_path}")
         record = _entry_to_record(e)
-        # Fan-out: one record per declared phase. Each emitted record is
-        # stamped with a single `phase` (its bucket) while keeping `phases`
-        # so downstream consumers know the entry's other homes.
+        # One record per declared phase; `phases` stays so consumers see the entry's other homes.
         for ph in e.phases:
             if ph not in by_phase:
                 raise SystemExit(

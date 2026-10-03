@@ -82,8 +82,7 @@ _SOURCE_SUFFIXES = frozenset({".C", ".H", ".cu", ".cuh"})
 
 
 def _supplied_src_root(driver_context: Any | None) -> Path | None:
-    """The stack's C++ source root, as supplied (``cxx_mapping.source_root``),
-    or ``None`` -- never discovered by walking up from this module."""
+    """The stack's supplied C++ source root (``cxx_mapping.source_root``), or ``None``; never discovered."""
     if driver_context is None:
         return None
     mapping = driver_context.stack.call("get_profile").cxx_mapping
@@ -96,8 +95,7 @@ _LIB_RULE = re.compile(r"^\s*LIB\s*=\s*\$\(FOAM_USER_LIBBIN\)/(\S+)", re.MULTILI
 
 
 def _sources(directory: Path) -> list[tuple[float, Path]]:
-    """Every C++/CUDA source under ``directory`` with its mtime; wmake's own
-    ``Make`` and ``lnInclude`` are not source."""
+    """Every C++/CUDA source under ``directory`` with its mtime; wmake's ``Make`` and ``lnInclude`` are not source."""
     found: list[tuple[float, Path]] = []
     for dirpath, dirnames, filenames in os.walk(directory):
         dirnames[:] = [name for name in dirnames if name not in {"Make", "lnInclude"}]
@@ -137,11 +135,7 @@ def _build_staleness_diagnostics(
     src_root: Path | str | None,
     driver_context: Any | None = None,
 ) -> tuple[StrictDiagnostic, ...]:
-    """Warn (never block) by name when a user-compiled utility under
-    ``$FOAM_USER_APPBIN``, or a library under ``$FOAM_USER_LIBBIN`` that a
-    ``Make/files`` under ``src_root`` builds, is older than the sources it
-    is built from -- the classic stale-``libso`` footgun; core OpenFOAM apps
-    are never flagged."""
+    """Warn, never block, when a user-compiled utility or library built from ``src_root`` is older than its sources."""
     if src_root is None:
         return ()
     src_root = Path(src_root)
@@ -196,10 +190,7 @@ _MPI_FAMILY_MARKERS = {
 
 
 def _mpi_family_diagnostics(checked_env: dict[str, str]) -> tuple[StrictDiagnostic, ...]:
-    """The ``mpirun`` on PATH must match ``WM_MPLIB``, the MPI family
-    OpenFOAM was sourced with -- another MPI's launcher first on PATH
-    (openCARP's bundled MPICH, say) starts N separate serial solvers instead
-    of one N-rank run. An unknown family is not checked."""
+    """The ``mpirun`` on PATH must match ``WM_MPLIB``, or another MPI's launcher starts N serial solvers; an unknown family is skipped."""
     mplib = checked_env.get("WM_MPLIB", "")
     markers = next((words for family, words in _MPI_FAMILY_MARKERS.items() if family in mplib), None)
     found = mpi.identity("mpirun", checked_env)

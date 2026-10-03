@@ -1,8 +1,6 @@
-"""Pure OpenFOAM case-edit planners: resolve a requested edit into a raw
-`render_patch_case_files` target, reading and writing nothing.
+"""Pure OpenFOAM case-edit planners: resolve a requested edit into a raw `render_patch_case_files` target, writing nothing.
 
-Enforced by `scripts/check-case-writes.py`: this module never writes a case
-directly.
+``scripts/check-case-writes.py`` enforces that this module never writes a case.
 """
 
 import re
@@ -61,9 +59,7 @@ def hex_cell_counts_expected_blocks(key_path: Sequence[str]) -> int:
 def _rewrite_hex_block_lines(
     text: str, cell_counts_str: str, expected_blocks: int, *, label: str,
 ) -> str:
-    """Rewrites every `hex (` block declaration in a blockMeshDict body;
-    raises ``KeyError`` if the number of lines rewritten does not equal
-    `expected_blocks`. `label` names the checked document in that error."""
+    """Rewrite every `hex (` line of a blockMeshDict body; ``KeyError`` naming `label` unless exactly `expected_blocks` change."""
     lines = text.splitlines(keepends=True)
     rewritten: list[str] = []
     replaced_count = 0
@@ -166,11 +162,7 @@ def _scale_line(keyword: str) -> re.Pattern[str]:
 
 
 def _block_mesh_scale(text: str, path: Path) -> float:
-    """Uniform scale blockMesh applies to `vertices`: the first of
-    `_SCALE_KEYWORDS` present, else 1.0. A scalar `<= 0` is no scaling, as
-    in blockMesh.C's `readScaling`, which also accepts a per-component
-    vector; this reader takes a scalar only and refuses anything else by
-    name."""
+    """Uniform scale blockMesh applies to `vertices`; `<= 0` is no scaling (blockMesh.C `readScaling`), and only a scalar is read."""
     for keyword in _SCALE_KEYWORDS:
         match = _scale_line(keyword).search(text)
         if match is None:
@@ -223,8 +215,7 @@ _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 
 
 def _named_block_body(text: str, name: str) -> str | None:
-    """Body of `name { ... }` in `text`, brace-depth aware; `None` if absent.
-    First match only."""
+    """Body of `name { ... }` in `text` (brace-depth aware, first match), or `None`."""
     match = re.search(rf"(?<![\w.]){re.escape(name)}\s*\{{", text)
     if match is None:
         return None
@@ -263,8 +254,7 @@ def read_nested_entry(document_path: Path, key: str, *, scope: Sequence[str]) ->
 
 
 def _patch_format() -> str:
-    """`case_rendering.FORMAT`, imported lazily to avoid a module cycle
-    (`case_rendering.py` imports `_rewrite_hex_block_lines` from here)."""
+    """``case_rendering.FORMAT``, imported lazily because ``case_rendering`` imports this module."""
     from .case_rendering import FORMAT
 
     return FORMAT

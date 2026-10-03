@@ -1,36 +1,7 @@
 #!/usr/bin/env python3
-"""Core must not assume the world is an OpenFOAM case (spec 2026-09-25 §6).
+"""Fail when core names OpenFOAM layout tokens beyond the recorded baseline, scripts/core-shape-baseline.txt.
 
-Counts OpenFOAM layout tokens in core's identifiers and string literals
-(comments and docstrings are prose, not coupling) per (file, token), and
-compares them with scripts/core-shape-baseline.txt. The baseline is recorded
-debt, not a waiver list:
-- a new (file, token) pair fails;
-- a higher count fails;
-- a count that shrank also fails until the baseline is edited to match, so
-  the debt can only go down.
-Baseline line format: ``<path relative to core src>\\t<token>\\t<count>\\t<reason>``.
-
-Matching is normalised (casefold, with ``_``/``.``/``-`` stripped from both
-the token and the scanned text) so a snake_case or otherwise-punctuated
-spelling of the same layout concept is counted, not just the token's literal
-form (``touch_case_foam`` is the same coupling as ``case.foam``). Two tokens
-carry a hand-tuned exception to that normalisation rather than a per-file
-special case:
-- ``FOAM_`` stays an exact, case-sensitive substring match with no boundary,
-  because a boundary would stop it catching ``OPENFOAM_*`` -- itself real
-  coupling.
-- ``processor`` gets a left boundary (not preceded by a letter) on the
-  normalised text, so ``processor_dir`` still counts but ``postprocessor``/
-  ``preprocessor`` do not.
-
-``--write-baseline`` preserves the file's header and every hand-written
-reason for a (file, token) pair whose count did not change; a new pair or a
-changed count is written with the placeholder reason ``TODO-reason``, which
-a maintainer must replace by hand. The normal check fails, naming the line,
-while any ``TODO-reason`` remains: a guard whose own maintenance flag
-can silently erase or bless debt is weaker than the invariant it claims to
-enforce.
+Tokens are counted per (file, token) in identifiers and string literals; a new, higher or shrunk count fails.
 """
 from __future__ import annotations
 
@@ -48,32 +19,25 @@ TOKENS = (
     "controlDict", "fvSchemes", "fvSolution", "polyMesh", "blockMesh", "decomposePar",
     "reconstructPar", "processor", "case.foam", "Allrun", "Allclean", "bashrc",
     "WM_PROJECT", "FOAM_", "foamlib",
-    # Core's own retired "start time"/time-indexed vocabulary
-    # (selected_start_time, DataArtifact
-    # .time_indexed, the {time} path placeholder): guards against it
-    # regrowing, since only test_instance_directories.py's specific
-    # assertions would otherwise catch a regression.
+    # Time-indexed vocabulary (start time, the {time} path placeholder) that
+    # core must not grow.
     "start_time", "startTime", "latestTime", "time_indexed", "{time}",
-    # Plan-report concepts that belong to one solver family's diagnostics
-    # (``get_plan_diagnostics``), not to the report core builds for every
-    # solver.
+    # Plan-report concepts owned by one solver family's ``get_plan_diagnostics``.
     "function_object", "nondimensional", "dictionary_resolution",
 )
 
-# Chars treated as equivalent-to-absent when comparing spellings: they
-# separate words in an identifier the way camelCase capitalisation or a
-# literal "." does in the token's own spelling.
+# Matching is casefolded with these separators stripped from both token and
+# text, so ``touch_case_foam`` counts as ``case.foam``.
 _SEPARATORS = str.maketrans("", "", "_.-")
 
-# processor's left boundary: not preceded by a letter, so postprocessor/
-# preprocessor are excluded but processor_dir (boundary at the underscore,
-# stripped before this regex runs) is not.
+# `processor` must not be preceded by a letter, so postprocessor/preprocessor
+# are excluded but processor_dir (separator already stripped) is not.
 _PROCESSOR_RE = re.compile(r"(?<![a-z])processor")
 
 TODO_REASON = "TODO-reason"
 
 _DEFAULT_HEADER = (
-    "# Recorded OpenFOAM-layout debt in core (spec 2026-09-25 §6). Format:\n"
+    "# Recorded OpenFOAM-layout debt in core. Format:\n"
     "# <path relative to core src>\\t<token>\\t<count>\\t<reason>\n"
     "# This is debt, not a waiver: scripts/check-core-shape.py fails on any new\n"
     "# (file, token) pair, any higher count, and any count that shrank without\n"
@@ -87,7 +51,7 @@ def _normalize(text: str) -> str:
 
 def _count_token(token: str, raw_text: str, normalized_text: str) -> int:
     if token == "FOAM_":
-        # Deliberately unnormalised: see the module docstring.
+        # Exact and unbounded so it also catches OPENFOAM_*, itself real coupling.
         return raw_text.count("FOAM_")
     if token == "processor":
         return len(_PROCESSOR_RE.findall(normalized_text))
@@ -103,15 +67,7 @@ def _is_string_expr_statement(stmt: ast.stmt) -> bool:
 
 
 def _docstring_ids(tree: ast.AST) -> set[int]:
-    """String literals this module's own docstring calls prose, not
-    coupling: not only body[0] (a module/class/function's true docstring),
-    but also a bare string statement anywhere else in a body -- the
-    attribute/field "docstring" convention this codebase's own house style
-    uses for a dated correction (CLAUDE.md: "record the correction with a
-    date rather than silently overwriting it"). Scanning only body[0] would
-    miss a dated correction attached to a dataclass field and count it as
-    coupling despite being exactly the prose this exemption exists for.
-    """
+    """Ids of bare string statements in any body: docstrings and attribute docstrings are prose, not coupling."""
     ids = set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -167,8 +123,7 @@ def read_baseline(path: Path) -> dict[tuple[str, str], tuple[int, str]]:
 
 
 def _existing_header(path: Path) -> str:
-    """The leading run of blank/comment lines in an existing baseline file,
-    preserved verbatim by --write-baseline; a fresh file gets the default."""
+    """The baseline's leading blank/comment lines, kept verbatim by --write-baseline."""
     if not path.exists():
         return _DEFAULT_HEADER
     header_lines = []
@@ -181,10 +136,11 @@ def _existing_header(path: Path) -> str:
 
 
 def write_baseline(path: Path, counts: Counter) -> None:
-    """Record today's counts. A (file, token) pair whose count is unchanged
-    from the existing baseline keeps its hand-written reason; a new pair or
-    one whose count changed (grew or shrank) gets TODO_REASON, which the
-    normal check then refuses until a maintainer replaces it by hand."""
+    """Record the current counts.
+
+    A pair with an unchanged count keeps its reason; a new or changed pair gets
+    TODO_REASON, which the check refuses until a maintainer writes one.
+    """
     existing = read_baseline(path)
     header = _existing_header(path)
     lines = []

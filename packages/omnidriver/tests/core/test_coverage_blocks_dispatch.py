@@ -29,7 +29,7 @@ def test_omitting_the_audit_still_never_blocks():
 
 
 def test_the_dispatch_gate_receives_the_audit(tmp_path: Path):
-    """The half that was missing: the predicate was correct and unfed."""
+    """The launch predicate is fed the audit, not only correct in isolation."""
     from omnidriver import cli
 
     case_root = tmp_path / "case"

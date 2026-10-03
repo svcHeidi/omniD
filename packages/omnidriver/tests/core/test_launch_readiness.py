@@ -1,4 +1,4 @@
-"""P2.1: one launch predicate, truth-table tested across every state category (structural, environment, warning, execution) the roadmap requires covered."""
+"""One launch predicate, truth-table tested across every state category (structural, environment, warning, execution)."""
 from __future__ import annotations
 
 import pytest

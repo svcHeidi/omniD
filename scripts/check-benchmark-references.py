@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
 """Every benchmark reference under benchmarks/ is a valid point reference.
 
-A reference is supplied data: an agent passes its path in a comparison
-request. This gate keeps the committed ones loadable, their citations
-resolvable and their units in core's table
-(omnidriver.core.quantities.load_point_reference). It checks form, not
-truth. Whether a value is the source's own is a review question, answered
-in each file's `sources` and in the review table of the task that wrote it.
+The gate checks form (loadable, citations resolvable, units in core's table), not truth.
 """
 from __future__ import annotations
 

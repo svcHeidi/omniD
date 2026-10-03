@@ -28,7 +28,7 @@ class ProvenanceComponent:
     ``role`` drives severity and defaults to ``"required_input"``. ``origin``
     is diagnostic only. ``strength`` is honest about how much the fingerprint
     actually proves: ``"content"`` (sha256 of the bytes), ``"metadata"``
-    (legacy weak evidence), ``"verified_absence"`` (a declared optional
+    (a weak stat-based fingerprint), ``"verified_absence"`` (a declared optional
     input was observed absent), or ``"unavailable"`` (could not be stat'd
     or read at all).  A verified absence is complete identity evidence: a
     later appearance changes that component and invalidates resume.

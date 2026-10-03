@@ -1,8 +1,6 @@
 """Load and adapt a RunDocument v3 for strict workflow execution.
 
-``build_execution_inputs`` turns a document into the same executor inputs
-``strict_plan`` produces, so the CLI run/step path is identical for both.
-"""
+``build_execution_inputs`` yields the same executor inputs ``strict_plan`` does."""
 
 from __future__ import annotations
 
@@ -51,8 +49,8 @@ def load_run_document(path: str | Path) -> RunDocument:
     """Read, schema-validate, and return a RunDocument from ``path``.
 
     The document is validated against ``schemas/run-document.json``, whose
-    ``version`` is the constant ``"3"``: any other version is refused, never
-    migrated. Raises ``ValueError`` on malformed input or schema-validation
+    ``version`` is the constant ``"3"``: any other version is refused.
+    Raises ``ValueError`` on malformed input or schema-validation
     failure (a ``jsonschema.ValidationError`` is re-raised as ``ValueError``
     here, since it is not one itself), and ``json.JSONDecodeError`` on
     invalid JSON.

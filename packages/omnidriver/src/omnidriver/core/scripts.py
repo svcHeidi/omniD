@@ -1,9 +1,6 @@
-"""A solver repository's helper scripts: listed with a usage line read from
-the file, never by running it, and runnable as a workflow step.
+"""A solver repository's helper scripts: listed with a usage line read from the file, never by running it.
 
-The repository is the truth: its ``omnidriver.toml`` names the scripts folder,
-the CLI puts the repository on the ``DriverContext``, and nothing here
-keeps a catalogue of what the folder holds.
+The repository is the truth: its ``omnidriver.toml`` names the folder and nothing here keeps a catalogue.
 """
 
 from __future__ import annotations
@@ -28,8 +25,7 @@ class ScriptError(RuntimeError):
 
 
 def _is_script(path: Path, root: Path) -> bool:
-    """A file directly in ``root`` with a script suffix or the executable bit,
-    or an executable file below it (a script keeping its library next to it)."""
+    """A ``.py``/``.sh`` file or executable directly in ``root``, or an executable below it."""
     if not path.is_file() or path.name.startswith("."):
         return False
     if os.access(path, os.X_OK):

@@ -204,13 +204,12 @@ def _predict_verification(case_root: Path) -> tuple[DataArtifact, ...]:
     return (
         DataArtifact(
             artifact_id="verification_error_summary",
-            # Confirmed directly against source: every non-Eikonal verifier
-            # writes "<...>_<N>_cells.dat" with nothing after "cells" but the
-            # extension --
-            #   3D_19_cells.dat                  (manufacturedFDAMonodomainVerifier.C:186)
-            #   rotatedAnisotropy_3D_19_cells.dat (manufacturedAnisotropicMonodomainVerifier.C:416)
-            #   bathBidomain_3D_19_cells.dat      (manufacturedFDABathBidomainVerifier.C:426)
-            #   <dimension>_19_cells.dat          (manufacturedFDABidomainVerifier.C:285)
+            # Every non-Eikonal verifier writes "<...>_<N>_cells.dat" with nothing
+            # after "cells" but the extension:
+            #   3D_19_cells.dat                   (manufacturedFDAMonodomainVerifier)
+            #   rotatedAnisotropy_3D_19_cells.dat (manufacturedAnisotropicMonodomainVerifier)
+            #   bathBidomain_3D_19_cells.dat      (manufacturedFDABathBidomainVerifier)
+            #   <dimension>_19_cells.dat          (manufacturedFDABidomainVerifier)
             path_pattern="postProcessing/manufactured*Summary*.dat" if "Eikonal" in verifier_type else "postProcessing/*_cells.dat",
             format="csv_probe",
             description=f"Manufactured-solution L1/L2/Linf error norms emitted by {verifier_type}",

@@ -1,4 +1,4 @@
-"""Instance directories are plugin-declared vocabulary (spec 2026-09-26-core-generality-design.md §2, A2). A stack that declares none (openCARP) has none; a stack that declares a pattern gets exactly what that pattern matches."""
+"""Instance directories are plugin-declared vocabulary. A stack that declares none (openCARP) has none; a stack that declares a pattern gets exactly what that pattern matches."""
 from __future__ import annotations
 
 from pathlib import Path

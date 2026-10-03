@@ -1,4 +1,4 @@
-"""M5, end to end and UNMOCKED: a record-entry sweep's spawned ``omnidriver run --run-document`` child must run on the SAME plugin stack the parent CLI invocation was given via ``--plugin`` -- never falling back to its own ``default_driver_context()``, which the parent's explicit selection must never be silently replaced by (CLAUDE.md's "an explicitly-contexted operation never falls back to the default")."""
+"""End to end and UNMOCKED: a record-entry sweep's spawned ``omnidriver run --run-document`` child must run on the SAME plugin stack the parent CLI invocation was given via ``--plugin`` -- never falling back to its own ``default_driver_context()``, which the parent's explicit selection must never be silently replaced by (CLAUDE.md's "an explicitly-contexted operation never falls back to the default")."""
 
 from __future__ import annotations
 

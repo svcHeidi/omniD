@@ -1,8 +1,5 @@
-"""The idealized-heart records: three variants on cardiacFOAM's own idealized
-biventricular mesh, committed natively (``cases/idealized*``, Git LFS); no
-``--input`` is needed. They use the ``cobiveco`` convention (``tm``/``tv``/
-``apicobasal``), so steps here declare their own field paths rather than
-reusing ``anatomy.py``'s ``uvc_*`` constants.
+"""The idealized-heart records: three variants on the native idealized biventricular mesh (``cases/idealized*``, Git LFS), needing no ``--input``.
+They use the ``cobiveco`` convention, so steps declare their own field paths instead of ``anatomy.py``'s ``uvc_*``.
 """
 
 from __future__ import annotations
@@ -11,34 +8,26 @@ from omnidriver.core.tutorial_records import RecordInput, TutorialRecord
 
 from .anatomy import CONV, MESH, TREE_OUT, step
 
-#: The idealized mesh's own coordinate fields (cobiveco naming): ``tm``
+#: The idealized mesh's coordinate fields (cobiveco naming): ``tm``
 #: 1=endocardium/0=epicardium, ``tv`` 0=LV/1=RV, ``apicobasal`` 0=apex/1=base,
-#: per this mesh's own ``coordinatesConventionDict`` (confirmed against its
-#: ENDO_LV/ENDO_RV/EPI/BASE boundary patches).
+#: per this mesh's own ``coordinatesConventionDict``.
 COBIVECO = ("0/tm", "0/tv", "0/apicobasal")
 
 #: generatePurkinjeTree's outputs under ``coordinateSystem cobiveco``: no
 #: ``RVSeptalEndoFaces`` set is built, since cobiveco solves transmural/
 #: intraventricular membership per chamber, so the septum already reads
-#: endocardial from both sides (per the native tutorial's own README).
+#: endocardial from both sides.
 COBIVECO_TREE_OUT = tuple(path for path in TREE_OUT if "RVSeptalEndoFaces" not in path)
 
-#: This mesh's own polyMesh, in full: `anatomy.MESH` lists only the five
-#: files `humanSlab`'s bundle has; this committed mesh also carries
-#: `cellZones`/`faceZones`/`pointZones`, which restaging must also copy.
+#: This mesh's polyMesh in full: it also carries `cellZones`/`faceZones`/
+#: `pointZones`, which `anatomy.MESH`'s five files omit and restaging must copy.
 IDEALIZED_MESH = MESH + tuple(
     f"constant/polyMesh/{name}" for name in ("cellZones", "faceZones", "pointZones")
 )
 
 
 def _mesh_input(native_case_relpath: str) -> RecordInput:
-    """Declare ``constant/polyMesh`` as a native-location input.
-
-    Staging excludes ``polyMesh`` unconditionally (a mesh is normally
-    generated or supplied); this committed mesh has no generating step, so
-    it must opt back into staging via a native-location ``RecordInput``,
-    which needs no ``--input``.
-    """
+    """Staging excludes ``polyMesh``; this committed mesh has no generating step, so a native-location input opts it back in."""
     return RecordInput(
         name="mesh",
         native_relpath=native_case_relpath,
@@ -47,10 +36,8 @@ def _mesh_input(native_case_relpath: str) -> RecordInput:
 
 CONDUCTIVITY = step(
     "conductivity", "setCardiacConductivity",
-    # *IDEALIZED_MESH (all eight files, not anatomy.MESH's five): every input
-    # destination must map to some step's consumes, and native `createMesh.H`
-    # reads the full committed mesh (cellZones/faceZones/pointZones included)
-    # as one `fvMesh` construction, never individually by name.
+    # All eight mesh files: every input destination must map to some step's
+    # consumes, and native `createMesh.H` reads the full mesh as one `fvMesh`.
     consumes=(*IDEALIZED_MESH, "0/fiber", "0/sheet"),
     produces=("0/Conductivity",),
 )
@@ -70,9 +57,7 @@ MORPHOMETRY = step(
     ),
 )
 
-#: idealizedHeart: mirrors humanSlab's own workflow (conductivity, anatomy,
-#: slab, morphometry), on the idealized mesh instead of the supplied bivCase
-#: bundle.
+#: Mirrors humanSlab's workflow (conductivity, anatomy, slab, morphometry).
 IDEALIZED_HEART = TutorialRecord(
     name="idealizedHeart",
     native_case_relpath="cases/idealizedHeart",
@@ -89,10 +74,9 @@ IDEALIZED_HEART = TutorialRecord(
     ),
 )
 
-#: idealizedHeartEndocardial: mirrors humanEndocardial's own workflow
-#: (conductivity, anatomy, generatePurkinjeTree -- LV/RV allLeaves+
-#: endocardial, per its own committed system/generatePurkinjeTreeDict).
-#: 1DgraphToFoam is left out here too, matching native humanEndocardial.
+#: Mirrors humanEndocardial's workflow (conductivity, anatomy,
+#: generatePurkinjeTree with LV/RV allLeaves+endocardial); `1DgraphToFoam` is
+#: not a step.
 IDEALIZED_HEART_ENDOCARDIAL = TutorialRecord(
     name="idealizedHeartEndocardial",
     native_case_relpath="cases/idealizedHeartEndocardial",
@@ -108,9 +92,9 @@ IDEALIZED_HEART_ENDOCARDIAL = TutorialRecord(
     ),
 )
 
-#: idealizedHeartPigTransmural: mirrors pigMorphometricTransmural's own
-#: workflow (conductivity, anatomy, morphometry, generatePurkinjeTree -- LV
-#: weightedField+transmural, RV allLeaves+transmural).
+#: Mirrors pigMorphometricTransmural's workflow (conductivity, anatomy,
+#: morphometry, generatePurkinjeTree with LV weightedField+transmural and RV
+#: allLeaves+transmural).
 IDEALIZED_HEART_PIG_TRANSMURAL = TutorialRecord(
     name="idealizedHeartPigTransmural",
     native_case_relpath="cases/idealizedHeartPigTransmural",
@@ -120,9 +104,8 @@ IDEALIZED_HEART_PIG_TRANSMURAL = TutorialRecord(
         ANATOMY_STEP,
         MORPHOMETRY,
         # `0/PurkinjeTerminalWeight{Subendocardial,Intramural}` are
-        # MORPHOMETRY's own `produces`, not authored inputs, so they are not
-        # re-declared as consumed here (same reasoning as `0/Conductivity`
-        # in `human_slab.py`).
+        # MORPHOMETRY's `produces`, not authored inputs, so they are not
+        # consumed here.
         step(
             "purkinje_tree", "generatePurkinjeTree",
             consumes=(CONV, *COBIVECO),

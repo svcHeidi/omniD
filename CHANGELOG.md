@@ -1,5 +1,8 @@
 # driverFOAM changelog
 
+> **Historical. Read for reasoning, not for locations.** Every path below names the
+> retired flat `openfoam_driver/` tree, not the current packages.
+
 This file starts with the Phase 2 core-decoupling branch. Earlier history is
 not reconstructed here — use `git log` for anything before it.
 

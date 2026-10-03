@@ -13,18 +13,12 @@ if TYPE_CHECKING:
 
 
 def _diagnostic_from_phase(phase: str, field: str, message: str, level: str) -> "StrictDiagnostic":
-    """Build the canonical :class:`StrictDiagnostic` from this module's
-    ``(phase, field, message, level)`` call shape, keeping every call site
-    below unchanged in argument order. ``code`` is the generic
-    ``"run_validation"`` -- none of these sites carries a more specific one.
-    """
+    """A ``run_validation`` diagnostic from the ``(phase, field, message, level)`` call shape."""
     return diagnostic(level, "run_validation", message, source=phase, field=field)
 
 
 def _catalogued(driver_path: str, value: Any) -> bool:
-    """Whether the catalogue lists ``value`` in ``driver_path``'s menu. A rule
-    that compares a name refuses only a name it knows: one the catalogue
-    lacks may be a model the scan registered, and is never refused here."""
+    """Whether the catalogue lists ``value``; a name it lacks may be one the scan registered, so a rule never refuses it."""
     from .record_key_validation import _ELECTRO_ENTRIES_BY_PATH
 
     entry = _ELECTRO_ENTRIES_BY_PATH.get(driver_path)
@@ -39,11 +33,11 @@ _VIRTUAL_PRESENCE_TRIGGERS: tuple[tuple[str, str], ...] = (
     ("bathPotentialDomain.", "$bathPotentialDomain_configured"),
     ("ecgDomains.", "$ecgDomains_present"),
     ("conductionNetworkDomains.", "$conductionNetworkDomains_present"),
-    # A single-cell run with no stimulus is legal: stimulusIO.C:149-155
-    # returns a no-op protocol when the sub-dict is absent. Gating the
-    # stimulus family on presence rather than on myocardimSolver keeps the
-    # builder from inventing stim_amplitude/nstim1 defaults and quietly
-    # pacing a case that asked for none.
+    # A single-cell run with no stimulus is legal: stimulusIO returns a
+    # no-op protocol when the sub-dict is absent. Gating the stimulus family
+    # on presence rather than on myocardiumSolver keeps the builder from
+    # inventing stim_amplitude/nstim1 defaults and quietly pacing a case
+    # that asked for none.
     ("singleCellStimulus.", "$singleCellStimulus_present"),
 )
 
@@ -75,12 +69,7 @@ _DOMAIN_COUPLINGS_PREFIX = "domainCouplings."
 
 
 def _evaluate_solver_coupling(context: dict[str, Any]) -> list["StrictDiagnostic"]:
-    """Validate each explicit coupling against its referenced network.
-
-    Network creation alone does not imply a coupling. Match the C++ system
-    builder's conductionNetworkDomain lookup rather than borrowing whichever
-    network selector happens to appear first in the flattened context.
-    """
+    """Check each explicit coupling against the network it names, as the C++ system builder resolves it."""
     errors: list["StrictDiagnostic"] = []
     myocardium = context.get("myocardiumSolver")
     if myocardium is None:
@@ -177,8 +166,7 @@ def _evaluate_solver_coupling(context: dict[str, Any]) -> list["StrictDiagnostic
 
 
 def _declared_conduction_networks(context: dict[str, Any]) -> set[str]:
-    """Names of every conductionNetworkDomains.<name> block that has at
-    least one sub-key present in context."""
+    """Names of the conductionNetworkDomains.<name> blocks with a sub-key in ``context``."""
     declared_networks: set[str] = set()
     for key in context:
         if not key.startswith(_CONDUCTION_NET_PREFIX):
@@ -322,9 +310,9 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list["StrictDiagnostic"]
                 level="error",
             ))
 
-        # gradientAxes is a dynamic-name dictionary (native 3025230b9): more
-        # than one named axis (e.g. apicobasal, longitudinal) can compose on
-        # the same run, each validated independently.
+        # gradientAxes is a dynamic-name dictionary: more than one named axis
+        # (e.g. apicobasal, longitudinal) can compose on the same run, each
+        # validated independently.
         axis_names = sorted({
             k[len(_GRADIENT_AXES_PREFIX):].split(".", 1)[0]
             for k in ga_keys
@@ -336,9 +324,7 @@ def _evaluate_heterogeneity(context: dict[str, Any]) -> list["StrictDiagnostic"]
             # Mirrors ionicHeterogeneity::validateGradientAxisConfig exactly:
             # 0 < scalingMin <= scalingMax. beta carries no native constraint
             # (apexBaseScale accepts any value, positive or negative) and is
-            # deliberately not checked here -- the old "beta must be > 0"
-            # check was never backed by a native read and is dropped, not
-            # carried over, with the apexBaseBands -> gradientAxes rename.
+            # deliberately not checked here.
             scaling_min = context.get(prefix + "scalingMin")
             scaling_max = context.get(prefix + "scalingMax")
             if scaling_min is not None:
@@ -434,10 +420,7 @@ _PERSONALIZED_TEMPLATES_SUFFIX = ".personalizedTemplates."
 
 
 def _evaluate_personalized_templates(context: dict[str, Any]) -> list["StrictDiagnostic"]:
-    """The value checks of an explicitly selected eikonalECG
-    template-generation block, which is optional: eikonalECG otherwise uses
-    compiled templates. The keys it must hold are the catalogue's
-    ``required_when`` on the block's presence."""
+    """Value checks of the optional eikonalECG template-generation block; its required keys are the catalogue's ``required_when``."""
     errors: list["StrictDiagnostic"] = []
     domains = {
         key[len(_ECG_DOMAIN_PREFIX):].split(".", 1)[0]
@@ -504,44 +487,13 @@ _ECG_PSEUDO_VERIFIER = "manufacturedPseudoECGVerifier"
 
 
 def _as_switch_bool(value: Any) -> bool:
-    """Interpret an OpenFOAM ``Switch``-shaped value as a Python bool.
-
-    ``value`` is either a real ``foamlib``-parsed string (``"yes"``/``"no"``/
-    ``"true"``/``"false"``, possibly quoted) or, in a unit test's literal
-    context dict, a plain Python ``bool``. Anything else (missing, ``None``)
-    reads as ``False`` -- the native default
-    (``manufacturedPseudoECGVerifier.C:420``,
-    ``cfg.lookupOrDefault<Switch>("anisotropic", false)``).
-    """
+    """An OpenFOAM ``Switch``-shaped value as a bool; a missing one reads as the native default, false."""
     return bool(switch_value(value))
 
 
 def _evaluate_ecg_anisotropic_consistency(context: dict[str, Any]) -> list["StrictDiagnostic"]:
-    """``ecgDomains.<name>.verificationModel.anisotropic`` must state the same
-    relation the tissue verifier already states, in both directions.
-
-    Native ``manufacturedPseudoECGVerifier`` reads its own ``anisotropic``
-    ``Switch`` (default ``false``,
-    ``src/verificationModels/ecgVerification/manufacturedPseudoECGVerifier.C``,
-    ``readVerificationModel``) to choose which of two reference branches --
-    the isotropic FDA cosine field or the anisotropic
-    ``sin^2(pi x)*sin^2(pi y)*sin^2(pi z)`` field -- its samples are checked
-    against. That choice has to agree with the *tissue*-side verifier
-    actually driving the solve
-    (``$ELECTRO_MODEL_COEFFS.verificationModel.type``): ``anisotropic yes``
-    is correct exactly when the tissue verifier is
-    ``manufacturedAnisotropicMonodomainVerifier``, and wrong -- a silently
-    mismatched reference -- otherwise, in either direction. This models the
-    relation between the two existing keys; it adds no new key.
-
-    Scoped to domains whose own ``ecgDomains.<name>.verificationModel.type``
-    is ``manufacturedPseudoECGVerifier``: native only reads ``anisotropic``
-    there (``manufacturedEikonalECGVerifier``/``manufacturedFDABathBidomain
-    ECGVerifier`` do not declare the key at all -- ``grep -rl anisotropic
-    src/verificationModels/ecgVerification/`` finds only the pseudo-ECG
-    verifier's ``.C``/``.H`` pair), matching this catalog entry's own
-    ``applicable_when``.
-    """
+    """``ecgDomains.<name>.verificationModel.anisotropic`` is yes exactly when the tissue verifier is the anisotropic one."""
+    # A mismatch silently checks the pseudo-ECG samples against the wrong reference field.
     errors: list["StrictDiagnostic"] = []
     tissue_verifier = context.get("verificationModel.type")
     if tissue_verifier is not None and not _catalogued(
@@ -557,6 +509,7 @@ def _evaluate_ecg_anisotropic_consistency(context: dict[str, Any]) -> list["Stri
     }
     for domain in sorted(domains):
         prefix = f"{_ECG_DOMAIN_PREFIX}{domain}."
+        # Only manufacturedPseudoECGVerifier reads `anisotropic`.
         if context.get(prefix + "verificationModel.type") != _ECG_PSEUDO_VERIFIER:
             continue
 
@@ -589,11 +542,7 @@ _RPVJ_COUPLER = "reactionDiffusionPvjCoupler"
 
 
 def _graph_has_terminal_resistances(graph_path: Any) -> bool:
-    """Whether a materialized Purkinje graph file carries a non-empty
-    top-level ``pvjResistances`` list (``conductionGraph::readFromDict``
-    reads it as an optional scalar list). foamlib parses without evaluating
-    ``#calc``/``#codeStream``, so it is safe on a file this module did not
-    write."""
+    """Whether the Purkinje graph file holds a non-empty ``pvjResistances`` list; foamlib does not evaluate ``#calc``/``#codeStream``."""
     from foamlib import FoamFile
 
     try:
@@ -611,11 +560,7 @@ def _graph_has_terminal_resistances(graph_path: Any) -> bool:
 def _evaluate_pvj_resistance_requirement(
     case_root: Path, context: dict[str, Any], electro_path: Path,
 ) -> list["StrictDiagnostic"]:
-    """``reactionDiffusionPvjCoupler`` reads ``rPvj`` only when its graph's
-    ``terminalResistances()`` is null (``reactionDiffusionPvjCoupler.C``), so
-    the catalogue cannot state it as a ``required_when``: it depends on a
-    file. A graph not yet materialized defers the check; a materialized one
-    with no ``pvjResistances`` and no ``rPvj`` is an error."""
+    """``rPvj`` is required only when the materialized graph has no ``pvjResistances``, which a ``required_when`` cannot see; an absent graph defers."""
     found: list["StrictDiagnostic"] = []
     for key, coupler in context.items():
         if not (key.startswith(_DOMAIN_COUPLINGS_PREFIX) and key.endswith(_COUPLER_SUFFIX)) or coupler != _RPVJ_COUPLER:

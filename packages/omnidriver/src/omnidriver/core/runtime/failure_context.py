@@ -8,11 +8,7 @@ DEFAULT_TAIL_BYTES = 65536  # 64 KiB default cap on the tail read window
 
 
 def _tail_file(path: str | None, *, max_lines: int, max_bytes: int) -> tuple[str, bool]:
-    """Return (tail_text, truncated) for the last lines of a file.
-
-    Bounded from the end so a diverged run that produced a huge log cannot
-    exhaust memory or context. Degrades to ("", False) on any I/O problem.
-    """
+    """(tail_text, truncated), read from the end so a huge log cannot exhaust memory; ("", False) on I/O errors."""
     if not path:
         return "", False
     file_path = Path(path)

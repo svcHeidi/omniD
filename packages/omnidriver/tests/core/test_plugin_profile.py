@@ -89,11 +89,9 @@ def test_a_core_role_loads(tmp_path) -> None:
 
 # --- Escape tier: a role for an environment core has no vocabulary for ---
 #
-# The hard block this closes: get_profile() is a required SolverPlugin
-# member, so a plugin whose profile YAML declares e.g. `fenics.mesh_file`
-# used to fail at load with `ValueError: unknown case-file role
-# 'fenics.mesh_file'` -- nothing about a non-OpenFOAM plugin could even be
-# attempted. See future/ENVIRONMENT_CONTRACT.md §10.
+# get_profile() is a required SolverPlugin member, so a plugin whose profile
+# YAML declares e.g. `fenics.mesh_file` must load rather than fail with
+# `ValueError: unknown case-file role 'fenics.mesh_file'`.
 
 
 def test_an_escape_role_for_a_foreign_environment_loads(tmp_path) -> None:
@@ -157,7 +155,7 @@ def test_a_typo_in_a_known_namespace_still_raises_under_the_escape_tier(
 def test_a_malformed_or_shadowing_escape_role_still_raises(
     tmp_path, bad_escape_role: str,
 ) -> None:
-    """The legacy `x-` marker cannot shadow a Core-owned namespace."""
+    """The `x-` marker cannot shadow a Core-owned namespace."""
     profile = tmp_path / "plugin.yaml"
     profile.write_text(
         "schema_version: 1\n"

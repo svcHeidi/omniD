@@ -312,7 +312,7 @@ def test_a_quantities_report_edited_after_writing_is_recomputed_as_failed(tmp_pa
 
 
 def test_a_consistent_quantities_report_keeps_its_status_and_surfaces_why(tmp_path: Path) -> None:
-    """The consistent case: recomputation agrees, and the report's own 'nothing was compared numerically' reason (I2/M1) surfaces through the experiment envelope too, not only in the report file itself."""
+    """The consistent case: recomputation agrees, and the report's own 'nothing was compared numerically' reason surfaces through the experiment envelope too, not only in the report file itself."""
     _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
     report = tmp_path / "reports" / "checker.json"
     report.parent.mkdir()
@@ -332,7 +332,7 @@ def test_a_consistent_quantities_report_keeps_its_status_and_surfaces_why(tmp_pa
 
 
 def test_a_quantities_report_with_no_recomputable_metrics_is_a_named_failure(tmp_path: Path) -> None:
-    """A checker omnidriver.quantities report missing metrics/both_not_reached cannot be recomputed at all, so it is never trusted either (M6): the stated status is not passed through as-is just because recomputation could not run."""
+    """A checker omnidriver.quantities report missing metrics/both_not_reached cannot be recomputed at all, so it is never trusted either: the stated status is not passed through as-is just because recomputation could not run."""
     _manifest(tmp_path, [_case(tmp_path, "a", status="completed")])
     report = tmp_path / "reports" / "checker.json"
     report.parent.mkdir()

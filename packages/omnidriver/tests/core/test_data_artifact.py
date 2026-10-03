@@ -1,4 +1,4 @@
-"""Contract tests for the DataArtifact vocabulary (plan v2 phase 2)."""
+"""Contract tests for the DataArtifact vocabulary."""
 from __future__ import annotations
 
 import dataclasses
@@ -82,7 +82,7 @@ class TestDataArtifact(unittest.TestCase):
 
 
 class TestArtifactFormatIsOpen(unittest.TestCase):
-    """ArtifactFormat is deliberately NOT a closed Literal (Tier 3, future/ENVIRONMENT_CONTRACT.md §10): most format strings in practice are a solver plugin's own vocabulary for its own outputs, which core has no business validating."""
+    """ArtifactFormat is deliberately NOT a closed Literal: most format strings in practice are a solver plugin's own vocabulary for its own outputs, which core has no business validating."""
 
     def test_artifact_format_is_a_plain_string_type(self) -> None:
         self.assertIs(ArtifactFormat, str)

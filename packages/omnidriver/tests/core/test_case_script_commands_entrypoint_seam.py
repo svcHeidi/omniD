@@ -1,4 +1,4 @@
-"""A plugin's declared openfoam.entrypoint now resolves case-locally, not just the fixed Allrun-family names (Tier 4, entrypoint slice -- future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md)."""
+"""A plugin's declared openfoam.entrypoint resolves case-locally, not just the fixed Allrun-family names."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from plugins.toy import ToyProvider
 
 
 class _ForeignEntrypointPlugin(ToyProvider):
-    """Declares its entrypoint as "run.sh" -- proves the seam is a genuine escape from the fixed name, not just a coincidence of every shipped plugin happening to use "Allrun" today."""
+    """Declares its entrypoint as "run.sh" -- proves the seam is a genuine escape from the fixed name, not just a coincidence of every shipped plugin using "Allrun"."""
 
     def get_profile(self) -> PluginProfile:
         return PluginProfile(
@@ -96,7 +96,7 @@ def test_allowlist_accepts_the_declared_entrypoint_only_for_its_own_plugin() -> 
 
 
 def test_dyld_dot_source_wrapper_applies_to_a_declared_entrypoint_too() -> None:
-    """The macOS-SIP DYLD-preservation wrapper (workflow_runner._argv_for_execution) must recognise the declared entrypoint, not just the fixed names -- a partial fix here would silently lose a foreign plugin's DYLD_* env on macOS even after command resolution and the allowlist are both fixed."""
+    """The macOS-SIP DYLD-preservation wrapper (workflow_runner._argv_for_execution) must recognise the declared entrypoint, not just the fixed names -- otherwise a foreign plugin's DYLD_* env is silently lost on macOS even when command resolution and the allowlist accept it."""
     ctx = driver_context(_ForeignEntrypointPlugin(), source="test")
     env = {"DYLD_LIBRARY_PATH": "/some/lib"}
 

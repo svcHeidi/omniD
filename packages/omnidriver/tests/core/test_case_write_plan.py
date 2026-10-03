@@ -68,7 +68,7 @@ def test_a_plan_round_trips_through_json_unchanged():
 
 
 def test_a_frozen_plan_has_no_mutable_interior():
-    """W1: `frozen=True` stops rebinding a field, not mutating what it points at."""
+    """`frozen=True` stops rebinding a field, not mutating what it points at."""
     plan = _plan()
     with pytest.raises(Exception):
         plan.files = ()
@@ -89,7 +89,7 @@ def test_a_dict_valued_parameter_is_frozen_too():
 
 
 def test_a_plan_carries_no_before_image():
-    """W1: a before-image is execution state."""
+    """A before-image is execution state."""
     fields = {field.name for field in case_write.CaseWritePlan.__dataclass_fields__.values()}
     assert "before" not in fields
     rendered_fields = {
@@ -331,7 +331,7 @@ def test_a_plan_with_zero_files_is_refused():
 
 
 def test_from_json_catches_a_tampered_content_digest():
-    """`from_json` recomputed content_digest from the decoded bytes and never compared it against the stored one -- a tampered digest was silently discarded rather than caught, the opposite of "an integrity check"."""
+    """`from_json` compares the stored content_digest against the one recomputed from the decoded bytes; a tampered digest is caught, not silently discarded."""
     payload = _file().to_json()
     payload["content_digest"] = "0" * 64
     with pytest.raises(ValueError, match="does not match"):

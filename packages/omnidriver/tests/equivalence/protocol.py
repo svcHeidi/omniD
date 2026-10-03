@@ -1,4 +1,4 @@
-"""The frozen tolerance protocol for E1."""
+"""The frozen tolerance protocol of the numerical-equivalence harness."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass

@@ -1,16 +1,6 @@
-"""Cross-domain solver coupling rules.
+"""Cross-domain solver coupling rules: which ``myocardiumSolver`` x ``purkinjeSolver`` x ``required_coupler`` combinations are valid, and why the invalid ones are forbidden.
 
-Defines which `myocardiumSolver × purkinjeSolver × required_coupler`
-combinations are physically valid in cardiacFoam, and explains why the
-invalid ones are forbidden. Lives outside `ionic_model_catalog.py` because
-the rules are about *solver* compatibility, not about any individual ionic
-model — keeping them here makes it clearer to readers (and agents) which
-concern owns the data.
-
-Consumer today: `introspection.py` exposes the table to LLM agents through
-the describe-tutorial JSON payload so they can reject incompatible solver
-combinations before launching a run.
-"""
+Kept apart from ``ionic_model_catalog.py`` because the rules concern solver compatibility, not any ionic model."""
 from __future__ import annotations
 
 from typing import Final

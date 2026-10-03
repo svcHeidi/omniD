@@ -1,13 +1,6 @@
-"""
-Ionic Model Catalog
+"""Static catalogue of ionic models: the variables each exposes, so an agent can plan ionic outputVariables without running the solver.
 
-A static, build-time-generated catalog of ionic models.
-This module exposes the exact variables each model supports so an autonomous
-agent can plan ionic outputVariables without running the solver.
-
-All variable names are extracted from C++ source files and are guaranteed to be
-exact.
-"""
+Names are extracted from the C++ source."""
 
 from __future__ import annotations
 

@@ -1,7 +1,6 @@
 """Read-only inspection of the files an OpenFOAM dictionary depends on.
 
-Separate from :func:`mutators.read_foam_entry`, which only inspects lexical
-source: this follows ``#include`` directives, and never runs ``foamDictionary``.
+Unlike :func:`mutators.read_foam_entry` (lexical only) it follows ``#include`` directives; it never runs ``foamDictionary``.
 """
 from __future__ import annotations
 

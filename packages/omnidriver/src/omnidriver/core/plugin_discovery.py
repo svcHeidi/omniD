@@ -1,9 +1,6 @@
-"""Discovery of installed omnidriver solver plugins via Python entry-points.
+"""Discovery of installed omnidriver solver plugins via the ``omnidriver.plugins`` entry-point group.
 
-Plugins register under the ``omnidriver.plugins`` entry-point group in their
-``pyproject.toml``; the entry-point name is what ``--plugin`` and
-:func:`load_discovered_plugin` resolve. Loading executes the plugin's Python
-code in-process, same as the trusted ``module:Class`` form.
+Loading executes the plugin's Python code in-process, same as the trusted ``module:Class`` form.
 """
 
 from __future__ import annotations
@@ -72,12 +69,7 @@ def _describe_entry_point(entry_point) -> str:
 
 
 def _instantiate(entry_point):
-    """Load ``entry_point`` and build its plugin, or raise :class:`BrokenPluginError`.
-
-    Catches ``Exception`` deliberately: importing third-party code can raise
-    anything, and whatever it raises means the same thing here -- this entry
-    cannot supply a plugin. The original error is chained and quoted.
-    """
+    """Load and build the plugin, or raise :class:`BrokenPluginError`; third-party code can raise anything, so all of it is caught."""
     try:
         return entry_point.load()()
     except Exception as exc:
@@ -89,16 +81,7 @@ def _instantiate(entry_point):
 
 
 def _find_installed_provider(plugin_id: str):
-    """The installed, unambiguous provider answering ``plugin_id``, if any.
-
-    Loads every discovered entry point to read its ``plugin_id`` -- there is
-    no id-keyed index, only the name-keyed one ``discover_plugins()``
-    returns. Only called to resolve a `requires:` declaration, a
-    CLI-startup-frequency operation, not a hot loop. Load failures are
-    collected rather than aborting the scan, so the answer does not depend on
-    enumeration order; the refusal (if no candidate answers) names every
-    broken entry as a possible provider.
-    """
+    """The installed provider answering ``plugin_id``; load failures are collected so the answer does not depend on enumeration order."""
     broken: list[BrokenPluginError] = []
     for entry_point in discover_plugins().values():
         try:
@@ -118,15 +101,7 @@ def _find_installed_provider(plugin_id: str):
 
 
 def _expand_with_requirements(primary: Any, source: str):
-    """Add whichever installed provider answers ``primary``'s `requires:`.
-
-    ``--plugin`` (and the bare discovered-name form) select ONE provider by
-    design. Resolving `requires:` against what is already installed keeps that
-    single-name UX working without the caller assembling a stack by hand. One
-    level only (no shipped profile declares a chain today); an unmet
-    requirement this can't find is left for ``order_providers`` to report by
-    name.
-    """
+    """Add the installed providers answering ``primary``'s `requires:`, one level; an unmet one is left for ``order_providers`` to report."""
     from .provider_stack import provider_profile
 
     providers = [primary]

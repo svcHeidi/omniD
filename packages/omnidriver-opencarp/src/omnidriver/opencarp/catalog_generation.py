@@ -119,7 +119,7 @@ def build_catalog(binary: str = "openCARP", env: Mapping[str, str] | None = None
 def compare_catalogs(committed: Mapping[str, Any], built: Mapping[str, Any]) -> dict[str, list]:
     """The committed catalog against the binary's, in the OpenFOAM scan's
     vocabulary: a parameter the binary lists and the catalog lacks is
-    ``uncatalogued``; a parameter it no longer lists is ``unread``; another
+    ``uncatalogued``; a catalogued parameter it does not list is ``unread``; another
     type, default, bound or menu is a ``disagreement`` stating both sides.
     None of them fails anything."""
     have = {parameter["name"]: parameter for parameter in built["parameters"]}

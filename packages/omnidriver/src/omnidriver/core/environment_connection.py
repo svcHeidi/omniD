@@ -1,19 +1,6 @@
 """``omnidriver env``: how to prepare a shell for one plugin's stack, checked.
 
-Each provider's manifest declares its part of the connection
-(``plugin_profile.EnvironmentConnection``): the variables an operator
-supplies, which one names a file to source, which name directories to put
-first on ``PATH``, and its MPI launcher. The stack's connection is every
-provider's, least-specific first; the C++ source-root variable a profile's
-``cxx_mapping`` names is one more supplied variable.
-
-This module renders and checks. It reads values only from the environment it
-is given, sources and exports only what is supplied, and invents no path: an
-unset required variable is refused by name, and nothing is searched for.
-The check is the stack's own preflight (``get_environment_diagnostics``),
-run on the environment the rendered prefix produces, over the stack's solver
-commands and, where a launcher is declared, a parallel solve.
-"""
+Renders and checks each provider's ``plugin_profile.EnvironmentConnection``, least specific first, from the supplied environment only: it invents no path, refuses an unset required variable by name, and runs the stack's own preflight on the environment the prefix produces."""
 from __future__ import annotations
 
 import json

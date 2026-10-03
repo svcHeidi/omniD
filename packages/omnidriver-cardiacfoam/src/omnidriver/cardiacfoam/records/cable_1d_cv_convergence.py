@@ -1,9 +1,5 @@
-"""``cable1DCVConvergence``: a tutorial record for the same case
-``cable1DRestitution`` points at,
-``electrophysiologyProtocols/cableProtocol/monodomain1DCableCV``. Runs
-``blockMesh`` then ``cardiacFoam``, with no postprocess step: CV extraction is
-a manual script, never wired through ``Allrun``/``Allrun.post``. See
-``docs/solver-learning/cardiacfoam.md`` section CABLE.
+"""``cable1DCVConvergence``, the ``dx`` convergence record on the same case as ``cable1DRestitution``.
+Runs ``blockMesh`` then ``cardiacFoam``; CV extraction is a manual script, not wired through ``Allrun``.
 """
 
 from __future__ import annotations

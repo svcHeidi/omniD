@@ -1,4 +1,4 @@
-"""PAR (owner Q6, 2026-09-26): a record runs parallel through its solver layer."""
+"""A record runs parallel through its solver layer."""
 from __future__ import annotations
 
 import json

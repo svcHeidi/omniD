@@ -13,9 +13,8 @@ from omnidriver.core.planning_types import SimulationAuditItem
 from omnidriver.core.runtime.attempt_lease import acquire_case_lease
 from omnidriver.core.runtime.launch_readiness import is_launchable
 
-#: Every case the write channel must handle before any route migrates onto
-#: it. A name here with no test is a visible gap; a case not listed is one
-#: nobody decided to leave out. Derived from the 2026-09-22 roadmap §4.
+#: Every case the write channel must handle. A name here with no test is a visible
+#: gap; a case not listed is one nobody decided to leave out.
 CHANNEL_CONFORMANCE_CASES = (
     "complete_plan_serialization_and_identity",
     "no_hidden_mutable_payloads",
@@ -112,7 +111,7 @@ def _context(*providers):
 
 
 def test_complete_plan_serialization_and_identity(tmp_path):
-    """W1: the serialized plan must contain every value that will be written, and its digest must be stable and order-insensitive (files and parameters are sorted canonically before hashing, per `plan_digest`'s `_digest_payload`)."""
+    """The serialized plan must contain every value that will be written, and its digest must be stable and order-insensitive (files and parameters are sorted canonically before hashing, per `plan_digest`'s `_digest_payload`)."""
     two_params = (
         _parameter(qualified_id="$TEST.a", document="constant/a", key_path=("a",)),
         _parameter(qualified_id="$TEST.b", document="constant/b", key_path=("b",)),
@@ -155,7 +154,7 @@ def test_complete_plan_serialization_and_identity(tmp_path):
 
 
 def test_no_hidden_mutable_payloads(tmp_path):
-    """W1: `frozen=True` stops rebinding a field, not mutating what it points at."""
+    """`frozen=True` stops rebinding a field, not mutating what it points at."""
     assignment = _parameter(
         value={"value": 50000.0, "dimensions": (0, -3, 0, 0, 0, 1, 0)},
         value_kind="dimensioned_scalar",
@@ -321,7 +320,7 @@ def test_file_modes(tmp_path):
 
 @_root_makes_chmod_tests_meaningless
 def test_file_modes_an_unreadable_existing_file_is_a_transaction_error_not_a_leak(tmp_path):
-    """R3 blocker 1 (2026-09-23): closest existing case to file modes, since it is one of those modes -- 0o000 -- that made the pre-existing file unreadable."""
+    """Mode 0o000 makes the pre-existing file unreadable; that must surface as a transaction error."""
     first = _plan(tmp_path, [_rendered("constant/a", b"one\n", mode=0o000)])
     case_transaction.commit_case_write(first, driver_context=object())
     before = case_write._digest_bytes(b"one\n")
@@ -592,7 +591,7 @@ def test_path_escape_and_symlinks(tmp_path):
 
 
 def test_path_escape_a_relative_case_root_is_refused_at_construction(tmp_path):
-    """R3 blocker 2 (2026-09-23): the other way a plan could escape to the wrong place -- not a symlinked write target, but a `case_root` that never named an absolute location at all, so it resolved against whatever directory the committing process happened to be in."""
+    """A `case_root` that names no absolute location would resolve against whatever directory the committing process is in."""
     with pytest.raises(ValueError, match="absolute"):
         case_write.CaseMutationRequest(
             mode="clone_and_patch", case_root=Path("somecase"),

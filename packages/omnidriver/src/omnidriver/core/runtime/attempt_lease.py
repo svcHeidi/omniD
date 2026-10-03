@@ -1,9 +1,6 @@
-"""A small, local ownership lease for workflow output directories.
+"""A host-local ownership lease for workflow output directories.
 
-The lease is deliberately host-local.  A lock from another host or a malformed
-record is not reclaimed: without shared ownership semantics, treating it as
-stale could corrupt a live remote attempt.
-"""
+A lock from another host or a malformed record is never reclaimed: it could belong to a live remote attempt."""
 from __future__ import annotations
 
 import json

@@ -98,11 +98,8 @@ monodomainSolverCoeffs
     //   models only support the single myocyte tissue.
     // Omit this block entirely for a homogeneous run governed solely by `tissue`.
     //
-    // Corrected 2026-09-26 (catalog drift fix): this used to show a third
-    // mode, transmuralBands, with endoMInterface/mEpiInterface boundaries.
-    // Native c7d6dd551 removed all three -- mode is namedRegions or
-    // cellZoneRegions only now, with no direct replacement for a two-band
-    // endo/epi split (use namedRegions with two regions instead, as below).
+    // mode is namedRegions or cellZoneRegions only; for a two-band endo/epi
+    // split use namedRegions with two regions, as below.
     //
     // namedRegions mode is an open, named list of field ranges tiling
     // [0,1]. Each region resolves to an
@@ -163,11 +160,9 @@ monodomainSolverCoeffs
     // it (both go through myocardiumDomainInterface::New()); eikonalSolver
     // and singleCellSolver do not.
     //
-    // Corrected 2026-09-26 (catalog drift fix): this used to show a single
-    // fixed 'apexBaseBands' block. Native 3025230b9 renamed it 'gradientAxes'
-    // and generalised it into a dynamic-name dictionary of axes -- the old
-    // 'must be > 0' note on beta was never true (validateGradientAxisConfig
-    // constrains scalingMin/scalingMax/variables, not beta).
+    // gradientAxes is a dynamic-name dictionary of axes; beta carries no
+    // 'must be > 0' constraint (validateGradientAxisConfig constrains
+    // scalingMin/scalingMax/variables, not beta).
     // ionicHeterogeneity
     // {
     //     gradientAxes

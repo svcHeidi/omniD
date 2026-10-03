@@ -1,18 +1,13 @@
-"""Solver-declared case classification for the provenance snapshot.
-
-``generated_output_globs`` excludes ``constant/C``, ``Cx``, ``Cy``, ``Cz`` and
-``skewness``: mesh-diagnostic byproducts an exhaustive grep across ``src/``
-and ``applications/`` found no reads of anywhere in the solver.
-"""
+"""Solver-declared case classification for the provenance snapshot."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-# Fixed names, independent of the resolved model -- unlike the 0/ solver
-# fields, these mesh-diagnostic byproducts are never renamed by a dictionary
-# key.
+# Mesh-diagnostic byproducts that nothing in the solver's src/ or applications/
+# reads. Fixed names, independent of the resolved model -- unlike the 0/ solver
+# fields, no dictionary key renames them.
 _GENERATED_OUTPUT_GLOBS: tuple[str, ...] = (
     "constant/C",
     "constant/Cx",

@@ -1,7 +1,6 @@
 """Parse and render OpenFOAM's vector- and list-literal text, and compare values.
 
-OpenFOAM owns this syntax; core must never learn it. This is the one place in
-the monorepo that parses or renders it.
+OpenFOAM owns this syntax and core must not learn it; this is the one place that parses or renders it.
 """
 
 from __future__ import annotations
@@ -49,13 +48,7 @@ def _parse_number(token: str, *, what: str, original: str) -> float:
 
 
 def _format_number(value: Any) -> str:
-    """Canonical text for one magnitude or dimension-exponent component.
-
-    A whole number renders without a decimal point (e.g. ``60`` not
-    ``60.0``); otherwise uses Python's shortest round-tripping `repr`. This
-    reproduces the *value*, not necessarily the original spelling -- an
-    insignificant trailing zero (``"0.030"`` for ``0.03``) is not preserved.
-    """
+    """Canonical number text: whole numbers without a decimal point, else the shortest round-tripping ``repr``."""
     if isinstance(value, bool):
         raise TypeError("a dimensioned/vector literal component must be a number, not a boolean")
     number = float(value)
@@ -156,13 +149,7 @@ def format_vector3_list_literal(value: Sequence[Sequence[Any]]) -> str:
     return "(" + " ".join(format_vector3_literal(item) for item in value) + ")"
 
 def _as_comparable_text(text: str):
-    """Parse one native scalar/word/vector spelling into a comparable value.
-
-    Returns a float for a number, a bool for an OpenFOAM boolean word, a tuple
-    of floats for a parenthesised or unparenthesised whitespace-separated
-    vector (``blockMeshDict``'s hex-cell-counts convention omits the
-    parentheses), and the stripped text otherwise.
-    """
+    """Parse one native scalar, word or vector spelling (parentheses optional) into a float, bool, tuple of floats or text."""
     stripped = text.strip().rstrip(";").strip()
     if not stripped:
         return None
@@ -187,14 +174,7 @@ def _as_comparable_text(text: str):
 
 
 def _as_comparable(value: Any):
-    """Parse a requested value into a comparable one, dispatching on the
-    Python type in hand rather than round-tripping through ``str()``
-    (``str([1, 2, 3])`` is not the OpenFOAM vector spelling ``"(1 2 3)"``).
-
-    A number becomes a ``float``, an OpenFOAM boolean word or a Python
-    ``bool`` stays a ``bool``, a list/tuple or vector string becomes a tuple
-    of floats, and anything else is compared as text.
-    """
+    """Parse a requested value by its Python type, since ``str([1, 2, 3])`` is not the vector spelling ``(1 2 3)``."""
     if isinstance(value, bool):
         return value
     if isinstance(value, (int, float)):

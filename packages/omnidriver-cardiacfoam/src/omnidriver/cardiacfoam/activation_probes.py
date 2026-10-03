@@ -1,28 +1,4 @@
-"""cardiacFOAM activation times from an OpenFOAM ``probes`` file of ``activationTime``.
-
-Each fact below comes from a real run or from source, logged in
-docs/solver-learning/cardiacfoam.md, section Q:
-
-- the values are seconds: ``activationTime``'s own field file declares
-  ``dimensions [0 0 1 0 0 0 0]`` (Q2), and ``myocardiumDomain`` builds it
-  with ``dimTime``;
-- ``-1`` means never activated: the field starts at ``dimensionedScalar(
-  "unactivated", dimTime, -1.0)`` (``myocardiumDomain.C``), and a real run
-  writes ``-1`` for every probe not yet reached (Q1). Core resolves it before
-  any unit conversion (``core.quantities.read_quantities``);
-- the value is the **last** row: the declared file is the ``samplePoints``
-  step's ``postProcess -latestTime`` output, one row at the final time (N2),
-  and the solve's own per-write-time rows before it are cumulative.
-
-**Sampling (Q9): the reader requires ``interpolationScheme cellPoint``**,
-read from the case's own
-``system/<function>`` dict (one source of truth), never a Python default. A
-probe location is then the point itself (offset 0). Any other scheme --
-including OpenFOAM's own ``cell`` default -- is refused by name: a ``cell``
-probe's location is the containing cell's centre, which this reader does not
-report (that route, and the ``writeCellCentres``/``samplePointCentres``
-steps it needed, were removed with this change; nothing else used them).
-"""
+"""cardiacFOAM activation times, in seconds, from an OpenFOAM ``probes`` file of ``activationTime``."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -31,6 +7,9 @@ from omnidriver.core.quantities import RawSample, ReadRequest
 from omnidriver.openfoam.probes import ProbeSeries, interpolation_scheme, parse_probe_series
 
 ACTIVATION_PROBES_FORMAT = "cardiacfoam_activation_probes"
+# A cellPoint probe's location is the point itself; OpenFOAM's default ``cell``
+# scheme gives the containing cell's centre, which this reader does not report.
+# The scheme is read from the case's own system/<function> dict, never defaulted.
 _REQUIRED_SCHEME = "cellPoint"
 
 
@@ -45,6 +24,8 @@ def _series(case_root: Path, relpath: str) -> ProbeSeries:
 
 class ActivationProbeReader:
     value_unit = "s"
+    # myocardiumDomain initialises the field to -1 (never activated); core
+    # resolves a sentinel before any unit conversion.
     sentinels = frozenset({-1.0})
     sampling_rule = "point"
     coordinate_unit = "m"
@@ -65,6 +46,8 @@ class ActivationProbeReader:
         if unknown:
             raise ValueError(f"{unknown[0]!r} is not a probe of {artifact.path_pattern}; it has probes {sorted(by_name, key=int)}")
         samples = []
+        # The declared file is the samplePoints step's `postProcess -latestTime`
+        # output: one row, at the final time. The solve's own rows are cumulative.
         for name in request.names:
             column = by_name[name]
             if int(name) in values.not_found:

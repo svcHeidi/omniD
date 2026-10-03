@@ -1,12 +1,5 @@
-"""cardiacCore's tutorial-record key catalogue and validator, on
-``omnidriver-openfoam``'s shared validator (:func:`make_validator`).
-
-The catalogued documents are the utility dicts ``catalogs/inputs.py``
-declares, each ``system/<utility>Dict``. A key one of its entries declares (by
-the entry's ``driver_path`` past its ``$TOKEN.``, in ``record_surface``'s key
-grammar) is checked against the entry's ``value_kind``; a key the catalogue
-lacks is accepted when the C++ reads it. cardiacCore catalogues no ``constant/*``
-document: its utilities read and write ``0/*`` fields directly.
+"""cardiacCore's tutorial-record key catalogue and validator, on ``omnidriver-openfoam``'s shared :func:`make_validator`.
+Documents are the ``system/<utility>Dict`` entries of ``catalogs/inputs.py``; a key the catalogue lacks is accepted when the C++ reads it.
 """
 
 from __future__ import annotations

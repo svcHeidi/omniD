@@ -1,32 +1,5 @@
-"""``manufacturedBidomain``: the native ``Allrun`` does not mesh at all --
-serially it is exactly ``runApplication cardiacFoam``, going straight to the
-solver on whatever mesh already sits in ``constant/polyMesh``. The case's own
-``regression/regressionTest.sh`` meshes it first with
-``blockMesh -dict system/blockMeshDict.3D``, which is this record's mesh-step
-default; there is no plain ``system/blockMeshDict``, only
-``.1D``/``.2D``/``.3D``.
-
-The gmsh tet route is this record's alternative variant; there is no native
-``Allrun`` tet route either (see :mod:`.manufactured_solution_axes` for the
-``gmsh``/``gmshToFoam``/``checkMesh`` evidence).
-
-Every step's ``produces``/``consumes`` below is observed, not assumed (logged
-under "manufacturedBidomain" in ``docs/solver-learning/cardiacfoam.md``):
-
-- ``blockMesh -dict system/blockMeshDict.3D`` writes exactly
-  ``constant/polyMesh``'s five files (``boundary``, ``faces``, ``neighbour``,
-  ``owner``, ``points``): a single ``hex (`` block with no zones;
-- ``gmsh -3 ... -setnumber lc <v>`` writes only the named ``.msh`` file;
-  ``gmshToFoam <mesh>.msh`` then writes ``constant/polyMesh``'s nine entries
-  (the five above, plus ``cellZones``, ``faceZones``, ``pointZones`` and
-  ``sets/internal`` for the template's single ``Physical Volume("internal")``);
-  ``checkMesh`` (no ``-writeAllFields``) writes nothing but its own log;
-- ``cardiacFoam`` (hex, then tet) writes
-  ``constant/electroProperties.withDefaultValues`` (``electroModel::end``, as
-  every non-``singleCellSolver`` step does) and exactly one
-  ``postProcessing/<dim>_<N>_cells.dat``, never a literal path: the
-  verifier's own ``round(nCells^(1/d))`` naming depends on the resolved mesh.
-"""
+"""``manufacturedBidomain``, the bidomain manufactured-solution record.
+Native case: ``manufacturedSolutions/bidomain``; hex and tet routes."""
 
 from __future__ import annotations
 
@@ -38,20 +11,23 @@ from .manufactured_solution_axes import (
 )
 from .routes import block_mesh_step, gmsh_route, solve_step
 
-#: This tutorial always addresses `myocardiumSolver bidomainSolver`'s own
-#: `bidomainSolverCoeffs` scope -- never varied, since the native case
-#: already holds it.
+#: The `bidomainSolverCoeffs` scope of `myocardiumSolver bidomainSolver`, which
+#: the native case already holds.
 _BIDOMAIN_SOLVER_COEFFS = ("bidomainSolverCoeffs",)
 
 _TET_TEMPLATE = "setup/studies/tetConvergence/box.geo.template"
 _TET_MESH = "box.msh"
 
-#: The mesh step's default argument, copied verbatim from
-#: ``regression/regressionTest.sh``. The gmsh step has none: with no
+#: The native Allrun does not mesh; the case's regression script meshes with
+#: this dictionary. The gmsh step has no default: with no
 #: ``tetNumberCells``, gmsh uses the template's own ``DefineConstant`` ``lc``
 #: default, rather than restating it and forcing it after a template change.
 _MESH_DICT_DEFAULT = "system/blockMeshDict.3D"
 
+# `blockMesh` writes the five `polyMesh` files; `gmshToFoam` adds the zone and
+# set files for the template's single Physical Volume. The solve writes exactly
+# one `<dim>_<N>_cells.dat`, whose name the verifier derives from the resolved
+# mesh, so it is declared as a glob.
 AXES = (
     dimension_axis(
         "dimension", mesh_step_id="mesh",

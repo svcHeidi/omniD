@@ -1,28 +1,6 @@
 """Evidence-labelled input catalog for cardiacCore preprocessing utilities.
 
-Every ``DictEntry`` is backed by a native ``.get``/``.getOrDefault``/
-``.found`` read, which every strict plan checks with
-``omnidriver.openfoam.dict_keys_scanner`` over the supplied cardiacCore
-``src`` (see ``docs/BUILDER_AGENT_EVIDENCE_CONTRACT.md``).
-Conditionality the native source expresses as an ``if``/``found`` branch is
-expressed here as ``applicable_when``/``required_when``/``forbidden_when``/
-``mutually_exclusive_with`` rather than prose; every resolved record case
-is judged against them (``omnidriver.openfoam.case_rules``).
-
-A study sets a declared key as ``system/<utility>Dict:key``
-(``record_key_validation``); a key this catalogue lacks is accepted when the
-C++ reads it.
-``setCardiacScar``, ``setPurkinjeScar`` and ``coordinatesConvention`` remain
-declared-only: no workflow yet schedules those utilities (see
-``catalogs/support_boundary.py``'s ``SUPPORT_BOUNDARY["pending"]``).
-
-``setCardiacScar`` and ``setPurkinjeScar`` are absent from cardiacCore's
-main branch entirely -- removed by commit c53a0d7 -- and exist only on its
-``scar`` branch; their ``source_refs`` carry a ``scar-branch:`` prefix
-saying so (an ancestry check is misleading here, since ``scar`` is an
-ancestor of ``main``; ``git ls-tree origin/main`` shows the truth). This
-package has no drift guard resolving refs against the native tree, so the
-prefix is a label, not an enforced guarantee.
+Each entry is backed by a native read; the scar utilities are off main (c53a0d7), so their ``source_refs`` carry ``scar-branch:`` (docs/solver-learning/cardiaccore.md, K5).
 """
 
 from __future__ import annotations
@@ -492,13 +470,8 @@ _REGION_ID_CONSTRAINT = (
     "unbounded, so the placeholder declares an explicitly open binding domain "
     "rather than a closed one. Healthy cells written by setCardiacScar carry "
     "region -1 and select no override (README). "
-    "PROVENANCE (2026-09-23): this evidence is read from the cardiacCore "
-    "'scar' BRANCH, not from main. Commit c53a0d7 (2026-09-18, 'refactor(scar): "
-    "remove scar and scar-Purkinje-coupling code from main') deleted "
-    "src/setPurkinjeScar/ and src/setCardiacScar/; main's src/Allwmake builds "
-    "neither utility. Every _PURKINJE_SCAR_SOURCE / _SCAR_SOURCE path in this "
-    "module resolves only on that branch. An unmerged source can still change, "
-    "which is a further reason this domain is declared open rather than closed."
+    "The scar sources resolve only on cardiacCore's 'scar' branch (docs/solver-learning/cardiaccore.md, K5); "
+    "an unmerged source can still change, so this domain is declared open rather than closed."
 )
 
 PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (

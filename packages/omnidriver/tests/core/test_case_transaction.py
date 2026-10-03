@@ -187,9 +187,8 @@ def test_the_journal_is_removed_after_a_clean_commit(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# R3 blocker 1 (2026-09-23): an unwrapped PermissionError escaped
-# commit_case_write. mode=0o000 is a plan-legal RenderedFile.mode, so this is
-# reachable by ordinary use -- not a monkeypatch, the real public path.
+# An unwrapped PermissionError must not escape commit_case_write. mode=0o000 is
+# a plan-legal RenderedFile.mode, so this is reachable by ordinary use.
 # --------------------------------------------------------------------------
 
 

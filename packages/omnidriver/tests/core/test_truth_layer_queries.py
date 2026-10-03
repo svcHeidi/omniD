@@ -1,4 +1,4 @@
-"""The truth layer's two core seams (2026-09-28, roadmap item 4)."""
+"""The truth layer's two core seams."""
 from __future__ import annotations
 
 import json

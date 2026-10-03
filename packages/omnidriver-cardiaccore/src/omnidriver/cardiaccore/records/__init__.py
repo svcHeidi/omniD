@@ -1,10 +1,5 @@
-"""cardiacCore's tutorial records.
-
-``humanSlab`` supplies a real, uncommitted anatomy bundle via ``--input``,
-proving that path against real anatomy; the idealized-heart variants use
-cardiacFOAM's own mesh instead, tracked natively via Git LFS, needing none.
-Scanned in full by ``scripts/check-case-writes.py``: nothing here may
-import or call a writer.
+"""cardiacCore's tutorial records. ``humanSlab`` needs an uncommitted anatomy bundle via ``--input``; the idealized-heart variants use a native mesh.
+Scanned by ``scripts/check-case-writes.py``: nothing here may import or call a writer.
 """
 
 from __future__ import annotations

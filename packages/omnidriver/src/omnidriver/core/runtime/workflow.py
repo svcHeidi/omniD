@@ -450,15 +450,12 @@ def workflow_output_artifacts(
 
 
 def _is_authorized(command: str, driver_context: Any) -> bool:
-    """The ONE definition of "authorized" for a bare command name, applied
-    both to a step's own command and, for an MPI launcher, the program it
-    wraps -- no second, independent notion of "authorized" for either."""
+    """The one rule for a bare command, applied to a step's command and to the program an MPI launcher wraps."""
     return _is_declared(command, driver_context) or find_script(command, driver_context) is not None
 
 
 def _is_declared(command: str, driver_context: Any) -> bool:
-    """Whether the command is a core, case-script, plugin, utility or installed
-    environment command: everything authorized except a repository script."""
+    """Whether the command is a core, case-script, plugin, utility or environment command (not a repository script)."""
     if command in CORE_NEUTRAL_COMMANDS or command in case_script_commands(driver_context):
         return True
     if driver_context is None:

@@ -79,19 +79,15 @@ def _step_payload(
 
 
 def _terminal_status_label(workflow_status: str) -> str:
-    """Map a workflow status to the CLI's ok/failed label via the shared
-    ``is_execution_successful`` predicate, never a subprocess exit code."""
+    """Derived from workflow status, never a subprocess exit code."""
     return "ok" if is_execution_successful(workflow_status) else "failed"
 
 
 def _refuse_environment_errors(context: _ExecutionContext, *, action: str) -> int | None:
-    # Structural validity was already established when this context was built
-    # (_context_from_entry / _context_from_run_document refuse to hand back a
-    # context otherwise), so only the environment and coverage halves of
-    # is_launchable are relevant at this dispatch-time gate. `simulation_audit`
-    # must be threaded from `context.simulation_audit`, or a required check
-    # reported `unavailable` could never block (see
-    # `execution_context.StepExecutionContext` for what populates it).
+    # Structure was validated when the context was built, so only the
+    # environment and coverage halves of is_launchable apply here.
+    # `simulation_audit` must be threaded through, or a required check
+    # reported `unavailable` could never block.
     readiness = is_launchable(
         plan_status="ok",
         environment_diagnostics=context.environment_diagnostics,
@@ -119,8 +115,7 @@ def _refuse_environment_errors(context: _ExecutionContext, *, action: str) -> in
 
 
 def _attach_failure_context(payload: dict, state, step_id: str | None, *, tail_lines: int) -> None:
-    """Mutate ``payload`` in place with a failure_context bundle when the named
-    step state is failed. Shared by step and run; never persisted to workflow_state.json."""
+    """Add a failure_context bundle to ``payload`` when the step failed; never persisted to workflow_state.json."""
     if step_id is None:
         return
     step_state = _step_state_by_id(state, step_id)
@@ -204,8 +199,7 @@ def _execute_step(
 
 
 def _reconciliation_payload(case_root: Path, expected_artifacts, *, driver_context=None) -> dict:
-    """Reconcile predicted artifacts against files on disk (path/size/sha256
-    only; no judgement about the values inside them)."""
+    """Predicted artifacts against files on disk: path, size and sha256 only."""
     from .core.runtime.reconciler import declared_instance_names, reconcile_artifacts
 
     return reconcile_artifacts(
@@ -231,9 +225,7 @@ def _execute_run(
     max_total_attempts: int | None = None,
     driver_context: DriverContext | None = None,
 ) -> int:
-    """Run a workflow to completion, print the JSON payload, return the exit code.
-    Shared by the --entry and --run-document paths. Refuses to auto-resume a
-    terminally-failed saved state (use action=step)."""
+    """Run a workflow to completion and print the JSON payload; refuses to auto-resume a terminally failed saved state (use action=step)."""
     state_path = output_dir / STATE_FILENAME
     workflow_state = planned_state
     if state_path.exists():
@@ -608,8 +600,7 @@ def _run_document_dispatch(args, driver_context) -> int:
 
 
 def _recover(args) -> int:
-    """Restore the before-images of an interrupted case transaction, without
-    planning or running."""
+    """Restore the before-images of an interrupted case transaction."""
     case_root = Path(args.case_root).resolve()
     try:
         recovered = recover_case_transaction(case_root)
@@ -631,8 +622,7 @@ def _recover(args) -> int:
 
 
 def _compare_quantities(args) -> int:
-    """``compare``: read, compare and report once. The report is the result:
-    exit 0 once it is written, whatever its status; exit 1 on a refusal."""
+    """``compare``: exit 0 once the report is written, whatever its status; 1 on a refusal."""
     from .core.quantities import QuantityComparisonError, run_quantity_comparison
 
     try:
@@ -646,12 +636,8 @@ def _compare_quantities(args) -> int:
 
 def resolve_cases_root(explicit: str | Path | None = None) -> Path:
     """Where to look for cases, resolved at the public edge only:
-    explicit -> OMNIDRIVER_CASES_ROOT -> current working directory.
-
-    Three steps, no fourth. The environment variable covers CI, containers and
-    HPC without a flag on every invocation; a config-file tier is deliberately
-    omitted until there is evidence one is needed
-    (future/ENVIRONMENT_CONTRACT.md §12). Core itself resolves nothing.
+    explicit, then OMNIDRIVER_CASES_ROOT, then the current working directory.
+    Core itself resolves nothing.
     """
     if explicit is not None:
         return Path(explicit).expanduser()
@@ -1114,10 +1100,7 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
 
 
 def _sweep_output_dir(args) -> str | Path | None:
-    """``--output-dir``, else ``<scratch>/sweeps/<spec-name>``; ``None`` after
-    printing the JSON refusal when neither that nor a scratch root is
-    supplied. The scratch default is computed only when ``--output-dir`` is
-    absent, so a run that supplies one never needs a scratch root."""
+    """``--output-dir``, else ``<scratch>/sweeps/<spec-name>`` (needed only when it is absent); ``None`` after a JSON refusal."""
     if args.output_dir:
         return args.output_dir
     try:
@@ -1133,12 +1116,7 @@ def _sweep_output_dir(args) -> str | Path | None:
 
 
 def _sweep_refusal(args, exc: Exception) -> int:
-    """A refusal of the sweep as a whole -- the spec's own shape, a record
-    sweep's missing ``cases_root``, a study name the record does not
-    resolve, a case id that is not path-safe -- printed as the CLI's JSON
-    failure, matching ``_sweep_output_dir``'s refusal and ``plan --strict``.
-    A per-case refusal is not this: it is one case's
-    ``materialization_error`` inside the sweep's own report."""
+    """A refusal of the sweep as a whole, printed as JSON; a per-case refusal is a ``materialization_error`` in the sweep report instead."""
     print(json.dumps({
         "status": "failed",
         "action": args.action,
@@ -1149,10 +1127,7 @@ def _sweep_refusal(args, exc: Exception) -> int:
 
 
 def _scan_or_uncatalogued(args, driver_context) -> int:
-    """``scan`` rescans the stack's C++ into the supplied scratch root's
-    cache and prints a summary; ``catalog --uncatalogued`` lists what the
-    C++ reads and the catalogue lacks (cached when a scratch root is
-    supplied)."""
+    """``scan`` rescans the stack's C++ into the scratch cache; ``catalog --uncatalogued`` lists what the C++ reads and the catalogue lacks."""
     from .core.catalog_query import cxx_evidence, scan_query
 
     try:
@@ -1188,9 +1163,7 @@ def _scan_or_uncatalogued(args, driver_context) -> int:
 
 
 def _check(args, driver_context, repository, cases_root: Path, inputs: dict[str, str]) -> int:
-    """``check``: the conformance checks and native regression against the
-    real solver, reported as JSON. It reports and gates nothing: the exit code
-    is 0 whenever the checks ran."""
+    """``check``: report only; the exit code is 0 whenever the checks ran."""
     from .conformance.report import check_report
 
     try:
@@ -1210,14 +1183,7 @@ def _check(args, driver_context, repository, cases_root: Path, inputs: dict[str,
 
 
 def _select_stack(parser: argparse.ArgumentParser, args):
-    """The stack to drive and the repository it was selected from, if any.
-
-    A repository comes from ``--repo``, or from the supplied cases root when
-    that is a repository's tutorials folder: a declared place, never a search.
-    Its ``omnidriver.toml`` names the plugin; ``--plugin`` alone names it for
-    a solver with no repository, and when both are given they must select the
-    same stack. The repository's C++ source is supplied to the stack through
-    the variable its profile declares, and its scripts folder on the context."""
+    """The stack and the repository it came from (``--repo`` or a supplied cases root, never a search); ``--plugin`` and the repository must agree."""
     from .core.plugin_interface import load_plugin_context
     from .core.provider_identity import stack_identity_mismatch
     from .core.repository import RepositoryError, read_repository, repository_of_cases_root

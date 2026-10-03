@@ -1,7 +1,5 @@
-"""How ``omnidriver check`` exercises openCARP's Niederer N-version record briefly against the real
-binary: coarse and short, so a run takes seconds. The quantity runs at dx 500 um to 150 ms so that
-all nine points activate; N = 2 differs from serial only in the last digit the LAT file prints (six
-decimals), a five-thousandth of dt. Its points and coordinates are the benchmark's own."""
+"""How ``omnidriver check`` exercises the Niederer N-version record briefly against the real binary: coarse and short.
+The quantity runs at dx 500 um to 150 ms so all nine points activate; N = 2 differs from serial only in the last LAT digit (six decimals), a five-thousandth of dt."""
 from __future__ import annotations
 
 from pathlib import Path

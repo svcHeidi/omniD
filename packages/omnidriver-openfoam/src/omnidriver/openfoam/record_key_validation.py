@@ -1,15 +1,6 @@
-"""The tutorial-record key validator, shared by every OpenFOAM-based plugin
-(see CLAUDE.md "One reality"). A plugin supplies how a key path finds its
-catalogue entry (:class:`CataloguedDocument`); the three outcomes are this
-module's:
+"""The tutorial-record key validator shared by every OpenFOAM-based plugin.
 
-1. a key of a catalogued document is checked against its entry's
-   ``value_kind``; a key the catalogue lacks is accepted when the plugin's own
-   C++ reads it at that path (:func:`scanned_key`) and refused by name
-   otherwise;
-2. any other ``system/`` document is written as asked, ``validated=False``,
-   tagged by an inferred shape;
-3. anything else is refused by name.
+A plugin supplies how a key path finds its catalogue entry (:class:`CataloguedDocument`).
 """
 
 from __future__ import annotations
@@ -189,6 +180,10 @@ def make_validator(
     catalogued ``documents`` are given. ``mapping`` returns the plugin's
     ``cxx_mapping``; ``owner`` names the plugin in refusals."""
 
+    # A key of a catalogued document is checked against its entry's ``value_kind``;
+    # a key the catalogue lacks passes only when the plugin's C++ reads it there
+    # (``scanned_key``). Any other ``system/`` document is written as asked,
+    # ``validated=False``, tagged by an inferred shape; anything else is refused.
     def validate(document: str, key_path: "tuple[str, ...]", value: Any) -> "tuple[str, bool]":
         dotted = ".".join(key_path)
         catalogued = documents.get(document)

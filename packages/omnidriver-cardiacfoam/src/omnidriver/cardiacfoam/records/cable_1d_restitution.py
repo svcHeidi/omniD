@@ -1,18 +1,5 @@
-"""``cable1DRestitution``: a tutorial record for
-``electrophysiologyProtocols/cableProtocol/monodomain1DCableCV``.
-
-The native ``Allrun``'s commands, ``blockMesh`` then ``cardiacFoam``. The
-``dx`` axis is shared with ``cable1DCVConvergence`` (:mod:`.cable_axes`).
-``s1s2SpatialProtocol`` reproduces the old module's S1-S2 arithmetic for
-both its pacing modes (coupling-interval and requested-DI90), reading the
-stimulus geometry/duration/intensity and the S1 interval from the case's
-own native defaults at resolve time rather than restating them. A third
-``postprocess`` step runs the native ``Allrun.post``: the axis passes the case's own resolved S1/S2 split to it as
-``--n-s1``/``--n-s2``/``--reference-repolarization90-s``, since
-``case_record.json`` never carries resolved axis values for a single,
-non-swept run. What each step reads/writes, the native defaults this axis
-reads, and the two-mode arithmetic: ``docs/solver-learning/cardiacfoam.md``,
-section CABLE.
+"""``cable1DRestitution``, the S1-S2 spatial-pacing restitution record on the 1D cable case.
+Native case: ``electrophysiologyProtocols/cableProtocol/monodomain1DCableCV``; mesh, solve, then ``Allrun.post``.
 """
 
 from __future__ import annotations
@@ -33,9 +20,8 @@ from .cable_axes import cable_dx_axis
 from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
 from .routes import block_mesh_step, solve_step
 
-#: This tutorial always addresses `myocardiumSolver monodomainSolver`'s own
-#: `monodomainSolverCoeffs` scope -- never varied (the native case already
-#: holds it).
+#: The `monodomainSolverCoeffs` scope of `myocardiumSolver monodomainSolver`,
+#: which the native case already holds.
 _MONODOMAIN_SOLVER_COEFFS = ("monodomainSolverCoeffs",)
 
 DX_AXIS_NAME = "dx"
@@ -43,10 +29,8 @@ S1_S2_PROTOCOL_AXIS_NAME = "s1s2SpatialProtocol"
 
 _CONTROL_DICT_DOCUMENT = "system/controlDict"
 
-#: Each externalStimulus list's own catalogued shape (dict_entries_catalog.py):
-#: the record-key validator overrides this before it reaches
-#: patches_to_parameters, but a shape this wrong (a string where a sequence
-#: belongs) is refused before that ever runs.
+#: Each externalStimulus list's catalogued shape, so a string where a sequence
+#: belongs is refused early.
 _STIMULUS_LIST_VALUE_KINDS = {
     "stimulusStartTimeList": "scalar_list",
     "stimulusDurationList": "scalar_list",
@@ -64,10 +48,7 @@ _REFERENCE_REPOLARIZATION90_ARG = ("--reference-repolarization90-s",)
 def _read_uniform_entry(
     file_path: Path, key: str, *, scope: list[str], parse,
 ) -> Any:
-    """The one value ``key``'s list holds, read from the staged case --
-    refused by name unless every entry agrees (docs/solver-learning/
-    cardiacfoam.md, CABLE8: every native list this axis reads is uniform
-    across all six of its entries today)."""
+    """The one value ``key``'s list holds, refused by name unless every entry agrees."""
     raw = read_nested_entry(file_path, key, scope=scope)
     if raw is None:
         raise ValueError(
@@ -87,10 +68,7 @@ def _read_uniform_entry(
 def _read_native_stimulus_defaults(
     staged_case_root: Path, electro_document: str, scope: tuple[str, ...],
 ) -> tuple[tuple[float, float, float], tuple[float, float, float], float, float, float]:
-    """``(bounds_min, bounds_max, duration_s, intensity, s1_interval_ms)``,
-    read from the staged case's own ``externalStimulus`` -- never a Python
-    constant restating it (one source of truth). The S1 interval is
-    ``t[1] - t[0]`` of the native ``stimulusStartTimeList``."""
+    """``(bounds_min, bounds_max, duration_s, intensity, s1_interval_ms)`` from the staged ``externalStimulus``; the S1 interval is ``t[1] - t[0]`` of ``stimulusStartTimeList``."""
     file_path = Path(staged_case_root) / electro_document
     stimulus_scope = list(scope) + ["externalStimulus"]
     bounds_min = _read_uniform_entry(
@@ -144,7 +122,7 @@ def _s1_s2_protocol_axis(name: str, *, electro_document: str, scope: tuple[str, 
                 duration_s=duration_s, intensity=intensity,
             )
             # No extra S1-interval propagation margin in this mode (unlike
-            # coupling_interval, below): the old module's own arithmetic.
+            # coupling_interval, below).
             end_time_s = s2_time_s + end_time_buffer_s
         else:
             if n_s2 and "s2_interval_ms" not in protocol:
@@ -162,7 +140,7 @@ def _s1_s2_protocol_axis(name: str, *, electro_document: str, scope: tuple[str, 
                 duration_s=duration_s, intensity=intensity,
             )
             # One extra S1 interval past the last stimulus: a 1D cable needs
-            # propagation time a 0-D single cell does not (module docstring).
+            # propagation time a 0-D single cell does not.
             end_time_s = (
                 last_s1_time_s + (s1_interval_ms / 1000.0)
                 + n_s2 * (s2_interval_ms / 1000.0) + end_time_buffer_s
@@ -191,6 +169,9 @@ def _s1_s2_protocol_axis(name: str, *, electro_document: str, scope: tuple[str, 
     return AxisContract(name=name, value_kind="mapping", resolve=resolve)
 
 
+# `Allrun.post` takes the resolved S1/S2 split as `--n-s1`/`--n-s2`/
+# `--reference-repolarization90-s`: `case_record.json` carries no resolved axis
+# values for a single, non-swept run.
 AXES = (
     cable_dx_axis(DX_AXIS_NAME),
     _s1_s2_protocol_axis(
@@ -215,7 +196,7 @@ RECORD = TutorialRecord(
             ),
             # Not `postProcessing/cableProbes/*/Vm`: that is the `solve`
             # step's own `produces`, not an authored file this step fails
-            # without -- C8 fingerprints only pre-existing inputs.
+            # without.
             consumes=(ELECTRO_PROPERTIES,),
             produces=("postProcessing/*_event_summary.json", "postProcessing/*_events.csv", "postProcessing/*_restitution.csv"),
         ),

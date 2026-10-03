@@ -1,5 +1,5 @@
 """The quantities contract: units, sentinels before conversion, the reader
-declaration (spec 2026-09-26 §3, §4)."""
+declaration."""
 from __future__ import annotations
 
 import pytest

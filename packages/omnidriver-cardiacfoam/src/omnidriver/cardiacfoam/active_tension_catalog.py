@@ -1,22 +1,6 @@
-"""
-Active Tension Model Catalog
+"""Static catalogue of active tension models: the variables each exposes, so an agent can plan output without running the solver.
 
-A static, build-time-generated catalog of active tension models.
-This module exposes the exact variables each model supports so an autonomous
-agent can plan active-tension output without running the solver.
-
-All variable names are extracted from C++ source files and are guaranteed to be
-exact.
-
-The ``constants`` field lists only the *user-facing*, dict-overridable parameters.
-Constants that a model *derives* from these at ``initConsts`` (e.g. the
-Land-Niederer transition rates ``AC_k_uw``/``AC_k_ws``/``AC_k_wu``/``AC_k_su``,
-``AC_cds``/``AC_cdw``, ``AC_ktm_block``, ``AC_A``, ``AC_XSSS``, ``AC_XWSS``,
-``AC_fPKA_TnI``, ``AC_PKAForceMultiplier``) are intentionally omitted: overriding
-them has no effect because the solver recomputes them from their inputs. An agent
-may still *reason about* such derived values, but to change one it must override
-the user-facing constant(s) it derives from.
-"""
+Names are extracted from the C++ source."""
 
 from __future__ import annotations
 
@@ -34,6 +18,9 @@ class ActiveTensionModelEntry:
     algebraic: tuple[str, ...]
     """Algebraic variables."""
 
+    # Only the user-facing, dict-overridable constants: those a model derives at
+    # ``initConsts`` (e.g. Land-Niederer's ``AC_k_uw``, ``AC_cds``, ``AC_A``) are
+    # omitted, since the solver recomputes them; override the constant they derive from.
     constants: tuple[str, ...]
     """Constant parameters."""
 

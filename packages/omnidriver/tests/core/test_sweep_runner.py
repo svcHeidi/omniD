@@ -385,7 +385,7 @@ def _record_driver_context():
 
 
 def test_sweep_plan_over_a_record_entry_refuses_a_bad_axis_name_upfront_before_staging_any_case(tmp_path):
-    """Minor: study-name/capability refusals happen ONCE, up front, for the whole sweep -- before this fix, a bad axis name reached resolve_case_patches independently for every case, each staging its own case directory before failing."""
+    """Study-name/capability refusals happen once, up front, for the whole sweep, not per case after staging that case's directory."""
     cases_root = _native_toy_case(tmp_path)
     spec = _record_sweep_spec(cases_root=cases_root)
     spec["sweep"]["independent"]["not_a_real_axis"] = [1, 2]
@@ -435,7 +435,7 @@ def test_sweep_plan_over_a_record_entry_previews_every_case_without_running(tmp_
 
 
 def test_sweep_plan_over_a_record_entry_persists_unchanged_patches_per_case(tmp_path):
-    """M5-of-2a: a patch that already matched the case (native cells="1", swept number_cells=1) is real per-case information -- persisted in the sweep summary, not discarded the moment commit_record_case returns."""
+    """A patch that already matched the case (native cells="1", swept number_cells=1) is real per-case information -- persisted in the sweep summary, not discarded the moment commit_record_case returns."""
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(1, 3))))
@@ -491,7 +491,7 @@ def test_sweep_plan_over_a_record_entry_refuses_without_cases_root(tmp_path):
 
 
 def test_sweep_run_over_a_record_entry_commits_and_runs_two_cases(tmp_path):
-    """Item 2's own end-to-end shape: a 2-case record study gets exactly one commit_and_build_record_spec (stage + commit + spec, P1's shared function) per case, and the record's workflow steps run through the same run-document/workflow-runner machinery a factory entry uses."""
+    """A 2-case record study gets exactly one commit_and_build_record_spec (stage + commit + spec) per case, and the record's workflow steps run through the same run-document/workflow-runner machinery a factory entry uses."""
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
@@ -542,7 +542,7 @@ def test_sweep_run_over_a_record_entry_commits_and_runs_two_cases(tmp_path):
 
 
 def test_sweep_run_over_a_record_entry_refuses_to_resume_an_existing_manifest(tmp_path):
-    """B2: a record-entry sweep does not support resume -- re-running sweep_run against an output directory that already holds a manifest (and no --fresh) must refuse by name rather than silently restage and rerun every case from scratch."""
+    """A record-entry sweep does not support resume -- re-running sweep_run against an output directory that already holds a manifest (and no --fresh) must refuse by name rather than silently restage and rerun every case from scratch."""
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
@@ -571,7 +571,7 @@ def test_sweep_run_over_a_record_entry_refuses_to_resume_an_existing_manifest(tm
 
 
 def test_sweep_run_over_a_record_entry_refuses_a_changed_spec_against_the_same_output_dir(tmp_path):
-    """B2's spec-hash half: the same 'sweep.json changed' refusal the factory branch already gives, reused here rather than silently accepting the new spec and leaving stale case directories from the old one."""
+    """The same 'sweep.json changed' refusal the factory branch already gives, reused here rather than silently accepting the new spec and leaving stale case directories from the old one."""
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(2, 3))))
@@ -601,7 +601,7 @@ def test_sweep_run_over_a_record_entry_refuses_a_changed_spec_against_the_same_o
 
 
 def test_sweep_plan_over_a_record_entry_resolves_a_relative_output_dir(tmp_path, monkeypatch):
-    """M4: a relative --output-dir used to reach commit_record_case unresolved (`case_root must be absolute`) -- resolved before staging, matching the factory branch's own CLI-resolved --output-dir."""
+    """A relative --output-dir is resolved before staging (commit_record_case refuses a relative case_root), matching the factory branch's own CLI-resolved --output-dir."""
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))

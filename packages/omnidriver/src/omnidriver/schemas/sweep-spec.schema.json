@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://omnidriver.dev/schemas/sweep-spec.schema.json/v1",
   "title": "SweepSpec",
-  "description": "A sweep.json document as consumed by omnidriver.core.sweep.sweep_expansion.expand_sweep and omnidriver.core.runtime.sweep_runner.sweep_plan/sweep_run. Enumerated from what that code actually reads (Phase 2 Task 11, docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md), not from documentation: 'base' is opaque adapter/entry vocabulary core never validates, and the cross-field rules expand_sweep enforces (no forward references among dependent entries, no name collisions, path-safe caseId, equal-length zip axes) are semantic and left to expand_sweep itself rather than duplicated here.",
+  "description": "A sweep.json document as consumed by omnidriver.core.sweep.sweep_expansion.expand_sweep and omnidriver.core.runtime.sweep_runner.sweep_plan/sweep_run. Enumerated from what that code actually reads: 'base' is opaque adapter/entry vocabulary core never validates, and the cross-field rules expand_sweep enforces (no forward references among dependent entries, no name collisions, path-safe caseId, equal-length zip axes) are semantic and left to expand_sweep itself rather than duplicated here.",
   "type": "object",
   "required": ["sweep"],
   "properties": {

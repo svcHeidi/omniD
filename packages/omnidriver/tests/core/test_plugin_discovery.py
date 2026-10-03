@@ -177,7 +177,7 @@ def test_a_named_plugin_composes_with_the_environment_provider_it_requires(monke
     assert {p.id for p in context.identity.providers} == {_ENV_ID, "test.solver"}
 
 
-# -- A broken entry point is refused by name (solver-conformance B-I1) --------
+# -- A broken entry point is refused by name --------------------------------
 #
 # A real ``importlib.metadata.EntryPoint`` whose target module does not exist,
 # so ``load()`` raises the genuine ``ModuleNotFoundError`` a half-installed

@@ -1,10 +1,6 @@
-"""Run one tutorial-record case: stage the native case, resolve and split
-patches into changed/unchanged, and commit the changed ones through one
-``commit_case_write`` call.
+"""Run one tutorial-record case: stage the native case, split its patches into changed/unchanged, commit the changed ones.
 
-``preview_record_case`` stages and resolves without ever committing;
-``commit_record_case`` also commits.
-"""
+``preview_record_case`` never commits; ``commit_record_case`` does, through one ``commit_case_write`` call."""
 
 from __future__ import annotations
 
@@ -106,13 +102,7 @@ def _stage(
     inputs: Mapping[str, str | Path] | None = None,
     strict_inputs: bool = True,
 ) -> tuple[ResolvedInput, ...]:
-    """Copy the native case, excluding every input destination, then overlay
-    each resolved input's files into the same staged clone.
-
-    ``strict_inputs`` is ``False`` only for ``preview_record_case``: an
-    unresolved or incomplete input is then silently left unstaged rather
-    than refused.
-    """
+    """Stage the native case without input destinations, then overlay each resolved input; ``strict_inputs`` is off only for a preview."""
     from .sweep_runner import _stage_entry_case
 
     native_case_root = _native_case_root(record, cases_root=cases_root)
@@ -129,11 +119,7 @@ def _stage(
 
 
 def _reserved_study_names(record: TutorialRecord) -> frozenset[str]:
-    """Reserved study names that name neither a document key nor an axis,
-    and must never reach ``sort_study_name``: the two sweep
-    naming-derivation outputs (``NAMING_OUTPUT_KEYS``) and this record's own
-    ``variant_selector`` name, if it declares one.
-    """
+    """Study names that are neither a document key nor an axis and must not reach ``sort_study_name``."""
     reserved = NAMING_OUTPUT_KEYS | frozenset({PARALLEL_STUDY_NAME})
     if record.variant_selector is None:
         return reserved
@@ -141,9 +127,7 @@ def _reserved_study_names(record: TutorialRecord) -> frozenset[str]:
 
 
 def _parallel_request(record: TutorialRecord, reserved_values: Mapping[str, Any]) -> Any:
-    """The study's ``parallel`` value, or ``None`` for serial (absent, or
-    ``False``). Any other value is the solver layer's to interpret. A
-    ``null`` is refused by name rather than read as "no choice"."""
+    """The study's ``parallel`` value, ``None`` for serial; a ``null`` is refused, not read as "no choice"."""
     if PARALLEL_STUDY_NAME not in reserved_values:
         return None
     value = reserved_values[PARALLEL_STUDY_NAME]
@@ -160,14 +144,7 @@ def _extract_reserved_names(
     *,
     reserved_names: frozenset[str],
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
-    """Strip every reserved name out of every source, refusing a value that
-    conflicts across sources by name. Returns
-    ``(stripped_study_by_source, reserved_values)``, the latter mapping each
-    reserved name actually present to its one agreed value. Conflict is
-    checked with strict same-type equality (``_strictly_equal``), not plain
-    ``==``, since ``1`` and ``True`` compare equal under Python's numeric
-    tower but may come from callers who each meant a different value.
-    """
+    """``(study_by_source without reserved names, reserved_values)``; sources must agree under ``_strictly_equal``, as ``1 == True``."""
     stripped: dict[str, dict[str, Any]] = {}
     reserved_values: dict[str, Any] = {}
     reserved_source: dict[str, str] = {}
@@ -192,22 +169,7 @@ def _extract_reserved_names(
 def _resolve_workflow_route(
     record: TutorialRecord, reserved_values: Mapping[str, Any],
 ) -> tuple[tuple[str, ...], dict[str, Any] | None]:
-    """The record's own steps, or one selected variant's steps, and which
-    variant that is.
-
-    A record that declares ``workflow_variants`` runs the variant the study
-    names through the record's ``variant_selector``, or, when the study does
-    not name the selector at all, the record's ``default_variant``. A study
-    that names the selector with a value that is not a declared variant --
-    ``None`` included -- is refused by ``resolve_variant_selector``, never
-    read as "no choice" and defaulted. A record with no variants at all
-    refuses a study that names its selector.
-
-    The second value is ``None`` for a record without variants, otherwise
-    the choice as ``describe`` reports it: the selector name, the selected
-    variant, whether it came from the ``"study"`` or the record's
-    ``"default"``, the default, and every declared variant.
-    """
+    """The steps of the record or its selected variant, and that choice as ``describe`` reports it (``None`` without variants)."""
     selector_name = record.variant_selector
     named = selector_name is not None and selector_name in reserved_values
     if not record.workflow_variants:
@@ -262,12 +224,7 @@ def _resolve_and_split(
 def _reader_refusing_as_record_error(
     record: TutorialRecord, read_current_value: Any, *, case_root: Path,
 ) -> Any:
-    """``read_current_value``, with a ``ValueError`` it raises -- the config
-    reader refusing the native value it found -- turned into a
-    ``TutorialRecordError`` naming the record, the document and the key,
-    the original chained. ``split_unchanged`` still lets the refusal
-    propagate, never reading it as "changed"; only its type and message
-    change."""
+    """``read_current_value`` with its ``ValueError`` turned into a ``TutorialRecordError`` naming record, document and key."""
 
     def read_or_refuse(document_path: Path, key_path: Any) -> Any:
         document = Path(document_path).relative_to(case_root).as_posix()
@@ -281,10 +238,7 @@ def _reader_refusing_as_record_error(
 
 
 def _serialize_sourced_patch(sourced: SourcedPatch, *, status: str) -> dict[str, Any]:
-    """One patch's JSON shape, shared by ``preview_record_case``'s preview
-    and the sweep manifest/summary's own per-case ``unchanged_patches`` --
-    one definition of "what a patch looks like on the wire", not two
-    independently maintained ones."""
+    """One patch's JSON shape, shared by the preview and the sweep manifest's ``unchanged_patches``."""
     return {
         "document": sourced.patch.document,
         "key_path": list(sourced.patch.key_path),
@@ -299,14 +253,7 @@ def _serialize_sourced_patch(sourced: SourcedPatch, *, status: str) -> dict[str,
 def _seed_snapshot_root(
     snapshot_root: Path, *, case_root: Path, documents: frozenset[str],
 ) -> None:
-    """Copy each target document from the real (staged) case into
-    ``snapshot_root`` before a renderer ever sees it, so a renderer that
-    reads ``snapshot_root/<document>`` (per ``render_case_files``'s own
-    isolated-copy contract) finds the real prior content rather than an
-    empty directory. A document the case does not yet hold is left
-    unseeded: the renderer legitimately sees it as new, the only situation
-    where ``exists_before=False`` is true.
-    """
+    """Copy each existing target document into ``snapshot_root`` so a renderer sees the prior content; a new one stays unseeded."""
     for document in sorted(documents):
         source = Path(case_root) / document
         if not source.is_file():
@@ -375,11 +322,7 @@ def preview_record_case(
 
 
 def _workflow_commands(dag: Mapping[str, Any]) -> dict[str, list[str]]:
-    """The command line each step of the DAG a run would build runs, as
-    ``describe`` shows it: its command, the default arguments no axis
-    replaced, and the axis's contribution (``WorkflowStep.argv``). Read
-    from the DAG, not the record's steps, so a parallel request's form is
-    what the preview shows."""
+    """Each step's command line, read from the DAG so a parallel request's form is what the preview shows."""
     return {step["id"]: [step["command"], *step.get("args", ())] for step in dag["steps"]}
 
 
@@ -388,15 +331,7 @@ def _refusal_as_record_error(
     record: TutorialRecord, documents: frozenset[str], action: str,
     *, refused_by: str = "the case writer",
 ) -> Iterator[None]:
-    """A ``ValueError`` the plugin's case writer raises while resolving or
-    rendering -- its contract's refusal type, e.g. a renderer refusing a
-    value the key validator could not see was wrong -- becomes a
-    ``TutorialRecordError`` naming the record and the document(s), with the
-    original message and the original exception chained. A non-``ValueError``
-    is a defect, not a refusal, and still propagates as itself.
-
-    ``refused_by`` names the layer; the config-value reader uses it too,
-    with ``document:key`` labels (:func:`_reader_refusing_as_record_error`)."""
+    """Turn a ``ValueError`` (the writer's refusal type) into a ``TutorialRecordError`` naming the record; other errors propagate."""
     try:
         yield
     except TutorialRecordError:
@@ -455,8 +390,7 @@ def _commit_patches(
     requested_by: str,
     case_lease_held: bool = False,
 ) -> CaseWriteRecord:
-    """Resolve, render and commit ``to_write`` into ``staged_case_root`` in
-    one ``commit_case_write`` call."""
+    """Resolve, render and commit ``to_write`` into ``staged_case_root`` through one ``commit_case_write``."""
     import tempfile
 
     identity = driver_context.identity
@@ -592,15 +526,7 @@ def _workflow_dag_for_record(
     workflow_step_ids: tuple[str, ...],
     command_arguments: Mapping[str, tuple[str, ...]],
 ) -> dict[str, Any]:
-    """The record's selected steps as the ``{"steps": [...]}`` DAG the planner
-    and runner read: one entry per step, ``command``/``args`` split, chained
-    by ``depends_on`` in declaration order -- core knows neither tool by name.
-
-    An axis's command arguments for a step (``AxisResult.command_arguments``,
-    already merged and conflict-checked by ``resolve_case_patches``) are
-    appended after the step's own declared ``command`` tail and the default
-    arguments they do not replace (``WorkflowStep.argv``).
-    """
+    """The selected steps as the ``{"steps": [...]}`` DAG, chained in declaration order, with axis arguments in ``WorkflowStep.argv``."""
     steps_by_id = {step.step_id: step for step in record.workflow_steps}
     dag_steps: list[dict[str, Any]] = []
     depends_on: list[str] = []
@@ -650,9 +576,7 @@ class SchedulerAllocation:
 
 
 def scheduler_allocation(environ: Mapping[str, str]) -> SchedulerAllocation | None:
-    """The allocation ``environ`` states, from the first declared variable
-    that is set, or ``None`` outside a scheduler. A value that is not a
-    positive integer is refused by name, never skipped."""
+    """The allocation from the first declared variable set, or ``None``; a non-positive-integer value is refused, not skipped."""
     for variable in SCHEDULER_ALLOCATION_VARIABLES:
         raw = environ.get(variable)
         if raw is None:
@@ -674,9 +598,7 @@ def _case_value_reader(
     record: TutorialRecord, driver_context: "DriverContext", *, case_root: Path,
     pending: Sequence[SourcedPatch] = (),
 ):
-    """``read_value(document, key_path)`` for the parallel form: a
-    ``pending`` (not yet committed) patch's value if present, else the
-    staged case's, through the stack's config-value reader."""
+    """``read_value(document, key_path)`` for the parallel form: a ``pending`` patch's value, else the staged case's."""
     pending_values = {
         (sourced.patch.document, tuple(sourced.patch.key_path)): sourced.patch.value
         for sourced in pending
@@ -698,10 +620,7 @@ def _apply_parallel_request(
     record: TutorialRecord, dag: dict[str, Any], *, request: Any,
     driver_context: "DriverContext", read_value: Any,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """``dag`` unchanged and ``None`` for a serial run; otherwise the
-    parallel DAG and what provenance records of the request: the requested
-    value and the scheduler allocation the form was checked against (``None``
-    outside a scheduler)."""
+    """``(dag, None)`` for a serial run; else the parallel DAG and the provenance of the request and its allocation."""
     if request is None:
         return dag, None
     allocation = scheduler_allocation(os.environ)
@@ -720,16 +639,7 @@ def _parallel_workflow_dag(
     driver_context: "DriverContext", read_value: Any,
     allocation: SchedulerAllocation | None,
 ) -> dict[str, Any]:
-    """Replace each step whose command the stack declares a solve command
-    with the parallel form the stack's ``get_parallel_steps`` returns, and
-    make the next step follow the form's last step.
-
-    Core checks only what keeps the rest of the run honest: the form keeps
-    the solve step's id and ``produces`` on exactly one step (its artifacts
-    and the record's declared outputs stay where they were), and takes no id
-    another step already uses. What the form means -- a decomposition, a
-    launcher, a rank count -- is the solver layer's. Every refusal names the
-    record."""
+    """Replace each solve step with the stack's ``get_parallel_steps`` form; core checks only that ids and ``produces`` hold."""
     stack = driver_context.stack
     if not stack.implements("get_parallel_steps"):
         raise TutorialRecordError(

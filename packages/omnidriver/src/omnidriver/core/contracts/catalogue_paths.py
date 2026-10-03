@@ -1,11 +1,6 @@
-"""Catalogue-path vocabulary over the plugin's own ``DictEntry`` values.
+"""Catalogue-path vocabulary over the plugin's own ``DictEntry`` values; reads no file and knows no OpenFOAM dictionary.
 
-Core owns ``DictEntry``, so it owns the scope-stripped form of a
-``driver_path``; nothing here reads a file, parses C++, or knows an OpenFOAM
-dictionary. This is split from the OpenFOAM C++ scanner because a plugin's plan
-diagnostics (``get_plan_diagnostics``) call ``catalogued_paths`` -- keeping it
-here lets a plugin do that without importing ``omnidriver.openfoam``.
-"""
+Kept apart from the OpenFOAM C++ scanner so a plugin's ``get_plan_diagnostics`` can call ``catalogued_paths`` without importing ``omnidriver.openfoam``."""
 
 from __future__ import annotations
 

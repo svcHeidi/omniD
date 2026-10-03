@@ -21,8 +21,8 @@ _EXEMPT: set[pathlib.Path] = set()
 # package directory), packages -- parents[4] is "packages". parents[3] would
 # land on packages/omnidriver/ and silently yield a path that does not
 # exist, which would make this guard pass by scanning zero files -- the
-# exact false-reassurance failure mode this repository has hit before, so
-# _OPENFOAM_ROOT.is_dir() is asserted below rather than assumed.
+# false-reassurance failure mode, so _OPENFOAM_ROOT.is_dir() is asserted
+# below rather than assumed.
 _OPENFOAM_ROOT = (
     pathlib.Path(omnidriver.core.__file__).resolve().parents[4]
     / "omnidriver-openfoam" / "src" / "omnidriver" / "openfoam"
@@ -181,7 +181,7 @@ def test_the_scratch_resolver_invents_no_default(tmp_path, monkeypatch) -> None:
 
 
 def test_nothing_rebuilds_a_dot_omnidriver_scratch_default() -> None:
-    """A bare ``".omnidriver"`` path segment anywhere in the package is the old default coming back under another name."""
+    """A bare ``".omnidriver"`` path segment anywhere in the package rebuilds the scratch default under another name."""
     offenders = {
         str(path.relative_to(_PACKAGE_ROOT)): [
             node.lineno for node in ast.walk(ast.parse(path.read_text(), filename=str(path)))

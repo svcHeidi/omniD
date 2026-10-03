@@ -1,10 +1,6 @@
 """Generic dictionary-catalog value objects.
 
-Core owns this shape and its closed ``value_kind`` vocabulary of generic
-value *shapes* -- how a value is built, never what it means, so no kind can
-mean "unchecked". Plugins own the entries; units, ranges and physical
-interpretation are the adapter's.
-"""
+Core owns the shape and the closed ``value_kind`` vocabulary of value shapes (how a value is built, never what it means, so no kind can mean "unchecked"); plugins own the entries, units and ranges."""
 
 from __future__ import annotations
 
@@ -16,34 +12,20 @@ from typing import Any
 
 from .catalogue_paths import PLACEHOLDER
 
-#: Generic value SHAPES, closed. Adding a member here is a real change to what
-#: every adapter and renderer must handle; do not add one that no declaration
-#: uses, and do not add a member that means "unchecked" -- that is exactly
-#: the hole this vocabulary closes.
+#: Generic value SHAPES, closed. Adding a member changes what every adapter and
+#: renderer must handle; never add one that no declaration uses or one that
+#: means "unchecked".
 #:
-#: The typed-list members (``word_list``, ``scalar_list``, ``vector3_list``,
-#: ``integer_list``) are kept distinct from a bare ``list`` because the
-#: element type is information a renderer needs -- a list of words and a
-#: list of scalars are spelled differently in every format this framework
-#: has. No declaration needs an untyped list, so one is not offered.
+#: The typed lists are distinct from a bare ``list`` because the element type
+#: is information a renderer needs (a list of words and a list of scalars are
+#: spelled differently); no untyped list is offered. ``dimensioned_scalar``
+#: and ``dimensioned_tensor`` pair a magnitude with a seven-exponent dimension
+#: vector, and are two kinds because the magnitude's shape differs.
 #:
-#: ``dimensioned_scalar`` and ``dimensioned_tensor`` name a magnitude paired
-#: with a seven-exponent physical-dimension vector -- a dimensional-analysis
-#: concept independent of any file format. They are two kinds, not one, for
-#: the same reason as the typed lists: the magnitude's shape differs (one
-#: number vs. several).
-#:
-#: ``tensor9`` and ``dictionary`` are deliberately absent: no current
-#: ``DictEntry`` declaration has that shape, and a kind nothing uses is not
-#: added.
-#:
-#: ``string`` is text whose *native type is text*: an openCARP
+#: ``string`` is text whose native type is text (an openCARP
 #: ``String``/``RFile``/``WFile`` parameter, which may be empty or contain
-#: spaces, both of which ``word`` refuses. It is never a pre-rendered native
-#: literal -- a vector, a list, a dimensioned value or a count spelled out as
-#: text; a declaration that reaches for ``string`` to carry rendered syntax
-#: is the defect, not this kind. Its only user today is omnidriver-opencarp's
-#: catalog.
+#: spaces, both refused by ``word``). It is never pre-rendered native syntax,
+#: such as a vector or a count spelled out as text.
 VALUE_KINDS = frozenset({
     "scalar", "integer", "boolean", "word", "enum", "vector3",
     "dimensioned_scalar", "dimensioned_tensor",
@@ -149,12 +131,9 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
             reasons.extend(f"element {index} {r}" for r in item_reasons)
         return tuple(reasons)
     if kind == "mapping":
-        # A tutorial-record axis's own study value is not always one of the
-        # shapes above -- an S1-S2 protocol axis takes one mapping of named
-        # parameters as its single study value, not a document key's value.
-        # Generic shape only: arbitrary keys/values, never checked against a
-        # specific protocol's required keys (the axis's own `resolve` does
-        # that, by name).
+        # An axis's study value may be one mapping of named parameters rather
+        # than a document key's value. Generic shape only; the axis's own
+        # `resolve` checks its required keys by name.
         if isinstance(value, (str, bytes)) or not isinstance(value, _Mapping):
             return ("must be a mapping",)
         return ()
@@ -165,11 +144,8 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
 class DictEntry:
     driver_path: str
     description: str
-    # No default: a default here hides a
-    # missing declaration from grep and review, since a field that always has
-    # some value looks declared either way. Placed before every field that
-    # still defaults, since a dataclass field with no default cannot follow
-    # one that has one.
+    # No default, so a missing declaration is visible; placed before the
+    # defaulted fields because a dataclass cannot order them otherwise.
     value_kind: str
     source_refs: tuple[str, ...] = ()
     notes: str = ""
@@ -189,16 +165,10 @@ class DictEntry:
     # on every member of the group to make the relation symmetric.
     co_required_with: tuple[str, ...] = ()
     # A dynamic path's declared domain per placeholder, e.g.
-    # ``{"<ventKey>": ("lv", "rv")}``. Most placeholders here are open-ended,
-    # case-author-chosen identifiers with no closed domain, and leaving this
-    # empty is fine for those. Where an entry instead maps a placeholder to
-    # ``None`` explicitly, that states "open by decision", not "unaudited" --
-    # distinct from a key that is merely absent. Naming some but not all of
-    # an entry's placeholders is refused either way: a partial declaration is
-    # how an undeclared placeholder goes unchecked. A binding against an open
-    # domain still validates as a word and still passes every other syntax
-    # refusal a written key must (`omnidriver.openfoam.mutators`); only a
-    # closed domain further restricts membership.
+    # ``{"<ventKey>": ("lv", "rv")}``. An explicit ``None`` states "open by
+    # decision", distinct from a placeholder left out; naming some but not all
+    # of an entry's placeholders is refused. An open binding still validates as
+    # a word; only a closed domain restricts membership.
     allowed_bindings: dict[str, tuple[str, ...] | None] = field(default_factory=dict)
 
     @property

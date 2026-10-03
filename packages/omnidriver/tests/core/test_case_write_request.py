@@ -165,14 +165,11 @@ def test_a_whitespace_only_source_artifact_is_refused():
         )
 
 
-# --- R3 blocker 2 (2026-09-23): a relative `case_root` resolves against
-# whatever directory the *committing* process happens to be in, not the one
-# the plan was built in. Reproduced against the real public constructor, not
-# a monkeypatch: `commit_case_write` had no defensive check of its own, so
-# the same plan committed from two different working directories silently
-# wrote the right bytes into two different, wrong-relative-to-each-other
-# case roots with no error at all. Refusing it here, at construction, means
-# a plan naming an unauditable root never comes into existence. ---
+# --- A relative `case_root` resolves against whatever directory the
+# *committing* process happens to be in, not the one the plan was built in, so
+# the same plan committed from two working directories would write into two
+# different roots with no error. Refusing it at construction means a plan
+# naming an unauditable root never comes into existence. ---
 
 
 def test_a_relative_case_root_is_refused_at_construction():
@@ -185,7 +182,7 @@ def test_a_relative_case_root_is_refused_at_construction():
 
 
 def test_a_relative_case_root_committed_from_two_directories_would_diverge_but_is_refused_first(tmp_path, monkeypatch):
-    """The exact reproduction R3 gave: build a plan whose `case_root` is a relative `Path("somecase")` from directory A, then attempt to commit it from directory B where a `somecase/` also exists."""
+    """Build a plan whose `case_root` is a relative `Path("somecase")` from directory A, then attempt to commit it from directory B where a `somecase/` also exists."""
     dir_a = tmp_path / "a"
     dir_b = tmp_path / "b"
     (dir_a / "somecase").mkdir(parents=True)
@@ -205,12 +202,10 @@ def test_a_relative_case_root_committed_from_two_directories_would_diverge_but_i
     assert list((dir_b / "somecase").iterdir()) == []
 
 
-# --- 2026-09-23 decision, "a parameter asserts a final state, not only a
-# value": `ParameterAssignment` gained `operation` (`set`/`ensure`/`remove`).
-# `set` is the default and every assignment built before this field existed
-# is implicitly one -- the tests above never pass `operation` at all, and
-# still construct, which is itself part of what "the default matches prior
-# behaviour" means. These test the new field directly. ---
+# --- "A parameter asserts a final state, not only a value": a
+# `ParameterAssignment` carries `operation` (`set`/`ensure`/`remove`), and `set`
+# is the default, so the tests above never pass it. These test the field
+# directly. ---
 
 
 def test_operation_defaults_to_set():
@@ -266,7 +261,7 @@ def test_remove_round_trips_through_json():
 
 
 def test_operation_changes_the_assignment_digest():
-    """Two assignments differing only in `operation` must serialize differently -- otherwise a plan could not distinguish "set this key" from "remove this key" once digested, which is the entire point of adding the field (2026-09-23 decision)."""
+    """Two assignments differing only in `operation` must serialize differently -- otherwise a plan could not distinguish "set this key" from "remove this key" once digested."""
     set_assignment = _assignment(operation="set")
     ensure_assignment = _assignment(operation="ensure")
     assert (

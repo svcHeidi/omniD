@@ -1,10 +1,6 @@
 """The one place an ``omnidriver run`` child command is built.
 
-Every spawned/advertised child must rebuild the parent's provider stack via
-``--plugin <DriverContext.plugin_selector>``, and its repository via
-``--repo``, which supplies the scripts a step may name; a context with
-neither gets no flag rather than guessing one.
-"""
+A child rebuilds the parent's stack via ``--plugin`` and its repository via ``--repo``; a context with neither gets no flag."""
 
 from __future__ import annotations
 

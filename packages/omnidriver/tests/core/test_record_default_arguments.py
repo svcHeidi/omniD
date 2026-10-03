@@ -1,4 +1,4 @@
-"""A workflow step's replaceable default arguments (owner Q3/Q7, 2026-09-26)."""
+"""A workflow step's replaceable default arguments."""
 from __future__ import annotations
 
 import pytest
@@ -33,7 +33,7 @@ def test_an_axis_passing_the_key_replaces_the_default_and_does_not_duplicate_it(
 
 
 def test_any_value_after_the_key_replaces_the_default_the_record_never_names_it():
-    """Owner, 2026-09-26 ("the pre-processing stage"): the record declares the default only."""
+    """The record declares the default only."""
     assert MESH.argv(("-dict", "system/agentComposedDict")) == ("mesher", "-dict", "system/agentComposedDict")
     assert GMSH.argv(("-setnumber", "lc", "0.0123")) == (
         "gmsh", "-3", "box.geo.template", "-o", "box.msh",

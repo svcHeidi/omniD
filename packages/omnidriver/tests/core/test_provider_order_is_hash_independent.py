@@ -53,7 +53,7 @@ def test_order_is_identical_across_hash_seeds():
 
 
 def test_independent_providers_keep_sorted_by_id_order():
-    """The docstring's own promise, now actually enforced."""
+    """Independent providers keep their sorted-by-id order."""
     order = _order_under_seed("3")
     assert order == "org.x,org.y,org.z,org.top"
 

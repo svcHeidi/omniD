@@ -1,54 +1,5 @@
-"""``manufacturedEikonalECG``, a cardiacFOAM tutorial record.
-
-Native case: ``manufacturedSolutions/eikonalECG`` -- a manufactured-solution
-verification of the eikonal activation-time solve and its template ECG
-calculation (see that case's own ``README.md`` for the physics). Its
-``Allrun`` runs unconditionally::
-
-    runApplication blockMesh -dict system/blockMeshDict.3D
-    if [ "${1:-}" = "parallel" ]; then ...; else runApplication cardiacFoam; fi
-
--- serial by default (parallel is the OpenFOAM layer's concern, not a record
-variant), so this record's ``hex`` route is exactly those two steps, with the
-``-dict`` argument as the ``mesh`` step's own default, replaced by the
-``dimension`` axis when a study picks something other than the native 3D
-default.
-
-The tet route has no native ``Allrun`` of its own: it is declared here citing
-``setup/studies/tetConvergence/``'s own README and the six studies that run
-it -- ``gmsh -3 <template> -setnumber lc <v>`` (evidence:
-``docs/solver-learning/cardiacfoam.md`` G1-G9), then ``gmshToFoam``, then
-``checkMesh``, then the same ``solve`` step. Two further routes extend it
-with one extra step apiece -- ``tet-errorLocalisation``
-(``postProcess -func writeCellCentres -latestTime``) and
-``tet-gradientReconstruction`` (``gradientReconstructionOrder``) -- one
-selector, ``variant_selector="mesh"``, with four values.
-
-The electrode-position tables (``E1``-``E5``) are not a formula over each
-``blockMeshDict``'s extents: ``E3``/``E4`` keep the same x across all three
-dimensions regardless of domain size, and ``E5`` varies non-monotonically
-(1D 1.65, 2D 0.18, 3D 1.55) -- these are hand-chosen sample points, the same
-character as the ``R1``-``R156`` scatter the native 3D case already carries
-alongside them. So they are study content: only ``cartesianConvergence`` --
-the one study that actually varies ``dimension`` -- states them directly, as
-five ``document:key`` overrides per case; no Python table is kept.
-
-Workflow steps' ``produces``/``consumes`` are settled by a real run
-(``docs/solver-learning/cardiacfoam.md``, section E). A real ``blockMesh``
-then ``cardiacFoam`` at the coarsest resolution (10x10x10) produced exactly:
-``constant/electroProperties.withDefaultValues`` (unlike ``singleCellSolver``,
-``eikonalMyocardiumDomain``'s ``end()`` does not override
-``electroModel::end()``, so it IS written -- R4's exemption does not hold
-here) and, under ``postProcessing/``, ``manufacturedEikonalActivationTime.dat``,
-``eikonalECG.dat``, ``manufacturedEikonalECG_ECG.dat`` and
-``manufacturedEikonalECGSummary_ECG.dat``. The same four names reappeared
-identically from a real tet run, confirming the solve step's declared
-outputs hold across both mesh routes. Removing ``0/activationTime`` from a
-copy of the run case made ``cardiacFoam`` fail with
-``cannot find file .../0/activationTime`` (rc 1), confirming it as a real
-``consumes`` entry, the way R3 established the pattern for
-``restitutionCurves``.
-"""
+"""``manufacturedEikonalECG``, the eikonal activation-time and template ECG manufactured-solution record.
+Native case: ``manufacturedSolutions/eikonalECG``; hex, tet and two extended tet routes."""
 
 from __future__ import annotations
 
@@ -63,20 +14,17 @@ from .routes import block_mesh_step, gmsh_route, solve_step
 _TET_TEMPLATE_RELPATH = "setup/studies/tetConvergence/box.geo.template"
 _TET_MESH = "box.msh"
 
-#: This record's own axes. The dimension axis takes no
-#: `solver_coefficients`: eikonalECG's `eikonalSolverCoeffs` has no
-#: `dimension` key (unlike bidomain's and bath's `<solver>Coeffs`), so it
-#: contributes the mesh step's `-dict` argument only.
+#: The dimension axis takes no `solver_coefficients`: `eikonalSolverCoeffs` has
+#: no `dimension` key (unlike bidomain's and bath's), so it only sets the mesh
+#: step's `-dict` argument.
 AXES = (
     dimension_axis("dimension", mesh_step_id="mesh"),
     hex_number_cells_axis("numberCells"),
     tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh"),
 )
 
-#: Settled by a real run (module docstring). Every cardiacFoam solve step
-#: writes `.withDefaultValues` here (unlike `restitutionCurves`'s
-#: `singleCellSolver`, which overrides `electroModel::end()` without calling
-#: it -- see R4): `eikonalMyocardiumDomain`'s solve does call it.
+#: `eikonalMyocardiumDomain` does not override `electroModel::end()`, so the
+#: solve writes `.withDefaultValues` (unlike `singleCellSolver`).
 _SOLVE_OUTPUTS = (
     WITH_DEFAULT_VALUES,
     "postProcessing/manufacturedEikonalActivationTime.dat",
@@ -85,6 +33,7 @@ _SOLVE_OUTPUTS = (
     "postProcessing/manufacturedEikonalECGSummary_ECG.dat",
 )
 
+# The native Allrun meshes with `blockMesh -dict system/blockMeshDict.3D`.
 _MESH_STEP = block_mesh_step(
     BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",), default_dict="system/blockMeshDict.3D",
 )
@@ -94,8 +43,7 @@ _WRITE_CELL_CENTRES_STEP = WorkflowStep(
     command=("postProcess", "-func", "writeCellCentres", "-latestTime"),
     # No `produces`: its output lands in a time directory, which cannot be
     # declared (`WorkflowStep` refuses `{`/`}`, and there is no other literal
-    # path for a time-varying instance) -- and it is dropped at staging
-    # regardless (A2a's `instance_directory_pattern`).
+    # path for a time-varying instance), and staging drops it regardless.
 )
 _GRADIENT_RECONSTRUCTION_STEP = WorkflowStep(
     step_id="gradientReconstructionOrder", command=("gradientReconstructionOrder",),

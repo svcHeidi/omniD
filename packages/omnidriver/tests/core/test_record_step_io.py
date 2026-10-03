@@ -61,7 +61,7 @@ def test_paths_must_be_case_relative(bad):
 
 @pytest.mark.parametrize("field", ["produces", "consumes"])
 def test_a_bare_string_is_refused_not_exploded_into_characters(field):
-    """M1: tuple("solved.marker") would be thirteen one-character paths."""
+    """tuple("solved.marker") would be thirteen one-character paths."""
     with pytest.raises(TutorialRecordError, match=field):
         WorkflowStep(step_id="x", command=("c",), **{field: "solved.marker"})
 
@@ -69,7 +69,7 @@ def test_a_bare_string_is_refused_not_exploded_into_characters(field):
 @pytest.mark.parametrize("field", ["produces", "consumes"])
 @pytest.mark.parametrize("bad", ["", ".", "./", "out/{x}.dat", "a}b"])
 def test_empty_root_and_brace_paths_are_refused(field, bad):
-    """M1: "." names the case root itself; a brace is later str.format-ed."""
+    """"." names the case root itself; a brace is later str.format-ed."""
     with pytest.raises(TutorialRecordError, match=field):
         WorkflowStep(step_id="x", command=("c",), **{field: (bad,)})
 
@@ -87,7 +87,7 @@ def test_a_refusal_names_the_step_once():
 
 
 def test_a_step_keeps_its_utility_manifest_produces_beside_its_own():
-    """I6: a step's declared ``produces`` is unioned with its command's utility-manifest ``produces``, never a replacement."""
+    """A step's declared ``produces`` is unioned with its command's utility-manifest ``produces``, never a replacement."""
     from omnidriver.core.runtime.workflow import normalize_workflow_dag
 
     dag, _diagnostics = normalize_workflow_dag(

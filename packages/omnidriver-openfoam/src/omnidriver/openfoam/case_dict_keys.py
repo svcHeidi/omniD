@@ -19,17 +19,14 @@ _RTS_COEFFS_SUFFIX = "Coeffs"
 
 
 def _scope_relative(trail: tuple[str, ...]) -> tuple[str, ...]:
-    """Drop a leading runtime-selection scope dict, aligning an absolute
-    trail with catalogue paths (expressed relative to inside `<model>Coeffs`,
-    since parsing strips their `$SCOPE_TOKEN.` prefix)."""
+    """Drop a leading runtime-selection scope dict so a trail aligns with catalogue paths relative to `<model>Coeffs`."""
     if trail and trail[0].endswith(_RTS_COEFFS_SUFFIX):
         return trail[1:]
     return trail
 
 
 def _prefixes(catalogued_paths: Iterable[str]) -> set[tuple[str, ...]]:
-    """Every catalogue path and every prefix of one, as segment tuples --
-    a container (`ecgDomains`) is legitimate even with no path ending there."""
+    """Every catalogue path and each of its prefixes, so a container is legitimate even when no path ends there."""
     out: set[tuple[str, ...]] = set()
     for path in catalogued_paths:
         segments = tuple(path.split("."))
@@ -152,9 +149,7 @@ def _unmatched(
     known: set[tuple[str, ...]],
     trail: tuple[str, ...] = (),
 ) -> list[tuple[str, ...]]:
-    """Outermost unmatched keys, depth-first; an unmatched container is
-    reported once and not descended into, so one misspelled container
-    doesn't bury the reported key under every key beneath it."""
+    """Outermost unmatched keys, depth-first; an unmatched container is reported once, not descended into."""
     found: list[tuple[str, ...]] = []
     for key in node:
         value = node[key]

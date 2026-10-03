@@ -1,4 +1,4 @@
-"""Tutorial records, axes, and the record-entry pipeline (step 2a of docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md)."""
+"""Tutorial records, axes, and the record-entry pipeline."""
 
 from __future__ import annotations
 
@@ -120,17 +120,12 @@ class _RecordCaseWriterPlugin(ToyProvider):
         return frozenset({_FORMAT})
 
     def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env=None):
-        # Regression pin (step 4b, the restitutionCurves pilot): a real
-        # renderer (omnidriver.openfoam.case_rendering) reads the real case
-        # ONLY to seed a copy under `snapshot_root` -- the two must never be
-        # the same directory, or its seeding copy becomes a no-op copy of a
-        # file onto itself (`shutil.SameFileError`, found running this
-        # pilot's sweep end to end against the real OpenFOAM dictionary
-        # renderer; this toy renderer's own read-from-snapshot_root shape
-        # never exercised that failure mode, so this assertion is the one
-        # thing in this test double that would have caught
-        # `commit_record_case` regressing back to passing `staged_case_root`
-        # for both).
+        # A real renderer (omnidriver.openfoam.case_rendering) reads the real
+        # case ONLY to seed a copy under `snapshot_root` -- the two must never
+        # be the same directory, or its seeding copy becomes a copy of a file
+        # onto itself (`shutil.SameFileError`). This toy renderer reads from
+        # snapshot_root and would not notice, so this assertion pins that
+        # `commit_record_case` passes distinct directories.
         case_root = Path(resolved.request.case_root)
         assert Path(snapshot_root) != case_root, (
             f"render_case_files was called with snapshot_root == case_root "
@@ -217,7 +212,7 @@ def _native_case(tmp_path: Path, files: dict[str, dict]) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# TutorialRecord construction (minor m4: native_case_relpath is case-relative)
+# TutorialRecord construction (native_case_relpath is case-relative)
 # ---------------------------------------------------------------------------
 
 
@@ -232,7 +227,7 @@ def test_tutorial_record_refuses_a_native_case_relpath_that_escapes_the_case():
 
 
 # ---------------------------------------------------------------------------
-# Record-scoped axes (2026-09-26): an axis belongs to the record that uses
+# Record-scoped axes: an axis belongs to the record that uses
 # it, so one name can mean different things in two records, and two axes of
 # one record can never share a name silently.
 # ---------------------------------------------------------------------------
@@ -279,7 +274,7 @@ def test_one_axis_name_resolves_within_each_record_that_declares_it():
 
 
 def test_workflow_step_refuses_an_empty_command():
-    """Minor: a step with no command has nothing to run -- refused at construction, rather than surfacing later as an IndexError when `_workflow_dag_for_record` tries `argv[0]` on an empty list."""
+    """A step with no command has nothing to run -- refused at construction, not later as an IndexError on `argv[0]`."""
     with pytest.raises(TutorialRecordError, match="non-empty command"):
         WorkflowStep(step_id="s", command=())
 
@@ -290,7 +285,7 @@ def test_workflow_step_refuses_an_empty_step_id():
 
 
 # ---------------------------------------------------------------------------
-# Name sorting (design §3, §4 step 4)
+# Name sorting
 # ---------------------------------------------------------------------------
 
 
@@ -316,13 +311,13 @@ def test_sort_study_name_refuses_a_name_that_is_neither():
 
 
 def test_sort_study_name_refuses_a_bare_name_the_entry_declares_no_axis_for():
-    """Record-scoped axes (2026-09-26): a bare name resolves against the entry's own axes only, and the refusal names the ones it has."""
+    """A bare name resolves against the entry's own axes only, and the refusal names the ones it has."""
     with pytest.raises(TutorialRecordError, match=r"'mesh_family'.*declared axes: \['number_cells'\]"):
         sort_study_name("mesh_family", axes=(_number_cells_axis(),))
 
 
 def test_sort_study_name_refuses_an_unknown_document():
-    """An "unknown document" (task item 3): a document that fails core's own case-relative shape check -- absolute or escaping the case are the structural facts core can check without knowing any solver's vocabulary."""
+    """An "unknown document": a document that fails core's own case-relative shape check -- absolute or escaping the case are the structural facts core can check without knowing any solver's vocabulary."""
     with pytest.raises(ValueError, match="escape"):
         sort_study_name("../outside:a.b", axes=())
 
@@ -333,7 +328,7 @@ def test_sort_study_name_refuses_an_empty_key_path_segment():
 
 
 # ---------------------------------------------------------------------------
-# Conflict refusal (design §4 step 6)
+# Conflict refusal
 # ---------------------------------------------------------------------------
 
 
@@ -366,7 +361,7 @@ def test_combine_patches_allows_two_sources_agreeing_on_one_value():
 
 
 def test_combine_patches_keeps_the_first_agreeing_patch_regardless_of_validated_flag():
-    """Item 6: the "prefer the validated agreeing patch" tie-break is dead code and has been removed."""
+    """There is no "prefer the validated agreeing patch" tie-break."""
     patches = [
         _sourced("constant/a.json", "k", "one", source="base", validated=False),
         _sourced("constant/a.json", "k", "one", source="axis", validated=True),
@@ -378,7 +373,7 @@ def test_combine_patches_keeps_the_first_agreeing_patch_regardless_of_validated_
 
 
 def test_combine_patches_refuses_a_value_kind_mismatch_even_when_values_are_equal():
-    """M7: a slot two sources disagree on the KIND of is a conflict even when Python happens to consider the values equal (int 1 == float 1.0)."""
+    """A slot two sources disagree on the KIND of is a conflict even when Python happens to consider the values equal (int 1 == float 1.0)."""
     patches = [
         SourcedPatch(patch=AxisPatch("constant/a.json", ("k",), 1, "integer"), source="base", validated=True),
         SourcedPatch(patch=AxisPatch("constant/a.json", ("k",), 1.0, "scalar"), source="axis", validated=True),
@@ -388,7 +383,7 @@ def test_combine_patches_refuses_a_value_kind_mismatch_even_when_values_are_equa
 
 
 def test_combine_patches_refuses_int_and_bool_as_a_conflict():
-    """M7: strict same-type equality -- 1 vs True is a conflict, not an agreement, even though Python's `1 == True`."""
+    """Strict same-type equality -- 1 vs True is a conflict, not an agreement, even though Python's `1 == True`."""
     patches = [
         SourcedPatch(patch=AxisPatch("constant/a.json", ("k",), 1, "integer"), source="base", validated=True),
         SourcedPatch(patch=AxisPatch("constant/a.json", ("k",), True, "integer"), source="axis", validated=True),
@@ -420,7 +415,7 @@ def test_resolve_case_patches_runs_axes_and_direct_keys_together():
 
 
 def test_resolve_case_patches_refuses_a_direct_key_absent_from_the_catalog():
-    """Minor m6: the validator's own KeyError is wrapped in a TutorialRecordError naming the key -- never surfaced as a bare KeyError whose message may or may not mention it."""
+    """The validator's own KeyError is wrapped in a TutorialRecordError naming the key -- never surfaced as a bare KeyError whose message may or may not mention it."""
     record = _record()
     with pytest.raises(TutorialRecordError, match="unknownKey"):
         resolve_case_patches(
@@ -444,7 +439,7 @@ def test_resolve_case_patches_accepts_an_unvalidated_environment_owned_key():
 
 
 def test_resolve_case_patches_validates_axis_produced_patches_too():
-    """M3: every combined patch, direct key or axis output, goes through record_key_validation.validate before commit -- an axis is not a back door around the catalog."""
+    """Every combined patch, direct key or axis output, goes through record_key_validation.validate before commit -- an axis is not a back door around the catalog."""
     def rogue(value, staged_case_root):
         return AxisResult(
             patches=(AxisPatch("constant/physics.json", ("notInCatalog",), value, "word"),),
@@ -462,7 +457,7 @@ def test_resolve_case_patches_validates_axis_produced_patches_too():
 
 
 def test_resolve_case_patches_refuses_a_value_that_does_not_fit_the_axis_value_kind():
-    """Minor: AxisContract.value_kind is checked against the study's value BEFORE resolve ever runs, wrapped as a TutorialRecordError naming the axis -- before this fix, a bad value reached the axis's own resolve code unchecked and surfaced as whatever native exception it happened to raise trying to coerce it."""
+    """AxisContract.value_kind is checked against the study's value before resolve runs, and a misfit is a TutorialRecordError naming the axis, not whatever exception the axis's own resolve raises coercing it."""
     def resolve(value, staged_case_root):
         return AxisResult(patches=(
             AxisPatch("constant/mesh.json", ("cells",), int(value), "integer"),
@@ -480,7 +475,7 @@ def test_resolve_case_patches_refuses_a_value_that_does_not_fit_the_axis_value_k
 
 
 def test_resolve_case_patches_refuses_an_axis_that_writes_the_staged_case(tmp_path):
-    """M2: axis purity enforced at RUNTIME, not merely documented."""
+    """Axis purity enforced at RUNTIME, not merely documented."""
     staged_case_root = tmp_path / "staged"
     staged_case_root.mkdir()
 
@@ -500,7 +495,7 @@ def test_resolve_case_patches_refuses_an_axis_that_writes_the_staged_case(tmp_pa
 
 
 def test_resolve_case_patches_validates_all_direct_keys_before_any_axis_runs():
-    """Minor m2: a direct key that the catalog will refuse must be caught before any axis (even a well-formed, allowed one) is given a chance to run -- not merely before OTHER bad names, which test_resolve_case_patches_refuses_before_running_any_axis already covers."""
+    """A direct key that the catalog will refuse must be caught before any axis (even a well-formed, allowed one) is given a chance to run -- not merely before OTHER bad names, which test_resolve_case_patches_refuses_before_running_any_axis already covers."""
     calls: list = []
 
     def tracking_resolve(value, staged_case_root):
@@ -523,7 +518,7 @@ def test_resolve_case_patches_validates_all_direct_keys_before_any_axis_runs():
 
 
 def test_resolve_case_patches_refuses_command_arguments_for_an_undeclared_step():
-    """M6: an axis contributing command arguments to a step id the record does not declare in its `workflow_steps` is refused by name -- the record's `workflow_steps` is the only place step ids come from."""
+    """An axis contributing command arguments to a step id the record does not declare in its `workflow_steps` is refused by name -- the record's `workflow_steps` is the only place step ids come from."""
     def rogue(value, staged_case_root):
         return AxisResult(command_arguments={"not_a_real_step": ("-x",)})
 
@@ -539,7 +534,7 @@ def test_resolve_case_patches_refuses_command_arguments_for_an_undeclared_step()
 
 
 def test_resolve_case_patches_refuses_conflicting_command_arguments_for_one_step():
-    """M6: two axes contributing DIFFERENT arguments to the SAME declared step is refused by name -- no concatenation, no later-wins."""
+    """Two axes contributing DIFFERENT arguments to the SAME declared step is refused by name -- no concatenation, no later-wins."""
     def axis_one(value, staged_case_root):
         return AxisResult(command_arguments={"mesh": ("-N", "5")})
 
@@ -579,7 +574,7 @@ def _mesh_file_axis(*arguments: str) -> AxisContract:
 
 
 def test_resolve_case_patches_refuses_an_axis_that_passes_a_default_key_twice():
-    """Owner Q3: an axis replaces a default argument by passing its key once."""
+    """An axis replaces a default argument by passing its key once."""
     with pytest.raises(TutorialRecordError) as exc:
         resolve_case_patches(
             _record_with_a_default_argument(_mesh_file_axis("-dict", "a", "-dict", "b")),
@@ -592,7 +587,7 @@ def test_resolve_case_patches_refuses_an_axis_that_passes_a_default_key_twice():
 
 
 def test_preview_shows_each_selected_steps_command_with_its_default_argument(tmp_path):
-    """Owner Q3/Q7: with no study values the step runs its default argument; ``record_preview.workflow_commands`` shows the argv that will run."""
+    """With no study values the step runs its default argument; ``record_preview.workflow_commands`` shows the argv that will run."""
     _native_case(tmp_path, {})
     preview = record_execution.preview_record_case(
         _record_with_a_default_argument(_mesh_file_axis("-dict", "x")), cases_root=tmp_path / "cases",
@@ -616,7 +611,7 @@ def test_preview_shows_the_axis_argument_in_place_of_the_default(tmp_path):
 
 
 def test_resolve_case_patches_allows_identical_command_arguments_for_one_step():
-    """M6: two axes contributing the SAME arguments to the same step agree, and the arguments are not concatenated (duplicated) either."""
+    """Two axes contributing the SAME arguments to the same step agree, and the arguments are not concatenated (duplicated) either."""
     def axis_one(value, staged_case_root):
         return AxisResult(command_arguments={"mesh": ("-N", "5")})
 
@@ -637,7 +632,7 @@ def test_resolve_case_patches_allows_identical_command_arguments_for_one_step():
 
 
 def test_resolve_case_patches_refuses_before_running_any_axis():
-    """Design §4 step 4: names are sorted BEFORE any axis runs."""
+    """Names are sorted BEFORE any axis runs."""
     calls: list = []
 
     def _tracking_resolve(value, staged_case_root):
@@ -659,12 +654,10 @@ def test_resolve_case_patches_refuses_before_running_any_axis():
 
 
 # ---------------------------------------------------------------------------
-# The variant selector (item 4): picks a workflow_variant, produces no
-# patches. Not an axis -- refused by name when unknown, and refused when the
-# record declares no variants at all. The selector's NAME is declared by the
-# record itself (`variant_selector`), never a core-owned constant (item 4's
-# vocabulary fix, 2026-09-24 -- `MESH_SELECTOR_NAME` was core-owned solver
-# vocabulary and is deleted).
+# The variant selector: picks a workflow_variant, produces no patches. Not an
+# axis -- refused by name when unknown, and refused when the record declares no
+# variants at all. The selector's NAME is declared by the record itself
+# (`variant_selector`), never a core-owned constant.
 # ---------------------------------------------------------------------------
 
 
@@ -698,7 +691,7 @@ def test_resolve_variant_selector_refuses_an_unknown_variant_by_name():
 
 
 def test_resolve_variant_selector_refuses_a_null_value():
-    """Minor: a null selector value is refused, never silently coerced into the string ``"None"`` (which could spuriously match a variant literally named that)."""
+    """A null selector value is refused, never silently coerced into the string ``"None"`` (which could spuriously match a variant literally named that)."""
     record = _record(
         workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
         workflow_variants={"variantA": ("meshA",)},
@@ -710,7 +703,7 @@ def test_resolve_variant_selector_refuses_a_null_value():
 
 
 def test_resolve_variant_selector_does_not_coerce_the_value_with_str():
-    """Minor: no str() coercion -- an integer 1 must not silently match a variant literally named "1", nor True one named "True"."""
+    """No str() coercion -- an integer 1 must not silently match a variant literally named "1", nor True one named "True"."""
     record = _record(
         workflow_steps=(WorkflowStep(step_id="meshA", command=("toolA",)),),
         workflow_variants={"1": ("meshA",), "True": ("meshA",)},
@@ -739,7 +732,7 @@ def test_tutorial_record_refuses_workflow_variants_without_a_variant_selector():
 
 
 def test_tutorial_record_refuses_workflow_variants_without_a_default_variant():
-    """Owner Q2, 2026-09-26: a record with routes names the one its native case runs (``default_variant``)."""
+    """A record with routes names the one its native case runs (``default_variant``)."""
     with pytest.raises(TutorialRecordError, match="default_variant") as exc:
         _record(
             workflow_steps=(
@@ -781,7 +774,7 @@ def test_tutorial_record_refuses_a_default_variant_without_workflow_variants():
 
 
 # ---------------------------------------------------------------------------
-# Unchanged reporting (design §4 step 7)
+# Unchanged reporting
 # ---------------------------------------------------------------------------
 
 
@@ -833,7 +826,7 @@ def test_patches_to_parameters_carries_the_validated_flag_through():
 
 
 def test_parameter_assignment_validated_defaults_none_and_round_trips_json():
-    """M2: `validated` is tri-state -- `None` means "not stated", distinct from `False` ("checked, and found unvalidated")."""
+    """`validated` is tri-state -- `None` means "not stated", distinct from `False` ("checked, and found unvalidated")."""
     assignment = ParameterAssignment(
         qualified_id="q", owner="org.a", document="constant/a", key_path=("k",),
         value=1.0, value_kind="scalar", source="case",
@@ -889,7 +882,7 @@ def test_lookup_record_refuses_an_unregistered_name_listing_the_registered_ones(
 
 
 def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path):
-    """Item 1: describe_entry's own B2 refusal is replaced, for describe only, with a real preview through record_execution.preview_record_case."""
+    """describe_entry gives a record a real preview through record_execution.preview_record_case."""
     from omnidriver.core.introspection import describe_entry
 
     _native_case(tmp_path, {
@@ -924,7 +917,7 @@ def test_describe_entry_previews_a_tutorial_record_instead_of_refusing(tmp_path)
 
 
 def test_describe_entry_refuses_a_tutorial_record_preview_without_cases_root(tmp_path):
-    """M3: no `Path.cwd()` default -- a case root has no ambient truth (CLAUDE.md's "supplied versus discovered")."""
+    """No `Path.cwd()` default -- a case root has no ambient truth (CLAUDE.md's "supplied versus discovered")."""
     from omnidriver.core.introspection import describe_entry
 
     record = _record()
@@ -976,7 +969,7 @@ def test_preview_record_case_lists_each_patch_with_status_and_validated(tmp_path
 
 
 def test_preview_record_case_ignores_sweep_naming_output_keys(tmp_path):
-    """Item 3: `caseId`/`output_dir_name` (sweep.dependent's own naming derivations) are sweep-naming bookkeeping, never case content and never an axis -- they must not reach `sort_study_name` and be refused as an unrecognized bare name, which is what happened before this fix."""
+    """`caseId`/`output_dir_name` (sweep.dependent's own naming derivations) are sweep-naming bookkeeping, never case content and never an axis -- they must not reach `sort_study_name` and be refused as an unrecognized bare name."""
     _native_case(tmp_path, {"constant/mesh.json": {"cells": "1"}})
     record = _record()
     context = _context_with_writer()
@@ -1021,7 +1014,7 @@ def test_extract_reserved_names_allows_the_same_value_restated_across_sources():
 
 
 # ---------------------------------------------------------------------------
-# The `mesh` selector, wired end to end through preview/commit (item 4)
+# The `mesh` selector, wired end to end through preview/commit
 # ---------------------------------------------------------------------------
 
 
@@ -1078,7 +1071,7 @@ def test_preview_record_case_refuses_an_unknown_mesh_variant(tmp_path):
 
 
 def test_preview_record_case_runs_the_default_variant_when_the_study_names_none(tmp_path):
-    """Owner Q2, 2026-09-26."""
+    """A record with routes runs its default variant when the study names none."""
     _native_case(tmp_path, {})
     record = _record_with_variants()
     context = _context_with_writer()
@@ -1355,7 +1348,7 @@ def test_commit_record_case_preserves_sibling_keys_in_a_multi_key_document(tmp_p
 
 
 def test_commit_record_case_writes_nothing_when_every_patch_is_unchanged(tmp_path):
-    """M5: the result states "everything was unchanged" explicitly -- a bare None told a caller nothing happened, but not WHY, or what the unchanged patches even were."""
+    """The result states "everything was unchanged" explicitly, with the unchanged patches, rather than a bare None."""
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(axes=())
     context = _context_with_writer()
@@ -1501,13 +1494,10 @@ def test_preview_record_case_refuses_when_the_stack_has_no_config_value_reader(t
 
 
 # ---------------------------------------------------------------------------
-# P1 fix (docs/superpowers/specs/2026-09-24-tutorials-are-pointers-
-# design.md, "Owner decisions" dated 2026-09-25): `strict_plan` handles a
-# tutorial_record resolution directly (stage + commit + spec, the same
-# shared sequence a sweep case uses), rather than refusing by name through
-# an entry registry. The CLI end-to-end path lives in
-# `test_cli_plan_strict_tutorial_record.py`; these are the direct, in-
-# process unit tests of `strict_plan` itself.
+# `strict_plan` handles a tutorial_record resolution directly (stage + commit +
+# spec, the same shared sequence a sweep case uses). The CLI end-to-end path
+# lives in `test_cli_plan_strict_tutorial_record.py`; these are the direct,
+# in-process unit tests of `strict_plan` itself.
 # ---------------------------------------------------------------------------
 
 
@@ -1602,7 +1592,7 @@ def test_a_sweep_over_a_record_entry_produces_one_commit_per_case(tmp_path):
 
 # ---------------------------------------------------------------------------
 # record_case_spec: mapping a committed record case onto the same
-# workflow_dag shape a factory tutorial's spec carries (item 2).
+# workflow_dag shape a factory tutorial's spec carries.
 # ---------------------------------------------------------------------------
 
 

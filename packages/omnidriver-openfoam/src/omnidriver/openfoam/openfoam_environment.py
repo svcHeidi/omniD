@@ -160,9 +160,7 @@ def _configure_plugin_environment(
     environment: OpenFOAMEnvironment,
     driver_context: Any | None,
 ) -> OpenFOAMEnvironment:
-    """Return the sourced environment unchanged; project-specific library
-    selection belongs to whichever provider composes with this one, not here.
-    ``driver_context`` is kept only for signature stability."""
+    """Return the sourced environment unchanged; project-specific library selection belongs to a composing provider."""
     return environment
 
 

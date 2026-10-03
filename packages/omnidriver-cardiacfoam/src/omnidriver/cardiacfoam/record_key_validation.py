@@ -1,18 +1,6 @@
-"""cardiacFOAM's tutorial-record key catalogue and validator, on
-``omnidriver-openfoam``'s shared validator (:func:`make_validator`).
+"""cardiacFOAM's tutorial-record key catalogue and validator, on ``omnidriver-openfoam``'s shared validator (:func:`make_validator`).
 
-Two documents are catalogued: ``constant/electroProperties`` and
-``constant/physicsProperties``. A ``<solver>Coeffs`` first segment stands for
-the catalogue's ``$ELECTRO_MODEL_COEFFS`` token; which spellings are legal is
-the catalogue's own ``myocardiumSolver`` menu. A map at a key whose members the
-catalogue declares as one dynamic ``<name>`` segment
-(``bathPotentialDomain.groundPatches.<patch>``) is checked member by member
-and validates as ``"mapping"``; the writer replaces the whole sub-dictionary
-with it.
-
-The validator reads no case. ``record_key_catalog`` lists what it accepts for
-one case, with that case's own ``<solver>Coeffs`` for the token.
-"""
+Covers ``constant/electroProperties`` and ``constant/physicsProperties``; ``record_key_catalog`` lists what is accepted for one case."""
 
 from __future__ import annotations
 
@@ -60,15 +48,13 @@ def _tokenised(key_path: "tuple[str, ...]") -> "tuple[str, ...]":
 
 
 def _electro_match(key_path: "tuple[str, ...]"):
-    """The entry (and dynamic-path binding) a literal electroProperties key path addresses.
-
-    A match reached only through the token is refused unless the first segment is a
-    legal ``<solver>Coeffs``: an arbitrary first segment, or the token itself, must not
-    stand in for it."""
+    """The entry (and dynamic-path binding) a literal electroProperties key path addresses."""
     dotted = ".".join(key_path)
     entry = _ELECTRO_ENTRIES_BY_PATH.get(dotted)
     if entry is not None and not dotted.startswith(f"{_COEFFS_TOKEN}."):
         return entry, {}
+    # A match through the token needs a legal <solver>Coeffs first segment: an
+    # arbitrary one, or the token itself, must not stand in for it.
     if len(key_path) == 1 or key_path[0] not in _coeffs_names():
         return None
     templated = ".".join(_tokenised(key_path))
@@ -104,6 +90,9 @@ record_key_validator = make_validator(
             entries=_ELECTRO_ENTRIES_BY_PATH.values,
             match=_electro_match,
             scan=_tokenised,
+            # A map whose members the catalogue declares as one dynamic <name>
+            # segment is checked member by member and validates as "mapping";
+            # the writer replaces the whole sub-dictionary with it.
             members=_electro_declares_members,
         ),
         PHYSICS_DOCUMENT: CataloguedDocument(

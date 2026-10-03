@@ -1,8 +1,6 @@
 """Compose N providers into one stack, and answer a contract member over it.
 
-Core owns composition; a provider never embeds another provider. Every
-contract member is optional: :data:`MEMBERS` says how a stack composes the
-providers that implement it, and what the stack answers when none does.
+Core owns composition; every contract member is optional, and :data:`MEMBERS` says how the providers implementing it compose and what the stack answers when none does.
 """
 
 from __future__ import annotations
@@ -282,9 +280,7 @@ _EMPTY = {
 
 
 class _ComposedProfile:
-    """Every provider's profile as one: case-file rules concatenated (one
-    declarer per path, checked when the stack is built), ``requires``
-    unioned, everything else from the most specific provider."""
+    """Every provider's profile as one: case-file rules concatenated, ``requires`` unioned, the rest from the most specific provider."""
 
     def __init__(self, profiles):
         self._profiles = tuple(profiles)

@@ -1,4 +1,4 @@
-# Recorded OpenFOAM-layout debt in core (spec 2026-09-25 §6). Format:
+# Recorded OpenFOAM-layout debt in core. Format:
 # <path relative to core src>\t<token>\t<count>\t<reason>
 # This is debt, not a waiver: scripts/check-core-shape.py fails on any new
 # (file, token) pair, any higher count, and any count that shrank without

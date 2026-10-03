@@ -14,12 +14,12 @@ repository root.
 | `packages/omnidriver/src/omnidriver/core/plugin_discovery.py` | Entry-point discovery via `importlib.metadata`. Explains `omnidriver.plugins` group name, ambiguity handling, and `_entry_points()` test seam. |
 | `packages/omnidriver/src/omnidriver/core/strict_planning.py` | The strict planner: `strict_plan()` / `omnidriver plan --strict`. Stages a copy of the record's case under the scratch root and never writes the native case; produces machine-readable JSON with readiness score, diagnostics (including the stack's `plugin_diagnostics`), and launch command. |
 | `packages/omnidriver/src/omnidriver/core/runtime_records.py` | `CORE_RUNTIME_RECORDS` — every filename/directory core itself writes into a case (`workflow_state.json`, `run_document.json`, `sweep_manifest.json`, `case_record.json`, `workflow_logs/`, ...), merged into every stack's `CaseRuntimeConventions` so staging never carries a prior run's state forward (conformance C11). |
-| `packages/omnidriver/src/omnidriver/core/quantities/` | Solver-neutral `Quantity` record, unit table, sentinel handling, the `artifact_value_reader` reader contract, and `comparison.py`'s agent-stated-pairs comparison behind `omnidriver compare`. |
+| `packages/omnidriver/src/omnidriver/core/quantities/` | Solver-neutral `Quantity` record, unit table, sentinel handling, the `get_artifact_value_reader` reader contract, and `comparison.py`'s agent-stated-pairs comparison behind `omnidriver compare`. |
 | `packages/omnidriver/src/omnidriver/cli.py` | `omnidriver` CLI entry-point (`pyproject.toml`'s `[project.scripts]` names the installed binary). All public subcommands, and the stack selection (`--plugin`, `--repo`), are here. |
 | `packages/omnidriver/src/omnidriver/core/repository.py` | `read_repository()` / `repository_of_cases_root()`: a solver repository's `omnidriver.toml` (`plugin`, `tutorials`, `source`, `scripts`), read only from a supplied place. |
 | `packages/omnidriver/src/omnidriver/core/tutorial_records.py` | `TutorialRecord` and the record study contract; `case_folder_record()` builds the ad hoc one-step record `--case` runs. |
 | `benchmarks/` | Published, solver-neutral reference definitions (e.g. `niederer2011.json`) a comparison request cites by id; `scripts/check-benchmark-references.py` gates them. |
-| `ARCHITECTURE.md` | Deep architectural review: layer map, claim discipline, coupling analysis, runtime flow diagrams. Read the package-independence rules and "Provider composition" first. |
+| `ARCHITECTURE.md` | The layer map, the package-independence rules and "Provider composition". |
 | `CHANGELOG.md` | History of the retired flat `openfoam_driver/` tree, kept for reasoning, not for locations. |
 
 ---
@@ -37,15 +37,14 @@ repository root.
 | `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/physics_layout.py`/`.json` | Which region(s) a case's physics type declares (single-region vs. region-split, and each region's role), one row per type, read from the case rather than exempted by tutorial name. | The single source of truth for "which `constant/electroProperties`-shaped document does this case use"; a case with no `physicsProperties` still resolves, it does not raise. |
 | `packages/omnidriver/src/omnidriver/core/contracts/dictionary.py` | `DictEntry` dataclass — the vocabulary unit. | Every dictionary key your solver reads must be a `DictEntry`. |
 | `packages/omnidriver/src/omnidriver/core/contracts/dictionary_catalog.py` | `DictionaryCatalog` — immutable partitioned store. | Return from `get_dictionary_catalog()`; validates uniqueness at construction. |
-| `pyproject.toml` | Entry-point registration. | You must add your plugin under `[project.entry-points."omnidriver.plugins"]`. |
+| `packages/omnidriver-opencarp/pyproject.toml` | Entry-point registration, one per package. | Your package adds its plugin under `[project.entry-points."omnidriver.plugins"]`. |
 | `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | Full contract definition. | Read `SolverPlugin`; only its identity is required. |
 
 ### Plugin Contract Quick Reference
 
 Only the identity is required (`plugin_name`, `plugin_id`, `plugin_version`,
 `plugin_api_version`). Which members each operation needs, and what a stack
-answers without them, is the table in `AGENT_GUIDE.md`, "Adding a New
-Solver"; `provider_stack.MEMBERS` is the authority.
+answers without them, is the table in `AGENT_GUIDE.md`, "Plugin Guide"; `provider_stack.MEMBERS` is the authority.
 
 ---
 

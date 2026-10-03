@@ -1,21 +1,7 @@
 #!/usr/bin/env python3
-"""Verify a *built and installed* omnidriver wheel actually works.
+"""Verify a built and installed omnidriver wheel works.
 
-Run with the interpreter of a venv that has the wheel installed -- not an
-editable install, and not this repository on ``sys.path``:
-
-    python -m build --outdir dist packages/omnidriver
-    python -m venv /tmp/wheelenv
-    /tmp/wheelenv/bin/pip install "dist/omnidriver-*.whl[post]"
-    /tmp/wheelenv/bin/python scripts/check-wheel-artifact.py
-
-Why this is not covered by the test suite: an editable install leaves the
-repository on the path, so a module that reads repo-relative state at import
-time still works and the defect stays invisible.
-
-Deliberately does NOT run the core pytest suite: some of its modules test
-repository tooling and need a checkout, so running them here would fail for
-the wrong reason.
+Run it with the interpreter of a venv holding the wheel, not an editable install.
 """
 from __future__ import annotations
 
@@ -60,9 +46,7 @@ def main() -> int:
             f"`describe` with no plugin exited {result.returncode}, not the named refusal: {result.stderr[:300]}"
         )
 
-    # 3. The CLI is reachable. It hard-imported omnidriver.openfoam at module
-    #    scope once, which made the whole command surface unusable in a
-    #    core-only install.
+    # 3. The CLI is reachable in a core-only install.
     result = subprocess.run(
         [sys.executable, "-m", "omnidriver", "--help"], capture_output=True, text=True
     )
@@ -70,10 +54,8 @@ def main() -> int:
     if result.returncode != 0:
         failures.append(f"CLI --help exited {result.returncode}: {result.stderr[:300]}")
 
-    # 4. The sweep-spec schema ships inside the installed package -- a
-    #    repository-only schemas/ file would pass every other
-    #    check here and still be absent from every wheel, which is exactly
-    #    the defect class this script exists to catch.
+    # 4. The sweep-spec schema ships inside the installed package; a
+    #    repository-only schemas/ file would pass every other check here.
     try:
         import importlib.resources as _resources
         import json as _json

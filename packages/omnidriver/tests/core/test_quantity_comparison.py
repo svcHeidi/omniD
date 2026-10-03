@@ -1,5 +1,5 @@
 """Comparison over agent-stated pairs: pre-registered, sentinel-aware,
-bound to run evidence, refusing before it reads (spec 2026-09-26 §3, §4)."""
+bound to run evidence, refusing before it reads."""
 from __future__ import annotations
 
 import json
@@ -126,7 +126,7 @@ def test_both_not_reached_fail_fails_the_report(tmp_path):
 
 
 def test_status_is_unavailable_when_nothing_is_compared_numerically(tmp_path):
-    """I2/M1: a report full of both_not_reached pairs must never claim 'passed' -- it says why in status_reason."""
+    """A report full of both_not_reached pairs must never claim 'passed' -- it says why in status_reason."""
     sweep, runs = _two_runs(tmp_path)
     report = run_quantity_comparison(
         _request(tmp_path, runs, [_pair("B", "one", "two")], both_not_reached="agree"), tmp_path / "report.json",
@@ -247,7 +247,7 @@ class _FakeQuantityToyEntryPoint:
 
 
 def test_the_same_plugin_loaded_by_import_path_and_by_name_is_accepted(tmp_path, monkeypatch):
-    """B1: the stack comparison is insensitive to `source` on purpose -- reloading the identical provider through a different install/import path is not a "different stack" refusal."""
+    """The stack comparison is insensitive to `source` on purpose -- reloading the identical provider through a different install/import path is not a "different stack" refusal."""
     monkeypatch.setattr(plugin_discovery, "_entry_points", lambda: (_FakeQuantityToyEntryPoint(),))
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, plugin=QUANTITY_TOY_PLUGIN)
     runs = {"one": _run(sweep, "one", plugin="quantity-toy"), "two": _run(sweep, "two")}
@@ -259,11 +259,10 @@ def test_points_are_converted_to_the_reader_unit_and_an_off_point_sample_fails(t
     grid = "0 0 0 1.0\n1 0 0 2.0\n"
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": grid, "two": grid}, artifact_format=GRID_FORMAT)
     points = {"unit": "m", "at": {"a": [0.0009, 0, 0]}}
-    # "one" is given a generous offset (I2/M1: 'points' now always requires
-    # 'max_sampling_offset', so it can no longer be left unchecked) that its
-    # own 0.1 mm offset never exceeds; only "two"'s tight 0.00005 m bound
-    # catches the same reader's same offset, keeping the asymmetry this test
-    # is about.
+    # "one" is given a generous offset ('points' always requires
+    # 'max_sampling_offset') that its own 0.1 mm offset never exceeds; only
+    # "two"'s tight 0.00005 m bound catches the same reader's same offset,
+    # keeping the asymmetry this test is about.
     runs = {"one": _run(sweep, "one", points=points, max_sampling_offset=1.0),
             "two": _run(sweep, "two", points=points, max_sampling_offset=0.00005)}
     report = run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
@@ -332,7 +331,7 @@ def test_expected_points_for_a_self_sampling_reader_pass_within_the_offset(tmp_p
 
 
 def test_expected_points_for_a_self_sampling_reader_catch_a_mispairing(tmp_path):
-    """I3: a far expected location becomes sampled_off_point, exactly as for a points-taking reader -- a wrong pairing is visible, not silent."""
+    """A far expected location becomes sampled_off_point, exactly as for a points-taking reader -- a wrong pairing is visible, not silent."""
     sweep, runs = _two_runs(tmp_path)
     points = {"unit": "m", "at": {"a": [5, 5, 5], "b": [0.02, 0.003, 0]}}
     runs["one"].update(points=points, max_sampling_offset=0.001)
@@ -356,7 +355,7 @@ def test_points_for_a_self_sampling_reader_without_max_sampling_offset_is_refuse
 
 
 def test_a_self_sampling_reader_with_no_location_is_a_named_gap_when_points_are_given(tmp_path):
-    """I3: NoWhereReaderPlugin's reader never reports sampled_at (like I1, but for a self-sampling reader) -- with expected points given, that is a named not_evaluated gap, not a silently unchecked pass."""
+    """NoWhereReaderPlugin's reader never reports sampled_at -- with expected points given, that is a named not_evaluated gap, not a silently unchecked pass."""
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, plugin=NO_WHERE_READER_PLUGIN)
     points = {"unit": "m", "at": {"a": [0, 0, 0.007]}}
     runs = {"one": _run(sweep, "one", plugin=NO_WHERE_READER_PLUGIN, points=points, max_sampling_offset=0.001),
@@ -471,7 +470,7 @@ def test_a_report_write_failure_is_a_named_refusal(tmp_path, monkeypatch):
 
 
 def test_a_malformed_expected_artifact_entry_is_refused_by_name(tmp_path):
-    """M10: `data_artifact_from_json` can raise KeyError/ValueError for a malformed `expectedArtifacts` entry; that must be a named QuantityComparisonError, not a traceback."""
+    """`data_artifact_from_json` can raise KeyError/ValueError for a malformed `expectedArtifacts` entry; that must be a named QuantityComparisonError, not a traceback."""
     sweep, runs = _two_runs(tmp_path)
     document_path = sweep / "cases" / "one" / "run_document.json"
     document = json.loads(document_path.read_text())

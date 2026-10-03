@@ -1,8 +1,6 @@
 """OpenFOAM runtime command declarations.
 
-These commands and the ``FOAM_*`` executable locations are OpenFOAM runtime
-conventions.  Core asks an active environment whether it authorizes a command;
-it never infers that answer from an OpenFOAM-specific environment variable.
+Core asks the active environment whether a command is authorized; it never infers that from an OpenFOAM variable.
 """
 
 from __future__ import annotations

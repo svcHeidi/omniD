@@ -17,12 +17,7 @@ _OMNIDRIVER_MARKER_NAMES = (STATE_FILENAME, SWEEP_MANIFEST_FILENAME, RUN_DOCUMEN
 
 
 def _has_omnidriver_marker(output_dir: Path) -> bool:
-    """True if output_dir contains a recognizable omnidriver artifact.
-
-    Bounded to the top level and one level of subdirectories -- markers
-    always live at a case root or a sweep's per-case root, and an unbounded
-    walk would be slow across large mesh trees.
-    """
+    """Whether ``output_dir`` holds a marker at its top level or one level down (a walk of mesh trees is slow)."""
     for name in _OMNIDRIVER_MARKER_NAMES:
         if (output_dir / name).exists():
             return True

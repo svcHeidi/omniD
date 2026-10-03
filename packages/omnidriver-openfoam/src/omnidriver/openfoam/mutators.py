@@ -34,8 +34,7 @@ def _strip_inline_comment(line: str) -> str:
 
 
 def _mask_comments(text: str) -> str:
-    """Blank out comments in place, preserving offsets, so the scope scanner
-    ignores commented entries while writes keep the original file verbatim."""
+    """Blank comments in place, preserving offsets, so the scope scanner ignores commented entries while writes keep the file verbatim."""
     result = list(text)
     index = 0
     quoted = False
@@ -88,11 +87,7 @@ def _normalize_scope(scope: str | list[str] | tuple[str, ...] | None) -> list[st
 def _explode_inline_blocks_with_spans(
     lines: list[str],
 ) -> list[tuple[str, int, int, int]]:
-    """Rewrite ``a { b 1; }`` (legal OpenFOAM, otherwise a degenerate line
-    range for the line-based scope machinery) as one ``(text, line_index,
-    start_col, end_col)`` brace or entry per virtual line, so the writing
-    path can splice a replacement back into the original line instead of
-    reformatting the file."""
+    """Rewrite ``a { b 1; }`` as one ``(text, line_index, start_col, end_col)`` per virtual line so a write can splice into the original line."""
     exploded: list[tuple[str, int, int, int]] = []
     for index, line in enumerate(lines):
         code = _strip_inline_comment(line)
@@ -138,9 +133,7 @@ def _explode_inline_blocks(lines: list[str]) -> list[str]:
 
 
 def _iter_direct_child_lines(lines: list[str], start: int, end: int):
-    """Yield the indices in ``[start, end)`` at that span's own level,
-    skipping lines owned by a nested sub-dictionary. Braces inside comments
-    don't count; tracked dicts do contain ``// }``."""
+    """Yield indices in ``[start, end)`` at the span's own level, skipping nested sub-dictionaries; braces in comments don't count."""
     depth = 0
     for idx in range(start, end):
         # Yield before this line's braces, so a sub-dictionary's header and
@@ -157,10 +150,7 @@ def _iter_direct_child_lines(lines: list[str], start: int, end: int):
 def _quoted_pattern_headers(
     lines: list[str], start: int, end: int
 ) -> list[tuple[str, str]]:
-    """Return ``(regex_source, on_disk_name)`` for quoted block headers --
-    OpenFOAM lets a sub-dictionary be keyed by a quoted regex (e.g.
-    ``"Vm|VmFinal|u|uFinal"``), which this module's line scanner and foamlib
-    otherwise only match literally."""
+    """``(regex_source, on_disk_name)`` for quoted regex block headers such as ``"Vm|u"``, which the line scanner and foamlib otherwise match literally."""
     headers: list[tuple[str, str]] = []
     for index in _iter_direct_child_lines(lines, start, end):
         candidate = _strip_inline_comment(lines[index]).strip()
@@ -176,10 +166,7 @@ def _quoted_pattern_headers(
 def _resolve_pattern_scope(
     lines: list[str], dict_name: str, *, start: int, end: int
 ) -> str | None:
-    """Map a member name onto the quoted-regex block header that matches it,
-    honoring OpenFOAM's precedence (exact literal wins; otherwise the
-    last-declared matching pattern). Returns the on-disk header text (quotes
-    included), or ``None``."""
+    """Map a member name to the quoted-regex block header that matches it (exact literal wins, else the last match), or ``None``."""
     for regex_source, on_disk in reversed(
         _quoted_pattern_headers(lines, start, end)
     ):

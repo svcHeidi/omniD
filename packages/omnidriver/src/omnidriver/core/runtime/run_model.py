@@ -1,9 +1,6 @@
-"""Python model for the adapter-neutral Run document.
+"""Python model for the adapter-neutral Run document, whose shape ``schemas/run-document.json`` defines.
 
-Its shape is defined in ``schemas/run-document.json`` (the single source
-of truth); this module provides a Python dataclass for code that wants
-to construct, validate, or round-trip a Run programmatically.
-"""
+For code that constructs, validates or round-trips a Run."""
 
 from __future__ import annotations
 

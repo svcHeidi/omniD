@@ -54,11 +54,9 @@ def test_controlled_allrun_executes_without_domain_claims(tmp_path: Path, capsys
 
 
 def test_declared_vocabulary_names_the_current_coordinates_dictionary() -> None:
-    """Native cardiacCore renamed ``system/uvcConventionDict`` to
-    ``system/coordinatesConventionDict``, which ``generatePurkinjeTree.C``
-    reads; a declared ``consumes`` list still naming the old file sends an
-    agent nowhere. Historical prose in source comments is exempt -- this
-    checks declared paths only."""
+    """``generatePurkinjeTree.C`` reads ``system/coordinatesConventionDict``; a
+    declared ``consumes`` list naming ``system/uvcConventionDict`` sends an
+    agent nowhere. Only declared paths are checked, not prose in comments."""
     plugin = CardiacCorePlugin()
     catalogs = plugin.get_named_catalogs()
     declared = json.dumps(catalogs)
@@ -216,10 +214,8 @@ def test_every_scar_source_ref_names_the_branch_it_resolves_on() -> None:
 
 
 def test_the_catalog_records_that_the_scar_utilities_are_off_main() -> None:
-    """The module docstring explains scar being declared-only as a *workflow
-    scheduling* fact ("no workflow below runs those utilities yet"), which
-    reads as "wired up later". The stronger fact is that main cannot build
-    them at all. Both are true; only one of them was written down."""
+    """Scar being declared-only is a fact about main, not only about workflow
+    scheduling: main cannot build the scar utilities at all."""
     from omnidriver.cardiaccore.catalogs import inputs
 
     doc = inputs.__doc__ or ""

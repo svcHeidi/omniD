@@ -1,14 +1,5 @@
-"""``manufacturedMonodomain1D3D``: a tutorial record for
-``manufacturedSolutions/monodomain1D3D``, replacing two old factory
-tutorials that both pointed at this one native case:
-``manufactured_monodomain_1d3d`` (the coupled solve, this record's
-``coupled`` variant) and ``manufactured_purkinje_graph`` (the graph-only
-diagnostic, this record's ``graphOnly`` variant). ``graphFile`` is a plain
-native dictionary key, not a file copy; ``numberCells`` reuses
-``openfoam.axes.block_mesh_resolution_axis`` directly, isotropic since the
-one ``hex (`` block is a cube. What each step reads and writes, and why
-``coupled`` is the default variant, was observed in a real run:
-``docs/solver-learning/cardiacfoam.md`` MD1D3D.
+"""``manufacturedMonodomain1D3D``, the coupled 1D-3D monodomain manufactured-solution record.
+Native case: ``manufacturedSolutions/monodomain1D3D``; a ``coupled`` and a ``graphOnly`` variant.
 """
 
 from __future__ import annotations
@@ -30,19 +21,14 @@ NUMBER_CELLS_AXIS_NAME = "numberCells"
 _BLOCK_MESH_DICT_DOCUMENT = "system/blockMeshDict.3D"
 _CONTROL_DICT_DOCUMENT = "system/controlDict"
 
-#: `myocardiumSolver monodomainSolver`'s own conduction-network scope this
-#: tutorial's one native `purkinjeNetwork` entry lives at -- never varied
-#: (the native case already names it `purkinjeNetwork`).
+#: The conduction-network scope of `myocardiumSolver monodomainSolver` where
+#: the native case's one `purkinjeNetwork` entry lives.
 _PURKINJE_GRAPH_MODEL_COEFFS = (
     "monodomainSolverCoeffs", "conductionNetworkDomains", "purkinjeNetwork", "purkinjeGraphModelCoeffs",
 )
 
-#: Every graph file the native case ships (README: "Creates:
-#: constant/purkinjeGraph.nodes003 through .nodes161"), plus the plain
-#: default -- declared once so the solve steps' `consumes` covers whichever
-#: one a study names, the same "declare every document a study might pick"
-#: shape `manufactured_solution_axes.BLOCK_MESH_DICT_DOCUMENTS` already uses
-#: for `dimension`.
+#: Every graph file the native case ships, plus the plain default, so the
+#: solve steps' `consumes` covers whichever one a study names.
 GRAPH_FILES: tuple[str, ...] = (
     "purkinjeGraph",
     "purkinjeGraph.nodes003", "purkinjeGraph.nodes011", "purkinjeGraph.nodes021",
@@ -57,12 +43,7 @@ GRAPH_ONLY_VARIANT = "graphOnly"
 
 
 def _graph_file_axis(name: str) -> AxisContract:
-    """A named ``graphFile`` axis: the study value must name a file that
-    exists under the staged case's ``constant/`` (checked live, never a
-    hardcoded name list -- one source of truth), patched directly onto
-    ``purkinjeGraphModelCoeffs.graphFile`` -- a bare native word, unquoted
-    (native: ``graphFile purkinjeGraph;``, unlike the quoted
-    ``dimension "3D";``)."""
+    """The study value must name a file under the staged case's ``constant/``; it is patched unquoted onto ``graphFile``."""
 
     def resolve(value: Any, staged_case_root: Path) -> AxisResult:
         graph_file = str(value)
@@ -85,9 +66,7 @@ def _graph_file_axis(name: str) -> AxisContract:
 def _isotropic_cell_counts(
     n: Any, current: tuple[int, int, int], extents: tuple[float, float, float] | None,
 ) -> tuple[int, int, int]:
-    """The one ``hex (`` block in ``blockMeshDict.3D`` is a cube with no
-    direction fixed at 1 cell (unlike bidomain's per-dimension files), so
-    every study value expands isotropically."""
+    """The one ``hex (`` block is a cube with no direction fixed at 1 cell, so ``n`` expands isotropically."""
     del current, extents
     return (n, n, n)
 
@@ -100,22 +79,20 @@ AXES = (
     ),
 )
 
-#: `GRAPH_FILES`, as case-relative paths under `constant/` (a `consumes`
-#: entry is a full case-relative path; `GRAPH_FILES` itself stays bare
-#: filenames, matching the native `graphFile` word's own shape).
+#: `GRAPH_FILES` as case-relative paths, which `consumes` requires; the native
+#: `graphFile` word stays a bare filename.
 _GRAPH_FILE_PATHS: tuple[str, ...] = tuple(f"constant/{name}" for name in GRAPH_FILES)
 
 #: `cardiacFoam` (coupled) reads the myocardium solver's usual set, plus
 #: whichever graph file `graphFile` names. `runPurkinjeGraph` (graphOnly)
-#: reads only `controlDict`/`electroProperties`/the graph files -- a real
-#: run of each confirms neither opens the other's extra documents.
+#: reads only `controlDict`/`electroProperties`/the graph files.
 _COUPLED_SOLVE_CONSUMES = (
     _CONTROL_DICT_DOCUMENT, "system/fvSchemes", "system/fvSolution",
     "constant/physicsProperties", ELECTRO_PROPERTIES,
 ) + _GRAPH_FILE_PATHS
 _GRAPH_ONLY_SOLVE_CONSUMES = (_CONTROL_DICT_DOCUMENT, ELECTRO_PROPERTIES) + _GRAPH_FILE_PATHS
 
-#: Written by both solve routes (a real run of each, section MD1D3D).
+#: Written by both solve routes.
 _GRAPH_VERIFIER_OUTPUTS = (
     "postProcessing/graph_1D_*_nodes.dat",
     "postProcessing/purkinjeNetwork.dat",
@@ -137,12 +114,10 @@ RECORD = TutorialRecord(
                 WITH_DEFAULT_VALUES,
                 "postProcessing/*_cells.dat",
             ) + _GRAPH_VERIFIER_OUTPUTS + (
-                # Both the directory and the file: `verification/` is not
-                # `postProcessing/` (no staging convention drops it wholesale),
-                # so restaging would otherwise carry the now-empty directory
-                # forward even once its file is excluded (C11 -- the same
-                # shape `case_outputs.POLY_MESH_OUTPUTS` already declares
-                # `constant/polyMesh` alongside its five files).
+                # Both the directory and the file: staging does not drop
+                # `verification/` wholesale like `postProcessing/`, so
+                # restaging would carry the now-empty directory forward even
+                # once its file is excluded.
                 "verification",
                 "verification/coupled1D3DMonodomain_diagnostics.csv",
             ),

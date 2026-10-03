@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
-"""Regenerate `states`, `algebraic`, `constants` tuples in ionic_model_catalog.py
-from each model's `*_Names.H` header. All other catalogue fields (descriptions,
-aliases, recommended_*, model_type, ...) are preserved untouched.
+"""Regenerate the `states`, `algebraic` and `constants` tuples in ionic_model_catalog.py from each model's `*_Names.H` header.
 
-Idempotent: running this twice produces zero diff.
-
-Usage:
-    python scripts/regenerate-ionic-catalog.py
-    python scripts/regenerate-ionic-catalog.py --check
+Other catalogue fields are left untouched; `--check` reports drift without writing.
 """
 
 from __future__ import annotations
@@ -47,9 +41,9 @@ def _format_tuple(items: tuple[str, ...]) -> str:
 
 
 def rewrite_entry(text: str, model_name: str, parsed: ParsedNames) -> tuple[str, int]:
-    """Replace the three data tuples for one model entry. Returns
-    (new_text, n_substitutions). n_substitutions is 0 if the entry could not
-    be matched (e.g. someone reformatted the catalogue).
+    """Replace the three data tuples of one model entry.
+
+    Returns (new_text, n_substitutions); 0 means the entry did not match.
     """
     pattern = re.compile(
         r'("'
@@ -74,9 +68,7 @@ def rewrite_entry(text: str, model_name: str, parsed: ParsedNames) -> tuple[str,
 
 
 def collect_models() -> list[tuple[str, Path]]:
-    """Return [(model_name, header_path), ...] for every model directory with
-    a Names header, excluding the FDA manufactured semantic-label models.
-    """
+    """[(model_name, header_path)] for every model directory with a Names header, minus the excluded models."""
     out: list[tuple[str, Path]] = []
     for child in sorted(IONIC_MODELS_DIR.iterdir()):
         if not child.is_dir() or child.name == "lnInclude":

@@ -1,9 +1,5 @@
-"""cardiacFOAM's tutorial records, aggregated into ``TUTORIAL_RECORDS`` and wired
-to the cardiac stack through ``CardiacFoamPlugin.get_tutorial_records``.
-
-Scanned by ``scripts/check-case-writes.py``: nothing here may import or call a
-writer. Every record and axis is pure data / a pure function; only
-``core.case_transaction.commit_case_write`` ever writes a case.
+"""cardiacFOAM's tutorial records, aggregated into ``TUTORIAL_RECORDS`` for ``CardiacFoamPlugin.get_tutorial_records``.
+Scanned by ``scripts/check-case-writes.py``: nothing here may import or call a writer.
 """
 
 from __future__ import annotations

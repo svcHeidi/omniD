@@ -1,9 +1,6 @@
 """Enumerate a case's canonical provenance inputs.
 
-Classification is by consumption, not authorship: e.g. ``constant/polyMesh``
-is written by ``blockMesh`` and then read by the solver, so it is generated
-and still a mandatory input.
-"""
+Classification is by consumption, not authorship: a generated ``constant/polyMesh`` is still a mandatory input."""
 
 from __future__ import annotations
 
@@ -36,13 +33,7 @@ def _case_root_dirnames(driver_context: "DriverContext") -> tuple[str, ...]:
 
 
 def _walk_files(root: Path) -> list[Path]:
-    """Every file (or symlink, valid or broken) under ``root``, recursively.
-
-    Plain sub-directories are not emitted -- only leaves. A symlink is always
-    emitted regardless of what it resolves to, so a required-but-broken link
-    still surfaces (via ``component_for_path``'s own unavailable handling)
-    instead of silently vanishing from the walk.
-    """
+    """Every file or symlink under ``root``; a broken symlink is kept so it surfaces as unavailable."""
     if not root.is_dir():
         return []
     found: list[Path] = []
@@ -73,14 +64,7 @@ def _is_case_local_script(
     case_root: Path,
     driver_context: "DriverContext | None" = None,
 ) -> Path | None:
-    """If ``_resolve_command`` would run a script from inside the case tree
-    for this exact ``command``, return its on-disk path; else ``None``.
-
-    Mirrors ``_resolve_command``'s own precondition (an explicit path, or a
-    recognized case-script name) rather than re-deciding independently --
-    checking existence for every bare command name here would find files the
-    real executor's PATH-only bare-name rule would never run.
-    """
+    """The in-case script ``_resolve_command`` would run for ``command``, else ``None``; same precondition as it."""
     if "/" not in command and command not in case_script_commands(driver_context):
         return None
     candidate = Path(executable)
@@ -98,9 +82,7 @@ def _is_case_local_script(
 def _resolve_dependency_path(
     name: str, *, resolved_cwd: Path, env: Mapping[str, str]
 ) -> Path | None:
-    """Where a step executable that is *not* a case-local script lives:
-    an explicit path resolved against the step's cwd, or a PATH lookup for a
-    bare name -- the same two cases ``_resolve_command`` distinguishes."""
+    """An explicit path against the step's cwd, or a PATH lookup for a bare name, as ``_resolve_command`` does."""
     if "/" in name:
         candidate = Path(name)
         if not candidate.is_absolute():
@@ -165,9 +147,7 @@ class _ComponentAdder:
 
 
 def _input_roots(stack, case_root: Path, resolved_case, conventions) -> tuple[str, ...]:
-    """The stack's input roots, each a non-empty ``str`` inside the case: a
-    blank root is the whole case tree, and an absolute or escaping one walks
-    outside it."""
+    """The stack's input roots; each must be a non-empty relative ``str`` inside the case."""
     roots = stack.call("get_input_roots", case_root, resolved_case, conventions=conventions)
     for root in roots:
         parts = PurePosixPath(root).parts if isinstance(root, str) else ()

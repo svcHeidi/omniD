@@ -1,18 +1,6 @@
-"""Parser for ionic-model `*_Names.H` headers.
+"""Parser for ionic-model `*_Names.H` headers: the states, algebraic and constants enum names, in declaration order.
 
-Shared by the regenerate-ionic-catalog script and the catalogue contract test
-so both sides interpret the headers identically.
-
-Returns the names that appear in each of the three enums (states, algebraic,
-constants), with the `NUM_*` sentinel stripped. Identifiers are returned in
-declaration order and with any `= <value>` initialiser removed.
-
-The variant enum names observed in this repo are matched by case-insensitive
-substring:
-    states     -> any enum whose name contains "STATE"
-    algebraic  -> any enum whose name contains "ALGEBRAIC"
-    constants  -> any enum whose name contains "CONSTANT"
-"""
+Shared by the regenerate-ionic-catalog script and the catalogue contract test."""
 
 from __future__ import annotations
 
@@ -70,9 +58,7 @@ def _parse_enum_body(body: str) -> tuple[str, ...]:
 
 
 def _extract_enum_body(text: str, name_keyword: str) -> tuple[str, ...] | None:
-    """Find the first enum whose name contains `name_keyword` (case-insensitive)
-    and return its parsed identifier list. Returns None if no such enum exists.
-    """
+    """The identifiers of the first enum whose name contains `name_keyword` (case-insensitive), or None."""
     text_nocomment = _strip_comments(text)
     keyword_upper = name_keyword.upper()
     for match in _ENUM_HEADER.finditer(text_nocomment):

@@ -1,9 +1,6 @@
 """Solver-neutral records for completed runs.
 
-Core records requests and execution state. It does not inventory solver output
-trees, infer execution from files, or expose arbitrary output content. An
-adapter supplies declared result inspection when that is required.
-"""
+Core records requests and execution state; an adapter supplies any declared result inspection."""
 from __future__ import annotations
 
 import json

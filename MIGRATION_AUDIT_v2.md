@@ -7,18 +7,8 @@
 > finding (`_case_is_runnable` was already capability-routed) were both
 > resolved during the migration.
 >
-> Current state and remaining work:
-> [`GITHUB_MIGRATION.md`](GITHUB_MIGRATION.md) §3,
-> [`future/ENVIRONMENT_CONTRACT.md`](future/ENVIRONMENT_CONTRACT.md), and
-> `docs/superpowers/plans/2026-08-27-core-completion-phase-2.md`.
->
-> **Corrected 2026-09-03.** This callout used to say one item was still live:
-> §3's note that `sweep_materialize.py::_materialize_case_legacy` is dead code
-> called from nowhere, to be confirmed callerless before removal. That function
-> no longer exists anywhere in the repository — `sweep_materialize.py` now
-> contains only `materialize_case()`, routed through the capability system.
-> Nothing in this document is still live. (The note was also undated, unlike
-> every sibling correction in `ARCHITECTURE.md` and `GITHUB_MIGRATION.md`.)
+> Current state: [`future/ENVIRONMENT_CONTRACT.md`](future/ENVIRONMENT_CONTRACT.md)
+> and `docs/superpowers/ROADMAP.md`.
 
 **Status:** the v1 audit's *direction* is correct but its *problem statement is
 incomplete and its Task 2 targets code that doesn't have the bug it

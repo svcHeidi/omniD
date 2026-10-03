@@ -159,11 +159,6 @@ stages.
 
 ## Traps
 
-**A test module that calls a raising function at import time cannot be
-skipped.** It errors during collection, before any marker applies. Use
-`conftest`'s `repo_root` / `skip_without_repo` (non-raising) rather than a
-lookup that raises at module scope.
-
 **"No Python imports" does not mean unused.** `gmsh` is declared for the
 **binary** its wheel installs, which cardiac tutorials invoke as a workflow
 command. An import scan reads it as dead; removing it breaks four tutorials at
@@ -174,11 +169,10 @@ runtime, silently.
 - `future/ENVIRONMENT_CONTRACT.md` — what core owns and how. Supersedes
   `ARCHITECTURE.md`'s Rule 1. §12 is the supplied-vs-discovered rule.
 - `ARCHITECTURE.md` — the layer map.
-- `docs/superpowers/specs/` and `plans/` — design reasoning and executed plans.
-  **Start at `plans/2026-10-01-pass2-convergence.md`**: its `## Decisions` are
-  the owner's, and its `## Tracks` say what each piece of work was for; the
-  older plans are the executed record.
-
+- `docs/superpowers/ROADMAP.md` — what is open. `docs/superpowers/specs/` and
+  `plans/` are the design reasoning and the executed record; the newest plan,
+  `plans/2026-10-01-pass2-convergence.md`, holds the owner's decisions.
+- `docs/solver-learning/` — evidence about each solver, one probe at a time.
 - `AGENT_GUIDE.md` — the domain guide: planning, sweeping, post-processing,
   and authoring a plugin or a tutorial. Its minimal plugin is a tested fixture
   (`test_agent_guide_plugin.py`); the rest is not import-checked, so verify a

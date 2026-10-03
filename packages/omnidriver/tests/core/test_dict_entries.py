@@ -124,7 +124,7 @@ def test_dict_entry_phases_default_is_empty_frozenset():
 
 
 def test_core_exports_no_phase_vocabulary():
-    """``omnidriver.dict_entries`` used to re-export a ``Phase`` literal spelling cardiacFoam's four editing phases."""
+    """``omnidriver.dict_entries`` exports no ``Phase`` literal spelling cardiacFoam's four editing phases."""
     import omnidriver.dict_entries as dict_entries
 
     assert not hasattr(dict_entries, "Phase")

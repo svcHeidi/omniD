@@ -653,7 +653,7 @@ class TestPredictorComposesUtilityProduces(unittest.TestCase):
     """When a spec's workflow_dag declares utility steps, the predictor merges every matching utility's `produces` entries into its output."""
 
     def test_workflow_dag_utility_step_contributes_produces(self) -> None:
-        """A monodomain spec whose workflow_dag includes `setTorsoOrganConductivityField` (a real migrated utility) must carry that utility's produces entries in the predicted set."""
+        """A monodomain spec whose workflow_dag includes `setTorsoOrganConductivityField` (a real utility) must carry that utility's produces entries in the predicted set."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
@@ -664,8 +664,7 @@ class TestPredictorComposesUtilityProduces(unittest.TestCase):
             )
             spec = _make_spec(case_root)
             # Inject a workflow_dag step naming a real utility from
-            # UTILITY_CATALOG. setTorsoOrganConductivityField is migrated
-            # under P11a and declares produces.
+            # UTILITY_CATALOG. setTorsoOrganConductivityField declares produces.
             spec_with_dag = TutorialSpec(
                 name=spec.name,
                 case_root=spec.case_root,
@@ -686,10 +685,9 @@ class TestPredictorComposesUtilityProduces(unittest.TestCase):
 
             artifacts = predict_data_artifacts(case_root, spec_with_dag)
             ids = {a.artifact_id for a in artifacts}
-            # The migrated setTorsoOrganConductivityField manifest declares
-            # produces entries — at least one should appear.
-            # (The exact artifact_id depends on the migrated TOML; assert
-            # the produced_by field instead which is stable.)
+            # The setTorsoOrganConductivityField manifest declares produces
+            # entries — at least one should appear. The exact artifact_id
+            # depends on the manifest; produced_by is stable.
             produced_by_utility = [
                 a for a in artifacts
                 if a.produced_by == "setTorsoOrganConductivityField"
@@ -733,7 +731,7 @@ class TestPredictorComposesUtilityProduces(unittest.TestCase):
             self.assertEqual(produced_by_blockmesh, [])
 
     def test_no_workflow_dag_means_no_utility_artifacts(self) -> None:
-        """Specs without workflow_dag (legacy / minimal) still work; the utility composition is a no-op."""
+        """Specs without workflow_dag (minimal) still work; the utility composition is a no-op."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()

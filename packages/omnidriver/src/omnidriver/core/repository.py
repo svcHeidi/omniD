@@ -1,11 +1,6 @@
-"""A solver repository's ``omnidriver.toml``: the one place a repository says
-which plugin drives it and where its tutorials, C++ source and helper scripts
-are.
+"""A solver repository's ``omnidriver.toml``: which plugin drives it and where its tutorials, C++ source and scripts are.
 
-omnidriver reads it from a place the caller supplies (``--repo``, or the
-repository a supplied cases root belongs to), never by walking up from the
-working directory.
-"""
+Read only from a place the caller supplies (``--repo``, or the repository of a supplied cases root), never by walking up from the working directory."""
 
 from __future__ import annotations
 

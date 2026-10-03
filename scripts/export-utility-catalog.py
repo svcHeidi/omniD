@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
 """Export the active plugin's utility manifest catalog to JSON.
 
-Each entry in the catalog is serialised to a flat JSON record; the ``flags``
-list is inlined as an array of objects. ``source_path`` is converted to a
-string relative to whichever utility root the manifest was loaded from, so
-the output is portable regardless of where that root is installed.
-
-``--plugin`` selects the plugin.
-
-Usage::
-
-    python scripts/export-utility-catalog.py --out /tmp/utility-catalog.json
+``--plugin`` selects the plugin; ``source_path`` is written relative to the utility root.
 """
 
 from __future__ import annotations
@@ -23,13 +14,7 @@ from pathlib import Path
 
 
 def _manifest_to_record(manifest, root: Path) -> dict:
-    """Serialise a ``UtilityManifest`` to a JSON-ready dict.
-
-    Every field of ``UtilityManifest`` is emitted. The catalog is an agent
-    tool-catalog: ``positional_args`` and ``produces`` are what let a caller
-    build an invocation and know what artifacts come back, so dropping them
-    (as an earlier version did) left the JSON unable to serve that purpose.
-    """
+    """Serialise a ``UtilityManifest``, every field included, as a JSON-ready dict."""
     return {
         "name": manifest.name,
         "description": manifest.description,

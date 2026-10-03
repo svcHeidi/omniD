@@ -1,15 +1,6 @@
-"""The one evaluator of a catalogue's conditional logic and of the keys the
-solver's C++ requires, run over one resolved dictionary.
+"""The one evaluator of a catalogue's conditional logic and of the keys the C++ requires, over one resolved dictionary.
 
-A ``DictEntry`` states when it applies (``applicable_when``), when it is
-required (``required``, ``required_when``), and what it forbids, excludes or
-needs beside it (``forbidden_when``, ``mutually_exclusive_with``,
-``co_required_with``). :func:`rule_diagnostics` reads those relations against
-the values a case holds, once per concrete instance for an entry under a
-``<name>`` block, and names every violated one. The same pass names a key the
-supplied C++ reads without a default that the catalogue lacks and the case
-does not set, and each enum value outside the menu the C++ registers (the
-catalogue's, when it registers none). Value types are the C++'s to judge.
+:func:`rule_diagnostics` names each violated relation per ``<name>`` instance, each missing C++ key and each enum value outside the menu.
 """
 
 from __future__ import annotations
@@ -78,9 +69,7 @@ def _format(predicate: Mapping[str, Any]) -> str:
 
 
 def _instances(prefix: str, reserved: set[str], context: Mapping[str, Any]) -> list[str]:
-    """Names with at least one leaf below them under ``prefix`` that no
-    catalogued template spells literally (``ecgDomains.electrodePositions``
-    is not an ECG domain called ``electrodePositions``)."""
+    """Names under ``prefix`` with a leaf that no catalogued template spells literally."""
     names = set()
     for key in context:
         if key.startswith(prefix):
@@ -91,8 +80,7 @@ def _instances(prefix: str, reserved: set[str], context: Mapping[str, Any]) -> l
 
 
 class _Instance:
-    """One entry bound to one concrete instance name of its ``<name>`` block
-    (or to none, for an entry outside any block)."""
+    """One entry bound to one concrete instance name of its ``<name>`` block, or to none outside any block."""
 
     def __init__(self, context: Mapping[str, Any], template: str | None = None, name: str | None = None):
         self.context = context
@@ -162,10 +150,7 @@ def match_dynamic_entry(key: str, entries: Iterable[Any]) -> tuple[Any, dict[str
 
 
 def _scan_facts(mapping: Any, entries: tuple[Any, ...], document: str):
-    """What the supplied C++ adds to the catalogue's rules: the keys it
-    requires that ``entries`` lack, the classes that build them, and the names
-    its selection tables register for each enum. Nothing when the source is
-    not supplied."""
+    """What the supplied C++ adds to the catalogue's rules; nothing when the source is not supplied."""
     from .dict_keys_scanner import built_when, registered_menus, required_reads, supplied_scan, unread_entries
 
     scan = supplied_scan(mapping)
@@ -184,14 +169,12 @@ def _scan_requirement(
     path: tuple[str, ...], reads: list[Any], context: Mapping[str, Any], document: str,
     built: Mapping[str, frozenset[str]],
 ) -> list[StrictDiagnostic]:
-    """A key the C++ requires, absent from the case, in each block of the
-    case that a class the case builds reads it from. A class is built when a
-    selection table registers it under a name the case selects, or when the
-    scan or the plugin's reviewed ``built_when`` ties it to a selector value
-    the case holds; inside a ``<name>`` block only that block's own values
-    and those outside every block of its family count. A class nothing ties to
-    the case, and a read that runs only under a branch of its function, are
-    noted, not judged."""
+    """A key the C++ requires and the case lacks, in each block of the case that a class the case builds reads it from."""
+    # A class is built when a selection table registers it under a name the case
+    # selects, or when the scan or the plugin's reviewed ``built_when`` ties it to
+    # a selector value the case holds. Inside a ``<name>`` block only that block's
+    # values and those outside every block of its family count. A class nothing
+    # ties to the case, and a read under a branch of its function, are noted, not judged.
     from .dict_keys_scanner import owner_of
 
     def ties(read: Any) -> frozenset[str] | None:

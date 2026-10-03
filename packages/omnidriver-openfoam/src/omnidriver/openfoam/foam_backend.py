@@ -121,15 +121,10 @@ def _require_file(file_path: Path) -> None:
 
 
 def _reject_directive_shaped(value: Any) -> None:
-    """Mirror ``literals._format_value``'s tier-1 guard on this tier too.
-
-    foamlib's own type-strictness does not reject a directive-shaped string
-    (e.g. ``'#includeEtcFuncs'``, ``'PCG#calc'``): none of them read back as
-    another type, so it has nothing to object to. Stringifies unconditionally
-    -- every value type, not only ``str`` -- so a container value (e.g. a
-    dict holding a directive-shaped string) cannot bypass the guard either.
-    See SECURITY.md.
-    """
+    """Mirror ``literals._format_value``'s directive guard on this tier (see SECURITY.md)."""
+    # foamlib's type strictness accepts directive-shaped strings such as
+    # '#includeEtcFuncs' or 'PCG#calc'. Stringifying every value type, not only
+    # str, keeps a container holding one from bypassing the guard.
     value = str(value)
     if ";" in value or "\n" in value:
         raise ValueError(
@@ -210,8 +205,7 @@ def update_entry(
             # Catches foamlib's own ValueError (type-inconsistent value) and
             # FoamFileDecodeError (a ValueError subclass raised by a parse
             # failure on either the pre-check read or the write). Neither
-            # foamlib exception type is allowed to escape unmapped -- see
-            # the spec's Exception contract.
+            # foamlib exception type may escape unmapped.
             file_path.write_text(before)
             raise ValueError(f"cannot write value {value!r} to {key!r}: {exc}") from exc
 

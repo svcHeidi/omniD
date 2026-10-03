@@ -1,4 +1,4 @@
-"""Core carries no cardiac or solver name (spec 2026-09-26-core-generality-design.md §2, A6)."""
+"""Core carries no cardiac or solver name."""
 from __future__ import annotations
 
 import importlib

@@ -32,14 +32,14 @@ def test_toy_passes(check_id, tmp_path):
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
 def test_a_record_with_a_supplied_input_passes(check_id, tmp_path):
-    """Step S's own proof (2026-09-28-supplied-inputs-design.md §5, S2): a toy record with a supplied bundle passes C1-C14 in core, no native tree or solver needed."""
+    """A toy record with a supplied bundle passes C1-C14 in core, no native tree or solver needed."""
     verdict = run_check(check_id, toy_conformance_target_with_input(tmp_path))
     assert verdict.passed, verdict.detail
 
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
 def test_a_record_with_a_default_route_passes_with_no_study_values(check_id, tmp_path):
-    """Owner Q2, 2026-09-26: a record with two routes and a ``default_variant`` is a full conformance target with an empty base study."""
+    """A record with two routes and a ``default_variant`` is a full conformance target with an empty base study."""
     verdict = run_check(check_id, toy_conformance_target(tmp_path, plugin=DEFAULT_ROUTE_PLUGIN))
     assert verdict.passed, verdict.detail
     if check_id == "C6":
@@ -61,7 +61,7 @@ def test_the_default_route_is_the_one_that_runs(tmp_path):
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
 def test_a_record_whose_step_has_a_default_argument_passes(check_id, tmp_path):
-    """Owner Q3/Q7, 2026-09-26: a step's default argument is fixed on the step and needs no study value."""
+    """A step's default argument is fixed on the step and needs no study value."""
     verdict = run_check(check_id, toy_conformance_target(tmp_path, plugin=DEFAULT_ARGUMENT_PLUGIN))
     assert verdict.passed, verdict.detail
 
@@ -97,7 +97,7 @@ def test_toy_passes_c4(tmp_path):
 
 
 def test_c4_bites_a_renderer_that_replaces_the_document(tmp_path):
-    """The P2 class of defect: a renderer that writes only the patched keys."""
+    """A renderer that writes only the patched keys."""
     verdict = run_check("C4", toy_conformance_target(tmp_path, plugin=REPLACING_PLUGIN))
     assert not verdict.passed
     assert "label" in verdict.detail
@@ -105,7 +105,7 @@ def test_c4_bites_a_renderer_that_replaces_the_document(tmp_path):
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
 def test_a_check_that_cannot_run_is_a_failed_verdict(check_id, tmp_path):
-    """I3: a misnamed record yields a failed verdict naming why, never a raise that would abort a runner looping over CHECKS."""
+    """A misnamed record yields a failed verdict naming why, never a raise that would abort a runner looping over CHECKS."""
     target = dataclasses.replace(toy_conformance_target(tmp_path), record="nope")
     verdict = run_check(check_id, target)
     assert not verdict.passed
@@ -118,7 +118,7 @@ def test_an_unknown_check_id_still_raises(tmp_path):
 
 
 def test_c8_bites_a_consumed_file_that_does_not_exist(tmp_path):
-    """I1: enumerate_case_inputs lists every consumed path, even a missing one (strength ``unavailable``), so listing alone proves nothing."""
+    """enumerate_case_inputs lists every consumed path, even a missing one (strength ``unavailable``), so listing alone proves nothing."""
     verdict = run_check("C8", toy_conformance_target(tmp_path, plugin=GHOST_CONSUMES_PLUGIN))
     assert not verdict.passed
     assert "does/not/exist.json" in verdict.detail
@@ -126,7 +126,7 @@ def test_c8_bites_a_consumed_file_that_does_not_exist(tmp_path):
 
 
 def test_checks_take_the_scratch_root_as_an_argument_so_threads_do_not_interleave(tmp_path, monkeypatch):
-    """Replaces the I2 lock test (2026-09-26)."""
+    """The scratch root is a check argument, so concurrent checks do not interleave."""
     import os
     import threading
 
@@ -157,7 +157,7 @@ def test_checks_take_the_scratch_root_as_an_argument_so_threads_do_not_interleav
 
 
 def test_a_write_into_the_native_cases_root_fails_the_check(tmp_path, monkeypatch):
-    """I4: the suite-wide guard watches all of cases_root, not only the record's subtree that C7 digests."""
+    """The suite-wide guard watches all of cases_root, not only the record's subtree that C7 digests."""
     target = toy_conformance_target(tmp_path, plugin=NATIVE_WRITING_PLUGIN)
     monkeypatch.setenv(STRAY_ROOT_VARIABLE, str(target.cases_root))
     verdict = run_check("C7", target)
@@ -171,7 +171,7 @@ def test_the_default_timeout_keeps_existing_constructions_working(tmp_path):
 
 @pytest.mark.parametrize("check_id", ["C6", "C7"])
 def test_a_child_that_outlives_the_timeout_is_a_failed_verdict(check_id, tmp_path):
-    """I5: a hung solver must still yield a verdict, naming the timeout."""
+    """A hung solver must still yield a verdict, naming the timeout."""
     target = dataclasses.replace(toy_conformance_target(tmp_path), timeout_s=0.001)
     verdict = run_check(check_id, target)
     assert not verdict.passed
@@ -198,7 +198,7 @@ def test_the_sweep_passes_the_timeout_per_case(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("inside", [".", "scratch", "toyTutorial/scratch"])
 def test_a_scratch_root_inside_the_native_tree_is_refused(inside, tmp_path):
-    """M8: every stage, plan and rmtree lands under scratch_root."""
+    """Every stage, plan and rmtree lands under scratch_root."""
     target = toy_conformance_target(tmp_path)
     scratch = target.cases_root / inside
     with pytest.raises(ValueError) as excinfo:
@@ -225,7 +225,7 @@ _CANNED_CHILD_OUTPUT = {
 
 @pytest.mark.parametrize("check_id", ["C6", "C7"])
 def test_an_absent_optional_artifact_fails_neither_run_check(check_id, tmp_path, monkeypatch):
-    """M3: C6 and C7 treat optional artifacts the same way."""
+    """C6 and C7 treat optional artifacts the same way."""
     import json
     import subprocess
 
@@ -267,7 +267,7 @@ def test_an_absent_required_artifact_fails_both_run_checks(check_id, tmp_path, m
     ('unknown key "constant/mesh.json:nope".', "constant/mesh.json:nope", True),
     ("unknown study name `x`", "x", True),
     ("refused constant/mesh.json:nope.", "constant/mesh.json:nope", True),
-    # M6: a bare substring is not naming it.
+    # A bare substring is not naming it.
     ("refused: 'xy' is not an axis", "x", False),
     ("cell_count_v2 is unknown", "cell_count", False),
     ("refused constant/mesh.json:nopes", "constant/mesh.json:nope", False),
@@ -281,7 +281,7 @@ def test_c3_requires_the_refusal_to_name_the_unknown_study_exactly(message, name
 
 
 def test_c6_bites_a_record_that_declares_no_outputs(tmp_path):
-    """M7."""
+    """A record that declares no outputs fails C6."""
     verdict = run_check("C6", toy_conformance_target(tmp_path, plugin=NO_PRODUCES_PLUGIN))
     assert not verdict.passed
     assert "produces" in verdict.detail
@@ -416,7 +416,7 @@ def test_c10_an_int_template_does_not_match_a_named_index(tmp_path):
 
 
 def test_c10_matches_any_key_of_an_open_document_through_its_document(tmp_path):
-    """A document-level entry (``key: "<any>"``, ``validated: False``) needs no value kind, and lists every key of its document (decision 3)."""
+    """A document-level entry (``key: "<any>"``, ``validated: False``) needs no value kind, and lists every key of its document."""
     target = dataclasses.replace(
         toy_conformance_target(tmp_path, plugin=OPEN_DOCUMENT_PLUGIN), patch=("constant/mesh.json:a.b[2].c", 7),
     )

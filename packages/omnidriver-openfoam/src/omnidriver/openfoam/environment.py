@@ -13,8 +13,7 @@ from .profile import load_openfoam_profile
 
 
 def _read_config_value_by_key_path(file_path: Path, key_path):
-    """Split a key-path tuple into ``read_foam_entry``'s scope/key pair; a
-    bare string is refused rather than iterated character-by-character."""
+    """Split a key-path tuple into ``read_foam_entry``'s scope/key pair; a bare string is refused, not iterated per character."""
     from .case_planning import (
         HEX_CELL_COUNTS_KEY_PATH,
         hex_cell_counts_expected_blocks,
@@ -43,9 +42,7 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
 
 
 def _case_value_agree(value_kind: str, requested, current) -> bool:
-    """Compares by the requested value's own Python type via
-    ``values_agree``; ``value_kind`` is unused, kept only to match the
-    comparator's signature."""
+    """Compare by the requested value's own Python type via ``values_agree``; ``value_kind`` only matches the comparator's signature."""
     from .literals import values_agree
 
     del value_kind

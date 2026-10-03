@@ -1,7 +1,6 @@
-"""MPI launchers, solver-neutral: how a step is wrapped in one, how a wrapped
-step is read back, and what process count a parallel run may use. Whether a
-launcher belongs to the MPI a solver was built against is the solver's own
-check."""
+"""MPI launchers, solver-neutral: wrapping a step in one, reading a wrapped step back, and the process count.
+
+Whether a launcher matches the MPI a solver was built against is the solver's own check."""
 from __future__ import annotations
 
 import shutil

@@ -24,8 +24,7 @@ REBUILD_HINT = (
 
 
 def _document_and_scope(dictionary: str, case_root: Path) -> tuple[str, list[str]]:
-    """The case file a dictionary path names, relative to the case when it
-    lies in it, and the sub-dictionaries below it."""
+    """The case file a dictionary path names (relative to the case when inside it) and the sub-dictionaries below it."""
     scope: list[str] = []
     path = Path(dictionary)
     if not path.is_absolute():

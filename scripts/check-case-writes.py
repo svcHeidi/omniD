@@ -1,37 +1,7 @@
 #!/usr/bin/env python3
-"""Enforce "records and axes write nothing" as a CI gate.
+"""Fail when a record, axis or planner module imports or calls a writer.
 
-A static gate, like ``scripts/check-import-boundaries.py``, with an empty
-waiver list: tutorial registrations and axis modules may not import or
-call a writer (``update_foam_entry``, ``apply_*_overrides``, ``shutil``,
-``write_text``, ``open(..., "w")``). Axes return patches and command
-arguments; only ``commit_case_write`` writes a case.
-
-This scans the directories where records and axes live (OpenFOAM's generic
-axes, and each solver package's records) and the writer-free planner module,
-and nowhere else.
-
-Like ``check-import-boundaries.py``, this list may only SHRINK -- and here
-it is, and stays, empty. If you find yourself wanting to add a waiver,
-the fix is to route the write through ``commit_case_write`` instead, not to
-waive this gate (CLAUDE.md: "If you find yourself wanting to add a waiver,
-you are solving the wrong problem").
-
-Imports inside ``if TYPE_CHECKING:`` blocks are never runtime imports, so
-they're exempt everywhere -- matching ``check-import-boundaries.py`` --
-UNLESS the module ALSO rebinds the name ``TYPE_CHECKING`` itself anywhere
-(e.g. ``TYPE_CHECKING = True``), in which case the whole file's exemption is
-disabled: a locally shadowed sentinel means ``if TYPE_CHECKING:`` is not
-``typing.TYPE_CHECKING`` at all, and the gate cannot tell a genuine
-type-only import from one hidden behind a look-alike guard, so it treats
-none of them as exempt in that file.
-
-**Runtime purity is also enforced mechanically, not only statically**: see
-``tutorial_records.resolve_case_patches``, which digests the staged case
-before and after every ``axis.resolve`` call and refuses BY NAME if anything
-changed. This static gate catches an evasion before it ever runs; that
-runtime digest catches whatever this gate's necessarily-incomplete pattern
-matching still misses (e.g. an evasion this list has not been taught yet).
+Only ``commit_case_write`` writes a case. The waiver list is empty; ``if TYPE_CHECKING:`` imports are exempt unless the module rebinds ``TYPE_CHECKING``.
 """
 
 from __future__ import annotations
@@ -49,20 +19,16 @@ AXES_SRC = (
 RECORDS_SRC = (
     REPO_ROOT / "packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/records"
 )
-# The pure planners axes import (`plan_delta_t`, `plan_block_mesh_resolution`,
-# ...), kept separate from the writers; scanned too, so an axis can never
-# reach a writer through this module.
+# The pure planners axes import, kept separate from the writers; scanned too,
+# so an axis can never reach a writer through this module.
 PLANNERS_SRC = (
     REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam/case_planning.py"
 )
-# openCARP's own record modules, scoped narrowly the same way: records
-# address a study key and return a patch, they never write one.
+# openCARP's record modules: records address a study key and return a patch.
 OPENCARP_RECORDS_SRC = (
     REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp/records"
 )
-# cardiacCore's own record modules: the same shape as cardiacfoam's --
-# humanSlab's workflow steps and its one anatomy input are pure data, never
-# a writer.
+# cardiacCore's record modules: workflow steps and anatomy inputs are pure data.
 CARDIACCORE_RECORDS_SRC = (
     REPO_ROOT / "packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/records"
 )
@@ -70,9 +36,7 @@ SCANNED_ROOTS: tuple[Path, ...] = (
     AXES_SRC, RECORDS_SRC, PLANNERS_SRC, OPENCARP_RECORDS_SRC, CARDIACCORE_RECORDS_SRC,
 )
 
-# Forbidden by full or partial dotted module name: importing ANY name from
-# these modules is a writer import, regardless of which name is imported
-# ("anything from openfoam mutators/foam_backend").
+# Importing any name from these modules (or a submodule) is a writer import.
 FORBIDDEN_IMPORT_MODULES: tuple[str, ...] = (
     "shutil",
     "subprocess",
@@ -80,25 +44,18 @@ FORBIDDEN_IMPORT_MODULES: tuple[str, ...] = (
     "importlib",
     "omnidriver.openfoam.mutators",
     "omnidriver.openfoam.foam_backend",
-    # utils.py held only writers (set_delta_t and kin); the pure planners
-    # live in case_planning.py, which is not named here and stays
-    # importable. utils.py no longer exists; the name stays banned so a
-    # writer module re-created there is still unreachable from an axis or
-    # record.
+    # Writer helpers must not live in a module named utils; the pure planners
+    # are in case_planning.py, which stays importable.
     "omnidriver.openfoam.utils",
     "omnidriver.core.case_transaction",
-    # openCARP's plugin module holds the renderer (patch_par/write): a record
-    # or axis module that reaches it would be a write path this gate cannot
-    # see through the plugin's own indirection.
+    # openCARP's plugin module holds the renderer (patch_par/write); reaching
+    # it would be a write path this gate cannot see through.
     "omnidriver.opencarp.plugin",
 )
 
-# Forbidden by imported/bound NAME, regardless of which module it came from
-# -- a record or axis module must not import these under any alias or path.
-# `ast.alias.name` is always the ORIGINAL (pre-`as`) name, so this already
-# catches `from os import rename as r` (the bound local name is `r`, but the
-# import statement's OWN name is still `rename`) without any alias
-# resolution.
+# Forbidden by imported name, whatever module it comes from. `ast.alias.name`
+# is the pre-`as` name, so `from os import rename as r` is caught without
+# alias resolution.
 FORBIDDEN_IMPORT_NAMES: frozenset[str] = frozenset({
     "update_foam_entry",
     "commit_case_write",
@@ -115,10 +72,8 @@ FORBIDDEN_IMPORT_NAMES: frozenset[str] = frozenset({
     "mkdir",
 })
 
-# Forbidden by CALLED name (attribute or bare), regardless of receiver --
-# within this narrowly-scoped axes/records directory there is no legitimate
-# reason to call any of these, aliased or not: `o.rename(...)` matches via
-# the Attribute's own `.attr`, no alias resolution needed either.
+# Forbidden by called name (attribute or bare), whatever the receiver:
+# `o.rename(...)` matches via the attribute name.
 FORBIDDEN_CALL_NAMES: frozenset[str] = frozenset({
     "update_foam_entry",
     "commit_case_write",
@@ -137,25 +92,19 @@ FORBIDDEN_CALL_NAMES: frozenset[str] = frozenset({
     "eval",
 })
 
-#: Standalone references to one of these attributes (never called at all,
-#: e.g. ``wt = Path.write_text``) are just as much a writer handle as
-#: calling it directly.
+#: A bare reference such as ``wt = Path.write_text`` is as much a writer handle
+#: as a call.
 FORBIDDEN_ATTRIBUTE_NAMES: frozenset[str] = FORBIDDEN_CALL_NAMES - {
     "__import__", "exec", "eval",
 }
 
-#: A call whose called-name matches this pattern is an override-application
-#: helper by shape, regardless of which module declares it (generalizes the
-#: exact names above to survive a not-yet-seen helper with the same shape).
+#: Override-application helpers are recognised by shape, so one the name list
+#: has not met is still refused.
 _OVERRIDES_CALL_PATTERN = re.compile(r"^apply_.*overrides?$")
 
 
 def _runtime_nodes(tree: ast.Module, *, type_checking_shadowed: bool) -> list[ast.stmt | ast.expr]:
-    """All statements/expressions reachable at runtime.
-
-    Skips ``if TYPE_CHECKING:`` bodies UNLESS ``type_checking_shadowed`` --
-    see the module docstring's note on a shadowed TYPE_CHECKING sentinel.
-    """
+    """Statements and expressions reachable at runtime; ``if TYPE_CHECKING:`` bodies are skipped unless the module shadows the name."""
     found: list[ast.stmt | ast.expr] = []
 
     class Visitor(ast.NodeVisitor):
@@ -181,11 +130,7 @@ def _runtime_nodes(tree: ast.Module, *, type_checking_shadowed: bool) -> list[as
 
 
 def _type_checking_is_shadowed(tree: ast.Module) -> bool:
-    """True if the module ever assigns to a name literally called
-    ``TYPE_CHECKING`` -- genuine ``typing.TYPE_CHECKING`` usage never
-    rebinds that name, so any assignment to it means whatever ``if
-    TYPE_CHECKING:`` appears in this file cannot be trusted to mean the real
-    sentinel."""
+    """True if the module assigns to the name ``TYPE_CHECKING``."""
     for node in ast.walk(tree):
         targets: list[ast.expr] = []
         if isinstance(node, ast.Assign):
@@ -199,9 +144,7 @@ def _type_checking_is_shadowed(tree: ast.Module) -> bool:
 
 
 def _package_of(path: Path) -> tuple[str, ...]:
-    """The dotted package a source file belongs to: the path parts after the
-    last ``src`` directory, minus the file itself (every package here uses a
-    ``src/`` layout)."""
+    """The dotted package of a source file: the path after the last ``src``, minus the file."""
     parts = path.resolve().parts
     if "src" not in parts:
         return ()
@@ -210,14 +153,7 @@ def _package_of(path: Path) -> tuple[str, ...]:
 
 
 def _from_module(node: ast.ImportFrom, path: Path) -> str | None:
-    """The absolute module an ``ImportFrom`` reads from.
-
-    A relative import (``from ..mutators import x``, ``from .. import
-    mutators``) names the same module an absolute one does, so it is
-    resolved against the file's own package before any comparison --
-    comparing only the literal text would let a relative import of a writer
-    module pass whenever the imported name itself was not forbidden.
-    """
+    """The absolute module an ``ImportFrom`` reads from; a relative import is resolved against the file's package."""
     if node.level == 0:
         return node.module
     package = _package_of(path)
@@ -235,25 +171,12 @@ def _module_names(node: ast.Import | ast.ImportFrom, path: Path) -> list[str]:
 
 
 def _imported_names(node: ast.Import | ast.ImportFrom) -> list[str]:
-    """The name each alias in this import statement was ORIGINALLY bound to
-    (never the local ``as`` rename) -- what ``FORBIDDEN_IMPORT_NAMES``
-    matches against, so ``from os import rename as r`` is still caught by
-    the import line itself even though the call site only ever says ``r``."""
+    """The pre-``as`` name of each alias, which ``FORBIDDEN_IMPORT_NAMES`` matches."""
     return [alias.name for alias in node.names]
 
 
 def _open_call_is_a_write(call: ast.Call) -> bool:
-    """``open(..., "w"...)`` and kin -- a mode containing w/a/x/+.
-
-    Handles both the builtin's shape (``open(file, mode)``, mode at
-    positional index 1) and a bound method's (``some_path.open(mode)``,
-    mode at positional index 0 since there is no separate ``file`` argument),
-    so ``Path(...).open("w")`` cannot evade by using the method form.
-
-    A non-literal (dynamic) mode cannot be proven read-only, so it is
-    treated as a write too: this gate has an empty waiver list, and "I
-    cannot tell" is not a reason to let a write through it.
-    """
+    """``open`` with a mode containing w/a/x/+, in builtin or ``Path.open`` form; a non-literal mode counts as a write."""
     is_method_form = isinstance(call.func, ast.Attribute)
     mode_index = 0 if is_method_form else 1
     mode_node: ast.expr | None = None
@@ -288,9 +211,7 @@ def _call_receiver_name(call: ast.Call) -> str | None:
 
 
 def _foam_file_bound_names(tree: ast.Module) -> set[str]:
-    """Local names assigned or ``with``-bound from a call to (something
-    ending in) ``FoamFile`` -- e.g. ``x = FoamFile(...)`` or ``with
-    FoamFile(...) as x:``."""
+    """Names assigned or ``with``-bound from a ``FoamFile(...)`` call."""
     bound: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
@@ -324,9 +245,7 @@ def _is_foam_file_receiver(receiver_text: str, foam_file_names: set[str]) -> boo
 
 
 def _getattr_string_args(call: ast.Call) -> list[str]:
-    """String-literal arguments to a bare ``getattr(...)`` call -- catches
-    ``getattr(x, "write_text")(...)``: the attribute name is never a Python
-    identifier in the source, so no other rule sees it."""
+    """String-literal arguments to ``getattr(...)``; no other rule sees ``getattr(x, "write_text")``."""
     if _call_func_name(call) != "getattr" or isinstance(call.func, ast.Attribute):
         return []
     literals: list[str] = []
@@ -355,11 +274,8 @@ def _check_file(path: Path, root: Path) -> list[tuple[str, str]]:
                 _from_module(node, path) if isinstance(node, ast.ImportFrom) else None
             )
             if from_module is not None:
-                # `from package import submodule` really imports the
-                # dotted name `package.submodule` -- `_module_names` alone
-                # only sees the "from" half (`package`), which misses this
-                # shape entirely, e.g. `from omnidriver.openfoam import
-                # utils` naming a forbidden submodule this way.
+                # `from package import submodule` imports `package.submodule`,
+                # which `_module_names` alone does not see.
                 candidate_module_names.extend(
                     f"{from_module}.{alias.name}" for alias in node.names
                 )
@@ -408,12 +324,8 @@ def _check_file(path: Path, root: Path) -> list[tuple[str, str]]:
             if name in FORBIDDEN_CALL_NAMES:
                 key = f"{path.relative_to(root)}:{node.lineno}:call:{name}"
                 receiver = _call_receiver_name(node)
-                # A specific `receiver.name` spelling when the receiver is
-                # literally `os`/`json` (the common, unaliased shape) --
-                # keeps the message's own wording backward-compatible for
-                # callers that grep it (e.g. "os.replace", "json.dump");
-                # an aliased or otherwise-shaped call still gets the generic
-                # message just below, which is still refused all the same.
+                # Unaliased os/json calls get the `receiver.name` spelling the
+                # tests grep for; any other receiver gets the generic message.
                 if receiver in {"os", "json"}:
                     message = f"{path}:{node.lineno}: call to {receiver}.{name}(...)"
                 else:
@@ -475,7 +387,7 @@ def _check_file(path: Path, root: Path) -> list[tuple[str, str]]:
     return violations
 
 
-# May only SHRINK, and starts (and stays) empty -- see the module docstring.
+# May only shrink; it is empty.
 KNOWN_VIOLATIONS: frozenset[str] = frozenset()
 
 
@@ -520,8 +432,7 @@ def main() -> int:
             "json.dump(...), getattr(..., \"write_text\")-style string "
             "attribute access, or a FoamFile item assignment/deletion/"
             ".update(...)/with-block. Axes return patches and command "
-            "arguments; only commit_case_write writes a case. See design doc "
-            "docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md §5."
+            "arguments; only commit_case_write writes a case."
         )
         return 1
 

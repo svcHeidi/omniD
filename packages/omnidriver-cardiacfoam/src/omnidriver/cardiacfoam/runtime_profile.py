@@ -23,14 +23,7 @@ _LIBRARY_EXTENSIONS = ("dylib", "so")
 
 
 def _profile_contract() -> dict[str, Any]:
-    """The runtime.backend contract, reusing the profile `CardiacFoamPlugin`
-    already parsed and cached rather than re-reading `plugin.yaml`.
-
-    This also means `runtime.backend` is now inside the same digest as the
-    rest of the profile (`PluginProfile.payload`), where before it sat
-    outside it -- a caller that only saw `get_profile()`'s parsed document
-    would not have seen this contract at all.
-    """
+    """The `runtime.backend` contract from the profile `CardiacFoamPlugin` already parsed."""
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
     payload = CardiacFoamPlugin.get_profile().payload
@@ -180,10 +173,7 @@ def _find_library(bare_name: str, search_dirs: tuple[Path, ...]) -> Path | None:
 
 
 def _linked_library_names(binary: Path) -> tuple[str, ...]:
-    """Return the basenames of shared libraries linked into `binary`.
-
-    Uses `otool -L` on macOS or `ldd` on Linux — whichever is on PATH.
-    """
+    """Basenames of the shared libraries linked into `binary`, by `otool -L` or `ldd`, whichever is on PATH."""
     if shutil.which("otool"):
         result = subprocess.run(["otool", "-L", str(binary)], capture_output=True, text=True)
         if result.returncode != 0:
@@ -204,14 +194,7 @@ def _linked_library_names(binary: Path) -> tuple[str, ...]:
 
 
 def _infer_backend(linked: tuple[str, ...], options: Mapping[str, Any]) -> str | None:
-    """Infer which backend was compiled from the solver's linked libraries.
-
-    Each backend option in the plugin contract declares the libraries that
-    must (`required_libraries`) and must not (`forbidden_libraries`) appear
-    linked into the solver. Exactly one backend matching both conditions is
-    the compiled backend; anything else (zero or more than one match) is
-    ambiguous.
-    """
+    """The one backend whose `required_libraries` are all linked and `forbidden_libraries` none; zero or several matches give None."""
     matches = []
     for backend_name, option in options.items():
         if not isinstance(option, dict):
@@ -235,18 +218,10 @@ def _ensure_build_manifest(
     *,
     solver_path: Path,
 ) -> str | None:
-    """Record runtime inspection when the manifest is absent or solver newer.
-
-    Environment/source observations describe the current installation, not
-    historical build provenance. The validator still checks every artifact;
-    a library-only change invalidates this record even if the solver is older.
-
-    Returns an error string if regeneration was attempted and failed.
-    Returns None if regeneration succeeded, was unnecessary (already
-    up to date), or could not be attempted (e.g. nothing compiled yet) —
-    in the last case the existing missing/stale manifest is reported by the
-    caller's own validation step.
-    """
+    """Write the manifest when it is absent or older than the solver; an error string on failure, else None."""
+    # The record describes the current installation. A case that cannot be
+    # regenerated (e.g. nothing compiled yet) returns None, and the caller's
+    # validation reports the missing or stale manifest.
     solver = solver_path
     if not solver.is_file():
         return None

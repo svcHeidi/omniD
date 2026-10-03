@@ -1,43 +1,6 @@
 """Where a cardiacFoam case keeps each region's documents, as the case says.
 
-``constant/physicsProperties``'s ``type`` selects a row of
-``physics_layout.json``: which region roles that type has, and, for a
-region-split type, which entry of which document names each role's region.
-A single-region row names its roles directly (``{"roles": ["electro"]}``):
-its documents sit under ``constant/``. A region-split row keeps
-``names_in``/``model_key``/``regions`` instead of ``roles`` -- its roles are
-``regions``'s own keys, and its documents sit under ``constant/<region>/``.
-The table never copies a region *name*; the case owns that. The table
-replaces a one-off lookup, so electromechanics and later FSI are one row
-each.
-
-**A case without ``constant/physicsProperties`` is single-region, role
-``electro`` only** -- settled by source, not preference. cardiacFoam's
-``physicsModel::New``
-(``modules/physicsModel/src/solids4FoamModels/physicsModel/physicsModel.C``)
-opens ``physicsProperties`` with ``IOobject::MUST_READ``, so the solver
-itself cannot run a case that lacks one. A case without it runs a different
-application: ``ionicHeterogeneity``'s ``controlDict`` names ``application
-ionicHeterogeneityProbe;``, a utility that reads ``constant
-/electroProperties`` directly, with no region split. That is ``_IMPLICIT_LAYOUT``
-below -- not a row in the JSON table, since there is no ``type`` to key one
-on.
-
-**Refusals are named, never swallowed.**
-``PhysicsLayoutError`` subclasses ``tutorial_records.TutorialRecordError``,
-so an unknown physics type, an unknown region role, or a missing/malformed
-coupling document reaches the CLI's existing ``plan --strict`` refusal
-handling (``cli._context_from_entry``'s ``except TutorialRecordError``,
-around every ``strict_plan`` call) exactly the way any other named refusal
-does, instead of becoming a traceback. Only the *detectors'* own parse of
-``electroProperties`` (``detection.detect_myocardium_solver_name``, which
-raises a plain ``KeyError``) is left to its caller.
-
-For FSI later: cardiacFoam's ``physicsModel::New`` also accepts the aliases
-``solid``->``solidModel``, ``fluid``->``fluidModel``,
-``fluidSolidInteraction``->``fluidSolidInterface``. None applies to the
-current electro rows, and this module does not handle aliases yet.
-"""
+``constant/physicsProperties``'s ``type`` selects a row of ``physics_layout.json``: its region roles and, for a region-split type, which entry of which document names each role's region."""
 
 from __future__ import annotations
 
@@ -54,12 +17,17 @@ from omnidriver.core.tutorial_records import TutorialRecordError
 class PhysicsLayoutError(TutorialRecordError):
     """The case names a physics type the layout table does not know, asks
     for a region role that type does not have, or names a coupling document
-    that is missing or does not resolve that role."""
+    that is missing or does not resolve that role.
+
+    A ``TutorialRecordError``, so the CLI refuses a plan by name.
+    """
 
 
-#: The layout for a case with no ``constant/physicsProperties`` at all (see
-#: the module docstring). Not a row in ``physics_layout.json`` -- there is
-#: no ``type`` to key it on.
+#: The layout for a case with no ``constant/physicsProperties``: single-region,
+#: role ``electro``. cardiacFoam's ``physicsModel::New`` reads that file as
+#: required, so such a case runs a utility that reads ``electroProperties``
+#: directly (``ionicHeterogeneityProbe``). Not a row in ``physics_layout.json``
+#: -- there is no ``type`` to key it on.
 _IMPLICIT_LAYOUT: dict = {"roles": ["electro"]}
 
 

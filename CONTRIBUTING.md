@@ -54,7 +54,7 @@ environment; in short:
 | all packages installed | ordinary regressions |
 | core installed alone | core reaching into a sibling package |
 | **core installed from a built wheel** | core reading repo-relative state at import time |
-| `scripts/check-import-boundaries.py`, `scripts/check-case-writes.py`, `scripts/check-core-shape.py`, `scripts/check-benchmark-references.py` | import direction; a record module writing a case directly; core naming a new OpenFOAM layout token; a benchmark reference that fails to load |
+| static gates: `scripts/check-import-boundaries.py`, `scripts/check-case-writes.py`, `scripts/check-core-shape.py`, `scripts/check-benchmark-references.py` | import direction; a record module writing a case directly; core naming a new OpenFOAM layout token; a benchmark reference that fails to load |
 
 CI runs each of them. The wheel shape is the one contributors skip and the one that
 has found the worst defects.
@@ -69,4 +69,4 @@ Write clear, descriptive commit messages and open a Pull Request against the mai
 
 ## Plugin Development
 
-OmniDriver is designed to be extensible. External solvers or pipelines should ideally be developed as separate Python packages exposing a `omnidriver.plugins` entry point. Please check the documentation on how to scaffold and link your own plugins without modifying the core `omnidriver` repository.
+OmniDriver is designed to be extensible. External solvers or pipelines should ideally be developed as separate Python packages exposing a `omnidriver.plugins` entry point. `AGENT_GUIDE.md`'s "Plugin Guide" shows a minimal plugin and how to register it without modifying the core `omnidriver` repository.

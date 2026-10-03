@@ -1,20 +1,6 @@
-"""The C++ dictionary-read scan: what an OpenFOAM-based solver's own source
-reads, and where.
+"""The C++ dictionary-read scan: what an OpenFOAM-based solver's own source reads, and where.
 
-For every read (``get<T>``, ``getOrDefault``, ``lookupOrDefault``,
-``lookup``, ``readScalar``/``readLabel``/``readBool``, ``readEntry``,
-``readIfPresent``, ``found``, ``isDict``, ``subDict``, ``subOrEmptyDict``,
-``optionalSubDict``, ``findDict``, the ``dimensioned<T>`` constructors) the
-scan records the key, the method, the type, the default literal, the
-sub-dictionary scope below a root (a function parameter, a member, ``this``
-or a literal ``IOdictionary`` document), the source location, and the
-selection-table names of the class it is read in. It also records which
-dictionary each call passes to which parameter, so a root's place in a
-document can be found from the catalogue (``locate``). What it cannot
-resolve it reports as unresolved (``None``); it never guesses.
-
-The scan is a pure function of the ``*.C``/``*.H`` files and of this
-scanner, so it is cached by their content digest (``cached_scan``).
+Reads it cannot resolve are reported as ``None``, never guessed; the scan is cached by source digest.
 """
 
 from __future__ import annotations
@@ -246,8 +232,7 @@ def _checksum(payload: dict) -> str:
 
 
 def _load(cache_file: Path, digest: str) -> Scan | None:
-    """The cached scan, or ``None`` when the file is unreadable, altered or
-    for another digest."""
+    """The cached scan, or ``None`` when the file is unreadable, altered or for another digest."""
     try:
         payload = json.loads(cache_file.read_text())
         checksum = payload.pop("checksum")
@@ -314,8 +299,7 @@ def _dispatch(text: str, structure: str, function: "_Function") -> Iterator[tupl
 
 
 def _includers(relative: str, files, includes) -> list["_Function"]:
-    """A function-less fragment ``#include``d inside function bodies (an
-    OpenFOAM idiom) is read as part of the including function."""
+    """A function-less fragment ``#include``d inside function bodies is read as part of the includer."""
     basename = relative.rsplit("/", 1)[-1]
     if sum(1 for other in files if other.rsplit("/", 1)[-1] == basename) != 1:
         return []
@@ -337,9 +321,7 @@ def _mask(match: re.Match[str]) -> str:
 
 
 def _strip_comments(text: str) -> str:
-    """Comments and preprocessor lines blanked in place, so offsets and line
-    numbers survive. String literals are skipped first so a ``//`` inside
-    one is not taken for a comment."""
+    """Comments and preprocessor lines blanked in place; strings are skipped first so a ``//`` in one stays."""
     out, pos = [], 0
     token = re.compile(r'"(?:\\.|[^"\\\n])*"|/\*.*?\*/|//[^\n]*', re.DOTALL)
     for match in token.finditer(text):
@@ -436,8 +418,7 @@ _DICT_MEMBER = re.compile(
 
 
 def _class_index(structures: Iterable[str]) -> dict[str, _Class]:
-    """Every class head in the tree: its bases and the dictionaries it
-    declares (members, and accessors such as ``coeffDict()``)."""
+    """Every class head in the tree: its bases and the dictionaries it declares."""
     index: dict[str, _Class] = {}
     for structure in structures:
         for brace in re.finditer(r"\{", structure):
@@ -482,9 +463,7 @@ def _lineage(name: str | None, classes: dict[str, _Class], seen: tuple[str, ...]
 
 
 def _head_start(structure: str, brace: int) -> int | None:
-    """Where the statement a ``{`` opens starts: after the last ``;``, ``{``
-    or ``}`` outside parentheses. ``None`` when the brace sits inside an
-    open parenthesis (a braced initialiser in an argument list)."""
+    """Where the statement a ``{`` opens starts; ``None`` inside an open parenthesis (a braced initialiser)."""
     depth = 0
     for index in range(brace - 1, -1, -1):
         char = structure[index]
@@ -515,9 +494,7 @@ def _drop_template_prefix(head: str) -> str:
 
 
 def _functions(structure: str) -> Iterator[_Function]:
-    """Every function definition, from its signature (initialiser list
-    included) to its closing brace. Namespaces and class bodies are walked
-    into; function bodies are not."""
+    """Every function definition, signature to closing brace; namespaces and classes are walked into, bodies are not."""
     stack: list[tuple[str, str | None]] = []
     pending: list[tuple[str, str | None, str, int]] = []
     for brace in re.finditer(r"[{}]", structure):
@@ -572,8 +549,7 @@ _NAME_BEFORE_PAREN = re.compile(
 
 
 def _function_name(head: str) -> str | None:
-    """The qualified name before a parenthesised group (the first qualified
-    one, else the first); ``None`` for a control statement."""
+    """The qualified name before a parenthesised group; ``None`` for a control statement."""
     names = []
     for open_at, _close_at in _paren_groups(head):
         match = _NAME_BEFORE_PAREN.search(head[:open_at])
@@ -615,10 +591,7 @@ def _child(scope: _Scope | None, segment: str) -> _Scope | None:
 
 
 class _Environment:
-    """The dictionaries one function can name, bound in source order:
-    parameters, locals (``IOdictionary`` from a literal object name
-    included), entries of an iterated dictionary, the class's own
-    dictionary members and accessors, and ``this`` for a dictionary class."""
+    """The dictionaries one function can name, bound in source order."""
 
     def __init__(self, text: str, structure: str, function: _Function, classes: dict[str, _Class]):
         self.text, self.structure, self.function = text, structure, function
@@ -730,8 +703,7 @@ class _Environment:
 
 
 def _steps(expression: str) -> list[tuple[str, str | None]]:
-    """``a.b("x").c()`` as ``[("a", None), ("b", '"x"'), ("c", "")]``;
-    ``[]`` when the expression is not such a chain."""
+    """A ``a.b("x").c()`` chain as ``[(name, args)]``; ``[]`` when the expression is not such a chain."""
     expression = re.sub(r"^\s*this\s*->\s*", "", expression.strip())
     expression = re.sub(r"^\(\s*\*\s*(\w+)\s*\)", r"\1", expression)
     expression = re.sub(r"^\*\s*this\b", "this", expression)
@@ -772,8 +744,7 @@ def _steps(expression: str) -> list[tuple[str, str | None]]:
 
 
 def _receiver_start(structure: str, end: int, floor: int) -> int:
-    """Where the receiver expression ending at ``end`` (before ``.``/``->``)
-    starts: walked back over names, calls, subscripts and member access."""
+    """Where the receiver expression ending at ``end`` starts, walking back over names, calls and subscripts."""
     index = end
     while True:
         while index > floor and structure[index - 1].isspace():
@@ -887,11 +858,7 @@ _BRANCH_HEAD = re.compile(r"\b(?:if|while|for|switch)\s*$")
 
 
 def _conditional(structure: str, position: int, floor: int) -> bool:
-    """Whether the code at ``position`` runs only under a condition of its
-    function: inside the braces of an ``if``/``else``/loop/``switch``, in the
-    braceless body of one, or after a ``?``, ``&&`` or ``||`` of its
-    statement. An ``if`` condition is evaluated whenever the ``if`` is, so a
-    read there is not conditional, but the condition of an ``else if`` is."""
+    """Whether the code at ``position`` runs only under a condition of its function; an ``if`` condition itself is not conditional, an ``else if`` condition is."""
     depth = 0
     for index in range(position - 1, floor - 1, -1):
         char = structure[index]
@@ -933,12 +900,7 @@ def _record_call(
     callee: str, args: list[str], environment: "_Environment", calls: list,
     constructors: dict[str, list[str]],
 ) -> None:
-    """A call passing a resolved dictionary: ``callee`` receives it as
-    argument ``index``. A dictionary member initialised from it is recorded
-    as ``=<member root>``, and a base-class constructor as ``^<class>``:
-    both hold the same dictionary as the caller. A constructor taken from a
-    runtime-selection table (``constructors``: its variable, to the classes
-    the table registers) is called with it by every registered class."""
+    """A call passing a resolved dictionary: ``callee`` receives it as argument ``index``."""
     if callee in _KEY_METHODS | _SUBDICT_METHODS | _NOT_A_CALL | _KEYWORDS:
         return
     if callee in constructors:
@@ -956,8 +918,7 @@ def _record_call(
 
 
 def _wrapping_type(structure: str, start: int, floor: int) -> str | None:
-    """The type a ``lookup`` result is read as: ``readScalar(d.lookup(..))``,
-    ``word(d.lookup(..))``, ``const word name(d.lookup(..))``."""
+    """The type a ``lookup`` result is read as, e.g. ``readScalar(d.lookup(..))`` or ``word(d.lookup(..))``."""
     head = structure[floor:start].rstrip()
     if not head.endswith("("):
         return None
@@ -1028,18 +989,13 @@ def _segment_matches(read: str, listed: str) -> bool:
 
 
 def _path_matches(read_path: tuple[str, ...], catalogue: tuple[str, ...]) -> bool:
-    """Whether a read and a catalogue path can name the same key: aligned
-    from the leaf, every segment both name agrees (``*`` and ``<name>`` match
-    any) and at least one agrees literally. Neither side's root is known, so
-    only the overlap is compared."""
+    """Whether a read and a catalogue path can name the same key, comparing only their overlap from the leaf."""
     pairs = list(zip(reversed(read_path), reversed(catalogue)))
     return any(read == listed for read, listed in pairs) and all(_segment_matches(*pair) for pair in pairs)
 
 
 def _anchored(read: DictRead, catalogue: tuple[str, ...], entry) -> bool:
-    """Whether a matching read is evidence about this entry rather than a
-    same-named key elsewhere: it agrees beyond the final name, or it is read
-    in a file the entry cites."""
+    """Whether a matching read is evidence about the entry: it agrees beyond the final name or is in a file the entry cites."""
     pairs = list(zip(reversed(read.scope + (read.key,)), reversed(catalogue)))[1:]
     return any(r == listed and not _is_placeholder(listed) for r, listed in pairs) or any(
         ref == read.file or ref.endswith("/" + read.file) for ref in entry.source_refs
@@ -1160,8 +1116,7 @@ def required_reads(scan: Scan, entries: Iterable, *, document: str) -> dict[tupl
 
 
 def _same_function(defined: str, called: str) -> bool:
-    """A definition and a call name one function when one spelling is the
-    other with more of its namespace or class qualification."""
+    """A definition and a call name one function when one spelling is the other with more qualification."""
     return defined == called or defined.endswith("::" + called) or called.endswith("::" + defined)
 
 
@@ -1200,8 +1155,7 @@ def unread_entries(scan: Scan, entries: Iterable, reviewed: dict) -> list:
 
 
 def _unconditional(read: DictRead, guarded: set[tuple]) -> bool:
-    """Whether the read fails whenever it runs and always runs: no default, no
-    test of its key in the same function, and no branch around it."""
+    """Whether the read fails whenever it runs and always runs: no default, no test of its key, no branch around it."""
     return (
         read.method in _REQUIRED_METHODS and not read.conditional
         and (read.file, read.function, read.root, read.scope, read.key) not in guarded
@@ -1209,8 +1163,7 @@ def _unconditional(read: DictRead, guarded: set[tuple]) -> bool:
 
 
 def _guards(scan: Scan) -> set[tuple]:
-    """``(file, function, root, scope, key)`` of every key some read tests or
-    reads only if present: a ``get`` of it in the same function is optional."""
+    """``(file, function, root, scope, key)`` of every key some read tests or reads only if present."""
     return {
         (read.file, read.function, read.root, read.scope, read.key)
         for read in scan.reads if read.method in _GUARDS
@@ -1234,8 +1187,7 @@ def cxx_value_kind(scan: Scan, entry) -> str | None:
 
 
 def _entry_arguments(read: DictRead, required: bool, driver_path: str | None) -> dict[str, object]:
-    """The ``DictEntry`` arguments the scan establishes for an uncatalogued
-    read; the description, unit and conditions are the author's to write."""
+    """The ``DictEntry`` arguments the scan establishes for an uncatalogued read."""
     return {
         "driver_path": driver_path,
         "value_kind": value_kind_of(read.type),

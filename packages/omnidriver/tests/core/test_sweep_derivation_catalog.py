@@ -14,7 +14,7 @@ def test_case_id_template_joins_named_values():
 
 
 def test_naming_output_keys_matches_the_catalog():
-    """NAMING_OUTPUT_KEYS's own comment claims it is "kept in sync with _case_id_template/_output_dir_name_template" -- this is that check, written where the comment already said it lived (it did not exist before this fix, a false citation)."""
+    """NAMING_OUTPUT_KEYS is kept in sync with _case_id_template/_output_dir_name_template; this is that check."""
     produced = set()
     for derivation in SWEEP_DERIVATION_CATALOG.values():
         produced.update(derivation({"x": "y"}).keys())

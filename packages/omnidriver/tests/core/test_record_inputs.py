@@ -1,4 +1,4 @@
-"""Step S: supplied inputs for a tutorial record (docs/superpowers/specs/2026-09-28-supplied-inputs-design.md)."""
+"""Supplied inputs for a tutorial record."""
 
 from __future__ import annotations
 

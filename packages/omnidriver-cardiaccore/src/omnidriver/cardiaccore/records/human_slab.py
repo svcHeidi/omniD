@@ -1,9 +1,4 @@
-"""``humanSlab``: mirrors ``cases/bivCase/Allrun``, using the native
-tutorial's own name (no ``cardiaccore-*`` alias) and running the four
-utilities in the native ``Allrun``'s own order. ``1DgraphToFoam`` is left
-out: the factory workflow never ran it, and its edge-length scaling
-remains unresolved.
-"""
+"""``humanSlab``, mirroring ``cases/bivCase/Allrun``: the four utilities in the native order, on a supplied anatomy bundle."""
 
 from __future__ import annotations
 
@@ -11,6 +6,7 @@ from omnidriver.core.tutorial_records import TutorialRecord
 
 from .anatomy import ANATOMY, CONDUCTIVITY, CONV, ANATOMY_STEP, MORPHOMETRY, step
 
+# `1DgraphToFoam` is not a step: its edge-length scaling is unresolved.
 RECORD = TutorialRecord(
     name="humanSlab",
     native_case_relpath="cases/bivCase",
@@ -19,9 +15,8 @@ RECORD = TutorialRecord(
         CONDUCTIVITY,
         ANATOMY_STEP,
         # `0/Conductivity` is CONDUCTIVITY's own `produces`, not an authored
-        # input, so it is not re-declared as consumed: at plan time it does
-        # not exist yet, and `record_execution.record_generated_relpaths`
-        # excludes it from the native-case copy as a generated intermediate.
+        # input, so it is not re-declared as consumed: it does not exist at
+        # plan time and is excluded from the native-case copy.
         step(
             "purkinje_slab", "setPurkinjeSlab",
             consumes=(CONV, "0/uvc_transmural"),

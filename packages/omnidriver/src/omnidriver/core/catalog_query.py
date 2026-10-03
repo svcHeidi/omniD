@@ -1,19 +1,6 @@
 """``omnidriver catalog``: the entries of one dictionary for one solver.
 
-One query over the one canonical key catalogue a record has
-(the stack's ``get_record_key_catalog``, what ``describe`` shows as
-``record_surface.keys`` and what the record-key validator refuses by), so an
-agent can ask for a document or a key without reading all of ``describe``.
-
-When the stack's C++ source root is supplied (``cxx_mapping.source_root``),
-the stack's own scanner runs, and every entry whose values the C++ registers
-(a runtime-selection table) carries them as ``cxx_values``.
-``scan_query`` lists what the C++ reads and the catalogue lacks (``uncatalogued``),
-or the catalogued keys it no longer reads (``unread``), each with what an
-agent needs to write or retire the catalogue entry. Core names no solver and
-no document: it filters what the plugin lists and attaches what the scanner
-returns.
-"""
+One query over the stack's key catalogue (``get_record_key_catalog``), with ``cxx_values`` from the stack's scanner when the C++ source root is supplied; ``scan_query`` lists what the C++ reads and the catalogue lacks (``uncatalogued``) or no longer reads (``unread``). Core names no solver or document."""
 from __future__ import annotations
 
 import os

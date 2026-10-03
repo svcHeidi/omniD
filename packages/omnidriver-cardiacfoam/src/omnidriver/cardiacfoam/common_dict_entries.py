@@ -1,8 +1,4 @@
-"""cardiacFoam-owned physicsProperties and controlDict catalog entries.
-
-``omnidriver.dict_entries`` re-exports these values without changing import
-paths or serialized catalogs.
-"""
+"""cardiacFoam-owned physicsProperties and controlDict catalog entries."""
 
 from __future__ import annotations
 

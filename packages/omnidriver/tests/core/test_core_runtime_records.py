@@ -1,5 +1,5 @@
 """Core declares its own run records, and record staging drops a record's
-step outputs (spec 2026-09-26-core-generality-design.md §2, A5)."""
+step outputs."""
 from __future__ import annotations
 
 from pathlib import Path

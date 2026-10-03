@@ -1,20 +1,6 @@
-"""A tutorial record: data, not a factory -- and the axis contract it draws on.
+"""A tutorial record: inert data, and the axis contract it draws on.
 
-**Why this is a separate module from ``core.case_write``.** A tutorial
-record's native case is never written in place. Everything in this module
-runs against a disposable staged clone and stops at *proposing* patches --
-``AxisPatch``, ``SourcedPatch`` -- which know a document, a key path, a
-value and how validated the adapter considers it, but nothing about
-``owner``/``workflow``, the identity fields a real
-``case_write.ParameterAssignment`` needs to actually commit.
-``patches_to_parameters`` is the one seam between the two: it promotes a
-merged, conflict-checked set of ``SourcedPatch`` into real
-``ParameterAssignment``s, once, right before the single
-``commit_case_write`` call.
-
-Zero solver-specific vocabulary lives here, and none may be added --
-``scripts/check-import-boundaries.py`` enforces that on the import side, the
-same way it guards every other core module.
+Everything here runs against a staged clone and stops at proposing patches; `patches_to_parameters` is the one seam to `case_write`.
 """
 
 from __future__ import annotations
@@ -32,12 +18,7 @@ if TYPE_CHECKING:
 
 
 class TutorialRecordError(ValueError):
-    """A tutorial-record study refused a name, a conflict, or a missing case.
-
-    Every raise site names the offending key or source -- a caller catching
-    this and printing ``str(exc)`` already has enough to act on, with no
-    need to inspect a structured payload.
-    """
+    """A tutorial-record study refused a name, a conflict, or a missing case; the message names the offending key or source."""
 
 
 # ---------------------------------------------------------------------------
@@ -66,14 +47,11 @@ not, which no reader reads (``record_execution.record_step_artifacts``)."""
 class ProducedPath(str):
     """A ``produces`` path that also names the format of what it holds.
 
-    It *is* its path: a ``str`` equal to the path, so every reader of
-    ``WorkflowStep.produces`` (the DAG's artifact ids, record staging,
-    provenance, a JSON dump) sees paths exactly as before. The format rides
-    on the entry as ``artifact_format``, so ``str.format`` stays callable, and
-    is read only through :meth:`WorkflowStep.produced_format`:
-    a string operation on the path returns a plain ``str`` without it, and
-    two entries compare equal by path alone. Core never interprets the
-    format. It names the reader a plugin returns from
+    A ``str`` equal to the path, so every reader of ``WorkflowStep.produces``
+    sees plain paths. The format rides on ``artifact_format`` and is read only
+    through :meth:`WorkflowStep.produced_format`: a string operation returns a
+    plain ``str`` without it, and entries compare equal by path alone. Core
+    never interprets the format; it names the reader a plugin returns from
     ``get_artifact_value_reader``.
     """
 
@@ -105,8 +83,7 @@ class ProducedPath(str):
 
 
 def _token_runs(tokens: Sequence[str], key: Sequence[str]) -> list[int]:
-    """Every index where ``key`` occurs in ``tokens`` as a contiguous run,
-    compared token by token for equality (overlapping runs counted)."""
+    """Every index where ``key`` occurs in ``tokens`` as a contiguous run (overlapping runs counted)."""
     width = len(key)
     key = tuple(key)
     return [i for i in range(len(tokens) - width + 1) if tuple(tokens[i:i + width]) == key]
@@ -115,13 +92,7 @@ def _token_runs(tokens: Sequence[str], key: Sequence[str]) -> list[int]:
 def _first_touching_step(
     path_str: str, steps: Sequence["WorkflowStep"],
 ) -> tuple[int, str] | None:
-    """The index of the first step (in declared order) that touches
-    ``path_str`` -- exactly, or through a directory relationship in either
-    direction (a step consuming ``constant/polyMesh/boundary`` touches a
-    destination of ``constant/polyMesh``, and vice versa) -- and whether it
-    was through that step's ``consumes`` or its ``produces``. ``None`` if no
-    step touches it at all. Shared by :meth:`TutorialRecord._check_inputs`
-    (§2.1's two input/step refusals)."""
+    """The first step touching ``path_str``, exactly or as a parent or child directory, and whether through ``consumes`` or ``produces``."""
     path = PurePosixPath(path_str)
 
     def _touches(other: str) -> bool:
@@ -164,42 +135,24 @@ def _string_tokens(label: str, value: Any, *, allow_empty_tuple: bool, allow_emp
 class DefaultArgument:
     """An argument a workflow step passes unless an axis passes its own.
 
-    On the command line it is ``key`` followed by ``values``: ``key=("-dict",),
-    values=("system/blockMeshDict.3D",)`` passes ``-dict
-    system/blockMeshDict.3D``, and ``key=("-setnumber", "lc"), values=("0.1",)``
-    passes ``-setnumber lc 0.1``. The default is the step's own, copied from
-    the native case, and independent of any study.
+    On the command line it is ``key`` followed by ``values``:
+    ``key=("-setnumber", "lc"), values=("0.1",)`` passes ``-setnumber lc 0.1``.
+    ``key`` is as many tokens as name the argument; core compares tokens for
+    equality and parses no flag.
 
-    **The replacement rule.** An axis replaces a default by passing the
-    default's ``key`` tokens, contiguously, anywhere in its
-    ``AxisResult.command_arguments`` for that step; the default's own tokens
-    are then dropped, and the axis's contribution is appended as always. An
-    axis that does not pass the ``key`` appends, and the default stays. So a
-    ``dimension`` axis passing ``-dict system/blockMeshDict.1D`` gives
-    ``blockMesh -dict system/blockMeshDict.1D``, never two ``-dict``s, and a
-    gmsh axis passing ``-setnumber lc 0.05`` replaces a ``-setnumber lc``
-    default but not a ``-setnumber nx`` one.
+    An axis replaces a default by passing its ``key`` tokens contiguously in
+    its ``AxisResult.command_arguments`` for that step: the default's tokens
+    are dropped and the contribution appended. An axis that does not pass the
+    key appends, and the default stays. What follows the key is passed as
+    given; the record declares only the default, never the values that may
+    replace it.
 
-    ``key`` is as many tokens as name the argument: one for ``-dict``, two
-    for ``-setnumber lc``, whose flag alone names nothing. Core compares
-    tokens for equality and nothing more; it parses no flag and knows no
-    arity.
-
-    **Loose by design:** the record declares only the default, never the
-    values that may replace it.
-    Whatever an axis passes after the key -- ``-dict system/blockMeshDict.2D``,
-    a dictionary an agent composed, any ``-setnumber lc`` -- replaces the
-    default as passed; nothing checks it against the record. Only malformed
-    input and real ambiguity are refused, below.
-
-    **Ambiguity is refused, by name.** At construction
-    (``WorkflowStep.__post_init__``), each default's ``key`` must occur
-    exactly once, as a contiguous run, in the step's default command line
-    (``command`` plus every default's tokens). That refuses a key the
-    command already holds, two defaults with one key, and a key inside
-    another default's tokens (``-setnumber`` beside ``-setnumber lc``). At
-    resolution (``WorkflowStep.argv``), an axis contribution holding one key
-    more than once is refused: it would pass the argument twice.
+    Ambiguity is refused by name. At construction each default's ``key`` must
+    occur exactly once as a contiguous run in the step's default command line
+    (``command`` plus every default's tokens): that refuses a key the command
+    already holds, two defaults with one key, and a key inside another
+    default's tokens. At resolution (``WorkflowStep.argv``) a contribution
+    holding one key more than once is refused.
     """
 
     key: tuple[str, ...]
@@ -231,10 +184,7 @@ class RecordInputIncomplete(RecordInputError):
 
 
 def _check_input_relative(label: str, value: str) -> tuple[str, ...]:
-    """A record-input source or destination: case-relative shape, plus the
-    two extra refusals every ``produces``/``consumes`` path already gets
-    (``WorkflowStep.__post_init__``): no ``{``/``}``, and never the root
-    itself."""
+    """Case-relative shape, no ``{``/``}``, and never the root: the refusals a ``produces``/``consumes`` path gets."""
     if not isinstance(value, str) or not value:
         raise TutorialRecordError(f"{label} must be a non-empty str, got {value!r}")
     if "{" in value or "}" in value:
@@ -254,19 +204,13 @@ class RecordInput:
     a patient anatomy bundle, a shared mesh, a 1D graph.
 
     ``files`` is a tuple of ``(path inside the input, case-relative
-    destination)`` pairs -- ``(".", destination)`` takes the input's own
-    root (which may itself be a file, e.g. one graph file). ``native_relpath``
-    is this input's default location under the environment's own cases root
-    (native fact, e.g. the idealized heart's tracked ``../mesh``); ``None``
-    means the input has no ambient location and must always be supplied
-    (``--input NAME=PATH``).
+    destination)`` pairs; ``(".", destination)`` takes the input's own root,
+    which may itself be a file. ``native_relpath`` is the input's default
+    location under the environment's cases root; ``None`` means it has no
+    ambient location and must be supplied (``--input NAME=PATH``).
 
-    Checked here: a non-empty name, at least one file pair, every source and
-    destination shaped like a real case-relative path (no absolute path, no
-    ``..`` escape, no ``{``/``}``, never the root). Two destinations
-    conflicting with each other, or with a step's own consumes/produces, are
-    checked on the owning :class:`TutorialRecord` instead, because only the
-    record knows its own steps.
+    Destination conflicts with each other or with a step's consumes/produces
+    are checked on the owning :class:`TutorialRecord`, which knows its steps.
     """
 
     name: str
@@ -308,8 +252,7 @@ class RecordInput:
 
 @dataclass(frozen=True)
 class ResolvedInput:
-    """One input, resolved to a real directory (or file), for staging and
-    for provenance (§2.4's ``resolvedEntry.inputs``)."""
+    """One input, resolved to a real directory or file, for staging and provenance."""
 
     name: str
     kind: str  # "native" | "supplied"
@@ -338,18 +281,13 @@ def resolve_record_inputs(
 ) -> tuple[ResolvedInput, ...]:
     """Resolve every input a record declares.
 
-    A supplied path wins; otherwise the input's own native location, if it
-    has one; otherwise -- when ``strict`` -- refused by name
-    (:class:`RecordInputNotSupplied`). An input whose resolved directory is
-    missing one of its declared files is refused too
-    (:class:`RecordInputIncomplete`), naming the missing files.
+    A supplied path wins; otherwise the input's native location; otherwise,
+    when ``strict``, :class:`RecordInputNotSupplied`. An input missing one of
+    its declared files is :class:`RecordInputIncomplete`.
 
-    ``strict=False`` is ``describe``'s own posture ("describe does not
-    refuse"): an input with nothing to resolve, or an incomplete one, is
-    left out of the result rather than raising -- an agent learns the
-    record's input names from :mod:`record_surface` before it has the data.
-    An unknown ``--input`` name is refused either way: that is a typo in
-    what the caller asked for, not a question of whether data exists yet.
+    ``strict=False`` is ``describe``'s posture: an input with nothing to
+    resolve, or an incomplete one, is left out rather than raising. An unknown
+    ``--input`` name is refused either way.
     """
     supplied = dict(supplied or {})
     declared = {input_.name: input_ for input_ in record.inputs}
@@ -392,36 +330,21 @@ def resolve_record_inputs(
 class WorkflowStep:
     """One named step in a tutorial record's workflow.
 
-    ``command`` is the step's base argv; an axis may contribute additional
-    arguments for a step it names (``AxisResult.command_arguments``),
-    appended after the base (see ``resolve_case_patches``). Core does not
-    know what any of these strings mean -- the solver binary's own name, or
-    a mesh-generation tool's flags, are the adapter's own vocabulary.
+    ``command`` is the step's base argv; core does not know what its strings
+    mean. An axis may contribute arguments for a step it names
+    (``AxisResult.command_arguments``). ``default_arguments`` are passed
+    unless an axis passes its own (:class:`DefaultArgument` states the rule);
+    the step runs :meth:`argv`: ``command``, the defaults no axis replaced,
+    then the axis's contribution.
 
-    ``default_arguments`` are arguments the step passes unless an axis
-    passes its own; :class:`DefaultArgument` states the replacement rule.
-    The step runs :meth:`argv`: ``command``, then every default no axis
-    replaced (in declared order), then the axis's contribution.
-
-    ``produces`` and ``consumes`` are case-relative paths the step writes
-    and reads. ``produces`` becomes the record's expected artifacts;
-    ``consumes`` becomes the step's DAG ``consumes``, which provenance
-    fingerprints. Paths here, never artifact ids: the ids are derived
-    (``record_execution.record_artifact_id``).
-
-    A step whose command has a utility manifest keeps the manifest's
-    ``produces`` beside its own: ``runtime.workflow.normalize_workflow_dag``
-    takes the union, never a replacement.
-
-    Each is a tuple of non-empty, case-relative ``str`` paths: a bare
-    ``str`` is refused rather than exploded into one-character paths; ``""``
-    and ``"."`` (the case root itself) are refused; so are ``{`` and ``}``,
-    because a ``produces`` path becomes an artifact ``path_pattern`` that
-    core ``str.format``-s -- the ``{case_id}``/``{instance}`` placeholders
-    are not supported here.
-
-    A ``produces`` entry may be a :class:`ProducedPath`, which also names its
-    format. A plain path means :data:`PLAIN_FILE_FORMAT`.
+    ``produces`` and ``consumes`` are tuples of case-relative paths the step
+    writes and reads, never artifact ids (those are derived).  ``produces``
+    becomes the record's expected artifacts and ``consumes`` the step's DAG
+    ``consumes``, which provenance fingerprints. A bare ``str``, ``""``, ``"."``
+    and ``{``/``}`` are refused: a ``produces`` path becomes an artifact
+    ``path_pattern`` that core ``str.format``-s. A utility manifest's
+    ``produces`` is unioned with the step's own. An entry may be a
+    :class:`ProducedPath`; a plain path means :data:`PLAIN_FILE_FORMAT`.
     """
 
     step_id: str
@@ -502,11 +425,7 @@ class WorkflowStep:
                 )
 
     def argv(self, contributed: Sequence[str] = ()) -> tuple[str, ...]:
-        """The command line this step runs, given the arguments an axis
-        contributes to it (:class:`DefaultArgument` states the rule).
-
-        Refuses, by name, a contribution holding a default's key more than
-        once."""
+        """The command line this step runs given an axis's contribution (:class:`DefaultArgument` states the rule)."""
         contributed = tuple(contributed)
         kept: list[str] = []
         for default in self.default_arguments:
@@ -534,40 +453,20 @@ class WorkflowStep:
 class TutorialRecord:
     """A tutorial as inert data: where its native case lives, what may vary.
 
-    Not a factory (``runtime.registry``'s ``spec_factories``): resolving a
-    record calls no plugin code at all, until an axis it names actually runs.
+    Resolving a record calls no plugin code until an axis it names runs.
+    ``native_case_relpath`` is relative to a cases root the caller supplies.
 
-    ``native_case_relpath`` is relative to the environment's own cases root
-    -- there is no ambient cases root to discover (``future/
-    ENVIRONMENT_CONTRACT.md`` §12, "supplied versus discovered"), so
-    resolving this to an absolute path is the caller's job, not this
-    dataclass's.
+    ``axes`` are the record's own :class:`AxisContract`s; a bare study name
+    resolves against these only, so one name may mean different things in two
+    records. Two axes sharing a name are refused, and so is a name-to-contract
+    mapping.
 
-    ``axes`` are the record's own axes, each an :class:`AxisContract` named
-    by its own ``name``. A bare study name resolves against these and
-    nothing else, so one name can mean different things in two records --
-    record-scoped rather than looked up in a stack-wide catalog, because two
-    records defining an axis of the same name differently must not silently
-    share whichever registered last. Two axes of one record sharing a name
-    are refused here, at load, and so is a ``name -> contract`` mapping,
-    whose keys would restate each contract's ``name`` and could silently
-    drop a duplicate.
-
-    ``workflow_steps`` are keyed by ``step_id``, for ``workflow_variants``
-    and for axes that contribute command arguments to a named step.
-    ``workflow_variants`` maps a selector value (e.g. an adapter's choice
-    between two mesh-generation routes) to the ordered tuple of step ids
-    that variant runs; a record with one route leaves this empty.
-
-    ``default_variant`` names the variant a study runs when it does not name
-    the record's ``variant_selector``: the route the native case itself runs
-    -- "the native case is the default", applied to routes. A record that
-    declares ``workflow_variants`` must declare it, and it must be one of
-    them, compared exactly (no ``str()`` coercion, as for a study's own
-    selector value); a ``default_variant`` on a record with no variants is
-    refused too. Each refusal names the record and the declared variants.
-    Core never knows what a route means; the record says which one is
-    native.
+    ``workflow_variants`` maps a selector value (say, a choice between two
+    mesh-generation routes) to the ordered step ids that variant runs; a
+    record with one route leaves it empty. ``default_variant`` is the variant
+    a study runs when it does not name ``variant_selector``, the route the
+    native case runs: required when ``workflow_variants`` is declared, one of
+    its keys compared exactly, and refused when there are no variants.
     """
 
     name: str
@@ -601,10 +500,6 @@ class TutorialRecord:
             raise TutorialRecordError(
                 f"tutorial record {self.name!r} must declare a native_case_relpath"
             )
-        # Case-relative, like every other case-addressing string this module
-        # checks (a patch's document, a study name's document) -- a record's
-        # native case lives under the environment's cases root, never at an
-        # absolute path or one that escapes it.
         _check_case_relative(
             f"tutorial record {self.name!r}'s native_case_relpath",
             self.native_case_relpath,
@@ -687,8 +582,7 @@ class TutorialRecord:
         return tuple(axis.name for axis in self.axes)
 
     def _check_inputs(self) -> None:
-        """The remaining input refusals: the ones only the record, not a
-        lone :class:`RecordInput`, can check -- they read ``workflow_steps``."""
+        """The input refusals that read ``workflow_steps``, which a lone :class:`RecordInput` cannot check."""
         seen_names: set[str] = set()
         seen_destinations: dict[str, str] = {}
         for input_ in self.inputs:
@@ -740,21 +634,11 @@ class TutorialRecord:
 class AxisPatch:
     """One value an axis (or a direct study key) proposes to write.
 
-    Deliberately its own type, not ``case_write.ParameterAssignment``: an
-    axis is pure and knows nothing about ``owner``/``workflow`` --
-    only a document, a key path, and a value. ``patches_to_parameters``
-    promotes a merged, conflict-checked set of these into real
-    ``ParameterAssignment``s.
-
-    **No ``validated`` field here.** Whether a patch is validated is not
-    this patch's own opinion to state -- an axis is not the record-key
-    catalog, and a self-reported ``validated=True`` default would let an
-    axis-produced patch for a key absent from any catalog reach a commit
-    unchecked. ``resolve_case_patches`` runs every patch, axis-produced or a
-    direct study key alike, through
-    the stack's record-key validator and carries the answer on
-    ``SourcedPatch.validated`` instead -- the validator decides, never the
-    patch.
+    Not a ``case_write.ParameterAssignment``: an axis is pure and knows only a
+    document, a key path and a value; ``patches_to_parameters`` promotes
+    merged patches. It carries no ``validated`` field: the record-key
+    validator decides, and ``resolve_case_patches`` puts its answer on
+    ``SourcedPatch.validated``.
     """
 
     document: str
@@ -797,22 +681,17 @@ class AxisResult:
         )
 
 
-#: An axis's resolution function: the study value, and a read-only view of
-#: the staged case (its root -- an axis reads through it, e.g. an existing
-#: mesh-description file's extents, and must not write it; nothing here
-#: enforces that mechanically at construction, only at runtime, in
-#: ``resolve_case_patches``'s digest check below).
+#: An axis's resolution function: the study value and the staged case root,
+#: which it may read and must not write (``resolve_case_patches`` checks a
+#: digest of the tree).
 AxisFunction = Callable[[Any, Path], AxisResult]
 
 
 @dataclass(frozen=True)
 class AxisContract:
-    """A named axis: what value it accepts, and the pure function computing
-    its patches and command arguments.
+    """A named axis: what value it accepts, and the pure function computing its patches and command arguments.
 
-    Core defines this contract and ships no axis of its own. An adapter
-    declares each axis on the record that uses it (``TutorialRecord.axes``),
-    never stack-wide.
+    Core ships no axis; an adapter declares each on the record that uses it.
     """
 
     name: str
@@ -828,29 +707,17 @@ class AxisContract:
 
 # ---------------------------------------------------------------------------
 # Selectors: a reserved study name that picks among a record's declared
-# `workflow_variants` rather than naming a document key or an axis. A
-# selector produces no patches at all -- it only chooses which of the
-# record's own declared workflow steps run for this case.
+# `workflow_variants` and produces no patches. Core names none; a record
+# declares its own via `TutorialRecord.variant_selector`.
 # ---------------------------------------------------------------------------
-
-#: Core defines the selector mechanism only, no selector name of its own --
-#: a record declares its own reserved name via
-#: ``TutorialRecord.variant_selector`` (cardiacFOAM's records declare
-#: ``"mesh"`` themselves), never a literal core-owned name, since that would
-#: itself be solver vocabulary core has no business naming.
 
 
 def resolve_variant_selector(record: TutorialRecord, value: Any) -> tuple[str, ...]:
-    """Resolve the record's own declared ``variant_selector`` name to one
-    variant's step ids.
+    """The step ids of the variant ``value`` selects.
 
-    A selector, not an axis: it produces no :class:`AxisPatch` at all, only
-    which of ``record.workflow_variants`` runs for this case.
-    Refused BY NAME when the record declares no variants to select among,
-    when ``value`` is ``None`` (a null selector value is never a valid
-    choice), or when ``value`` does not name a declared variant EXACTLY --
-    no ``str()`` coercion: an integer ``1`` must not silently match a
-    variant literally named ``"1"``, nor ``True`` one named ``"True"``.
+    Refused when the record declares no variants, when ``value`` is ``None``,
+    or when it does not name a declared variant exactly (no ``str()``
+    coercion: ``1`` must not match a variant named ``"1"``).
     """
     if not record.workflow_variants:
         raise TutorialRecordError(
@@ -900,17 +767,11 @@ def sort_study_name(
 ) -> DocumentKeyName | AxisMatch:
     """Classify one study name, refusing by name before anything runs.
 
-    A name containing ``:`` is a ``document:dotted.path`` literal key: the
-    document is the substring before the first colon (itself may contain
-    ``/``, e.g. ``constant/someProperties``), the rest is a dot-joined key
-    path. Its document is checked for shape only (case-relative, no ``..``
-    escape, non-empty) -- whether the key itself is one a real catalog
-    recognises is adapter work, resolved later by the stack's record-key
-    validator (``resolve_case_patches``), not here.
-
-    A name with no colon is a bare axis name, resolved against ``axes``, the
-    entry's own (``TutorialRecord.axes``), and refused when none of them has
-    that name.
+    A name containing ``:`` is a ``document:dotted.path`` literal key; the
+    document (before the first colon, may contain ``/``) is checked for shape
+    only, and the key is left to the stack's record-key validator. A name with
+    no colon is an axis name, resolved against ``axes`` and refused when none
+    has it.
     """
     if ":" in name:
         document, _, dotted = name.partition(":")
@@ -942,15 +803,9 @@ def sort_study_name(
 
 @dataclass(frozen=True)
 class SourcedPatch:
-    """One patch, tagged with where it came from, and how validated the
-    record-key catalog considers it.
+    """One patch, tagged with its source and the record-key validator's answer for it.
 
-    ``validated`` lives here, not on ``AxisPatch``: it is always
-    the record-key validator's own answer for this exact
-    ``(document, key_path, value)``, computed uniformly for a direct study
-    key or an axis-produced patch alike -- never a value a patch invented
-    about itself. There is deliberately no default: every call site that
-    builds one states an explicit answer.
+    ``validated`` has no default: every call site states one.
     """
 
     patch: AxisPatch
@@ -962,39 +817,16 @@ class SourcedPatch:
 
 
 def _strictly_equal(first: Any, second: Any) -> bool:
-    """Same Python type AND ``==``.
-
-    Plain ``==`` alone agrees that ``1 == True`` and ``1 == 1.0`` -- both
-    real conflicts here, since they come from two DIFFERENT declared
-    ``value_kind``s (an "integer" and a "boolean", or an "integer" and a
-    "scalar") that only coincidentally compare equal under Python's numeric
-    tower. ``combine_patches`` never reaches this on two values it already
-    knows have differing kinds, but a same-kind conflict (e.g. two "integer"
-    patches whose values happen to be ``1`` and ``True`` under a validator
-    that mis-declares a boolean as an integer) must still be caught, so the
-    type check is strict here too rather than assumed from the kind check.
-    """
+    """Same Python type and ``==``, since ``1 == True`` and ``1 == 1.0`` are real conflicts here."""
     return type(first) is type(second) and first == second
 
 
 def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]:
     """Combine every source's patches into one list, refusing a real conflict.
 
-    Two sources naming the same (document, key) slot are fine when they
-    agree on the value -- e.g. a study restates a base default explicitly --
-    and refused, by name, naming both sources, when they do not. This is the
-    tutorial-record rule: a later write never silently wins.
-
-    "Agree" is checked two ways, both refusing:
-
-    - a differing ``value_kind`` is a conflict even when the raw values
-      happen to compare equal (``1`` and ``1.0`` under "integer" vs
-      "scalar") -- two sources cannot both be right about what KIND of
-      value a slot holds while disagreeing on the kind itself;
-    - same-kind values are compared with strict same-type equality
-      (:func:`_strictly_equal`), not plain ``==``, so ``1`` and ``True``
-      conflict rather than silently agreeing the way Python's ``1 == True``
-      would suggest.
+    Two sources naming one (document, key) slot agree when ``value_kind`` and
+    the value (strict same-type equality) match, and are otherwise refused
+    naming both sources: a later write never silently wins.
     """
     by_slot: dict[str, SourcedPatch] = {}
     for sourced in patches:
@@ -1016,15 +848,9 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
                 f"({existing.patch.value!r}) and {sourced.source!r} "
                 f"({sourced.patch.value!r})"
             )
-        # Same value from two sources: keep whichever was seen first. There
-        # is no tie-break preferring whichever of the two is `validated`:
-        # every patch reaching this function -- a direct key's or an axis's,
-        # alike -- already ran through the same `direct_key_validator` for
-        # this same (document, key_path, value) in `resolve_case_patches`,
-        # so two `SourcedPatch` values that pass the equality check above
-        # always carry the same `validated` answer too. See
-        # test_combine_patches_keeps_the_first_agreeing_patch_
-        # regardless_of_validated_flag.
+        # Agreeing patches already went through the same validator in
+        # `resolve_case_patches`, so they carry the same `validated`; keep the
+        # first.
     return tuple(by_slot.values())
 
 
@@ -1034,14 +860,7 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
 
 
 def _case_root_digest(case_root: Path) -> str:
-    """A content digest over every file's path AND bytes under ``case_root``
-    -- the read-only invariant an axis's ``resolve`` must never break.
-
-    Reuses ``case_write._digest_bytes`` for each file's own digest (the same
-    helper a rendered file's ``content_digest`` already uses), then combines
-    every (relative path, digest) pair, sorted for determinism, into one
-    digest over the whole tree.
-    """
+    """A digest over every file's path and bytes under ``case_root``."""
     import hashlib
 
     from .case_write import _digest_bytes
@@ -1065,16 +884,7 @@ def _validate_or_wrap(
     key_path: tuple[str, ...],
     value: Any,
 ) -> tuple[str, bool]:
-    """Call ``direct_key_validator``, wrapping any exception it raises in a
-    ``TutorialRecordError`` naming the document and key.
-
-    An adapter's validator may raise anything -- a deliberate ``KeyError``
-    for an unrecognised key, or an unrelated bug -- and its own message may
-    not mention which key was being checked at all. This function is the one
-    place that always knows, so it names it, regardless of what the
-    validator itself said (the original exception is chained via ``from``,
-    never discarded).
-    """
+    """Call the validator, wrapping anything it raises in a ``TutorialRecordError`` that names the document and key."""
     try:
         return direct_key_validator(document, key_path, value)
     except Exception as exc:
@@ -1094,33 +904,20 @@ def resolve_case_patches(
 ) -> tuple[tuple[SourcedPatch, ...], dict[str, tuple[str, ...]]]:
     """Resolve one case's whole study into a conflict-checked patch list.
 
-    ``study_by_source`` maps a source label (e.g. ``"base"``, ``"sweep"``) to
-    that source's flat ``name -> value`` mapping. Every name across every
-    source is classified first, before running a single axis, so a bad name
-    anywhere in the study is refused before any axis has a side-effect-free
-    chance to run either.
-
-    Every direct key is then validated, in full, before any axis runs: a
-    study whose direct keys include one the catalog will refuse must never
-    let a well-formed, allowed axis run first and have its (pure, but still
-    real) resolution wasted, or worse, its command arguments collected into
-    a result that is about to be thrown away anyway. Only once every direct
-    key has passed does the first axis run.
-
-    Every patch -- a direct key's or an axis's output -- then goes through
-    the same ``direct_key_validator``: an axis is not a back door around the
-    record-key catalog. ``AxisPatch`` carries no ``validated`` opinion of
-    its own; the validator's answer becomes each patch's
+    ``study_by_source`` maps a source label (``"base"``, ``"sweep"``) to that
+    source's flat ``name -> value`` mapping. Every name is classified, and
+    every direct key validated, before any axis runs, so a bad study is
+    refused before an axis does any work. Every patch, a direct key's or an
+    axis's, goes through ``direct_key_validator``, whose answer becomes
     ``SourcedPatch.validated``.
 
     ``workflow_step_ids`` are the steps the selected route runs (default: all
     the record's). An axis whose only effect is command arguments for a
-    declared step that route does not run is refused by name: its value would
-    otherwise have no effect.
+    declared step that route does not run is refused, since its value would
+    have no effect.
 
-    Returns ``(combined_patches, command_arguments_by_step)`` -- the latter
-    is every axis's ``AxisResult.command_arguments``, merged by step id in
-    axis-resolution order.
+    Returns ``(combined_patches, command_arguments_by_step)``, the latter the
+    axes' ``AxisResult.command_arguments`` merged by step id.
     """
     classified: list[tuple[str, str, DocumentKeyName | AxisMatch, Any]] = []
     for source, values in study_by_source.items():
@@ -1154,12 +951,8 @@ def resolve_case_patches(
     for source, name, sorted_name, value in axis_entries:
         del source  # an axis patch is sourced by the axis's own name, below
         axis = sorted_name.axis
-        # The axis's own declared value_kind is checked against the study's
-        # value before resolve ever runs -- an axis's `resolve` is arbitrary
-        # adapter code, and a value that does not fit the shape the axis
-        # itself declares (e.g. a non-integer string for an "integer" axis)
-        # must not reach that code unchecked and surface as whatever native
-        # exception the adapter's own coercion happens to raise.
+        # `resolve` is adapter code: a value not fitting the axis's declared
+        # kind must not reach it and surface as a native coercion error.
         value_kind_reasons = validate_value_shape(axis.value_kind, value)
         if value_kind_reasons:
             raise TutorialRecordError(
@@ -1167,11 +960,7 @@ def resolve_case_patches(
                 f"but the value {value!r} does not fit it: "
                 f"{'; '.join(value_kind_reasons)}"
             )
-        # Axis purity enforced at runtime, not merely documented: an axis's
-        # own contract (AxisFunction's docstring) says it reads the staged
-        # case and must not write it, so a misbehaving axis (or one that
-        # imports a writer by mistake) mutating the staged case directly,
-        # outside the one commit_case_write channel, must not go unnoticed.
+        # An axis must not write the staged case outside `commit_case_write`.
         before_digest = _case_root_digest(staged_case_root)
         result = axis.resolve(value, staged_case_root)
         after_digest = _case_root_digest(staged_case_root)
@@ -1194,10 +983,6 @@ def resolve_case_patches(
                 SourcedPatch(patch=revalidated, source=name, validated=validated)
             )
         for step_id, extra_args in result.command_arguments.items():
-            # A step id the record does not declare in its own
-            # `workflow_steps` is refused by name -- an axis contributing
-            # arguments to a step that will never run (or never existed) is
-            # a defect, not a no-op.
             if step_id not in known_step_ids:
                 raise TutorialRecordError(
                     f"axis {name!r} contributes command arguments to step "
@@ -1212,9 +997,7 @@ def resolve_case_patches(
                     f"runs {step_id!r}"
                 )
             extra_args = tuple(extra_args)
-            # The contribution must name each of the step's default-argument
-            # keys at most once (`DefaultArgument`'s rule), refused here,
-            # before any later axis runs, rather than when the DAG is built.
+            # Refused here rather than when the DAG is built.
             try:
                 steps_by_id[step_id].argv(extra_args)
             except TutorialRecordError as exc:
@@ -1224,11 +1007,8 @@ def resolve_case_patches(
                 command_arguments[step_id] = extra_args
                 command_argument_source[step_id] = name
                 continue
-            # Two axes contributing to the same step is fine when they agree
-            # byte-for-byte, and refused by name (naming both axes and the
-            # step) otherwise -- no concatenation, no later-wins. An
-            # agreeing second axis contributes nothing further; the
-            # arguments are not duplicated either.
+            # Two axes may contribute to one step only when they agree
+            # exactly: no concatenation, no later-wins.
             if existing_args != extra_args:
                 raise TutorialRecordError(
                     f"step {step_id!r} receives conflicting command arguments "
@@ -1254,22 +1034,14 @@ def split_unchanged(
 ) -> tuple[tuple[SourcedPatch, ...], tuple[SourcedPatch, ...]]:
     """Split ``patches`` into ``(to_write, unchanged)``.
 
-    Uses the adapter's own typed comparison (``values_agree``, the stack's
+    Compares with the adapter's typed ``values_agree`` (the stack's
     ``get_case_value_comparator``) against the staged case's current value
-    (``read_current_value``, its ``get_config_value_reader``) -- never Python
-    ``==``/string equality: a requested ``1e-3`` and a resolved ``0.001`` are
-    one value. ``read_current_value`` is always called with the
-    patch's ``key_path`` as a tuple (``patch.key_path`` itself, never a
-    dotted string): a real adapter's reader may split that tuple into a
-    scope and a leaf key of its own file format's shape -- this function
-    does not know, or need to know, how any adapter's reader turns a key
-    path into a scope.
+    from ``read_current_value`` (its ``get_config_value_reader``), never
+    Python equality: a requested ``1e-3`` and a resolved ``0.001`` are one
+    value. The reader receives ``patch.key_path`` as a tuple.
 
-    When there is no reader or no comparator, every patch is reported
-    changed, never silently dropped: an "unchanged" claim this function
-    cannot back is not made. When a reader or comparator is present but
-    raises for a particular patch, that exception propagates -- it is not
-    caught and reinterpreted as "changed" here.
+    Without a reader or a comparator every patch is reported changed. An
+    exception either raises propagates.
     """
     if read_current_value is None or values_agree is None:
         return tuple(patches), ()
@@ -1296,16 +1068,12 @@ def patches_to_parameters(
     *,
     owner: str,
 ) -> tuple[Any, ...]:
-    """Promote a merged, conflict-checked patch list into real
-    ``case_write.ParameterAssignment`` values, ready for one
-    ``CaseMutationRequest`` -- everything goes in one ``commit_case_write``.
+    """Promote a merged, conflict-checked patch list into ``ParameterAssignment`` values for one commit.
 
-    ``source="case"`` for every assignment: each one is a genuine per-case
-    choice (a direct study key, or an axis's derived value), the same
-    reasoning an adapter's own override-resolution path uses for its own
-    ``source="case"`` assignments. A validated key is written whether or not
-    the case already holds it (``"ensure"``); an unvalidated one only
-    replaces a key the case holds (``"set"``), so a typo cannot add a key.
+    Every assignment has ``source="case"``, a per-case choice. A validated key
+    is written whether or not the case holds it (``"ensure"``); an unvalidated
+    one only replaces a key the case holds (``"set"``), so a typo cannot add a
+    key.
     """
     from .case_write import ParameterAssignment
 
@@ -1326,18 +1094,12 @@ def patches_to_parameters(
 
 
 # ---------------------------------------------------------------------------
-# Building a plugin's own record catalog (a plain {record.name: record} dict
-# comprehension silently drops a duplicate name -- the same hazard closed
-# for two axes sharing a name within one record, closed here for two
-# records sharing a name across a plugin's own TUTORIAL_RECORDS).
+# Building a plugin's own record catalog
 # ---------------------------------------------------------------------------
 
 
 def record_input_destinations(record: "TutorialRecord") -> frozenset[str]:
-    """Every case-relative destination any of ``record``'s inputs writes --
-    never taken from the native case folder at staging time, the same
-    exclusion role ``record_execution.record_generated_relpaths`` plays for
-    a step's own outputs."""
+    """Every case-relative destination any of ``record``'s inputs writes, excluded from the native-case copy at staging."""
     return frozenset(destination for input_ in record.inputs for destination in input_.destinations())
 
 
@@ -1350,15 +1112,8 @@ def build_tutorial_record_catalog(
     ``conformance`` gives each record it names its :class:`ConformanceStudy`,
     and a name no record has is refused.
 
-    A plugin's own ``TUTORIAL_RECORDS`` module constant is exactly this: a
-    tuple of the records it registers, reduced to a dict keyed by
-    ``TutorialRecord.name``. Writing that reduction as a dict comprehension
-    lets a second record with the same name silently overwrite the first,
-    with no error and no trace of which record was actually reachable --
-    the same hazard ``TutorialRecord.__post_init__`` already refuses for two
-    axes sharing a name inside one record. Neutral (core owns no record
-    vocabulary; this is just "how to build the dict without losing one"), so
-    both ``cardiacfoam.records`` and ``opencarp.records`` share it.
+    A dict comprehension over a plugin's ``TUTORIAL_RECORDS`` would let a
+    second record with the same name silently overwrite the first.
     """
     catalog: dict[str, TutorialRecord] = {}
     studies = dict(conformance or {})

@@ -1,4 +1,4 @@
-"""The environment-sourcing flag is --environment-source, opaque to core (spec 2026-09-26-core-generality-design.md §2, A1). It was --openfoam-bashrc, then --environment-bashrc; both names are gone, not aliased: this codebase has no external callers to protect yet."""
+"""The environment-sourcing flag is --environment-source, opaque to core. --openfoam-bashrc and --environment-bashrc are refused, not aliased."""
 
 from __future__ import annotations
 

@@ -1,6 +1,5 @@
 """Unit tests for `case_planning.read_hex_cell_counts`, the
-`ConfigValueCapability` reader for the synthetic `HEX_CELL_COUNTS_KEY_PATH`
-(see docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md)."""
+`ConfigValueCapability` reader for the synthetic `HEX_CELL_COUNTS_KEY_PATH`."""
 
 from __future__ import annotations
 

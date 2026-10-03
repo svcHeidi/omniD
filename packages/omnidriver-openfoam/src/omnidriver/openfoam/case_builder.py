@@ -1,7 +1,6 @@
-"""Solver-neutral primitives for building an OpenFOAM case from a catalogue,
-outside the record path: value resolution, block serialisation, a generic
-``blockMeshDict`` and the committed write of the built documents. A solver's
-own builder composes them and judges what it builds with ``case_rules``.
+"""Solver-neutral primitives for building an OpenFOAM case from a catalogue, outside the record path.
+
+Value resolution, block serialisation, a generic ``blockMeshDict`` and the committed write; a solver's builder composes them.
 """
 from __future__ import annotations
 

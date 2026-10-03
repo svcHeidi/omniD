@@ -1,10 +1,5 @@
 """cardiacCore's shared anatomy input and workflow steps.
-
-``ANATOMY`` (mesh, ``0/fiber``, ``0/sheet``, ``uvc_*``) has no native case
-location, so a study always supplies ``--input anatomy=<bundle dir>``.
-``step()`` mirrors native ``Allrun``'s own ``<utility> -case .`` invocation;
-every utility reads ``system/coordinatesConventionDict`` (``CONV``) even
-though native ``Allrun`` never declares it as a dependency.
+``step()`` mirrors native ``Allrun``'s ``<utility> -case .``; ``ANATOMY`` has no native case location, so a study supplies ``--input anatomy=<bundle dir>``.
 """
 
 from __future__ import annotations
@@ -16,8 +11,7 @@ from omnidriver.core.tutorial_records import RecordInput, WorkflowStep
 MESH = tuple(f"constant/polyMesh/{name}" for name in ("boundary", "faces", "neighbour", "owner", "points"))
 
 #: The three convention-named fields every utility reads via
-#: ``coordinatesConventionDict``'s ``uvc_*`` names (native README's "Local
-#: case contract").
+#: ``coordinatesConventionDict``'s ``uvc_*`` names.
 UVC = ("0/uvc_transmural", "0/uvc_intraventricular", "0/uvc_longitudinal")
 
 #: The one input every cardiacCore record needs: no native location, so
@@ -27,8 +21,8 @@ ANATOMY = RecordInput(
     files=tuple((path, path) for path in (*MESH, "0/fiber", "0/sheet", *UVC)),
 )
 
-#: Every utility reads this, even though no native ``Allrun``/factory
-#: ``consumes`` declaration ever names it.
+#: Every utility reads this convention dictionary, though native ``Allrun``
+#: never declares it as a dependency.
 CONV = "system/coordinatesConventionDict"
 
 

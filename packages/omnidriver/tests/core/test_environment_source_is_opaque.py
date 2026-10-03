@@ -1,5 +1,4 @@
-"""Core passes the environment source through, unread and unchanged
-(spec 2026-09-26-core-generality-design.md §2, A1)."""
+"""Core passes the environment source through, unread and unchanged."""
 from __future__ import annotations
 
 import os

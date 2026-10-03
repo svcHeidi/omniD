@@ -1,7 +1,6 @@
 """Render ``clone_and_patch`` mutations into OpenFOAM dictionary bytes.
 
-Every rendering happens against a copy under ``snapshot_root``; the real case
-is only ever read, never written, here.
+Rendering happens against a copy under ``snapshot_root``; the real case is only read.
 """
 from __future__ import annotations
 
@@ -51,13 +50,7 @@ def _document_edits(resolved: Any) -> dict[str, list[Mapping[str, Any]]]:
 
 
 def _target_for_parameter(parameter: ParameterAssignment) -> dict[str, Any]:
-    """One :func:`render_patch_case_files` edit target for ``parameter``.
-
-    A parameter at ``HEX_CELL_COUNTS_KEY_PATH`` is not a key/value edit: it
-    rewrites every ``hex (`` line, so it becomes ``plan_block_mesh_resolution``'s
-    structural target, with the block count the path itself encodes. A
-    ``remove`` carries no ``"value"``.
-    """
+    """One ``render_patch_case_files`` edit target; a parameter at ``HEX_CELL_COUNTS_KEY_PATH`` becomes the structural ``plan_block_mesh_resolution`` target."""
     if parameter.key_path[:1] == HEX_CELL_COUNTS_KEY_PATH:
         return dict(plan_block_mesh_resolution(
             parameter.document, " ".join(str(count) for count in parameter.value),

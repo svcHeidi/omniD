@@ -18,7 +18,6 @@ is tested against the code; verify any other module path before relying on it.
 | Validate RunDocument v3 (any other version is refused) | `RunDocument.from_json(...)` | `omnidriver.core.runtime.run_model` |
 | Check a flat `{slot_key: value}` context against the catalogue's rules, its menus and, given the plugin's `cxx_mapping`, the keys its C++ requires | `rule_diagnostics(entries, context, document=, mapping=)` | `omnidriver.openfoam.case_rules` |
 | Synthesize a fresh `electroProperties` / `physicsProperties` | `build_electro_properties(...)`, `build_physics_properties(...)` | `omnidriver.cardiacfoam.case_builder` |
-| Parse an existing `electroProperties` back to selectors + overrides | `parse_electro_properties(path)` | `omnidriver.cardiacfoam.case_builder` |
 | Build a runnable case from the catalogue when there is no native case | `omnidriver build --plugin cardiacfoam --out <dir>` (see "Build a case from the catalogue") | `omnidriver.cardiacfoam.case_builder` |
 | Locate predicted outputs | `strict_plan(...)`'s `expected_artifacts` field (also in `omnidriver plan --strict` JSON) | `omnidriver.core.strict_planning` |
 | Verify outputs vs predictions | `artifact_reconciliation` in `run --strict`/`step --strict` JSON output | `omnidriver.core.runtime.reconciler` |
@@ -86,119 +85,71 @@ command (`ambiguous_workflow_command`): rename the script.
 
 ## Preferred strict agent loop
 
-Use strict planning before launching. It is the only path that tells an agent
-whether the run is machine-readable, validated, catalog-covered, artifact
-predictable, and workflow-addressable before execution starts.
+Plan strictly before launching: it tells an agent, before anything runs,
+whether the run is validated, catalogue-covered, artifact-predictable and
+workflow-addressable.
 
-For the cardiacFoam plugin, configure
-`omnidriver-runtime.example.yaml` once per
-host and expose it through `OMNIDRIVER_RUNTIME_CONFIG`. The plugin declares
-the `lightweight` and `full` physics backends in its `plugin.yaml`; the local
-file selects one backend, its OpenFOAM bashrc, the full-mode solids4foam root,
-and the generated `cardiacFoam.build.json` manifest. The manifest is not a
-build step you run yourself: `runtime_profile.py` generates or refreshes it
-automatically, on the fly, whenever it is missing or older than the compiled
-`cardiacFoam` solver — by inspecting the solver's actual linked libraries
-(`otool -L`/`ldd`) to infer which backend was compiled, never by trusting an
-asserted flag. omnidriver rejects an unset, invalid, unbuilt, or
-compiled-metadata-mismatched selection instead of letting a shell resolver
-silently select another checkout. This runtime file is separate from study
-values and applies to all cardiacFoam records.
+For cardiacFoam, copy `omnidriver-runtime.example.yaml` once per host and
+point `OMNIDRIVER_RUNTIME_CONFIG` at it. It selects the physics backend the
+plugin's `plugin.yaml` declares (`lightweight` or `full`), the OpenFOAM
+bashrc, the solids4foam root and the `cardiacFoam.build.json` manifest, which
+`runtime_profile.py` regenerates when it is missing or older than the solver
+(from the binary's linked libraries, never an asserted flag). An unset,
+invalid, unbuilt or mismatched selection is refused. It applies to every
+cardiacFoam record and is separate from study values.
 
 ```bash
 omnidriver plan --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry singleCell
 omnidriver run  --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry singleCell
 ```
 
-`--entry` is the name of a tutorial record the selected stack registers;
-`describe` lists them in its `records` key. A record is the only entry kind.
-`plan`, `step` and `run` stage the record's case under
-`<scratch>/records/<name>`; the scratch directory is supplied (`--scratch-dir`
-or `OMNIDRIVER_SCRATCH_DIR`, outside the cases root) or the command is refused
-by name (`ScratchRootNotSupplied`). The native case is never written. A single
-plan, step or run takes the native case as it is, plus `--parallel` and
-`--input`; any study (`document:key` patches, axes, `parallel`) goes in a
-sweep spec (see "Running a study: sweeps").
+`--entry` names a tutorial record the stack registers (`describe` lists them
+under `records`); a record is the only entry kind. `plan`, `step` and `run`
+stage the record's case under `<scratch>/records/<name>` and never write the
+native case. The scratch directory is supplied (`--scratch-dir` or
+`OMNIDRIVER_SCRATCH_DIR`, outside the cases root) or the command is refused
+(`ScratchRootNotSupplied`). A single plan, step or run takes the native case
+as it is, plus `--parallel` and `--input`; a study (`document:key` patches,
+axes, `parallel`) goes in a sweep spec. `describe --entry <record>` takes no
+study values; `sweep-plan` previews one.
 
-`describe --entry <record>` takes no study values; it returns `entry`,
-`records`, `plugin_catalogs`, `record_preview`, `record_surface` and
-`capability_manifest`. A preview of a study is `sweep-plan`.
+`plan --strict` stages the case, writes `run_document.json` under
+`launch.output_dir` and prints JSON: `status` (`ok` or `failed`), `entry`,
+`resolved_entry`, `readiness_score` over the `simulation_audit` stages,
+`workflow_diagnostics`, `artifact_diagnostics`, `environment_diagnostics`,
+`plugin_diagnostics`, `workflow_dag`, `workflow_state`, `expected_artifacts`,
+`launch`, `run_document` and `capability_manifest`. `plugin_diagnostics` is
+the stack's own check (`get_plan_diagnostics`): errors fail the plan, warnings
+and notes never do. For cardiacFOAM and cardiacCore it compares the catalogue
+with the scanned C++ (see "The C++ scan") and reports `unknown_sampled_field`
+(see "Function objects") and `uncatalogued_case_dict_key` warnings; a key the
+scan reads is reported once, as the `uncatalogued` note.
 
-The `plan --strict` command stages the case and persists the plan's
-`run_document.json` under `launch.output_dir`. It prints JSON with:
+`run --strict` executes the steps until completion or failure and writes
+`workflow_state.json` under the output directory and
+`workflow_logs/<step>.attempt<N>.{stdout,stderr}.log`. It resumes from an
+existing `workflow_state.json`; a `failed` state exits non-zero without
+retrying. `step --strict --step <id>` is the explicit manual rerun.
+`--max-total-attempts <N>` caps step executions across the run (unbounded by
+default).
 
-- `status`: `ok` or `failed`
-- `entry`: the record name as requested
-- `resolved_entry`: `{entry_name, entry_path}`
-- `readiness_score`: weighted 0-100 score over the three stages in
-  `simulation_audit`
-- `simulation_audit`: the scored stages `workflow_preparation` (workflow DAG
-  normalization), `artifact_prediction` and `environment_preflight`
-- `workflow_diagnostics`: normalized workflow-DAG validation results (command
-  allowlist, DAG structure)
-- `artifact_diagnostics`: the stack's configuration validation and the
-  command allowlist
-- `environment_diagnostics`: missing executables, unsourced OpenFOAM env, missing MPI launcher
-- `plugin_diagnostics`: the stack's own checks (`get_plan_diagnostics`);
-  errors fail the plan, warnings and notes never do. The OpenFOAM layer
-  answers it for cardiacFOAM and cardiacCore with the catalogue compared with
-  the scanned C++ (see "The C++ scan"), `unknown_sampled_field` warnings (see
-  "Function objects") and `uncatalogued_case_dict_key` warnings for case keys
-  nothing catalogues; a key the scan reads is reported once, as the
-  `uncatalogued` note, never again as a case-key warning
-- `workflow_dag`: normalized executable steps
-- `workflow_state`: initial pending step state
-- `expected_artifacts`: predicted machine-readable artifacts
-- `launch`: exact launch command and output paths
+**A `completed` `workflow_state.json` is replayed silently.** A leftover case
+directory makes `run --strict`/`step --strict` report success and exit 0
+without invoking the solver. A before/after comparison MUST pass `--fresh`,
+which deletes the resolved output directory first. It refuses a directory
+that does not look like omnidriver's own output, the filesystem root, your
+home directory and a path outside `OMNIDRIVER_ALLOWED_RUNS_ROOT` when set, but
+asks nothing: treat what you point it at as disposable.
 
-The `run --strict` command executes normalized steps until completion or
-failure. It writes:
-
-- `workflow_state.json` under the strict-plan output directory
-- `workflow_logs/<step>.attempt<N>.stdout.log`
-- `workflow_logs/<step>.attempt<N>.stderr.log`
-
-If `workflow_state.json` already exists, `run --strict` resumes from that
-state. If the saved state is `failed`, it exits non-zero and does not retry the
-failed step automatically. Use `step --strict` for an explicit manual rerun:
-
-```bash
-omnidriver step --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry singleCell --step solve
-```
-
-**Resuming can silently replay stale results.** If `workflow_state.json`
-already says `completed` — e.g. a leftover case directory from a previous
-session, code change, or experiment — `run --strict`/`step --strict` report
-success and exit 0 without invoking the solver at all; there is no warning.
-Any re-run intended as a genuine before/after comparison after a code or
-config change MUST pass `--fresh`, which deletes the resolved output directory
-before running so the workflow executes exactly as it would on a first run:
-
-```bash
-omnidriver run --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry singleCell --fresh
-```
-
-`--fresh` refuses to delete anything that doesn't look like omnidriver's own
-output (no `workflow_state.json`/`sweep_manifest.json`/`run_document.json`
-found), the filesystem root, your home directory, or a path outside
-`OMNIDRIVER_ALLOWED_RUNS_ROOT` when that's set — but it does not prompt for
-confirmation, so treat any `--output-dir`/case directory you point it at as
-fully disposable and copy out anything you want to keep first.
-
-`--max-total-attempts <N>` caps the total number of step executions across the
-whole run (a retry-storm guard on top of each step's per-step `max_attempts`).
-It defaults to unbounded.
-
-Programmatic planning uses the same contract:
+Programmatic planning is the same contract:
 
 ```python
 from omnidriver.core.plugin_interface import load_plugin_context
 from omnidriver.core.strict_planning import strict_plan
 
-# `driver_context` is keyword-only and has NO default: which adapter's
-# semantics a plan is built under is supplied, never guessed. `cases_root` and
-# the scratch root are supplied too. Any other key in `overrides` is a study
-# value for this one case.
+# driver_context is keyword-only with no default, and cases_root and
+# scratch_root are supplied: which semantics a plan is built under is never
+# guessed. Any other key in `overrides` is a study value for this one case.
 report = strict_plan(
     "singleCell",
     overrides={"cases_root": "<tutorials>"},
@@ -208,7 +159,6 @@ report = strict_plan(
 payload = report.to_json()
 if payload["status"] != "ok":
     raise RuntimeError(payload)
-print(payload["workflow_state"]["current_step_id"])
 ```
 
 ### Running a case folder that is not a record
@@ -582,266 +532,88 @@ configurations, for example probes that were not enabled.
 
 ## Comparing results as quantities
 
-Once two runs' declared artifacts hold quantities a plugin's reader
-understands (`get_artifact_value_reader`), an agent
-compares them with `omnidriver compare` rather than parsing solver output
-itself. Core reads no result file on its own: everything — which runs, which
-artifact of each, where to sample, which reference, which pairs and the
-tolerance — comes from the agent's comparison request
-(`omnidriver/schemas/quantity-comparison.schema.json`), validated against
-that schema before anything is read.
-
-**Orientation, pairing and tolerance are the agent's step, and they are
-stated in the request.** Core does no frame conversion and infers no
-pairing. **A request's
-`points` are written in the *reader's* (the solver's) own frame and unit —
-not the reference's.** The two frames only coincide for openCARP, whose
-reader "orients nothing: openCARP's frame is whatever the mesh says"
-(`opencarp/lat_reader.py`); for a points-taking reader in a different
-frame, points written in the reference's frame instead sample the wrong
-location with zero reported offset. Orienting a reference's coordinates into a
-reader's frame (e.g. cardiacFOAM's probe-versus-slab rotation) is the
-agent's own step, done before writing the request. A request's `pairs` say
-explicitly which `(run, quantity)` on the left compares against which on
-the right, under which reference label. A tolerance (`kind`: `absolute` or
-`relative`, a `value`, and a `rationale`) is declared once, before either
-run is read.
-
-**`points` means one of two things, by the artifact's reader
-(`takes_points`).** For a reader that samples at supplied locations
-(openCARP's), `points` says where to sample, and the reader receives them.
-For a reader that samples where it chooses, `points` instead states the
-agent's *expected* location of each named quantity — the reader never
-receives them; the comparison checks each sample's own reported
-`sampled_at` against that expected point, exactly as for a points-taking
-reader, so a mispaired probe still shows up as `sampled_off_point`. Either
-meaning requires `max_sampling_offset`: it is **pre-registered, with no
-default** — a request that gives `points` without it is refused by name,
-before anything is read.
-
-**`both_not_reached` is also pre-registered, with no default.** Every
-request states `"both_not_reached": "agree"` or `"fail"`: with `agree`, a
-pair whose sentinel (e.g. `-1`) is resolved on both sides does not fail the
-report; with `fail`, it does, exactly like `outside_tolerance`. Either way,
-the report's `status` is never `passed` unless at least one pair is
-`within_tolerance` — a report full of `both_not_reached` pairs is
-`unavailable`, with `status_reason` saying why, never a vacuous `passed`.
-
-**What pre-registration actually enforces, and what stays the agent's own
-discipline.** Nothing stops rerunning `compare` with a
-loosened tolerance at a new report path, and a written report's request
-digest ties it to the request bytes that produced it, not to a time before
-any value was read. What core actually enforces is narrower: the report is
-written once (below), the request's digest is recorded in it, and
-(`omnidriver.core.quantities` reports specifically) `experiments.inspect_sweep_experiment`
-recomputes the overall status from the report's own `metrics` rather than
-trusting a stated `status`. Writing the request *before* looking at
-results, and not writing a second one once the first result is
-unwelcome, is the agent's own discipline — the tool does not, and cannot,
-verify it.
-
-**The report is written once, and read-only.** `run_quantity_comparison(request_path,
-report_path)` (`omnidriver compare --comparison-request ... --report ...`)
-refuses to run at all if `report_path` already exists, and refuses to
-overwrite it if two processes race to write it (it hard-links a temporary
-file into place, then `chmod`s it `0o444`). A changed request is a new
-report, at a new path; the request's own digest is recorded in the report
-so the two stay traceable to each other. **`omnidriver compare` exits 0
-once a report is written, whatever its `status`** — `failed` and
-`unavailable` are still a successful run of the tool; check the report's
-own `status` field, not the process exit code, for the comparison's
-result. Exit 1 means the comparison itself was refused (a malformed
-request, a report path that already exists, …), reported as JSON on
-stdout with an `error` field, and no report file is written at all.
-
-Each pair in the report's `metrics` carries a `status`:
-
-- `within_tolerance` / `outside_tolerance` — both sides evaluated, compared
-  against the pair's bound;
-- `both_not_reached` — the sentinel (e.g. `-1`) on both sides, resolved
-  before any unit conversion, never converted itself (`-1 s` is never
-  `-1000 ms`); counts as agreement or as a failure per the request's
-  `both_not_reached` choice above;
-- `reached_on_one_side` — the sentinel on exactly one side;
-- `sampled_off_point` — a side's reader sampled further from its requested
-  or expected point than the run's stated `max_sampling_offset`;
-- `not_evaluated` — a side could not be read at all (a `reason` says why:
-  the case did not complete, the stack declares no reader for the
-  artifact's format, the artifact is missing, the reader itself raised, or
-  an expected location was given but the reader reported none to check it
-  against).
-
-Each side of a pair also reports its `value`, `unit` (post-conversion) and
-`declared_unit` (the reader's own), its `sampling_rule` (e.g. `node`,
-`point`) and its
-`sampled_at`/`sampled_at_unit` next to the
-`requested_at`/`requested_at_unit` point that was asked for and the
-`sampling_offset`/`sampling_offset_unit` between them — so a wrong pairing
-or a misoriented frame is visible in the report itself, not hidden behind
-an aggregate number, and every one of those location numbers carries its
-own unit (`max_sampling_offset_unit` likewise, on each `runs` entry). The
-report's own `status` (`passed`/`failed`/`unavailable`) is `failed` if any
-pair is outside tolerance, reached on one side only, sampled off point, or
-(with `both_not_reached: "fail"`) both not reached; `unavailable` if any
-pair could not be evaluated, or if no pair reached `within_tolerance` at
-all; `passed` otherwise.
-
-**Relative paths in the request resolve against the request file's own
-directory**, not the current working directory: `"reference": "../reference.json"`
-in `requests/request.json` reads `reference.json` next to `requests/`, and
-likewise for each run's `sweep_output`.
-
-**Attaching the report to an experiment.** `quantities.experiment_comparisons(report_path,
-sweep_output=...)` builds the `ComparisonRequest` tuple for every case in one
-sweep that the report actually names, for `experiments.inspect_sweep_experiment(...,
-comparisons=...)` to associate. Core verifies the association itself
-(`ExperimentCase.comparison.association_status`) from the run's own recorded
-digests — it never trusts the report's say-so about which case it covers.
-
-**Example: openCARP vs openCARP, two resolutions, at the paper's points**
-(`omnidriver check --plugin opencarp`'s C14 runs it against
-`benchmarks/niederer2011.json`). An agent runs the sweep, reads
-each case's own artifact id off its run document, writes points from the
-reference (already in the reader's frame — F3, `docs/solver-learning/opencarp.md`),
-and states the pairing and tolerance itself:
+Once two runs' declared artifacts hold quantities a plugin's reader understands
+(`get_artifact_value_reader`), `omnidriver compare` compares them, so an agent
+never parses solver output itself. Core reads nothing on its own, converts no
+frame and infers no pairing: which runs, which artifact of each, where to
+sample, which reference, which pairs and the tolerance all come from the
+request (`omnidriver/schemas/quantity-comparison.schema.json`), which is
+validated before anything is read.
 
 ```bash
-OMNIDRIVER_OPENCARP_TUTORIALS=/usr/local/lib/opencarp/share/tutorials DYLD_LIBRARY_PATH=/opt/homebrew/lib \
-  python -m omnidriver sweep-run --plugin opencarp --spec sweep.json \
-  --output-dir sweep --scratch-dir scratch
+omnidriver compare --comparison-request request.json --report report.json
 ```
 
-```json
-{
-  "schema_version": 1, "reference": "benchmarks/niederer2011.json",
-  "tolerance": {"kind": "absolute", "value": 5.0, "unit": "ms",
-                "rationale": "declared before either run was read; exploratory, not a benchmark acceptance claim"},
-  "both_not_reached": "agree",
-  "runs": {
-    "dx500": {"plugin": "opencarp", "sweep_output": "sweep", "case_id": "case_0001",
-              "artifact_id": "record.solve.2", "points": {"unit": "mm", "at": {"P1": [0, 0, 0], "...": "..."}},
-              "max_sampling_offset": 0.001},
-    "dx250": {"plugin": "opencarp", "sweep_output": "sweep", "case_id": "case_0002",
-              "artifact_id": "record.solve.2", "points": {"unit": "mm", "at": {"P1": [0, 0, 0], "...": "..."}},
-              "max_sampling_offset": 0.001}
-  },
-  "pairs": [{"reference_label": "P1", "left": {"run": "dx500", "quantity": "P1"},
-             "right": {"run": "dx250", "quantity": "P1"}}]
-}
-```
+What the request must state, before either run is read:
 
-```bash
-python -m omnidriver compare --comparison-request request.json --report report.json
-```
+- **`points`** are written in the reader's frame and unit, never the
+  reference's. Orienting a reference into a reader's frame is the agent's own
+  step. A reader that takes points (`takes_points`, openCARP's) samples there;
+  one that samples where it chooses (cardiacFOAM's) treats them as the
+  expected location, checked against the `sampled_at` it reports. Either way
+  `max_sampling_offset` is required, with no default.
+- **`both_not_reached`** is `"agree"` or `"fail"`, with no default: it decides
+  whether a pair whose sentinel (such as `-1`) resolves on both sides fails
+  the report.
+- **`tolerance`**: `kind` (`absolute` or `relative`), `value`, `rationale`.
+- **`pairs`**: which `(run, quantity)` compares against which, under which
+  reference label.
+- Relative paths resolve against the request file's own directory.
 
-At dx 500 vs dx 250 (dt 50 µs, tend 150 ms), the report's own numbers are the
-proof, not agreement between resolutions: P1 (nearest the stimulus) is
-`within_tolerance` (both around 1.355 ms), while most other points are
-`outside_tolerance` by tens of ms — the coarser mesh's diagonal conduction
-disagrees with the finer one, which is exactly what a spatial-refinement
-comparison is for. The pipeline reporting that correctly, with every value,
-unit and sampled location shown, is the proof; a passing overall `status` is
-not the goal.
+The report is written once, read-only, to a path that must not exist; a
+changed request is a new report, and the request's digest is recorded in it.
+`compare` exits 0 whenever a report is written, whatever its `status`: read
+the report's `status`, not the exit code. Exit 1 means the request was refused
+(malformed, an existing report path, ...), with an `error` in the JSON and no
+file. Core cannot verify that the request was written before the results were
+seen; that is the agent's discipline.
+
+Each pair in `metrics` has a `status`: `within_tolerance`,
+`outside_tolerance`, `both_not_reached` (a sentinel is resolved before any unit
+conversion and never converted), `reached_on_one_side`, `sampled_off_point`, or
+`not_evaluated` (a `reason` says why: the case did not complete, no reader for
+the format, a missing artifact, a reader error, or no reported location to
+check). Each side shows its `value`, `unit`, `sampling_rule`, `sampled_at`,
+`requested_at` and `sampling_offset`, each with its unit, so a wrong pairing or
+frame is visible in the report. The overall `status` is `failed` when any pair
+is outside tolerance, reached on one side, sampled off point or, with
+`both_not_reached: "fail"`, not reached on both; `unavailable` when a pair
+could not be evaluated or no pair is `within_tolerance`; `passed` otherwise.
+
+`quantities.experiment_comparisons(report_path, sweep_output=...)` builds the
+comparison requests for every case of one sweep the report names, for
+`experiments.inspect_sweep_experiment(..., comparisons=...)`. Core verifies the
+association itself (`association_status`) from the run's recorded digests.
 
 ### Comparing two solvers on the Niederer benchmark
 
-The worked example is `benchmarks/niederer2011.json` compared against each
-solver's `niederer2011` record (`omnidriver check`'s C13 and C14). Its evidence is
-`docs/solver-learning/cardiacfoam.md` section X. These are the agent's
-steps. Core does none of them for you.
+`benchmarks/niederer2011.json` against each solver's `niederer2011` record is
+the worked case (`omnidriver check`'s C13 and C14; evidence in
+`docs/solver-learning/cardiacfoam.md` section X). Core does none of these steps.
 
-1. **Orient each solver from its own native files, never from a secondary
-   map.**
-   - **cardiacFOAM** (`NiedererEtAl2011verification`). Three files:
-     - `constant/electroProperties`, `monodomainSolverCoeffs.externalStimulus`:
-       the stimulus box `stimulusLocationMin`/`stimulusLocationMax` is at
-       the corner (0, 0, 7) mm;
-     - `system/blockMeshDict`: the slab spans x 20, y 3, z 7 mm;
-     - the conductivity tensor: fibres run along x.
+1. **Orient each solver from its own native files.** cardiacFOAM's stimulus
+   corner is in `constant/electroProperties`, the slab in `system/blockMeshDict`
+   and the points in `system/Niedererpoints`: against the reference's frame,
+   x = a, y = c, z = 7 mm - b, and probe k is P(k+1). openCARP's frame is the
+   reference frame (`docs/solver-learning/opencarp.md` F3).
+2. **Run both at the same resolution, long enough to reach every point.** The
+   `dx` axis is in metres for cardiacFOAM and µm for openCARP; the native
+   cardiacFOAM `endTime` reaches only P1. Each solver is its own `sweep-run`
+   with its own `--output-dir` and `--scratch-dir`.
+3. **Write each side's points in its solver's frame and unit**: openCARP's in
+   mm, the reference's own; cardiacFOAM's in metres from `Niedererpoints`, as
+   expected locations, with `max_sampling_offset` 0 (its reader requires
+   `interpolationScheme cellPoint`).
+4. **Pair explicitly**, taking each side's `artifact_id` from its run
+   document's `expectedArtifacts` by format (`opencarp_lat_per_node`,
+   `cardiacfoam_activation_probes`).
+5. **Pre-register, then compare, then read the report.** A `failed` status
+   between two discretisations is a finding to report, not a request to
+   retune.
 
-     Against `benchmarks/niederer2011.json`'s `frame` (origin at the
-     stimulus corner; axes a, b and c along the 20, 7 and 3 mm edges), that
-     gives x = a, y = c, z = 7 mm - b. So probe k of
-     `system/Niedererpoints` is P(k+1).
-   - **openCARP** (`02_EP_tissue/03E_study_resolution`). `nversion.par`'s
-     `stim[0].elec` box sits at the origin, and the record's `mesher` slab
-     is 0-20000 x 0-7000 x 0-3000 µm with fibres along x
-     (`docs/solver-learning/opencarp.md` F3). Its frame *is* the reference
-     frame.
-2. **Run both at a setting that reaches every point.**
-   - Use the same dx and time step on both: the `dx` axis is in metres for
-     cardiacFOAM and in µm for openCARP, and `nversion.par:dt` is in µs
-     (G2).
-   - Run long enough for the slowest point to activate on both. At dx
-     0.5 mm that is past about 143 ms (`cardiacfoam.md` Q7, openCARP G4),
-     and the example uses 200 ms. The native cardiacFOAM `endTime` (0.015 s)
-     reaches only P1.
-   - Each solver runs as its own `sweep-run`, with its own `--output-dir`
-     and `--scratch-dir`.
-3. **Write each side's points in its own solver's frame and unit.**
-   - openCARP's reader samples at the points you give it. Give the
-     reference's own coordinates, in mm.
-   - cardiacFOAM's reader chooses its own sampling (`takes_points` false),
-     so its `points` are your *expected* locations. Give them in metres,
-     straight from `system/Niedererpoints`, including the 0.019999 x
-     coordinate.
-   - Each side needs its own `max_sampling_offset`. For openCARP it is a
-     rounding bound, because every P1-P9 is a node at dx 500 µm. For
-     cardiacFOAM it is 0: its reader now requires `interpolationScheme
-     cellPoint` on the case's `system/Niedererpoints` and reports each
-     probe's own location. The worked example below ran before
-     that, with `cell` sampling.
-   - No code converts a frame. The orientation is in your points and in
-     each pair's `note`.
-4. **Pair explicitly.** Each `pairs[]` entry names the openCARP quantity
-   `P<k+1>` and the cardiacFOAM quantity `"<k>"` under that reference label.
-   Its `note` says how you oriented it. Take each side's `artifact_id` from
-   its run document's `expectedArtifacts`, by format:
-   - openCARP: `opencarp_lat_per_node`, `record.solve.2`;
-   - cardiacFOAM: `cardiacfoam_activation_probes`, `record.samplePoints.0`.
-5. **Pre-register, then run `compare`.**
-   - Declare the tolerance, with its rationale, and `both_not_reached`
-     before either run is read. The example chooses `fail`, so a point the
-     duration was too short for fails the report instead of agreeing.
-   - Keep the request. Its digest is in the report.
-6. **Read the report, not the exit code.**
-   - `omnidriver compare` exits 0 whenever it writes a report.
-   - Check the report's `status`, and each pair's two `sampled_at` against
-     its `requested_at`, with their units: µm for openCARP, m for
-     cardiacFOAM.
-   - Attach the report to each sweep with
-     `experiment_comparisons(report_path, sweep_output=<that sweep>)` and
-     check `association_status` is `run_verified` for both.
-   - A `failed` status between two discretisations is a finding to report,
-     not a request to retune. In section X it is `failed`: P1, P3 and P7
-     agree within 5 ms, and the points across the 7 mm edge differ by
-     15-19 ms.
-
-### The Niederer campaign: the whole grid, for a cluster
-
-`benchmarks/niederer2011/campaign/` runs the steps above
-over the paper's full grid, Δx 0.5/0.2/0.1 mm × Δt 0.05/0.01/0.005 ms. Its
-`README.md` is the runbook, and covers:
-- each solver's environment;
-- one `sweep-run` per solver and Δx, serial or on N ranks, with a Slurm
-  example;
-- 21 pre-registered requests, one cross-solver per level and one temporal
-  per solver, Δx and pair of successive Δt, with their digests;
-- `campaign.sh compare`, and a performance protocol.
-
-What it adds to the steps above:
-- **Relative request paths.** Every path in a request is relative, and
-  `runs/` is a link to scratch. So a request's digest is the same on
-  every machine, and nothing is filled in per run.
-- **openCARP runs `nversion.par:mass_lumping 0`.** That is the full mass
-  matrix, which openCARP's own `run.py` uses. The binary's default is
-  lumped, and the `niedererNVersion` record passes nothing, so the runs
-  above were lumped. At Δx 0.5 mm, P8 is 58 ms with the full
-  mass matrix against 126 ms lumped (`docs/solver-learning/opencarp.md`
-  G10).
-- **Per-level studies.** cardiacFOAM uses its native study, not a copy.
-  `level_study.py` keeps one Δx's rows and adds the rank count, and
-  changes nothing the study states.
+`benchmarks/niederer2011/campaign/` runs this over the paper's full grid; its
+`README.md` is the runbook (per-solver environment, Slurm, the pre-registered
+requests and their digests, `campaign.sh compare`).
 
 ## The entries of one dictionary: `omnidriver catalog`
 
@@ -1141,30 +913,6 @@ build_electro_properties(
 ```
 
 Declaring any `bathPotentialDomain.*` override auto-enables the bath block — the bath leaves typical-value default unless overridden.
-
-### Read back an existing dict
-
-```python
-from omnidriver.cardiacfoam.case_builder import parse_electro_properties
-
-parsed = parse_electro_properties("/path/to/case/constant/electroProperties")
-# {"selectors": {"myocardiumSolver": "monodomainSolver", "ionicModel": "TNNP", ...},
-#  "overrides": {"$ELECTRO_MODEL_COEFFS.solutionAlgorithm": "explicit", ...}}
-```
-
-Pass the result directly to `build_electro_properties` to round-trip:
-
-```python
-from omnidriver.cardiacfoam.case_builder import build_electro_properties, parse_electro_properties
-
-parsed = parse_electro_properties(existing_path)
-text = build_electro_properties(parsed["selectors"], overrides=parsed["overrides"] or None)
-```
-
-Only non-default values appear in `overrides`. Entries matching the catalog's
-`typical_value` are omitted. `dynamic_path` entries and keys outside the
-catalog are silently ignored by the parser, but strict planning and the strict
-dict-key scanner are the contract gates for new generated plans.
 
 ### Build a case from the catalogue
 

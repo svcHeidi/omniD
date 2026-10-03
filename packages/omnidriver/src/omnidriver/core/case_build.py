@@ -1,8 +1,6 @@
-"""``omnidriver build``: author a runnable case from a solver's catalogue, for
-when there is no native case to run. It sits beside the record path and is not
-part of it; a native case stays the default. The solver package declares its
-builder under the ``omnidriver.builders`` entry-point group, named like its
-plugin."""
+"""``omnidriver build``: author a runnable case from a solver's catalogue when there is no native case; a native case stays the default.
+
+The solver package declares its builder under the ``omnidriver.builders`` entry-point group, named like its plugin."""
 
 from __future__ import annotations
 

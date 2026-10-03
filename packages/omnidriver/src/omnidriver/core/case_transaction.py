@@ -1,40 +1,6 @@
-"""Commit a reviewed plan's bytes, recoverably.
+"""Commit a reviewed plan's bytes recoverably: atomic per-file replacement, a before-image journal, rollback.
 
-What this guarantees:
-
-* Each file is replaced atomically, so a framework reader never observes a
-  partially written file.
-* A journal records every before-image before any write, so an interrupted
-  transaction is recoverable and a failed one is **rolled back when the
-  rollback itself succeeds**: overwritten files are restored, created files
-  are removed, and directories created only for the transaction are removed.
-  Rollback can itself fail -- see :func:`_rollback`'s own docstring. When it
-  does, the journal is left in place rather than removed, and
-  :func:`commit_case_write` raises naming every path restoration failed for;
-  the case's prior state remains recoverable from that journal, but it is
-  not restored automatically a second time.
-* A case lease serializes this framework's attempts against one case.
-
-What this does NOT guarantee, and must not be documented as guaranteeing:
-
-* Simultaneous atomic visibility of several files to an arbitrary outside
-  process. A process reading the case during a multi-file commit can observe
-  a mixed state. The supported reader model is: this framework's own
-  readers, and outside readers that read after the transaction completes.
-* Control over writers outside the framework. A lease coordinates this
-  framework's attempts. A user editing a dictionary in an editor is not
-  prevented. A symlinked write target is refused outright
-  (:func:`_resolve_target`).
-* Durability beyond what ``fsync`` on the file and its directory provides on
-  the host filesystem. Network filesystems that reorder or defer writes are
-  outside the supported profile -- this module has been exercised only
-  against a local POSIX filesystem, and that is what these guarantees are
-  claims about, not POSIX in general.
-
-This is the only module in the repository that writes a framework-authored
-case input. It moves bytes and digests; it does not know what a ``;`` means.
-If a caller needs dictionary syntax, the caller's format owner renders it
-into a :class:`~omnidriver.core.case_write.RenderedFile` first.
+The only module that writes a framework-authored case input; it moves bytes and digests and knows no dictionary syntax.
 """
 
 from __future__ import annotations
@@ -57,6 +23,11 @@ from .runtime.transaction_mechanics import (
     atomic_write_json as _atomic_write_json,
     fsync_directory as _fsync_directory,
 )
+
+# Not guaranteed: simultaneous visibility of several files to an outside reader
+# (a multi-file commit can be seen half done), control over writers outside the
+# framework, or durability beyond fsync of the file and its directory on a local
+# POSIX filesystem. A symlinked write target is refused outright.
 
 #: The transaction's authoritative head is the journal file. Legal states and
 #: who may advance them:
@@ -171,9 +142,6 @@ def _record_from_completed(payload: Mapping[str, Any]) -> CaseWriteRecord:
         committed=tuple(payload.get("committed", ())),
         evidence=tuple(payload.get("evidence", ())),
         status=payload.get("status", "committed"),
-        # Absent in a record persisted before these fields existed -- the
-        # same "no field means the prior, only behaviour" default every
-        # other `.get(...)` here already uses.
         parameters=tuple(payload.get("parameters", ())),
         expected_effects=tuple(payload.get("expected_effects", ())),
     )
@@ -182,19 +150,7 @@ def _record_from_completed(payload: Mapping[str, Any]) -> CaseWriteRecord:
 def _check_render_exists_before(
     files: tuple[RenderedFile, ...], targets: Mapping[str, Path],
 ) -> None:
-    """Refuse a rendered file whose ``exists_before`` claim contradicts the
-    real filesystem, before any write.
-
-    ``render_case_files``'s own contract (``plugin_interface.py``) says a
-    renderer "reads the case ... to patch an existing file" through
-    ``snapshot_root``, "an isolated copy core provides". A renderer that
-    (wrongly) believed a document was brand new, when the case already held
-    one with other keys in it, would produce a ``RenderedFile`` whose
-    committed bytes hold ONLY the keys that renderer touched, discarding
-    every sibling key the moment ``_write_one`` replaces the file. This is
-    the generic, solver-agnostic guard: it does not know what a document
-    means, only whether the claim about its prior existence matches disk.
-    """
+    """Refuse an ``exists_before`` claim the disk contradicts: a renderer that thought a document new would drop its sibling keys."""
     for rendered in files:
         target = targets[rendered.path]
         actually_exists = target.is_file()
@@ -216,13 +172,7 @@ def _check_render_exists_before(
 
 
 def _resolve_target(case_root: Path, rendered_path: str) -> Path:
-    """The path to write, after refusing a symlink escape.
-
-    ``RenderedFile`` already refused an absolute or ``..``-bearing spelling at
-    construction. This checks the same thing against the resolved real path,
-    because a symlink can move a legal spelling outside the case between
-    planning and commit.
-    """
+    """The path to write; a symlink can move a legal spelling outside the case between planning and commit."""
     root = Path(case_root).resolve()
     candidate = Path(case_root) / rendered_path
     if candidate.is_symlink():
@@ -246,13 +196,6 @@ def _resolve_target(case_root: Path, rendered_path: str) -> Path:
 
 
 def _before_image(rendered: RenderedFile, target: Path) -> dict[str, Any]:
-    """What ``target`` looked like before this transaction touches it.
-
-    Any ``OSError`` reading the before-image is reported as a
-    ``CaseTransactionError`` naming the path and the operation, with the
-    original preserved as ``__cause__`` -- the same guard
-    ``_check_preconditions``'s own read needs, and for the same reason.
-    """
     if target.exists() and not target.is_dir():
         try:
             content = target.read_bytes()
@@ -284,14 +227,7 @@ def _write_one(target: Path, rendered: RenderedFile) -> dict[str, Any]:
 
 
 def _restore_one(target: Path, before_image: Mapping[str, Any]) -> None:
-    """Put one file back the way the journal recorded it.
-
-    Idempotent by construction: restoring a file that was never actually
-    touched (because the transaction was interrupted before reaching it) just
-    rewrites the same bytes, or unlinks a path that was never created. That
-    is what lets recovery replay the full before-image list unconditionally
-    rather than needing to know exactly how far a partial commit got.
-    """
+    """Idempotent, so recovery replays every before-image without knowing how far the commit got."""
     if before_image.get("existed_before"):
         content = base64.b64decode(before_image["content_base64"])
         _atomic_write_bytes(target, content, mode=before_image.get("mode"))
@@ -303,12 +239,7 @@ def _restore_one(target: Path, before_image: Mapping[str, Any]) -> None:
 
 
 def _all_missing_ancestors(case_root: Path, targets: list) -> list:
-    """Directories that exist nowhere yet, deepest first.
-
-    Recorded once, before any write, so rollback can remove exactly the
-    directories this transaction created -- and none that predate it, even
-    if they end up empty for an unrelated reason.
-    """
+    """Directories that do not exist yet, deepest first, so rollback removes only those this transaction creates."""
     root = Path(case_root)
     seen: set = set()
     for target in targets:
@@ -331,14 +262,7 @@ def _remove_created_directories(case_root: Path, journal: Mapping[str, Any]) -> 
 
 
 def _rollback(case_root: Path, journal: Mapping[str, Any]) -> None:
-    """Restore every before-image the journal recorded.
-
-    Attempts every restore rather than stopping at the first failure, so a
-    caller sees the complete set of paths a failed rollback left in an
-    unknown state. If any restore fails, the journal is left in place --
-    recorded, not silently dropped -- and this raises rather than reporting a
-    clean rollback that did not happen.
-    """
+    """Restore every before-image; on any failure keep the journal and raise naming every path that failed."""
     root = Path(case_root)
     failures: list[tuple[str, Exception]] = []
     for image in journal.get("before_images", ()):
@@ -364,22 +288,11 @@ def _rollback(case_root: Path, journal: Mapping[str, Any]) -> None:
 
 
 def _check_stack_freshness(plan: CaseWritePlan, driver_context: Any) -> None:
-    """Refuse a plan bound to a stack that is no longer the composed one.
-
-    Best-effort: applies only when ``driver_context`` actually carries a
-    :class:`~omnidriver.core.provider_identity.StackIdentity` (its public
-    ``identity`` field -- never ``driver_context.providers`` directly, which
-    no production module may touch). A bare stand-in, as this module's own
-    unit tests deliberately pass, has no such attribute and this check is a
-    no-op for it; those tests are exercising journal and rollback mechanics,
-    not stack binding.
-
-    Known limit: most contract members contribute a placeholder digest to
-    ``capability_digest``, so an edited implementation in an editable
-    install with no version bump is invisible to this check. It catches a
-    changed provider set, version, profile, dictionary vocabulary or
-    manifest -- not an edited renderer's content.
-    """
+    """Refuse a plan bound to a stack that is no longer the composed one."""
+    # Applies only when the context carries a StackIdentity. Most contract
+    # members contribute a placeholder digest, so this catches a changed
+    # provider set, version, profile, vocabulary or manifest, not an edited
+    # renderer in an editable install.
     identity = getattr(driver_context, "identity", None)
     if identity is None:
         return
@@ -407,23 +320,13 @@ def commit_case_write(
 ) -> CaseWriteRecord:
     """Commit a reviewed plan, or replay a completed one by id.
 
-    Ordering: replay check -> stack-freshness check -> lease ->
-    unrecovered-journal check -> path safety -> journal ->
-    writes -> (rollback on failure | completion record).
+    A failed commit is rolled back; if the rollback itself fails the journal
+    is kept and the error names every path left unrestored.
 
-    The lease this function acquires is host-local and **not reentrant**
-    (see ``runtime.attempt_lease``'s own docstring) -- a second
-    ``acquire_case_lease`` from the same thread finds its own record already
-    on disk and refuses it as a conflicting owner. A caller that already
-    holds the case lease for the whole operation it is part of (e.g.
-    `cli.py`'s `--apply` dispatch, which holds it for the whole `step`
-    execution) passes ``case_lease_held=True`` to say so; this is verified,
-    not merely trusted, against `case_lease_is_held` -- a caller that lies
-    about holding it is a bug worth failing loudly for, not silently running
-    unprotected -- and this call then neither acquires nor releases a second
-    lease, relying on the caller's own for the whole duration. Every other
-    caller omits it, defaults to ``False``, and acquires its own lease as
-    usual.
+    The case lease is host-local and not reentrant, so a caller that already
+    holds it (``--apply`` holds it for the whole step) passes
+    ``case_lease_held=True``; the claim is verified, and this call then
+    neither acquires nor releases a lease.
     """
     case_root = Path(plan.request.case_root)
 
@@ -456,8 +359,7 @@ def commit_case_write(
             lease_context = acquire_case_lease(case_root)
             lease_context.__enter__()
         except AttemptLeaseError as exc:
-            # Report the cause `exc` actually gives (e.g. `case_root` not
-            # existing at all), not an assumed "write lease is already held".
+            # Report the cause the lease gives (a missing case root, say), not an assumed held lease.
             raise CaseTransactionError(
                 f"cannot acquire the write lease for case {case_root}: {exc}"
             ) from exc
@@ -515,10 +417,6 @@ def commit_case_write(
             committed=tuple(committed),
             evidence=(),
             status="committed",
-            # `expected_effects` is copied from the plan unchanged, alongside
-            # the same validated `ParameterAssignment`s the channel wrote
-            # from (`plan.request.parameters`, not a second description of
-            # them).
             parameters=tuple(
                 parameter.to_json() for parameter in plan.request.parameters
             ),
@@ -544,8 +442,6 @@ def recover_case_transaction(case_root: Path) -> CaseWriteRecord | None:
         lease_context = acquire_case_lease(case_root)
         lease_context.__enter__()
     except AttemptLeaseError as exc:
-        # Same as commit_case_write's: report the cause acquire_case_lease
-        # actually gives.
         raise CaseTransactionError(
             f"cannot acquire the write lease to recover case {case_root}: {exc}"
         ) from exc

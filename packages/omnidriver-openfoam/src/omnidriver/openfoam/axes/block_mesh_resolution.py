@@ -1,7 +1,6 @@
-"""The OpenFOAM package's one generic axis: a PARAMETERISED BUILDER (not a
-fixed-name axis) that a tutorial record instantiates with its own
-``documents``/``resolution`` to patch every named ``blockMeshDict``'s
-``hex (`` cell counts.
+"""The generic block-mesh resolution axis.
+
+A record instantiates it with its own ``documents``/``resolution`` to patch each ``blockMeshDict``'s ``hex (`` cell counts.
 """
 
 from __future__ import annotations
@@ -92,11 +91,7 @@ def _validate_cell_counts(
 def _current_cell_counts(
     *, axis_name: str, document: str, staged_case_root: Path, expected_blocks: int,
 ) -> tuple[int, int, int]:
-    """This document's current hex-block cell counts.
-
-    ``read_hex_cell_counts`` refuses by name when the real block count
-    disagrees with ``expected_blocks`` or the blocks disagree with each other.
-    """
+    """The document's current hex-block cell counts; ``read_hex_cell_counts`` refuses a count mismatch by name."""
     document_path = Path(staged_case_root) / document
     if not document_path.is_file():
         raise ValueError(

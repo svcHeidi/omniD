@@ -1,8 +1,5 @@
-"""Post-run artifact reconciliation: matches predicted ``DataArtifact``
-paths -- which may contain placeholders and glob wildcards, and may name
-either a file or a directory -- against what exists on disk under
-``case_root``.
-"""
+"""Post-run artifact reconciliation: match predicted ``DataArtifact`` paths (placeholders, globs, files or
+directories) against what exists under ``case_root``."""
 from __future__ import annotations
 
 import hashlib

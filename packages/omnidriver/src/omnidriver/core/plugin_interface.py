@@ -1,11 +1,6 @@
 """The solver plugin contract.
 
-A provider must have only its identity. Every other member of
-:class:`SolverPlugin` is optional: ``provider_stack.MEMBERS`` says how a
-stack composes it and what the stack answers when no provider implements it,
-refusing by name where an operation needs it. See ``AGENT_GUIDE.md``,
-"Adding a New Solver".
-"""
+A provider must have only its identity; every other member of :class:`SolverPlugin` is optional (``provider_stack.MEMBERS`` gives each its composition and its absent answer). See ``AGENT_GUIDE.md``."""
 
 # Annotations below name types imported only under TYPE_CHECKING; without
 # lazy annotations, importing this module raises NameError before Python 3.14.

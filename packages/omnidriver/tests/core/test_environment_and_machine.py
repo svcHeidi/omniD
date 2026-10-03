@@ -1,4 +1,4 @@
-"""The environment and machine connections (2026-09-28, roadmap item 5)."""
+"""The environment and machine connections."""
 from __future__ import annotations
 
 import json

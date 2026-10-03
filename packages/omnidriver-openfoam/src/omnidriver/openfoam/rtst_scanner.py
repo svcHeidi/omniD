@@ -1,7 +1,6 @@
-"""OpenFOAM runtime-selection tables: every ``addToRunTimeSelectionTable``
-registration, under the name it registers (``OverrideTypeName`` when the
-class declares one), and the comparison of a catalogue's enum menus with
-them.
+"""OpenFOAM runtime-selection tables: every ``addToRunTimeSelectionTable`` registration, under its registered name.
+
+The name is ``OverrideTypeName`` when the class declares one; a catalogue's enum menus are compared with the registrations.
 """
 
 from __future__ import annotations

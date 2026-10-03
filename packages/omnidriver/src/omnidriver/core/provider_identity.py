@@ -1,8 +1,6 @@
 """Identity over a composed stack of providers, not a single plugin.
 
-Two different stacks must never produce the same provenance record; the
-digest here is what makes a run reproducible.
-"""
+Two different stacks must never produce the same provenance record; the digest here is what makes a run reproducible."""
 
 from __future__ import annotations
 
@@ -32,7 +30,7 @@ COMPOSITION_RULE_VERSION = "3"
 
 @dataclass(frozen=True)
 class ProviderIdentity:
-    """What `PluginIdentity` was, now one per provider."""
+    """One provider's identity within a stack."""
 
     id: str
     version: str

@@ -25,8 +25,7 @@ _UTILITIES_ROOT = Path(__file__).parent / "utilities"
 
 @lru_cache(maxsize=1)
 def _utility_manifests() -> Any:
-    """Parsed once: loading walks the sidecar tree. Read-only so the shared
-    cache cannot be corrupted through a returned mapping."""
+    """Parsed once and read-only, so the shared cache cannot be mutated through a returned mapping."""
     return MappingProxyType(load_utility_manifests(_UTILITIES_ROOT))
 
 

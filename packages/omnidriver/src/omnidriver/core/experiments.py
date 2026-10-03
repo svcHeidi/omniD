@@ -1,18 +1,6 @@
-"""Public, solver-neutral read model for completed simulation experiments.
+"""Public, solver-neutral read model for completed experiments: a sweep's manifest, RunDocuments and workflow states.
 
-``sweep_run`` remains the only sweep executor.  This module makes its durable
-manifest, RunDocuments, and workflow states useful after execution without
-asking an agent to reconstruct a simulation from directories and log files.
-
-The boundary is deliberate:
-
-* Core reports what was requested, planned, and executed.
-* A plugin or solver-owned checker supplies scientific comparison evidence.
-* Core records a checker's stated status and its declared metrics, but never
-  decides whether a numerical difference is scientifically acceptable.
-
-All comparison inputs are explicit.  Reading an experiment never discovers or
-executes a convenient ``regressionTest.sh`` beside a case.
+Core records a checker's stated status and metrics but never judges whether a difference is scientifically acceptable; every comparison input is explicit.
 """
 
 from __future__ import annotations
@@ -346,10 +334,8 @@ def _read_comparison(
     status = stated_status if isinstance(stated_status, str) and stated_status in _COMPARISON_STATUSES else "unknown"
     reason: str | None = None
     if request.checker_id == _QUANTITIES_CHECKER_ID:
-        # Never trust a checker omnidriver.quantities report's stated status
-        # verbatim -- it is written read-only, but nothing stops an edit
-        # after the fact, so recompute it from the report's own metrics with
-        # the function that wrote it in the first place.
+        # The report is written read-only but can still be edited, so its
+        # stated status is recomputed from its own metrics.
         status, reason = _quantities_status(report, stated_status=status)
     metric_values, metric_truncated = _bounded_metrics(report.get("metrics"), limits)
     details, detail_truncated = _bounded_details(report, limits)
@@ -370,13 +356,7 @@ def _read_comparison(
 
 
 def _quantities_status(report: Mapping[str, Any], *, stated_status: str) -> tuple[str, str | None]:
-    """Recompute a checker ``omnidriver.quantities`` report's overall status
-    from its own ``metrics`` and ``both_not_reached``, using the same
-    function that wrote it (``core.quantities.comparison.overall_status``,
-    imported lazily here to avoid the cycle noted at ``_QUANTITIES_CHECKER_ID``).
-    A report that cannot be recomputed at all, or recomputes to something
-    other than what it states, is a named failure -- never a silent
-    pass-through of whatever ``status`` says."""
+    """Recompute the report's status with ``overall_status``; a report that cannot be recomputed, or recomputes differently, is a named failure."""
     from .quantities.comparison import overall_status
 
     metrics = report.get("metrics")

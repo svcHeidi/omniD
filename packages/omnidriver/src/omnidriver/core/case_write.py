@@ -1,18 +1,6 @@
-"""What a framework-authored case mutation is, before anything is written.
-
-Core owns this vocabulary. A solver adapter fills it with meaning; a format
-owner turns it into bytes; core commits those bytes. This module is types,
-canonical serialization, and the two calls that ask the stack to resolve and
-render (:func:`resolve_mutation`, :func:`render_mutation`); it knows no
-dictionary syntax.
-
-Two creation modes, kept distinct because their prerequisites differ:
-
-``clone_and_patch``   an existing case is edited in place or into a clone.
-``synthesize``        a case is built from a catalog. Requires explicit source
-                      artifacts; a case built from nothing is not a supported
-                      mode.
-"""
+"""What a framework-authored case mutation is, before anything is written: types, canonical serialization,
+and the two calls (:func:`resolve_mutation`, :func:`render_mutation`) that ask the stack to resolve and render.
+Core knows no dictionary syntax; a format owner turns a mutation into bytes and core commits them."""
 
 from __future__ import annotations
 
@@ -29,26 +17,24 @@ from .contracts.dictionary import VALUE_KINDS, validate_value_shape
 
 #: Bumped whenever a field is added, removed or reinterpreted. A plan
 #: serialized under one version is not readable under another: a reader that
-#: silently accepts an older payload is a reader that fills a missing field
-#: with a default nobody reviewed.
+#: accepted an older payload would fill a missing field with a default nobody
+#: reviewed.
 PLAN_SCHEMA_VERSION = 2
 
+#: ``clone_and_patch`` edits an existing case in place or into a clone;
+#: ``synthesize`` builds a case from a catalog and requires explicit source
+#: artifacts.
 MUTATION_MODES = frozenset({"clone_and_patch", "synthesize"})
 
-#: What a `ParameterAssignment` asserts about the document's *final* state,
-#: not merely the action that gets it there. ``set`` is the default: the key
-#: already exists, and must hold this value. ``ensure`` is the same
-#: assertion plus "...and if the key is absent, create it" -- the typed
-#: counterpart of `mutators.update_foam_entry`'s own `add_if_missing`.
-#: ``remove`` asserts the key does not exist and carries no value at all
-#: (enforced in `ParameterAssignment.__post_init__`). One vocabulary, not three types: a caller that wants to upsert
-#: or delete still builds a `ParameterAssignment`, just with a different
-#: `operation`.
+#: What a `ParameterAssignment` asserts about the document's *final* state.
+#: ``set``: the key exists and holds this value. ``ensure``: the same, creating
+#: the key when absent. ``remove``: the key does not exist, and no value is
+#: carried.
 PARAMETER_OPERATIONS = frozenset({"set", "ensure", "remove"})
 
 #: Where a value came from. These never convert into one another: a tutorial
 #: example is not a solver default, and a plausible number is not a validated
-#: recommendation. See the plan's "five value sources" table.
+#: recommendation.
 VALUE_SOURCES = frozenset({
     "case", "effective", "call_site_default", "template", "recommendation",
 })
@@ -63,29 +49,13 @@ def _check_case_relative(label: str, value: str) -> PurePosixPath:
     return path
 
 
-#: The only JSON-representable scalar types. Deliberately excludes ``bytes``:
-#: JSON has no byte-string type, and ``RenderedFile.content`` already carries
-#: real bytes outside this payload system (see its docstring on why the
-#: "referenced by digest" rule does not apply there).
+#: The only JSON-representable scalar types. Excludes ``bytes``, which JSON
+#: cannot carry; ``RenderedFile.content`` holds real bytes outside this system.
 _JSON_SCALAR_TYPES = (type(None), bool, int, float, str)
 
 
 def _freeze(value: Any) -> Any:
-    """Deep-freeze a payload so a "frozen" record has no mutable interior.
-
-    ``@dataclass(frozen=True)`` prevents rebinding a field, not mutating the
-    object a field points at, so a dict held by a "frozen" record could
-    otherwise still change after review.
-
-    Also enforces "a plan payload must be JSON-shaped and immutable": a
-    mapping key must be a ``str`` (an int key silently becomes a string on a
-    real JSON round trip, changing the plan digest without the stability
-    check noticing), and a non-finite float is refused here too, at
-    construction rather than only at digest time (the same
-    ``allow_nan=False`` reasoning ``canonical_json`` applies). Anything else
-    -- not a mapping, list/tuple, or JSON scalar -- is refused outright
-    rather than passed through unchanged.
-    """
+    """Deep-freeze a JSON-shaped payload; refuse a non-string key (it would change on a JSON round trip), a non-finite float or any other type."""
     if isinstance(value, Mapping):
         for key in value:
             if not isinstance(key, str):
@@ -123,27 +93,15 @@ class ParameterAssignment:
     source: str
     operation: str = "set"
     #: Whether the adapter that resolved this key checked it against a real
-    #: catalog. A solver-owned key (checked against that solver's own
-    #: dictionary catalog) is ``True``; an environment-owned key with no
-    #: full catalog yet is written anyway, flagged ``False``. Core never
-    #: decides this itself; whichever adapter resolves the key
-    #: (``core.tutorial_records.resolve_case_patches``'s
-    #: ``direct_key_validator``, the stack's ``get_record_key_validator``) does.
-    #:
-    #: Tri-state, not a default-True boolean: a validation opinion that was
-    #: never formed is not the same as one that passed, so ``None`` means
-    #: "not stated" -- neither validated nor known-unvalidated -- and is the
-    #: default; ``bool`` means an adapter actually answered. ``from_json`` of
-    #: a payload written before this field existed deserializes as ``None``,
-    #: never ``True``.
+    #: catalog; core never decides this itself (``resolve_case_patches``'s
+    #: ``direct_key_validator`` and the stack's ``get_record_key_validator``
+    #: do). Tri-state: ``None`` means no opinion was formed, which is not the
+    #: same as one that passed.
     validated: bool | None = None
 
     def __post_init__(self) -> None:
-        # Coerced to a tuple before anything below reads it: a list
-        # `key_path` could otherwise be appended to after
-        # `CaseMutationRequest.__post_init__`'s duplicate-slot check already
-        # ran against the pre-append `slot()`, silently invalidating a check
-        # that had already passed.
+        # A list key_path could be appended to after the duplicate-slot check
+        # in `CaseMutationRequest` ran against the earlier `slot()`.
         object.__setattr__(self, "key_path", tuple(self.key_path))
         _check_case_relative("a parameter's document", self.document)
         if not self.key_path:
@@ -159,23 +117,16 @@ class ParameterAssignment:
                 f"{self.operation!r}; known operations are "
                 f"{sorted(PARAMETER_OPERATIONS)}"
             )
-        # `validated` is tri-state (`bool | None`), not merely truthy: a
-        # caller passing the string "false" must be refused rather than
-        # silently accepted as a truthy string. `bool` is checked directly
-        # rather than excluding `int` (also true via `isinstance(True,
-        # int)`), since there is no legitimate integer input to this field.
+        # Tri-state, not truthy: the string "false" must be refused.
         if self.validated is not None and not isinstance(self.validated, bool):
             raise TypeError(
                 f"parameter {self.qualified_id!r} declares validated="
                 f"{self.validated!r}; must be a bool or None (not stated), "
                 f"got {type(self.validated).__name__}"
             )
-        # `remove` asserts absence, a different claim from "has this value"
-        # -- carrying a value alongside it would be two assertions on one
-        # field. `set`/`ensure` still require a value; refusing
-        # `None` here first gives a direct answer instead of a
-        # shape-mismatch message about `None` not fitting
-        # `"scalar"`/`"boolean"`/etc.
+        # `remove` asserts absence, so a value beside it would be two claims
+        # on one field; refusing a missing value for `set`/`ensure` here gives
+        # a direct answer rather than a shape mismatch about `None`.
         if self.operation == "remove":
             if self.value is not None:
                 raise ValueError(
@@ -190,12 +141,8 @@ class ParameterAssignment:
                 f"{self.operation!r}, which requires a value; only 'remove' "
                 f"may omit one"
             )
-        # A parameter value is typed data, checked against its declared
-        # shape here -- never rendered text checked nowhere else. `value_kind`
-        # is always checked, even for `remove` (it still names the shape of
-        # the removed key, for audit purposes); only the "does the value fit
-        # that shape" half is skipped for `remove`, since there is no value
-        # to check.
+        # `value_kind` is checked even for `remove` (it names the removed
+        # key's shape for audit); only the value-fits-shape check is skipped.
         if self.value_kind not in VALUE_KINDS:
             raise ValueError(
                 f"parameter {self.qualified_id!r} declares value_kind "
@@ -260,22 +207,11 @@ def _json_value(value: Any) -> Any:
 class CaseMutationRequest:
     """An explicit request to author case inputs, in a declared mode.
 
-    Each mode's declared prerequisite is enforced, not merely documented:
     ``clone_and_patch`` assigns at least one parameter or names at least one
-    source artifact, and ``synthesize`` names at least one non-empty source
-    artifact. The ``clone_and_patch`` rule mirrors ``synthesize``'s own "you
-    must declare what you did" shape rather than requiring a parameter
-    outright, because a whole-file swap that copies documents in verbatim
-    (zero `ParameterAssignment`s, one or more source artifacts) is still a
-    genuine mutation, not a no-op.
-
-    ``source_artifacts`` are opaque identifiers -- a path, a digest, a URI --
-    naming something a mutation consumed, and are deliberately NOT
-    case-relative-checked the way ``ParameterAssignment.document`` and
-    ``RenderedFile.path`` are: a mesh or template a mutation reads from may
-    legitimately live outside the case (an externally supplied source),
-    where a document this framework writes into never should. Only
-    non-empty, non-whitespace-only is enforced here.
+    source artifact (a verbatim whole-file swap assigns none); ``synthesize``
+    names at least one. ``source_artifacts`` are opaque identifiers (a path, a
+    digest, a URI), not checked as case-relative: a source may live outside
+    the case.
     """
 
     mode: str
@@ -287,19 +223,11 @@ class CaseMutationRequest:
     requested_by: str
 
     def __post_init__(self) -> None:
-        # Coerced before any check reads them: a list
-        # `parameters`/`source_artifacts` could otherwise be mutated in
-        # place after the duplicate-slot check below already ran against it,
-        # silently invalidating a check that had already passed. See the
-        # analogous comment on ParameterAssignment.
+        # A list could be mutated after the duplicate-slot check below ran.
         object.__setattr__(self, "source_artifacts", tuple(self.source_artifacts))
         object.__setattr__(self, "parameters", tuple(self.parameters))
-        # A relative `case_root` resolves against whatever directory happens
-        # to be current *at commit time*, not at plan time -- two different
-        # processes (or the same process after a `chdir`) could commit one
-        # plan into two different directories with no error at all. A
-        # channel whose entire purpose is auditability must refuse that at
-        # construction, not discover it later inside `commit_case_write`.
+        # A relative root resolves against the directory current at commit
+        # time, so one plan could be committed into two places.
         if not Path(self.case_root).is_absolute():
             raise ValueError(
                 f"case_root must be absolute, not {str(self.case_root)!r}; a "
@@ -326,10 +254,6 @@ class CaseMutationRequest:
                 "case built from no declared source is not a supported creation "
                 "mode"
             )
-        # Mirrors `synthesize`'s own "you must declare what you did"
-        # invariant -- see the class docstring: a clone_and_patch request
-        # satisfies it with a parameter OR a named source artifact, not
-        # neither.
         if self.mode == "clone_and_patch" and not self.parameters and not self.source_artifacts:
             raise ValueError(
                 "a clone_and_patch request must assign at least one "
@@ -394,13 +318,9 @@ def _digest_bytes(content: bytes) -> str:
 class RenderedFile:
     """One file's complete proposed content, as its format owner rendered it.
 
-    ``content`` is embedded in the plan whole, base64-encoded, not merely
-    digested. The global "large assets are referenced by digest, never
-    embedded" rule is about meshes and VTU output -- this channel's actual
-    subject, a rendered dictionary or input file, is typically kilobytes, and
-    a reviewer (or a later recovery reader) needs the real bytes, not a hash
-    of bytes it does not have. ``content_digest`` stays as a derived,
-    quick-to-compare integrity check over exactly those bytes.
+    ``content`` is embedded in the plan whole, base64-encoded: a rendered
+    dictionary is small, and a reviewer or recovery reader needs the bytes,
+    not a hash of them. ``content_digest`` is the derived integrity check.
     """
 
     path: str
@@ -449,10 +369,6 @@ class RenderedFile:
 
     @classmethod
     def from_json(cls, payload: Mapping[str, Any]) -> "RenderedFile":
-        # Compares the decoded bytes' digest against the stored one rather
-        # than silently discarding a mismatch -- a tampered or corrupted
-        # content_digest must be caught, which is what "an integrity check"
-        # promises.
         content = base64.b64decode(payload["content_base64"])
         stored_digest = payload["content_digest"]
         computed_digest = _digest_bytes(content)
@@ -478,17 +394,11 @@ class RenderedFile:
 class CaseWritePlan:
     """Everything that will happen, reviewable before any of it does.
 
-    The plan holds no execution state. Before-*images* live in the journal
-    (:mod:`omnidriver.core.case_transaction`); before-*digests* live here,
+    The plan holds no execution state. Before-images live in the journal
+    (:mod:`omnidriver.core.case_transaction`); before-digests live here,
     because a conflict check is part of what a reviewer approves.
-
-    ``expected_effects`` is threaded straight from the ``ResolvedMutation``
-    every producer already builds before constructing this plan.
-    ``commit_case_write`` copies it onto the returned ``CaseWriteRecord``,
-    which is how ``describe`` reads what a real ``plan_case`` invocation, run
-    against a disposable staged clone, actually proposes to change --
-    without core inventing a second, hand-maintained description of the same
-    facts.
+    ``expected_effects`` comes from the ``ResolvedMutation`` and is copied
+    onto the committed ``CaseWriteRecord``.
     """
 
     request: CaseMutationRequest
@@ -500,16 +410,12 @@ class CaseWritePlan:
     expected_effects: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        # Coerced before the duplicate-path check below reads them: a list
-        # `files` could otherwise be `.append()`ed onto after this check
-        # already approved it, silently changing `plan_digest` after review.
-        # See the analogous comment on ParameterAssignment.
+        # A list could be appended to after the duplicate-path check below,
+        # changing `plan_digest` after review.
         object.__setattr__(self, "files", tuple(self.files))
         object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
-        # Checked here too, not only in `from_json`, so a plan constructed
-        # directly (not read back from a persisted payload) can't skirt
-        # either check: a wrong schema_version, or zero files -- nothing to
-        # write, so committing it would be a no-op dressed as a mutation.
+        # Checked here, not only in `from_json`, so a directly constructed
+        # plan cannot skirt either check.
         if self.schema_version != PLAN_SCHEMA_VERSION:
             raise ValueError(
                 f"plan schema version {self.schema_version!r} is not "
@@ -545,28 +451,13 @@ class CaseWritePlan:
         return hashlib.sha256(canonical_json(self._digest_payload()).encode()).hexdigest()
 
     def _digest_payload(self) -> dict[str, Any]:
-        """``to_json()`` with order-irrelevant lists canonically sorted.
-
-        ``files`` and ``request.parameters`` cannot contain two entries at
-        the same path/slot (enforced above and in
-        ``CaseMutationRequest.__post_init__``), so their as-written order is
-        not semantically meaningful -- but hashing them as-given would make
-        two plans differing only in list order digest differently, breaking
-        replay/staleness comparison with a spurious mismatch. Sorted here,
-        not in ``to_json()``, so a reviewer still sees the plan in the order
-        it was authored; only the digest is canonicalized.
-        """
+        """``to_json()`` with order-irrelevant lists sorted, so only the digest is canonical and a reviewer sees authoring order."""
         payload = self.to_json()
         payload["files"] = sorted(payload["files"], key=lambda f: f["path"])
         payload["request"]["parameters"] = sorted(
             payload["request"]["parameters"],
             key=lambda p: f"{p['document']}::{'.'.join(p['expanded_key_path'])}",
         )
-        # Same reasoning as the two sorts above: `expected_effects` is
-        # positionally aligned with `targets`/`parameters` at construction
-        # time, not a keyed structure -- two plans differing only in that
-        # construction order would otherwise digest differently for no
-        # semantic reason.
         payload["expected_effects"] = sorted(payload["expected_effects"])
         return payload
 
@@ -597,15 +488,9 @@ class CaseWritePlan:
 class CaseWriteRecord:
     """What a committed transaction actually did. Not part of the plan.
 
-    ``parameters`` and ``expected_effects`` are copied from the committed
-    ``CaseWritePlan`` by ``commit_case_write`` -- ``parameters`` is
-    ``[p.to_json() for p in plan.request.parameters]`` (the same validated
-    ``ParameterAssignment``s the channel wrote from, not a second
-    description of them), ``expected_effects`` is ``plan.expected_effects``
-    unchanged. ``describe`` reads both off a real ``plan_case`` invocation
-    run against a disposable staged case clone (see ``core.introspection``)
-    to answer "what will this change" without core inventing a parallel,
-    adapter-specific mapping.
+    ``parameters`` and ``expected_effects`` are copied from the committed plan
+    by ``commit_case_write``; ``describe`` reads them off a staged clone to say
+    what a step will change.
     """
 
     transaction_id: str
@@ -618,10 +503,7 @@ class CaseWriteRecord:
     expected_effects: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        # `rec.committed[0]["a"] = 999` would otherwise work: these are
-        # plain dicts inside a tuple whose own outer immutability says
-        # nothing about its elements. Deep-freeze each entry the same way
-        # `ResolvedMutation.targets` is.
+        # The entries are plain dicts inside a tuple, so freeze them.
         object.__setattr__(self, "committed", tuple(_freeze(entry) for entry in self.committed))
         object.__setattr__(self, "evidence", tuple(_freeze(entry) for entry in self.evidence))
         object.__setattr__(self, "parameters", tuple(_freeze(entry) for entry in self.parameters))
@@ -635,13 +517,8 @@ class CaseWriteRecord:
             "committed": [dict(entry) for entry in self.committed],
             "evidence": [dict(entry) for entry in self.evidence],
             "status": self.status,
-            # `dict(entry)` (the shallow unfreeze `committed`/`evidence` use
-            # above) only un-wraps the outermost `MappingProxyType`; a
-            # parameter's own nested `binding`/`allowed_bindings` mappings
-            # would still be frozen underneath and fail JSON serialization.
-            # `_json_value` recurses through every `Mapping` (including
-            # `MappingProxyType`) and `tuple`, undoing `_freeze`'s
-            # deep-freeze.
+            # `dict(entry)` unwraps only the outermost proxy; a parameter's
+            # nested mappings need `_json_value` to serialize.
             "parameters": [_json_value(entry) for entry in self.parameters],
             "expected_effects": list(self.expected_effects),
         }
@@ -651,12 +528,9 @@ class CaseWriteRecord:
 class ResolvedMutation:
     """The semantic owner's answer: concrete addresses and expected effects.
 
-    Pure. Produced without reading the case, so a dry run costs nothing and
-    changes nothing. The renderer reads; this does not.
-
-    ``targets`` is consumed by the renderer (``case_rendering._document_edits``
-    groups it by document); ``semantic_owner_id`` is passed straight through
-    into ``CaseWritePlan``.
+    Pure: produced without reading the case, so a dry run changes nothing.
+    The renderer reads; this does not. ``targets`` is consumed by the
+    renderer and ``semantic_owner_id`` passes through into ``CaseWritePlan``.
     """
 
     request: CaseMutationRequest
@@ -665,10 +539,6 @@ class ResolvedMutation:
     semantic_owner_id: str
 
     def __post_init__(self) -> None:
-        # Coerced and deep-frozen the same as every other declared-tuple
-        # field in this module: `targets` holds plain mappings -- unlike
-        # `RenderedFile`, which is itself a frozen
-        # dataclasses -- so it needs `_freeze`, not just `tuple()`.
         object.__setattr__(self, "targets", tuple(_freeze(target) for target in self.targets))
         object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
 

@@ -1,13 +1,6 @@
-"""Build a runnable cardiacFoam case from the catalogue, for when there is no
-native case to run. Nothing in the record path imports this module; native
-cases stay the default.
+"""Build a runnable cardiacFoam case from the dict-entry catalogue, for when there is no native case to run.
 
-``build_electro_properties`` and ``build_physics_properties`` write the
-dictionaries from selectors and overrides over the dict-entry catalogue, and
-each passes ``case_rules`` before it returns. ``build_case`` adds the system
-templates, a ``blockMeshDict`` and an ``Allrun``, commits them as one journaled
-write, then holds the written case to the same pre-run rules a record's case
-passes. ``build`` is the ``omnidriver build`` entry point.
+``build_case`` writes and rule-checks the whole case; ``build`` is the ``omnidriver build`` entry point.
 """
 from __future__ import annotations
 
@@ -87,14 +80,9 @@ def resolve_context(
     """Collapse selectors + overrides into a single `{slot_key: value}` dict.
 
     Selectors enter at their raw key (`myocardiumSolver`, `ionicModel`, ...);
-    overrides go through `slot_key` so the `$ELECTRO_MODEL_COEFFS.` prefix
-    is stripped. This is the same context shape `validation._flatten_context`
-    produces from a Run document — so the validator can be reused unchanged.
-
-    Also infers virtual presence keys (`$bathPotentialDomain_configured`,
-    `$ecgDomains_present`, `$conductionNetworkDomains_present`) so the
-    matching `applicable_when` predicates fire only when the agent has
-    actually declared overrides under the corresponding block.
+    overrides go through `slot_key`, which strips the `$ELECTRO_MODEL_COEFFS.`
+    prefix. Virtual presence keys are inferred, so a block's `applicable_when`
+    fires only when overrides under that block were declared.
     """
     ctx: dict[str, Any] = dict(selectors)
     if overrides:
@@ -149,8 +137,7 @@ def _with_virtual_presence(values: dict[str, str]) -> dict[str, Any]:
 
 
 def _check_no_forbidden_selectors(context: dict[str, Any]) -> None:
-    """Raise ValueError if the caller explicitly set a key that is forbidden
-    in the current context."""
+    """Raise ValueError for a key the caller set that the context forbids."""
     for entry, predicate in forbidden_in(_all_electro_entries(), context):
         raise ValueError(
             f"build_electro_properties: '{slot_key(entry.driver_path)}' is forbidden when "
@@ -274,12 +261,7 @@ def _serialize(
     entries: list[DictEntry],
     myocardium_solver: str,
 ) -> str:
-    """Group populated values by scope and emit the OpenFOAM dict body.
-
-    Top-level keys (entries whose `driver_path` does not start with the
-    `$ELECTRO_MODEL_COEFFS.` prefix) are emitted at the root. Everything
-    else nests under the resolved `<solver>Coeffs` block.
-    """
+    """The dict body: top-level keys at the root, `$ELECTRO_MODEL_COEFFS.` keys under `<solver>Coeffs`."""
     top_level: dict[str, str] = {}
     coeffs: dict = {}
 
@@ -287,11 +269,10 @@ def _serialize(
     for entry in entries:
         if getattr(entry, "dynamic_path", False):
             template = slot_key(entry.driver_path)
-            # Same generic placeholder rule as the population pass. Hardcoding
-            # <name>/<electrode> here meant an entry with any other placeholder
-            # failed to match its own catalog entry, so the ROUTING fell
-            # through to top_level -- emitting a $ELECTRO_MODEL_COEFFS.* key at
-            # the electroProperties root, where the solver never reads it.
+            # Same generic placeholder rule as the population pass: an entry
+            # that fails to match its own catalogue entry routes to top_level
+            # and emits a $ELECTRO_MODEL_COEFFS.* key at the electroProperties
+            # root, where the solver never reads it.
             pattern = PLACEHOLDER.sub(r"([^.]+)", re.escape(template))
             dynamic_patterns.append((entry, re.compile(f"^{pattern}$")))
 
@@ -496,10 +477,9 @@ def build_physics_properties(
 ) -> str:
     """Synthesise a complete `physicsProperties` dict from intent.
 
-    Mirrors :func:`build_electro_properties` but against
-    :data:`PHYSICS_PROPERTY_ENTRIES`. There is no ``<solver>Coeffs``
-    wrapper — every physics key lives at the dict root. Today the only
-    entry is ``type``; future physics-level selectors slot in unchanged.
+    Mirrors :func:`build_electro_properties` against
+    :data:`PHYSICS_PROPERTY_ENTRIES`; every physics key lives at the dict
+    root, with no ``<solver>Coeffs`` wrapper.
 
     Args:
         selectors: top-level physics keys (e.g. ``{"type": "electroModel"}``).
@@ -516,7 +496,6 @@ def build_physics_properties(
             relation `case_rules` finds violated.
     """
     context = resolve_context(selectors, overrides=overrides)
-    # Scope to physics entries — electro entries don't belong here.
     entries = applicable_entries(PHYSICS_PROPERTY_ENTRIES, context)
     populated = populate_values(
         entries, context, typical_value_fallback=typical_value_fallback,
@@ -554,8 +533,7 @@ def _block(name: str, lines: list[str]) -> str:
 
 
 def _fv_schemes(solver: str) -> str:
-    """The discretisation each field family of a ``myocardiumSolver`` solves
-    for (``Vm`` alone, or with ``psi`` or ``phiE``)."""
+    """The discretisation for each field family a ``myocardiumSolver`` solves (``Vm``, with ``psi`` or ``phiE``)."""
     if "singleCell" in solver:
         ddt = ["default         backward; // 2nd order"]
         grad = "leastSquares"
@@ -664,8 +642,9 @@ def build_case(
     Writes ``constant/electroProperties`` and ``physicsProperties``,
     ``system/fvSchemes``, ``fvSolution``, ``controlDict``, ``blockMeshDict``
     and an ``Allrun`` (``blockMesh`` then ``cardiacFoam``); a ``system/``
-    file the directory already holds is kept unless ``overwrite``. The mesh is a generic slab, sized by ``dx``
-    (metres); a single-cell solver gets one cell and refuses ``dx``.
+    file the directory already holds is kept unless ``overwrite``. The mesh is
+    a generic slab, sized by ``dx`` (metres); a single-cell solver gets one
+    cell and refuses ``dx``.
 
     Raises:
         FileExistsError: ``case_dir`` holds an ``electroProperties`` and

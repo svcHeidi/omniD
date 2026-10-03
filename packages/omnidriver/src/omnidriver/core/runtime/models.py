@@ -79,10 +79,7 @@ _KNOWN_PATH_PLACEHOLDERS: Final[frozenset[str]] = frozenset({"case_id", "instanc
 
 
 def _validate_path_pattern(pattern: str) -> None:
-    """Raise ``ValueError`` if ``pattern`` contains any placeholder not in
-    :data:`_KNOWN_PATH_PLACEHOLDERS`. Does not require values — this is shape
-    validation, not expansion. Called from :class:`DataArtifact.__post_init__`
-    so typos surface at construction rather than at expand-time."""
+    """Raise ``ValueError`` for a placeholder not in ``_KNOWN_PATH_PLACEHOLDERS``; shape only, no expansion."""
     for match in _PATH_PATTERN_PLACEHOLDER.finditer(pattern):
         name = match.group(1)
         if name not in _KNOWN_PATH_PLACEHOLDERS:

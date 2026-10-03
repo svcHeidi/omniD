@@ -220,7 +220,7 @@ def test_a_case_with_no_constant_does_not_raise(tmp_path: Path) -> None:
 
 
 def test_generic_plugin_still_requires_unknown_files(tmp_path: Path) -> None:
-    """Under the generic plugin (declares nothing), the same file cardiacFoam would exclude stays required -- an unclassified file always defaults to required_input (I1)."""
+    """Under the generic plugin (declares nothing), the same file cardiacFoam would exclude stays required -- an unclassified file always defaults to required_input."""
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
     (tmp_path / "constant").mkdir()
     (tmp_path / "constant" / "C").write_bytes(b"mesh-diagnostic-byproduct")
@@ -317,7 +317,7 @@ def test_plugin_runtime_dependency_entries_appear_and_missing_required_is_unavai
 
 
 def test_dag_consumes_declaration_wins_over_a_generated_output_glob(tmp_path: Path) -> None:
-    """I1's resolution precedence: a DAG step's consumes declaration beats a plugin's generated_output_globs exclusion."""
+    """Resolution precedence: a DAG step's consumes declaration beats a plugin's generated_output_globs exclusion."""
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
     (tmp_path / "constant").mkdir()
     (tmp_path / "constant" / "C").write_bytes(b"mesh-diagnostic-byproduct")
@@ -340,7 +340,7 @@ def test_dag_consumes_declaration_wins_over_a_generated_output_glob(tmp_path: Pa
 
 
 def test_processor_selected_time_is_included_other_processor_times_excluded(tmp_path: Path) -> None:
-    """I9: processor*/<selected-time>/** is a required input on the same footing as the serial case; other times under processor*/ are outputs."""
+    """processor*/<selected-time>/** is a required input on the same footing as the serial case; other times under processor*/ are outputs."""
     _write_control_dict(tmp_path, start_from="startTime", start_time="0")
     proc0 = tmp_path / "processor0"
     (proc0 / "0").mkdir(parents=True)

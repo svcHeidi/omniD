@@ -1,4 +1,4 @@
-"""No shipped module may import the pre-migration ``openfoam_driver`` package."""
+"""No shipped module may import the ``openfoam_driver`` package, which ships in no install."""
 from __future__ import annotations
 
 import ast
@@ -10,8 +10,7 @@ from conftest import skip_without_repo
 
 #: .../packages — parents[4] of core/__init__.py: core, omnidriver, src,
 #: omnidriver (the package dir), packages. Asserted below rather than trusted:
-#: a guard whose root does not resolve passes by scanning nothing, which this
-#: repository has now produced twice.
+#: a guard whose root does not resolve passes by scanning nothing.
 _PACKAGES = pathlib.Path(omnidriver.core.__file__).resolve().parents[4]
 
 _FORBIDDEN = "openfoam_driver"

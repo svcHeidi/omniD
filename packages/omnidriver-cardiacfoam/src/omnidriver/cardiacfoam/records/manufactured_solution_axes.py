@@ -1,28 +1,5 @@
-"""The axes every multi-dimension manufactured-solution record shares (bath
-bidomain, bidomain, eikonalECG, pseudo-ECG). Built once here; each record
-instantiates them with its own ``<solver>Coeffs`` scope and file set.
-
-Each builder takes what differs between records as an argument (the axis
-name, a workflow step id, the optional ``<solver>Coeffs`` document and
-scope), the same shape
-``omnidriver.openfoam.axes.block_mesh_resolution_axis`` and this package's
-``ionic_model_axis``/``s1_s2_protocol_axis`` use. A record puts the axes it
-builds on its own ``TutorialRecord.axes``, so ``dimension`` can mean one
-thing for bidomain and another for eikonalECG.
-
-**Evidence for the conventions below** (real runs, logged in
-``docs/solver-learning/cardiacfoam.md`` under "manufacturedBidomain", and
-G1-G9 and section E for eikonalECG):
-
-- ``system/blockMeshDict.<dim>`` (``dim`` one of ``1D``/``2D``/``3D``) is
-  the naming convention all four cases use; none has a plain
-  ``system/blockMeshDict``;
-- the tet route's gmsh templates carry ``DefineConstant[ lc = { <default>,
-  Name "lc" } ]``; ``gmsh -3 <template> -o <mesh>.msh -format msh2
-  -setnumber lc <v>`` runs correctly with ``-setnumber`` trailing every other
-  flag (a real run at ``lc=0.2`` then ``lc=0.3`` produced two different
-  meshes, 1203 and 706 elements).
-"""
+"""The axes every multi-dimension manufactured-solution record shares (bath bidomain, bidomain, eikonalECG, pseudo-ECG).
+Each record instantiates them with its own ``<solver>Coeffs`` scope and file set."""
 
 from __future__ import annotations
 
@@ -32,7 +9,7 @@ from typing import Any
 from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
 
-#: One ``blockMeshDict`` per dimension, never a plain ``system/blockMeshDict``.
+#: One ``blockMeshDict`` per dimension; none of these cases has a plain ``system/blockMeshDict``.
 DIMENSIONS: tuple[str, ...] = ("1D", "2D", "3D")
 
 
@@ -51,8 +28,7 @@ MESH_DICT_KEY: tuple[str, ...] = ("-dict",)
 #: The gmsh argument a tet axis passes. The gmsh steps declare no default for
 #: it: with no study value, gmsh uses the template's own ``DefineConstant``
 #: default, and an axis that names it adds it (``WorkflowStep.argv`` appends
-#: a contribution no default claims). A record that did declare a
-#: ``DefaultArgument`` under this key would still have it replaced.
+#: a contribution no default claims).
 GMSH_LC_KEY: tuple[str, ...] = ("-setnumber", "lc")
 
 
@@ -66,17 +42,10 @@ def dimension_axis(
     default argument), and, when ``solver_coefficients`` is a ``(document,
     scope)`` pair, to ``<scope>.dimension`` in that document too.
 
-    ``$ELECTRO_MODEL_COEFFS.dimension`` is already catalogued (enum
-    ``1D``/``2D``/``3D``), so this axis derives no catalog fact of its own.
-
     ``ecg_verification_scope`` (pseudo-ECG) adds a second patch in the same
-    ``solver_coefficients`` document, at ``scope + ecg_verification_scope +
-    ("dimension",)`` -- the native
-    ``ecgDomains.ECG.verificationModel.dimension`` echoes the tissue
-    dimension the pseudo-ECG verifier is built for, and a study that only
-    stated one of the two could silently desync them. One study value drives
-    both, the same way a single ``dimension`` already drives the mesh
-    argument and the tissue coefficient. Requires ``solver_coefficients``.
+    document, at ``scope + ecg_verification_scope + ("dimension",)``: the
+    verifier's dimension echoes the tissue dimension, and one study value
+    drives both so they cannot desync. Requires ``solver_coefficients``.
 
     Refuses by name a value that is not one of :data:`DIMENSIONS`: a
     nonsense dimension would otherwise surface only as blockMesh failing to
@@ -115,17 +84,7 @@ def _keep_ones_fixed(
     n: int, current: tuple[int, int, int],
     extents: tuple[float, float, float] | None = None,
 ) -> tuple[int, int, int]:
-    """A direction whose current cell count is 1 stays 1; every other
-    direction becomes ``n``.
-
-    Each ``blockMeshDict.<dim>``'s own ``hex (`` line already says which
-    directions a resolution study refines (bidomain's ``.1D`` is
-    ``(1280 1 1)``, ``.2D`` is ``(640 640 1)``, ``.3D`` is ``(20 20 20)``),
-    so no per-dimension table restates it.
-
-    Takes the ``extents`` argument ``block_mesh_resolution_axis`` passes to
-    every resolution function, and ignores it: this rule counts cells.
-    """
+    """A direction whose cell count is 1 stays 1; the others become ``n``, so no per-dimension table is needed."""
     del extents
     return tuple(n if c != 1 else 1 for c in current)  # type: ignore[return-value]
 
@@ -136,8 +95,8 @@ def hex_number_cells_axis(name: str, *, expected_blocks: int = 1) -> AxisContrac
     three dimension files, whichever one the ``dimension`` axis selects.
 
     ``expected_blocks`` defaults to 1: bidomain's and eikonalECG's
-    ``blockMeshDict.<dim>`` files are each a single ``hex (`` block,
-    confirmed by real ``blockMesh`` runs (bath's have three).
+    ``blockMeshDict.<dim>`` files are each a single ``hex (`` block (bath's
+    have three).
     """
     return block_mesh_resolution_axis(
         name, documents=BLOCK_MESH_DICT_DOCUMENTS, resolution=_keep_ones_fixed,
@@ -153,10 +112,8 @@ def tet_number_cells_axis(name: str, *, gmsh_step_id: str = "gmsh") -> AxisContr
 
     ``lc = 1/N``, not a study-supplied ``lc``: every native
     ``.geo.template`` parameterises resolution by a cell count ``N`` along
-    the unit cube's edge (the hex route's vocabulary), and G5/G8's real-gmsh
-    evidence confirms ``-setnumber lc <v>`` overrides the template's
-    ``DefineConstant`` default at any value. With the axis unnamed, a case
-    gets the template's own default.
+    the unit cube's edge (the hex route's vocabulary). With the axis unnamed,
+    a case gets the template's own default.
 
     Refuses by name a value that is not a positive integer (``bool``
     excluded): ``1/N`` would otherwise be a ``ZeroDivisionError`` or a

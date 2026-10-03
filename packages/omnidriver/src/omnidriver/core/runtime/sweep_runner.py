@@ -91,9 +91,7 @@ _RECORD_NON_STUDY_BASE_KEYS: frozenset[str] = frozenset({"entry", "cases_root"})
 def _sweep_record(
     sweep_spec: dict[str, Any], *, driver_context: "DriverContext",
 ) -> tuple[Any, Path]:
-    """The ``(record, cases_root)`` ``base.entry`` and ``base.cases_root``
-    name. A record has no ambient cases root: both are refused by name when
-    absent."""
+    """The ``(record, cases_root)`` named by ``base``; a record has no ambient cases root, so both are required."""
     base = sweep_spec.get("base", {})
     entry = base.get("entry")
     if entry is None:
@@ -115,8 +113,7 @@ def _record_case_study_by_source(
     *, base: dict[str, Any], resolved_axis_values: dict[str, Any],
     cli_study: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """``cli_study`` is the CLI's ``--parallel`` study source, kept apart from
-    ``base`` so a disagreement with the sweep file is refused by name, not merged."""
+    """Study values by source; ``cli_study`` stays apart from ``base`` so a disagreement is refused, not merged."""
     stripped_base = {
         key: value for key, value in base.items()
         if key not in _RECORD_NON_STUDY_BASE_KEYS
@@ -127,13 +124,7 @@ def _record_case_study_by_source(
 def _validate_record_sweep_upfront(
     record: Any, sweep_spec: dict[str, Any], *, driver_context: "DriverContext",
 ) -> None:
-    """Refuse a missing member or a bad study name once, up front, for the
-    whole sweep -- before any case is staged. Both kinds of refusal are the
-    same for every case in one sweep, since the stack either has the
-    members a record case needs or it does not, and a name's shape (a
-    ``document:key`` literal vs an axis) never varies across cases even when
-    a swept axis's value does.
-    """
+    """Refuse a missing member or a bad study name once for the whole sweep, before any case is staged."""
     record_case_members(record, driver_context)
 
     reserved = _reserved_study_names(record)
@@ -207,14 +198,7 @@ def _record_sweep_run(
     inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
-    """The record-entry counterpart of ``sweep_run``'s factory-entry branch.
-
-    Deliberately narrower than the factory-entry path: every case is
-    planned and run fresh, sequentially -- no manifest-based
-    resume/retry/skip across separate invocations yet. A manifest is still
-    written, so the output directory carries the same bookkeeping shape a
-    factory-entry sweep's does.
-    """
+    """Plan and run every case of a record sweep fresh and in sequence, writing a manifest; no resume or skip."""
     _validate_record_sweep_upfront(record, sweep_spec, driver_context=driver_context)
     execution_environment = dict(driver_context.stack.call(
         "get_configured_environment", dict(os.environ), driver_context,
@@ -360,13 +344,7 @@ def _record_sweep_run(
 
 
 def _relative_or_absolute(path: Path, base: Path) -> str:
-    """Path relative to `base` when possible, else the absolute path.
-
-    `workflow_state_path` may resolve outside the sweep's `--output-dir` in
-    entry mode (it comes from `launch.outputDir`), so this returns the
-    absolute path there rather than crash the whole sweep over a manifest
-    cosmetic.
-    """
+    """``path`` relative to ``base``, else absolute: a state path may lie outside the sweep's output dir."""
     try:
         return str(path.relative_to(base))
     except ValueError:
@@ -388,22 +366,7 @@ def _stage_entry_case(
     excluded_relpaths: frozenset[str] = frozenset(),
     overlays: "Sequence[tuple[Path, str]]" = (),
 ) -> None:
-    """Copy a registered case into scratch storage without old run output.
-
-    Registered tutorial folders contain source dictionaries and scripts next
-    to OpenFOAM's generated mesh, time, processor, log, and post-processing
-    trees. Copying those generated trees would reintroduce the stale-state
-    bug this staging boundary is meant to prevent, so the filter is explicit
-    and conservative: keep authored inputs (including ``0/``) and omit only
-    known derived artifacts.
-
-    ``excluded_relpaths`` names further case-relative paths (files, or whole
-    directories, at any depth) that the caller knows are generated: a
-    tutorial record's step outputs. With no ``driver_context`` supplied,
-    ``conventions`` below is a bare ``CaseRuntimeConventions()`` that
-    carries none of core's own records, so every production caller must
-    supply a real ``driver_context``.
-    """
+    """Copy a case into scratch without run output; only a ``driver_context`` supplies what counts as generated."""
     from ..plugin_interface import CaseRuntimeConventions
     from ..runtime_records import case_runtime_conventions
 
@@ -530,12 +493,7 @@ def _journal_case_path(case_root: Path, payload: dict[str, Any], key: str) -> Pa
 
 
 def _recover_interrupted_case_staging(case_root: Path) -> None:
-    """Restore a coherent case after a failed sibling-directory promotion.
-
-    If a process dies between the two renames, restoring the prior case
-    from its backup is safer than assuming the candidate should run; a
-    brand-new case has no backup and promotes its candidate instead.
-    """
+    """Restore the prior case from its backup after an interrupted promotion; a new case promotes its candidate."""
     payload = _load_staging_journal(case_root)
     if payload is None:
         return
@@ -573,13 +531,7 @@ def _recover_interrupted_case_staging(case_root: Path) -> None:
 
 
 def _apply_overlay(source: Path, destination: Path) -> None:
-    """Copy one ``(source, destination)`` pair into a staging candidate.
-
-    Always copies real bytes, never a link: a step can write inside its
-    input (e.g. ``generatePurkinjeTree`` rewriting
-    ``constant/polyMesh/sets/*``), and a link would send that write into
-    the supplied bundle or the native tree.
-    """
+    """Copy one overlay into a staging candidate as real bytes, never a link, so a step cannot write into the source."""
     if not source.exists():
         raise FileNotFoundError(f"record input overlay source does not exist: {source}")
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -596,8 +548,7 @@ def _copy_and_promote_staged_case(
     ignore: Any,
     overlays: "Sequence[tuple[Path, str]]" = (),
 ) -> None:
-    """Copy to a private sibling, apply every overlay, then replace a staged
-    case under its lease, so a crash never leaves a half-staged case."""
+    """Copy to a private sibling, apply the overlays, then replace the staged case, so a crash leaves no half-staged case."""
     token = uuid.uuid4().hex
     candidate = _staging_path(staged_case_root, token, "candidate")
     backup = _staging_path(staged_case_root, token, "backup")

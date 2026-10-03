@@ -1,11 +1,6 @@
-"""
-Utility Manifest Catalog
+"""Utility manifest catalog: loads ``utility.manifest.toml`` sidecars from a plugin-supplied utilities root.
 
-Loads ``utility.manifest.toml`` sidecar files from a plugin-supplied
-utilities root -- core names no solver's utilities. See the dataclasses
-below (``UtilityManifest``, ``UtilityFlag``, ``PositionalArg``,
-``ProducesEntry``) for the schema each manifest must follow.
-"""
+Core names no solver's utilities; the dataclasses below define the schema."""
 
 from __future__ import annotations
 

@@ -1,9 +1,6 @@
-"""Where a workflow step ran: ambient facts, recorded, never interpreted.
+"""Where a workflow step ran: ambient facts (machine, scheduler, declared variables, MPI launcher), recorded.
 
-Machine/OS/CPU identity, ambient scheduler/threading variables, declared
-stack variables, and MPI launcher identity when applicable. Nothing here is
-supplied or defaulted: an absent fact is absent.
-"""
+Nothing is supplied or defaulted: an absent fact is absent."""
 from __future__ import annotations
 
 import os

@@ -1,10 +1,6 @@
 """Compose ``RuntimeDependency`` declarations into ``ProvenanceComponent``s.
 
-A dependency's resolved path is not under any case root, so each is
-fingerprinted relative to its own parent directory and the declared
-dependency name is restored as the component's identity -- a library found
-via a different search directory must still compare as the same dependency.
-"""
+Each keeps its declared name and is fingerprinted relative to its parent, so a library found elsewhere still compares equal."""
 
 from __future__ import annotations
 

@@ -151,7 +151,7 @@ def test_a_rollback_that_itself_fails_leaves_the_journal_and_says_so(tmp_path, m
 
 
 def test_a_persisted_plan_round_trips(tmp_path):
-    """`CaseWritePlan.from_json` was already implemented before this task, not left as a `NotImplementedError` the way the plan's own snippet describes (a stale plan claim, reported rather than followed): `RenderedFile` embeds its content as base64 directly, so `to_json()`/`from_json()` round-trip with no separate ``contents`` side-channel needed."""
+    """`RenderedFile` embeds its content as base64 directly, so `to_json()`/`from_json()` round-trip with no separate ``contents`` side-channel needed."""
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     payload = json.loads(case_write.canonical_json(plan.to_json()))
     restored = case_write.CaseWritePlan.from_json(payload)

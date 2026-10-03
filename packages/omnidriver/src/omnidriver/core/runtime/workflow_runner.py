@@ -49,8 +49,7 @@ def _safe_step_id(step_id: str) -> str:
 
 
 def _host_facts(command, args, env, driver_context) -> dict[str, Any]:
-    """Ambient facts about where this step runs (``runtime.host_facts``),
-    with the values of the stack's declared environment variables."""
+    """Ambient host facts plus the values of the stack's declared environment variables."""
     from .host_facts import host_facts
 
     declared: tuple[str, ...] = ()
@@ -112,15 +111,7 @@ def _dependencies_completed(
 
 
 def _resolve_command(command: str, cwd: Path, driver_context: Any | None = None) -> str:
-    """Resolve a step command to what subprocess should execute.
-
-    - Explicit paths (containing ``/`` or an absolute path) are used verbatim
-      — the author opted in.
-    - A recognized adapter-declared case-script name resolves to the case-local
-      executable when present, else falls through to PATH.
-    - Any other bare name resolves via PATH only (subprocess does not search
-      cwd), so a case directory cannot shadow a trusted binary.
-    """
+    """Paths verbatim; a declared case-script name case-locally when present; any other bare name via PATH only."""
     if "/" in command:
         return command
     if command in case_script_commands(driver_context):
@@ -146,21 +137,7 @@ def _argv_for_execution(
     env: Mapping[str, str] | None,
     driver_context: Any | None = None,
 ) -> tuple[str, ...]:
-    """Build the argv subprocess should exec for one workflow step.
-
-    Case-local adapter scripts are shebang-interpreted by `/bin/sh`, which is
-    SIP-protected on macOS: it silently strips inherited `DYLD_*` variables
-    before the script body runs, even though `env=` carries them into the
-    subprocess call. A running process's own exported values survive SIP
-    stripping, so DYLD_* is instead re-exported in an explicit shell
-    preamble that `.` (dot-sources) the script rather than `exec`s it --
-    `exec` would re-trigger a shebang exec of `/bin/sh` and strip them again.
-    Dot-sourcing alone breaks the common self-locate idiom `cd "${0%/*}"`,
-    since it leaves `$0` as `/bin/sh`'s own; passing the script path as
-    `sh -c cmd name arg...`'s `name` rebinds `$0` before dot-sourcing,
-    restoring that idiom. No-op whenever the command isn't a case script or
-    there are no DYLD_* values to preserve.
-    """
+    """The argv subprocess should exec for one step."""
     step_env = os.environ if env is None else env
     script = find_script(command, driver_context)
     if script is not None:
@@ -170,6 +147,8 @@ def _argv_for_execution(
     exports = [f"export {name}={shlex.quote(env[name])}" for name in _DYLD_VAR_NAMES if env.get(name)]
     if not exports:
         return (executable, *args)
+    # macOS SIP makes /bin/sh strip DYLD_* from a shebang-run script, so re-export them and dot-source it;
+    # passing the script as `sh -c`'s name rebinds $0, which keeps the `cd "${0%/*}"` idiom working.
     preamble = "; ".join(exports) + '; . "$0" "$@"'
     return ("/bin/sh", "-c", preamble, executable, *args)
 
@@ -187,11 +166,7 @@ def _resolve_case_cwd(case_root: Path, cwd: str) -> Path:
 def _artifact_snapshot(
     case_root: Path, artifact: DataArtifact, driver_context: Any | None,
 ) -> dict[Path, tuple[int, int, int, int]]:
-    """Record matched outputs and directory contents for step attribution.
-
-    Stat changes establish filesystem activity only, not scientific validity.
-    Instance-indexed contracts accept both serial and decomposed locations.
-    """
+    """Stat the outputs matching ``artifact`` (serial and decomposed locations) for step attribution."""
     import glob
 
     expanded = artifact.path_pattern.format(case_id=case_root.name, instance="*")
@@ -218,13 +193,7 @@ def _artifact_snapshot(
 
 
 def _terminate_process_group(process: subprocess.Popen[Any]) -> None:
-    """Terminate a step and descendants that share its owned process group.
-
-    Every step starts a fresh session below, making its PID a group leader.
-    This deliberately owns ordinary descendants of a workflow command; a
-    descendant that deliberately creates a new session is outside this local
-    process contract and must be managed by the invoked program itself.
-    """
+    """Terminate a step and the descendants in its process group; a descendant in a new session is out of scope."""
     if os.name != "posix":
         process.kill()
         process.wait()
@@ -272,8 +241,7 @@ _EXPLAINED_LOG_BYTES = 65536
 def _explained_by_the_logs(
     step_id: str, logs: tuple[Path, ...], case_root: Path, driver_context: Any,
 ) -> tuple[dict[str, Any], ...]:
-    """What the stack reads in the end of ``logs`` that explains why the step
-    failed, as step diagnostics."""
+    """Step diagnostics the stack reads from the end of ``logs`` to explain a failure."""
     text = ""
     for log in logs:
         try:

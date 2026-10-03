@@ -151,15 +151,7 @@ _EXPLORABLE_CONFIGURATION_STATUSES = frozenset({
 def _configuration_evidence_diagnostics(
     evidence: tuple[dict[str, Any], ...], *, allow_unresolved_configuration: bool,
 ) -> tuple[StrictDiagnostic, ...]:
-    """Turn declared configuration-closure limits into an explicit policy.
-
-    ``inspected`` is the normal, launchable state.  The three declared
-    unresolved states are errors for a normal plan.  An operator may opt into
-    an exploratory run with ``allow_unresolved_configuration``; those exact
-    known states then remain visible as warnings and are recorded in the run
-    intent.  Unknown status strings are never made launchable by the flag:
-    that would turn a future plugin contract into an implicit bypass.
-    """
+    """Unresolved states are errors, or warnings under ``allow_unresolved_configuration``; an unknown status is never made launchable."""
     diagnostics: list[StrictDiagnostic] = []
     for record in evidence:
         dictionary = str(record.get("dictionary", "<unknown>"))
@@ -190,19 +182,7 @@ def _configuration_evidence_diagnostics(
 
 
 def _run_launch_description(context, *, driver_context: "DriverContext") -> dict[str, Any]:
-    """Describe the ``run --run-document`` invocation for this plan.
-
-    The four paths are written absolute. They become the run document's
-    ``launch`` block, read by ``run_document_exec.build_execution_inputs``
-    under its own rule (a relative ``outputDir`` is under ``caseRoot``, a
-    relative ``caseRoot`` is under the reader's working directory) --
-    writing them as supplied, already joined under a possibly relative
-    ``cases_root``, would nest ``outputDir`` twice.
-
-    The case was already committed by the caller that built this plan, so the
-    command points at the run document THIS PLAN becomes, once its caller
-    persists it at ``output_dir/run_document.json``.
-    """
+    """The ``run --run-document`` invocation; paths are absolute because a relative ``outputDir`` is read as under ``caseRoot``."""
     run_document_path = str(Path(context.output_dir).absolute() / RUN_DOCUMENT_FILENAME)
     command = omnidriver_run_command(driver_context, "--run-document", run_document_path)
     return {
@@ -305,8 +285,7 @@ def _strict_plan_for_spec(
     driver_context: "DriverContext",
     scratch_root: Path | None = None,
 ) -> StrictPlanReport:
-    """The diagnostics and run-document assembly for one committed record
-    case's ``spec``, shared by ``strict_plan`` and the sweep runner."""
+    """Diagnostics and run-document assembly for one committed case, shared by ``strict_plan`` and the sweep runner."""
     execution_context = resolve_execution_context(spec)
     launch = _run_launch_description(execution_context, driver_context=driver_context)
     artifacts = tuple(

@@ -1,4 +1,4 @@
-"""End-to-end CLI coverage for P1 (docs/superpowers/specs/2026-09-24- tutorials-are-pointers-design.md, "Owner decisions" dated 2026-09-25): `plan --strict --entry <record>` must work end to end, and the run document it produces must advertise a `run --run-document <path>` command that ITSELF works -- never the `run --strict --entry <record>` this used to (uncatchably) refuse with, per `registry._materialize_resolved_entry`'s own explicit refusal ("tutorial records are not yet runnable through load_entry_spec")."""
+"""End-to-end CLI coverage: `plan --strict --entry <record>` must work end to end, and the run document it produces must advertise a `run --run-document <path>` command that itself works."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def test_plan_strict_over_a_tutorial_record_advertises_a_working_run_document_co
 
 
 def test_run_strict_entry_over_a_tutorial_record_also_works_end_to_end(tmp_path, capsys):
-    """P1's own explicit choice, decided and reported: `step`/`run --entry <record>` work through the SAME shared function `plan --strict` uses (`strict_planning.strict_plan`'s new tutorial_record branch), rather than refusing by name -- `_context_from_entry` calls `strict_plan` exactly the way it always has, and gained record support for free once `strict_plan` itself stopped refusing that resolution kind."""
+    """`step`/`run --entry <record>` work through the same shared function `plan --strict` uses (`strict_planning.strict_plan`'s tutorial_record branch), rather than refusing by name."""
     cases_root = _native_toy_case(tmp_path)
 
     exit_code = main([
@@ -84,7 +84,7 @@ def test_run_strict_entry_over_a_tutorial_record_also_works_end_to_end(tmp_path,
 def test_plan_strict_over_a_tutorial_record_whose_native_case_is_missing_refuses_with_structured_json(
     tmp_path, capsys,
 ):
-    """P1's `cli.main` fix: a `TutorialRecordError` becomes the same structured JSON failure payload every comparable CLI refusal already produces (see e.g. `_context_from_run_document`'s `run_document_unreadable` payload) -- never a raw traceback."""
+    """`cli.main` turns a `TutorialRecordError` into the same structured JSON failure payload every comparable CLI refusal already produces (see e.g. `_context_from_run_document`'s `run_document_unreadable` payload) -- never a raw traceback."""
     empty_cases_root = tmp_path / "empty"
     empty_cases_root.mkdir()
 
@@ -186,7 +186,7 @@ def _write_spec(tmp_path: Path, spec: dict) -> Path:
 def test_a_record_sweep_refusal_is_the_clis_json_failure(
     tmp_path, capsys, action, base_extra, sweep, fragment,
 ):
-    """Review 54b M12: a refusal of a record sweep as a whole used to escape `sweep-plan`/`sweep-run` as a Python traceback with nothing on stdout."""
+    """A refusal of a record sweep as a whole must not escape `sweep-plan`/`sweep-run` as a Python traceback with nothing on stdout."""
     cases_root = _native_toy_case(tmp_path)
     base = {"entry": "toyTutorial"}
     for key, value in base_extra.items():

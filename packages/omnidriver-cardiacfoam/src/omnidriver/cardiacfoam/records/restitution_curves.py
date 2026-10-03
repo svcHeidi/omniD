@@ -1,25 +1,5 @@
-"""``restitutionCurves``, the first cardiacFOAM tutorial record.
-
-The record itself is inert data (``core.tutorial_records.TutorialRecord``): a
-native case path, the axes it allows, and the workflow steps its native
-``Allrun`` actually runs. It writes nothing; only an axis it names, or a
-direct ``document:key`` a study supplies, ever produces a patch.
-
-``tutorials/electrophysiologyProtocols/restitutionCurves_s1s2Protocol/Allrun``
-unconditionally runs::
-
-    runApplication blockMesh
-    runApplication cardiacFoam
-    if [ "${CF_SKIP_PLOTS:-1}" = "1" ]; then
-        echo "Skipping plotVoltage (CF_SKIP_PLOTS=1)."
-    else
-        ./plotVoltage
-    fi
-
-``plotVoltage`` is conditional and skipped by default (``CF_SKIP_PLOTS``
-defaults to ``1``), so it is not one of this record's steps. This record
-declares exactly the two steps ``Allrun`` runs unconditionally: ``mesh``
-(``blockMesh``) then ``solve`` (``cardiacFoam``).
+"""``restitutionCurves``, the S1-S2 restitution tutorial record.
+Native case: ``electrophysiologyProtocols/restitutionCurves_s1s2Protocol``; ``mesh`` then ``solve``.
 """
 
 from __future__ import annotations
@@ -34,19 +14,14 @@ from .ionic_model_axis import ionic_model_axis
 from .routes import block_mesh_step, solve_step
 from .s1_s2_protocol_axis import s1_s2_protocol_axis
 
-#: This tutorial always addresses `myocardiumSolver singleCellSolver`'s own
-#: `singleCellSolverCoeffs` scope -- never varied by this tutorial, since the
-#: native case already holds it -- so both axes below are instantiated with
-#: it directly rather than deriving it from a study value.
+#: The `singleCellSolverCoeffs` scope of `myocardiumSolver singleCellSolver`,
+#: which the native case already holds.
 _SINGLE_CELL_SOLVER_COEFFS = ("singleCellSolverCoeffs",)
 
 IONIC_MODEL_AXIS_NAME = "ionicModel"
 S1_S2_PROTOCOL_AXIS_NAME = "s1s2Protocol"
 #: ``system/blockMeshDict`` documents three uniform resolutions as
-#: commented-out alternatives (deltaX 0.5/0.2/0.1mm; see that file's own
-#: comments) -- a genuine per-case study choice. Without this axis, the only
-#: way to select one is a direct text edit of the staged case's
-#: ``blockMeshDict``.
+#: commented-out alternatives (deltaX 0.5/0.2/0.1mm); this axis selects one.
 BLOCK_MESH_RESOLUTION_AXIS_NAME = "blockMeshResolution"
 
 _BLOCK_MESH_DICT_DOCUMENT = "system/blockMeshDict"
@@ -56,18 +31,7 @@ def _explicit_cell_counts(
     cell_counts: Sequence[Any], current: tuple[int, int, int],
     extents: tuple[float, float, float] | None = None,
 ) -> tuple[int, int, int]:
-    """No scaling formula: this axis's study value already IS the three hex
-    cell counts (one of ``system/blockMeshDict``'s own three documented
-    resolutions, e.g. ``[40, 6, 14]``), taken as given. ``current`` is
-    unused: this tutorial has exactly one ``blockMeshDict`` and no
-    per-direction "stays 1" rule to apply. ``extents`` is unused for the same
-    reason: this axis's study value is already the target cell counts, not a
-    physical cell size a formula would need the extent to convert.
-    ``block_mesh_resolution_axis``'s own ``_validate_cell_counts`` checks the
-    shape (exactly three positive integers) once ``resolution`` returns --
-    this callable only turns the study's list/tuple into the plain tuple
-    that check expects, inventing no formula of its own.
-    """
+    """The study value already is the three hex cell counts; no scaling applies."""
     del current, extents
     return tuple(cell_counts)
 
@@ -87,35 +51,25 @@ AXES = (
         BLOCK_MESH_RESOLUTION_AXIS_NAME,
         documents=(_BLOCK_MESH_DICT_DOCUMENT,),
         resolution=_explicit_cell_counts,
-        # The study value is already the three cell counts (e.g.
-        # [40, 6, 14]), not a bare count a formula expands -- "integer" (this
-        # builder's default) does not fit a list; "integer_list" is the
-        # closest existing `contracts.dictionary.VALUE_KINDS` member for "a
-        # list of ints" (no fixed-length-3 kind exists, and none is added
-        # here: `_validate_cell_counts` already enforces exactly three
-        # positive integers once `resolution` returns).
+        # The study value is the three cell counts (e.g. [40, 6, 14]), so the
+        # builder's default "integer" kind does not fit; `_validate_cell_counts`
+        # enforces the length of three.
         value_kind="integer_list",
     ),
 )
 
-#: What each step reads and writes, as observed in real runs
-#: (``docs/solver-learning/cardiacfoam.md`` R1-R4). A step ``consumes`` only
-#: the authored files it fails without; the solve step's mesh comes from the
-#: mesh step's ``produces``, so it is not re-declared as a consumed input.
-#: ``constant/sweepCurrents`` is read by neither step (R3: the
+#: A step ``consumes`` only the authored files it fails without; the solve
+#: step's mesh comes from the mesh step's ``produces``.
+#: ``constant/sweepCurrents`` is read by neither step (it is the
 #: ``sweepCurrents`` utility's input), nor is ``system/blockMeshDict`` by
 #: ``cardiacFoam``.
 #:
 #: The trace's name is ``<ionicModel>_<tissue>_<protocol>.txt``
-#: (``singleCellSolver``'s constructor; R1 observed
-#: ``BuenoOrovio_epicardialCells_S1_2000_S2_250.txt``), so it depends on
-#: three study values and is declared as a glob. ``postProcessing`` is
-#: dropped at staging by the OpenFOAM layer's conventions.
+#: (``singleCellSolver``'s constructor), so it depends on three study values
+#: and is declared as a glob.
 #:
 #: No ``constant/electroProperties.withDefaultValues``: ``singleCellSolver``
-#: overrides ``electroModel::end`` without calling it, and no real run of
-#: this case writes one (R4). The mesh step's outputs are
-#: ``case_outputs.POLY_MESH_OUTPUTS`` (R1).
+#: overrides ``electroModel::end`` without calling it.
 
 RECORD = TutorialRecord(
     name="restitutionCurves",

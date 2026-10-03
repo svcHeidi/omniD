@@ -1,8 +1,6 @@
-"""Predict the data artifacts a tutorial run will (or did) produce.
+"""Predict the data artifacts a tutorial run will (or did) produce; never raises.
 
-Composes the active adapter's artifact-capability declarations with any
-static ``spec.metadata['expected_artifacts']`` override; never raises.
-"""
+Composes the adapter's artifact declarations with any static ``spec.metadata['expected_artifacts']``."""
 from __future__ import annotations
 
 #: produced_by for files the executor itself writes, not the solver command.
@@ -71,11 +69,7 @@ def _merge_static_override(
 
 
 def _output_dir_prefix(spec: TutorialSpec) -> str:
-    """The spec's output directory, as a case-relative POSIX prefix.
-
-    An absolute output_dir_name escapes the case root, which has no
-    case-relative pattern; predict nothing rather than a wrong path.
-    """
+    """The output directory as a case-relative POSIX prefix; empty when it escapes the case root."""
     try:
         return Path(spec.metadata["output_dir"]).relative_to(Path(spec.case_root)).as_posix()
     except (ValueError, KeyError):

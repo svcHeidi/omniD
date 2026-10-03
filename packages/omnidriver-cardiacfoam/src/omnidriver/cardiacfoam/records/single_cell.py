@@ -1,12 +1,5 @@
-"""``singleCell``: a tutorial record for ``electrophysiologyProtocols/singleCell``.
-
-The native ``Allrun``'s commands, ``blockMesh`` then ``cardiacFoam``, on one
-cell running ``singleCellSolver``. The case has no mesh study, so there is no
-mesh axis and no tet route. ``ionicModel`` reuses ``restitutionCurves``' axis,
-because the catalog pairs each model with its stimulus amplitude. Everything
-else the two native studies vary (``tissue``, ``stim_period_S1``,
-``outputVariables.ionic.export``) is a direct key. What each step reads and
-writes was observed in a real run: ``docs/solver-learning/cardiacfoam.md`` SC.
+"""``singleCell``, the single-cell tutorial record: ``electrophysiologyProtocols/singleCell``.
+``blockMesh`` then ``cardiacFoam`` (``singleCellSolver``); ``ionicModel`` is the only axis.
 """
 
 from __future__ import annotations

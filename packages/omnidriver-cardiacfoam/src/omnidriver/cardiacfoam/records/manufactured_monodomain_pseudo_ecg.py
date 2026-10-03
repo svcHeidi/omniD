@@ -1,19 +1,5 @@
-"""``manufacturedMonodomainPseudoECG``: a tutorial record for
-``manufacturedSolutions/monodomainPseudoECG``, a manufactured-solution
-verification of the monodomain stack with pseudo-ECG electrode output.
-
-The native ``Allrun`` does not mesh at all; the mesh step's ``-dict``
-default and the gmsh tet route are both copied from
-``regression/regressionTest.sh`` and ``setup/studies/tetConvergence/``
-respectively, not invented. The ``dimension`` axis models a two-key
-relation: one study value drives both ``monodomainSolverCoeffs.dimension``
-and the pseudo-ECG verifier's own nested
-``...verificationModel.dimension`` (``ecg_verification_scope``). The tet
-``fvSchemes`` overlay is a native quirk left unmodelled -- every entry it
-sets already equals ``system/fvSchemes``'s own value. What each step reads
-and writes, every old-factory write's fate, and the electrode-table
-reasoning were all settled by real runs: ``docs/solver-learning
-/cardiacfoam.md`` section PE.
+"""``manufacturedMonodomainPseudoECG``, the monodomain manufactured-solution record with pseudo-ECG output.
+Native case: ``manufacturedSolutions/monodomainPseudoECG``; hex and tet routes.
 """
 
 from __future__ import annotations
@@ -26,20 +12,20 @@ from .manufactured_solution_axes import (
 )
 from .routes import block_mesh_step, gmsh_route, solve_step
 
-#: This tutorial's own `monodomainSolverCoeffs` scope, and the pseudo-ECG
-#: verifier's own nested echo of the tissue dimension: this axis keeps
-#: `verificationModel.dimension` in step with the tissue `dimension`.
+#: The `monodomainSolverCoeffs` scope, and the pseudo-ECG verifier's nested
+#: echo of the tissue dimension, which the `dimension` axis keeps in step.
 _MONODOMAIN_SOLVER_COEFFS = ("monodomainSolverCoeffs",)
 _ECG_VERIFICATION_MODEL = ("ecgDomains", "ECG", "verificationModel")
 
 _TET_TEMPLATE = "setup/studies/tetConvergence/box.geo.template"
 _TET_MESH = "box.msh"
 
-#: The mesh step's default argument, copied verbatim from
-#: `regression/regressionTest.sh`: there is no native `Allrun` mesh step at
-#: all, the same gap bidomain's record found.
+#: The native `Allrun` has no mesh step; the case's regression script meshes
+#: with this dictionary.
 _MESH_DICT_DEFAULT = "system/blockMeshDict.3D"
 
+# The tet `fvSchemes` overlay is not modelled: every entry it sets already
+# equals `system/fvSchemes`.
 AXES = (
     dimension_axis(
         "dimension", mesh_step_id="mesh",
@@ -50,9 +36,8 @@ AXES = (
     tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh"),
 )
 
-#: Settled by a real run (module docstring, PE1/PE3): every cardiacFoam
-#: solve step here writes `.withDefaultValues` (the pseudo-ECG verifier's
-#: myocardium domain does call `electroModel::end()`).
+#: The pseudo-ECG verifier's myocardium domain calls `electroModel::end()`, so
+#: the solve writes `.withDefaultValues`.
 _SOLVE_OUTPUTS = (
     WITH_DEFAULT_VALUES,
     "postProcessing/*_cells.dat",

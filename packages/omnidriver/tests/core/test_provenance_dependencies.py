@@ -27,7 +27,7 @@ def test_a_required_dependency_with_no_path_is_unavailable() -> None:
 def test_an_optional_dependency_with_no_path_is_still_reported_unavailable(
     tmp_path: Path,
 ) -> None:
-    """I3b: a missing library in lightweight mode is a normal state, not an error -- but it must still be visible, never silently dropped, so it still shows up as unavailable rather than being omitted."""
+    """A missing library in lightweight mode is a normal state, not an error -- but it must still be visible, never silently dropped, so it still shows up as unavailable rather than being omitted."""
     dependency = RuntimeDependency(name="electroMechanicalModels", path=None, required=False)
     component = component_for_runtime_dependency(dependency)
     assert component.method == "unavailable"

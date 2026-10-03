@@ -19,28 +19,18 @@ def solve_step_commands() -> frozenset[str]:
     return _SOLVE_STEP_COMMANDS
 
 
-# Libraries cardiacFoam links or loads, and whether their absence is
-# abnormal.
+# Libraries cardiacFoam links or loads, and whether their absence is abnormal.
 #
 # required=True  -- linked unconditionally into cardiacFoam's EXE_LIBS
 #                    (applications/solvers/cardiacFoam/Make/options); the
 #                    solver cannot start without it.
 # required=False -- either mode-dependent (exactly one of physicsModel /
 #                    electroMechanicalModels is linked, selected by
-#                    USE_LIGHTWEIGHT_PHYSICSMODEL at build time, and which
-#                    one is baked into *this* installed binary cannot be
-#                    determined from the outside) or not linked into
-#                    cardiacFoam at all (verificationModels -- six
-#                    manufactured-solution tutorials pull it in at runtime
-#                    through their own controlDict libs (...) instead, which
-#                    overrides this default to required=True for those
-#                    cases; see _resolve_control_dict_libs_entry below).
-#
-# Verified live against a sourced OpenFOAM v2412 install, not assumed from
-# Make/files: FOAM_MODULE_LIBBIN is unset in a plain sourced shell, and
-# libphysicsModel is actually found in FOAM_USER_LIBBIN despite Make/files
-# declaring FOAM_MODULE_LIBBIN. See _defined_lib_dirs -- the search below
-# never maps a name to one fixed variable.
+#                    USE_LIGHTWEIGHT_PHYSICSMODEL at build time, which cannot
+#                    be told from outside the binary) or not linked at all
+#                    (verificationModels): the cases that use it name it in
+#                    their own controlDict libs, which makes it required for
+#                    them; see _resolve_control_dict_libs_entry.
 _LIBRARY_CATALOG: dict[str, bool] = {
     "electroModels": True,
     "ionicModels": True,
@@ -51,7 +41,9 @@ _LIBRARY_CATALOG: dict[str, bool] = {
     "verificationModels": False,
 }
 
-# Search every *defined* one of these, never one fixed variable per name.
+# Search every defined one, never one fixed variable per name: a plain sourced
+# shell leaves FOAM_MODULE_LIBBIN unset, and libphysicsModel is found in
+# FOAM_USER_LIBBIN although its Make/files declares FOAM_MODULE_LIBBIN.
 _LIB_DIR_ENV_VARS = ("FOAM_USER_LIBBIN", "FOAM_MODULE_LIBBIN", "FOAM_LIBBIN")
 
 # The extension is platform-dependent -- .dylib here, .so on Linux. Try both
@@ -76,21 +68,7 @@ def _resolve_named_library(name: str, *, lib_dirs: tuple[Path, ...]) -> Path | N
 
 
 def _parse_control_dict_libs(control_dict_path: Path) -> tuple[str, ...]:
-    """Extract the entries of a controlDict's ``libs ( ... )`` list.
-
-    Uses foamlib for structural, read-only parsing instead of hand-rolled
-    paren-counting: this is a pure read of a list's shape with no write-
-    back or provenance-digest concern (contrast core/runtime/mutators.py's
-    read_foam_entry, which deliberately avoids foamlib because ITS values
-    feed dict builders and must stay byte-verbatim), so none of that
-    module's determinism caveats apply here -- foamlib parses in-process
-    without evaluating ``#calc``/``#codeStream`` either way (see
-    core/runtime/foam_backend.py's header comment), so it is safe on an
-    arbitrary case's controlDict regardless.
-
-    Unparseable or absent ``libs`` blocks yield an empty tuple rather than
-    raising -- a case with no libs entry simply has none to resolve.
-    """
+    """The entries of a controlDict's ``libs ( ... )`` list; an absent or unparseable list gives ``()``."""
     from foamlib import FoamFile
 
     try:
@@ -115,17 +93,8 @@ def _library_name_from_entry(entry: str) -> str:
 
 
 def _expand_openfoam_path(raw: str, *, case_root: Path, env: Mapping[str, str]) -> str | None:
-    """Expand ``$FOAM_CASE`` and any other ``$VAR`` in a controlDict-style
-    path using the executor's own environment.
-
-    ``$FOAM_CASE`` is not a shell variable set by ``etc/bashrc`` -- OpenFOAM
-    substitutes it at solver startup from the case being run (``-case``), so
-    it is resolved here as the ``case_root`` this resolver was already given.
-    Every other variable (``$WM_OPTIONS`` in practice) must come from
-    ``env``; if it is undefined this returns ``None`` rather than guessing a
-    value, so the caller can report the dependency unavailable instead of
-    fabricating a path.
-    """
+    """Expand ``$VAR`` in a controlDict path from ``env`` (``$FOAM_CASE`` is ``case_root``); None when a variable is undefined."""
+    # etc/bashrc does not set $FOAM_CASE: OpenFOAM substitutes it at solver startup.
     missing: list[str] = []
 
     def _substitute(match: "re.Match[str]") -> str:
@@ -156,7 +125,7 @@ def _resolve_control_dict_libs_entry(
         return name, _resolve_named_library(name, lib_dirs=lib_dirs)
 
     # A case-local path such as
-    # "$FOAM_CASE/platforms/$WM_OPTIONS/lib/lib<name>.so" (I2c).
+    # "$FOAM_CASE/platforms/$WM_OPTIONS/lib/lib<name>.so".
     expanded = _expand_openfoam_path(entry, case_root=case_root, env=env)
     if expanded is None:
         return name, None
@@ -249,8 +218,7 @@ def artifact_value_reader(artifact_format: str):
 
     Returns :class:`~omnidriver.cardiacfoam.activation_probes.ActivationProbeReader`
     for ``ACTIVATION_PROBES_FORMAT``, the format ``niederer2011``'s
-    ``samplePoints`` output declares. Readers for other cardiac formats (ECG
-    traces, Purkinje time series) register here when they land."""
+    ``samplePoints`` output declares."""
     from omnidriver.cardiacfoam.activation_probes import ACTIVATION_PROBES_FORMAT, ActivationProbeReader
 
     if artifact_format == ACTIVATION_PROBES_FORMAT:

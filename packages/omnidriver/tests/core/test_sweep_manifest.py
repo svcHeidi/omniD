@@ -99,9 +99,8 @@ def test_write_then_read_manifest_round_trips_case_record_path(tmp_path):
 
 
 def test_read_manifest_defaults_case_record_path_for_pre_existing_manifest(tmp_path):
-    # A manifest written before this field existed must still load -- a
-    # resumed sweep from an older omnidriver version cannot be forced to
-    # regenerate everything just because one new field appeared.
+    # A manifest without this field must still load, so a resumed sweep need
+    # not regenerate everything.
     manifest_path = tmp_path / "sweep_manifest.json"
     manifest_path.write_text(json.dumps({
         "schema_version": "1.0",

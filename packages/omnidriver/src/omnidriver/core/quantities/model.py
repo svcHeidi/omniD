@@ -1,10 +1,6 @@
-"""A value read from a result, with everything needed to judge it.
+"""A value read from a result, with everything needed to judge it; nothing here names a solver or a physical quantity.
 
-Nothing here names a solver or a physical quantity. A reader declares the
-unit of what it returns, its sentinels (raw values meaning "never reached"),
-its sampling rule and the unit of its coordinates. Core resolves sentinels
-first and converts after (``reading.read_quantities``, ``reading.converted``).
-"""
+A reader declares its unit, sentinels (raw values meaning "never reached"), sampling rule and coordinate unit; core resolves sentinels first and converts after."""
 from __future__ import annotations
 
 import math

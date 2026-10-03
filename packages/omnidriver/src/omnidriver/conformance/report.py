@@ -1,12 +1,6 @@
-"""``omnidriver check``: the conformance checks C1-C14 and the native
-regression, run against a solver you are working on, reported as JSON.
+"""``omnidriver check``: the conformance checks C1-C14 and the native regression, reported as JSON.
 
-A record declares how it is exercised briefly (``TutorialRecord.conformance``).
-Everything the checks need is supplied: the solver's tree, its shell, a scratch
-root and any inputs. The report states what passed and what failed and why; it
-gates nothing, and a solver under development that fails a check is the report
-doing its job.
-"""
+It gates nothing: a solver under development that fails a check is the report doing its job."""
 from __future__ import annotations
 
 import dataclasses
@@ -44,9 +38,7 @@ def regression_script(driver_context: "DriverContext", native_case: Path) -> Pat
 
 
 def _regression(script: Path, native_case: Path, work: Path, timeout_s: float) -> dict[str, Any]:
-    """The native regression run where the native case is never written: a
-    copy under ``work`` runs the script and compares with the solver's own
-    reference."""
+    """Run the native regression script in a copy under ``work``; the native case is never written."""
     case = work / native_case.name
     shutil.rmtree(case, ignore_errors=True)
     shutil.copytree(native_case, case, symlinks=True)
@@ -78,8 +70,7 @@ def _target(
     driver_context: "DriverContext", plugin: str, record: Any, cases_root: Path, scratch_root: Path,
     inputs: Mapping[str, str], benchmarks: Path | None,
 ) -> tuple[ConformanceTarget, str | None]:
-    """The record's study placed at ``cases_root``/``scratch_root``, and why
-    its quantity could not be placed (``None`` when it could)."""
+    """The record's study placed at the roots, and why its quantity could not be placed (``None`` when it could)."""
     study = {
         field.name: getattr(record.conformance, field.name) for field in dataclasses.fields(record.conformance)
     }

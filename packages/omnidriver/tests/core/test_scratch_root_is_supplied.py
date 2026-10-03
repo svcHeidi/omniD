@@ -1,4 +1,4 @@
-"""The scratch root is supplied, never invented (owner decision 2026-09-26)."""
+"""The scratch root is supplied, never invented."""
 
 from __future__ import annotations
 

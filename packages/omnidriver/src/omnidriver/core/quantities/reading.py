@@ -38,7 +38,7 @@ def read_quantities(reader: Any, case_root: Path, artifact: Any, request: ReadRe
 
     A sentinel is a statement ("never reached"), not a number, so it becomes
     ``not_reached`` here, before anything could convert it: ``-1 s`` is never
-    ``-1000 ms`` (spec §2)."""
+    ``-1000 ms``."""
     check_reader(reader, artifact_format=artifact.format)
     if reader.takes_points:
         missing = [name for name in request.names if name not in request.points]
@@ -71,10 +71,8 @@ def read_quantities(reader: Any, case_root: Path, artifact: Any, request: ReadRe
             status, value = "evaluated", float(sample.value)
         sampled_at = tuple(float(c) for c in sample.sampled_at) if sample.sampled_at is not None else None
         if reader.takes_points and sampled_at is None:
-            # A pre-registered max_sampling_offset checks a sample's location,
-            # so a reader that samples at supplied points must report where;
-            # silently accepting "no location" would let that stated guard
-            # pass unchecked (`comparison._metric` only compares an offset it has).
+            # Without a reported location a stated max_sampling_offset would
+            # pass unchecked.
             raise QuantityReadError(
                 f"the {artifact.format!r} reader samples at supplied points, but reported no sampled_at for "
                 f"{name!r}; a stated max_sampling_offset could not be checked against an unknown location"

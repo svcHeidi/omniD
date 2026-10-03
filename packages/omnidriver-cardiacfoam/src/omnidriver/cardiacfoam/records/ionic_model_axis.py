@@ -1,13 +1,5 @@
-"""The ionic-model axis: a parameterised builder
-(``ionic_model_axis(name, *, document, scope)``) mapping a bare ionic-model
-name to its ``<solver>Coeffs.ionicModel`` and
-``singleCellStimulus.stim_amplitude`` patches, both read from the ionic model
-catalog.
-
-The amplitude is looked up, never study-supplied: it is a property of the
-model, so a study naming both a model and a separate, disagreeing amplitude
-would just restate the same fact twice, wrongly. ``tissue`` is not part of
-this axis -- a record's own study supplies it directly.
+"""The ionic-model axis: ``ionic_model_axis(name, *, document, scope)`` maps an ionic-model name to its
+``<solver>Coeffs.ionicModel`` and ``singleCellStimulus.stim_amplitude`` patches, both from the ionic model catalog.
 """
 
 from __future__ import annotations
@@ -27,17 +19,14 @@ def ionic_model_axis(
 
     ``document`` is the case-relative document the ``<solver>Coeffs`` scope
     lives in. ``scope`` is the dictionary path to that block (e.g.
-    ``("singleCellSolverCoeffs",)``); this axis does not derive it from
-    ``myocardiumSolver``, since the tutorial doesn't vary that value.
+    ``("singleCellSolverCoeffs",)``).
 
-    The axis declares ``value_kind="word"`` for the study value (a bare model
-    name); a non-string or whitespace-containing value is refused by core's
-    generic shape check before ``resolve`` ever runs.
+    The amplitude is looked up, never study-supplied: it is a property of the
+    model, so a second study value would restate the same fact.
 
     Refuses by name a model the ionic model catalog does not recognise, or
     one with no single-cell stimulus amplitude declared (every
-    manufactured-tissue-only model, by construction: there is no single-cell
-    case for a manufactured verification model).
+    manufactured-tissue-only model).
     """
 
     def resolve(value: Any, staged_case_root: Path) -> AxisResult:
