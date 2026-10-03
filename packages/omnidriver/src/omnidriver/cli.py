@@ -1270,7 +1270,7 @@ def _select_stack(parser: argparse.ArgumentParser, args):
                     f"folder {repository.tutorials} that {repository.root / 'omnidriver.toml'} declares"
                 )
             os.environ[mapping.source_root_variable] = str(repository.tutorials)
-        context = dataclasses.replace(context, scripts_dir=repository.scripts)
+        context = dataclasses.replace(context, repository=repository)
     return context, repository
 
 

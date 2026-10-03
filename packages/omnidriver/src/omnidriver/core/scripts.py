@@ -2,7 +2,7 @@
 as a workflow step.
 
 The repository is the truth: its ``omnidriver.toml`` names the scripts folder,
-the CLI puts it on the ``DriverContext`` (``scripts_dir``), and nothing here
+the CLI puts the repository on the ``DriverContext``, and nothing here
 keeps a catalogue of what the folder holds.
 """
 
@@ -40,10 +40,15 @@ def _is_script(path: Path, root: Path) -> bool:
     return path.parent == root and path.suffix in _SCRIPT_SUFFIXES
 
 
+def _scripts_folder(driver_context: Any | None) -> Path | None:
+    repository = getattr(driver_context, "repository", None)
+    return None if repository is None else repository.scripts
+
+
 def find_script(name: str, driver_context: Any | None) -> Path | None:
     """The script a step command names: a path relative to the context's
-    ``scripts_dir`` and inside it. ``None`` when the context supplies no folder."""
-    root = getattr(driver_context, "scripts_dir", None)
+    scripts folder and inside it. ``None`` when the context has no repository."""
+    root = _scripts_folder(driver_context)
     if root is None or not name or Path(name).is_absolute():
         return None
     path = (root / name).resolve()
@@ -103,11 +108,11 @@ def _help_usage(path: Path, text: str, environ: Mapping[str, str]) -> str | None
 
 
 def list_scripts(driver_context: Any, environ: Mapping[str, str]) -> list[dict[str, str | None]]:
-    """Every script in the context's ``scripts_dir`` with its usage line: the
+    """Every script in the repository's scripts folder with its usage line: the
     docstring's or header's first line when the file states one, else the first
     line of ``--help`` (run under ``environ``'s ``PATH``), else ``None``. Empty
     when the context supplies no folder."""
-    root = driver_context.scripts_dir
+    root = _scripts_folder(driver_context)
     if root is None or not root.is_dir():
         return []
     listed = []

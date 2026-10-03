@@ -268,6 +268,16 @@ def toy_conformance_target(tmp_path: Path, *, plugin: str = TOY_PLUGIN) -> Confo
 # -- fixtures: the shell a CLI test runs in --------------------------------------
 
 
+class ScriptStepToy(ToyStack):
+    """``toyTutorial`` runs the repository script ``solve.py`` as its one step."""
+
+    SOLVER_COMMANDS = frozenset()
+    RECORDS = {"toyTutorial": _toy_record(
+        _solve(("solve.py",)),
+        conformance=dataclasses.replace(_TOY_RECORD.conformance, requires=()),
+    )}
+
+
 class E2EFolderPlugin(ToyStack):
     """Declares a case entrypoint, so ``--case`` can run a folder."""
 

@@ -6,6 +6,7 @@ within one process: the scratch root is supplied explicitly
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -29,6 +30,7 @@ from omnidriver.core.runtime.postprocess_phase import build_sweep_context
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from omnidriver.core.runtime.record_surface import lists_key
 from omnidriver.core.runtime.record_execution import commit_record_case
+from omnidriver.core.repository import read_repository
 from omnidriver.core.runtime.run_command import omnidriver_run_command
 from omnidriver.core.runtime.run_document_exec import RUN_DOCUMENT_FILENAME
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR
@@ -48,7 +50,10 @@ def _verdict(check_id: str, passed: bool, detail: str) -> CheckVerdict:
 
 
 def _context(target: ConformanceTarget):
-    return load_plugin_context(target.plugin)
+    context = load_plugin_context(target.plugin)
+    if target.repository is None:
+        return context
+    return dataclasses.replace(context, repository=read_repository(target.repository))
 
 
 def _record(ctx, name: str):
@@ -234,7 +239,7 @@ def _execute(
     target: ConformanceTarget, ctx, report, env: Mapping[str, str] = {},
 ) -> tuple[subprocess.CompletedProcess, dict[str, Any] | None]:
     # Never hand-build a run command: the canonical builder carries --plugin
-    # from ctx.plugin_selector, set by load_plugin_context.
+    # from ctx.plugin_selector and ctx.repository.
     proc = subprocess.run(
         omnidriver_run_command(ctx, "--run-document", str(_run_document_path(report))),
         capture_output=True, text=True, env={**_child_env(target), **env}, timeout=target.timeout_s,
@@ -295,7 +300,8 @@ def check_sweep(target: ConformanceTarget) -> CheckVerdict:
     try:
         proc, payload = sweep_run(
             target.plugin, sweep_spec(target.record, target.cases_root, base, {target.sweep_name: target.sweep_values}),
-            work=work, scratch_dir=target.scratch_root, inputs=target.inputs, case_timeout_s=target.timeout_s,
+            work=work, scratch_dir=target.scratch_root, repository=target.repository, inputs=target.inputs,
+            case_timeout_s=target.timeout_s,
             env=_child_env(target), timeout_s=target.timeout_s,
         )
     except subprocess.TimeoutExpired:
@@ -682,7 +688,8 @@ def check_quantity_across_sweep(target: ConformanceTarget) -> CheckVerdict:
         proc, payload = sweep_run(
             target.plugin,
             sweep_spec(target.record, target.cases_root, base, {target.sweep_name: declared.sweep_values}),
-            work=work, scratch_dir=target.scratch_root, inputs=target.inputs, case_timeout_s=target.timeout_s,
+            work=work, scratch_dir=target.scratch_root, repository=target.repository, inputs=target.inputs,
+            case_timeout_s=target.timeout_s,
             env=_child_env(target), timeout_s=target.timeout_s,
         )
     except subprocess.TimeoutExpired:

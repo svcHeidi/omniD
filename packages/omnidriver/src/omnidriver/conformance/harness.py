@@ -11,7 +11,7 @@ SWEEP_TIMEOUT_S = 1800.0
 
 
 def sweep_run(
-    plugin: str, spec: Mapping[str, Any], *, work: Path, scratch_dir: Path,
+    plugin: str, spec: Mapping[str, Any], *, work: Path, scratch_dir: Path, repository: Path | None = None,
     inputs: Mapping[str, str] | None = None, case_timeout_s: float | None = None,
     env: Mapping[str, str] | None = None, timeout_s: float = SWEEP_TIMEOUT_S,
 ) -> tuple[subprocess.CompletedProcess, dict[str, Any] | None]:
@@ -21,6 +21,8 @@ def sweep_run(
     spec_path.write_text(json.dumps(spec))
     argv = [sys.executable, "-m", "omnidriver", "sweep-run", "--plugin", plugin, "--spec", str(spec_path),
             "--output-dir", str(work / "out"), "--scratch-dir", str(scratch_dir)]
+    if repository is not None:
+        argv += ["--repo", str(repository)]
     if case_timeout_s is not None:
         argv += ["--case-timeout-s", str(case_timeout_s)]
     for name, path in (inputs or {}).items():

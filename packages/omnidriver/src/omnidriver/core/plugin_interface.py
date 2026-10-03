@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from omnidriver.core.provider_identity import ProviderIdentity, StackIdentity
     from omnidriver.core.provider_stack import ProviderStack
     from omnidriver.core.quantities.model import ArtifactValueReader
+    from omnidriver.core.repository import Repository
     from omnidriver.core.runtime.models import DataArtifact, TutorialSpec
 
 
@@ -293,10 +294,10 @@ class DriverContext:
     #: or ``None`` for a context no selector produced. Not part of equality:
     #: it says how to rebuild a context, not what the context is.
     plugin_selector: str | None = field(default=None, compare=False)
-    #: The scripts folder of the solver repository the stack was selected
-    #: from, or ``None``. A step may name a script in it. Not part of
-    #: equality, for the same reason.
-    scripts_dir: Path | None = field(default=None, compare=False)
+    #: The solver repository the stack was selected from, or ``None``: its
+    #: scripts folder serves a step that names a script, and a child process
+    #: is given its root (``--repo``). Not part of equality, for the same reason.
+    repository: Repository | None = field(default=None, compare=False)
 
     @cached_property
     def stack(self) -> "ProviderStack":

@@ -75,7 +75,8 @@ def _probe(probe: Any, env: Mapping[str, str]) -> dict[str, Any]:
 
 
 def _target(
-    plugin: str, record: Any, cases_root: Path, scratch_root: Path, inputs: Mapping[str, str], benchmarks: Path | None,
+    driver_context: "DriverContext", plugin: str, record: Any, cases_root: Path, scratch_root: Path,
+    inputs: Mapping[str, str], benchmarks: Path | None,
 ) -> tuple[ConformanceTarget, str | None]:
     """The record's study placed at ``cases_root``/``scratch_root``, and why
     its quantity could not be placed (``None`` when it could)."""
@@ -89,7 +90,8 @@ def _target(
         except (OSError, ValueError) as exc:
             study["quantity"], problem = None, str(exc)
     return ConformanceTarget(
-        plugin=plugin, record=record.name, cases_root=cases_root, scratch_root=scratch_root, inputs=dict(inputs), **study,
+        plugin=plugin, record=record.name, cases_root=cases_root, scratch_root=scratch_root, inputs=dict(inputs),
+        repository=None if driver_context.repository is None else driver_context.repository.root, **study,
     ), problem
 
 
@@ -127,7 +129,7 @@ def check_report(
         verdicts: list[dict[str, Any]] = []
         for check_id in ran:
             target, quantity_problem = _target(
-                plugin, record, cases_root, scratch_root / record.name / check_id, inputs or {}, benchmarks,
+                driver_context, plugin, record, cases_root, scratch_root / record.name / check_id, inputs or {}, benchmarks,
             )
             started = time.monotonic()
             if check_id in {"C13", "C14"} and quantity_problem:

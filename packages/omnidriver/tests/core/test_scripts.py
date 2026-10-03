@@ -6,12 +6,14 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from omnidriver.cli import main
 from omnidriver.core.plugin_interface import driver_context
+from omnidriver.core.repository import Repository
 from omnidriver.core.runtime.workflow import validate_workflow_commands
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
@@ -51,7 +53,9 @@ def scripts(tmp_path) -> Path:
 @pytest.fixture
 def context(scripts):
     """A stack whose repository keeps its scripts in ``scripts``."""
-    return dataclasses.replace(driver_context(ToyStack(), source="test:scripts"), scripts_dir=scripts.resolve())
+    root = scripts.parent.resolve()
+    repository = Repository(root=root, plugin=TOY_PLUGIN, tutorials=root, source=root, scripts=scripts.resolve())
+    return dataclasses.replace(driver_context(ToyStack(), source="test:scripts"), repository=repository)
 
 
 def test_every_script_is_listed_with_the_usage_line_its_file_states(context):
@@ -142,3 +146,34 @@ def test_describe_lists_the_repositorys_scripts_beside_its_records(tmp_path, cap
     assert main(["describe", "--entry", "toyTutorial", "--repo", str(repo)]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["records"] and [(s["name"], s["usage"]) for s in payload["scripts"]] == [("convert.py", "Convert it.")]
+
+
+def _script_repository(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    write_toy_native_case(repo / "tutorials")
+    (repo / "applications" / "scripts").mkdir(parents=True)
+    (repo / "applications" / "scripts" / "solve.py").write_text("open('solved.marker', 'w').close()\n")
+    (repo / "omnidriver.toml").write_text(
+        'plugin = "plugins.toy:ScriptStepToy"\ntutorials = "tutorials"\nsource = "src"\nscripts = "applications/scripts"\n'
+    )
+    return repo
+
+
+def test_a_planned_script_step_runs_from_the_plans_own_launch_command(tmp_path, capsys):
+    repo = _script_repository(tmp_path)
+    assert main([
+        "plan", "--strict", "--repo", str(repo), "--entry", "toyTutorial", "--scratch-dir", str(tmp_path / "scratch"),
+    ]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    launched = subprocess.run(plan["launch"]["command"], capture_output=True, text=True, timeout=120)
+    assert json.loads(launched.stdout)["status"] == "ok", launched.stdout
+
+
+def test_check_runs_a_script_step_in_the_repositorys_own_child_processes(tmp_path, capsys):
+    repo = _script_repository(tmp_path)
+    assert main([
+        "check", "--repo", str(repo), "--scratch-dir", str(tmp_path / "scratch"), "--record", "toyTutorial",
+        "--checks", "C6,C7",
+    ]) == 0
+    [entry] = json.loads(capsys.readouterr().out)["records"]
+    assert [(v["check"], v["passed"]) for v in entry["checks"]] == [("C6", True), ("C7", True)], entry

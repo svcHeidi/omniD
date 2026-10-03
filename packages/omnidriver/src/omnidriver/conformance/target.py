@@ -20,7 +20,9 @@ class ConformanceTarget(ConformanceStudy):
     written. ``inputs`` is every ``--input NAME=PATH`` the record's own inputs
     need, forwarded to every plan/run/sweep a check makes (C5-C7) and to a
     direct ``commit_record_case`` call (C4, C11); empty for a record with no
-    inputs, or one whose inputs all have a native location.
+    inputs, or one whose inputs all have a native location. ``repository`` is
+    the solver repository's root when the stack was selected from one, so the
+    child processes a check starts see its scripts too.
     """
 
     plugin: str
@@ -28,6 +30,7 @@ class ConformanceTarget(ConformanceStudy):
     cases_root: Path
     scratch_root: Path
     inputs: Mapping[str, str] = field(default_factory=dict)
+    repository: Path | None = None
 
     def __post_init__(self) -> None:
         # scratch_root must be distinct from cases_root so nothing a check

@@ -61,7 +61,7 @@ def describe_entry(
     the case's own ``case.documentation`` files. ``record_preview`` is each
     patch's document, key, value, status and validated flag, plus the command
     arguments per workflow step. ``scripts`` lists the helper scripts of the
-    stack's repository (``DriverContext.scripts_dir``) with their usage lines,
+    stack's repository (``DriverContext.repository``) with their usage lines,
     beside ``records``: a record step may run one, and an agent may run one
     by hand.
     """

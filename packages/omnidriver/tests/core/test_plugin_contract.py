@@ -139,10 +139,10 @@ def test_identity_records_which_provider_answers_each_member():
     assert resolutions["get_tutorial_records"] == provider_stack.UNCLAIMED
 
 
-def test_a_driver_context_holds_providers_identity_selector_and_scripts_dir_only():
+def test_a_driver_context_holds_providers_identity_selector_and_repository_only():
     plugin = _Bare()
     context = driver_context(plugin, source="test")
     rebuilt = DriverContext((plugin,), context.identity)
-    assert [item.name for item in fields(rebuilt)] == ["providers", "identity", "plugin_selector", "scripts_dir"]
+    assert [item.name for item in fields(rebuilt)] == ["providers", "identity", "plugin_selector", "repository"]
     assert rebuilt == context
     assert rebuilt.stack.ids == ("org.test.bare",)
