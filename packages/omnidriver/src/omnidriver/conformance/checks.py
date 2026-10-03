@@ -18,7 +18,7 @@ from typing import Any, Callable, Mapping
 
 from omnidriver.core.introspection import describe_entry
 from omnidriver.core.plugin_interface import load_plugin_context
-from omnidriver.core.provider_stack import MemberAbsent
+from omnidriver.core.provider_stack import MemberAbsent, provider_profile
 from omnidriver.core.experiments import inspect_sweep_experiment
 from omnidriver.core.quantities import (
     Quantity, ReadRequest, ReaderDeclarationError, check_reader, convert, experiment_comparisons, read_quantities,
@@ -68,7 +68,7 @@ def check_load(target: ConformanceTarget) -> CheckVerdict:
     target names."""
     ctx = _context(target)
     ids = [provider.plugin_id for provider in ctx.providers]
-    required = {rid for provider in ctx.providers for rid in provider.get_profile().requires}
+    required = {rid for provider in ctx.providers for rid in provider_profile(provider).requires}
     roots = [pid for pid in ids if pid not in required]
     if len(roots) != 1:
         return _verdict("C1", False, f"stack {ids} has {len(roots)} unrequired providers {roots}; expected exactly one root")

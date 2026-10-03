@@ -1251,8 +1251,10 @@ def _select_stack(parser: argparse.ArgumentParser, args):
                 f"(plugin = {repository.plugin!r}) select different stacks ({', '.join(mismatch)})"
             )
     if repository is not None:
+        from omnidriver.core.provider_stack import provider_profile
+
         for provider in context.providers:
-            mapping = provider.get_profile().cxx_mapping
+            mapping = provider_profile(provider).cxx_mapping
             if mapping is None:
                 continue
             if (repository.tutorials / mapping.source_root_relative).resolve() != repository.source:

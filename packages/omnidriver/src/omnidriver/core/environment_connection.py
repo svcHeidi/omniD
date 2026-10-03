@@ -131,6 +131,8 @@ def _diagnostic(level: str, code: str, message: str, field: str = "") -> dict[st
 
 
 def environment_report(driver_context: "DriverContext", environ: Mapping[str, str] | None = None) -> dict[str, Any]:
+    from .provider_stack import provider_profile
+
     environ = dict(os.environ if environ is None else environ)
     connection, declared_by = stack_connection(driver_context)
     variables = [
@@ -146,7 +148,7 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
         for item in variables if item["required"] and not item["set"]
     ]
     for provider in driver_context.providers:
-        mapping = provider.get_profile().cxx_mapping
+        mapping = provider_profile(provider).cxx_mapping
         root = mapping.source_root(environ) if mapping is not None else None
         if root is not None and not root.is_dir():
             diagnostics.append(_diagnostic(

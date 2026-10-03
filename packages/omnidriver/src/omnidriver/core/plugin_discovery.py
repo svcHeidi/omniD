@@ -127,10 +127,12 @@ def _expand_with_requirements(primary: Any, source: str):
     requirement this can't find is left for ``order_providers`` to report by
     name.
     """
+    from .provider_stack import provider_profile
+
     providers = [primary]
     sources = [source]
     seen_ids = {primary.plugin_id}
-    for required_id in primary.get_profile().requires:
+    for required_id in provider_profile(primary).requires:
         if required_id in seen_ids:
             continue
         found = _find_installed_provider(required_id)
