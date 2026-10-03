@@ -710,11 +710,6 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Plan and print simulation cases without running the solver.",
-    )
-    parser.add_argument(
         "--strict",
         action="store_true",
         help="For action=plan/step/run, fail on incomplete machine-readable coverage.",
@@ -794,11 +789,6 @@ def build_parser() -> argparse.ArgumentParser:
             "JSON object of 'document:key' patches, the same a study takes, "
             "then rerun the step."
         ),
-    )
-    parser.add_argument(
-        "--continue-on-error",
-        action="store_true",
-        help="Continue executing remaining cases after a failure.",
     )
     parser.add_argument(
         "--cases-root",
@@ -946,31 +936,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 _FLAG_ERRORS_BY_ACTION = {
-    "describe": (
-        ("dry_run", "--dry-run is not valid with action=describe"),
-        ("continue_on_error", "--continue-on-error is not valid with action=describe"),
-    ),
-    "plan": (
-        ("dry_run", "--dry-run is not valid with action=plan"),
-        ("continue_on_error", "--continue-on-error is not valid with action=plan"),
-    ),
-    "step": (
-        ("dry_run", "--dry-run is not valid with action=step"),
-        ("continue_on_error", "--continue-on-error is not valid with action=step"),
-    ),
-    "run": (
-        ("dry_run", "--dry-run is not valid with action=run"),
-        ("continue_on_error", "--continue-on-error is not valid with action=run"),
-    ),
     "catalog": (
-        ("dry_run", "--dry-run is not valid with action=catalog"),
-        ("continue_on_error", "--continue-on-error is not valid with action=catalog"),
         ("parallel", "--parallel is not valid with action=catalog"),
         ("inputs", "--input is not valid with action=catalog"),
-    ),
-    "compare": (
-        ("dry_run", "--dry-run is not valid with action=compare"),
-        ("continue_on_error", "--continue-on-error is not valid with action=compare"),
     ),
 }
 
@@ -986,7 +954,7 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
     if args.action == "check":
         if any((
             args.entry, args.case, args.run_document, args.spec, args.output_dir, args.strict,
-            args.parallel is not None, args.dry_run, args.continue_on_error, args.step, args.apply is not None,
+            args.parallel is not None, args.step, args.apply is not None,
         )):
             parser.error(
                 "action=check takes --plugin or --repo, --cases-root, --scratch-dir, --input, --record, "
@@ -1075,12 +1043,12 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--comparison-request/--report are only valid with action=compare")
     if args.action == "env" and any((
         args.entry, args.case, args.run_document, args.cases_root, args.spec, args.output_dir,
-        args.scratch_dir, args.parallel is not None, args.inputs, args.dry_run, args.continue_on_error,
+        args.scratch_dir, args.parallel is not None, args.inputs,
     )):
         parser.error("action=env takes only --plugin or --repo: it reports the stack's environment, not a run's")
     if args.action == "scan" and any((
         args.entry, args.case, args.run_document, args.cases_root, args.spec, args.output_dir,
-        args.parallel is not None, args.inputs, args.dry_run, args.continue_on_error,
+        args.parallel is not None, args.inputs,
     )):
         parser.error("action=scan takes only --plugin or --repo, and --scratch-dir: it rescans the stack's C++ source")
     if not args.run_document and not args.entry and not args.case and not (args.uncatalogued or args.unread) and args.action not in {

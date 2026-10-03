@@ -16,7 +16,7 @@ def test_compare_requires_both_flags():
 
 
 @pytest.mark.parametrize("flag_and_value", [
-    ("--entry", "x"), ("--run-document", "doc.json"), ("--config", "c.json"), ("--cases-root", "."),
+    ("--entry", "x"), ("--run-document", "doc.json"), ("--cases-root", "."),
     ("--spec", "s.json"), ("--output-dir", "out"), ("--plugin", "plugins.toy:QuantityToyPlugin"),
     ("--scratch-dir", "scratch"),
 ])
@@ -24,16 +24,6 @@ def test_compare_refuses_plan_run_sweep_flags(flag_and_value):
     flag, value = flag_and_value
     with pytest.raises(SystemExit):
         main(["compare", "--comparison-request", "r.json", "--report", "o.json", flag, value])
-
-
-def test_compare_refuses_dry_run():
-    with pytest.raises(SystemExit):
-        main(["compare", "--comparison-request", "r.json", "--report", "o.json", "--dry-run"])
-
-
-def test_compare_refuses_continue_on_error():
-    with pytest.raises(SystemExit):
-        main(["compare", "--comparison-request", "r.json", "--report", "o.json", "--continue-on-error"])
 
 
 def test_comparison_request_and_report_flags_are_refused_outside_compare():
