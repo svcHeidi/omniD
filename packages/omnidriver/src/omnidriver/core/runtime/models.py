@@ -9,8 +9,8 @@ from typing import Any, Final
 ArtifactFormat = str
 """Artifact output format. Open-ended by design, not a closed enum: most
 format strings in practice are a solver plugin's own vocabulary for its own
-outputs -- core has no business validating spellings it does not own (see
-``future/ENVIRONMENT_CONTRACT.md`` §10). ``CORE_ARTIFACT_FORMATS`` below
+outputs -- core has no business validating spellings it does not own.
+``CORE_ARTIFACT_FORMATS`` below
 names the only two values core itself ever writes, for its own artifacts."""
 
 CORE_ARTIFACT_FORMATS: Final[frozenset[str]] = frozenset({"json_summary", "log"})

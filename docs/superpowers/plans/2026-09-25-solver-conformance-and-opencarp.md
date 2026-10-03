@@ -179,7 +179,7 @@ packages/omnidriver-opencarp/
 
   Design: docs/superpowers/specs/2026-09-25-solver-conformance-and-opencarp-design.md §4.
   Everything here is supplied by the caller; the suite discovers nothing
-  (future/ENVIRONMENT_CONTRACT.md §12).
+  (`CLAUDE.md`'s "Supplied versus discovered").
   """
   from __future__ import annotations
 

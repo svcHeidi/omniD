@@ -333,7 +333,7 @@ git commit -m "feat(core): a profile declares what it provides and what it requi
 
 ## Task 2: Declared-vs-implemented guard
 
-Intent is supplied; the method set is discovered. `ENVIRONMENT_CONTRACT.md` §12 is the rule; this is its application.
+Intent is supplied; the method set is discovered. `CLAUDE.md`'s "Supplied versus discovered" is the rule; this is its application.
 
 **Files:**
 - Modify: `packages/omnidriver/src/omnidriver/core/provider_stack.py` (created here)
@@ -1680,7 +1680,7 @@ git commit -m "feat(core): dict-key scanning becomes a real, overridable seam"
 
 **Files:**
 - Modify: `ARCHITECTURE.md`
-- Modify: `future/ENVIRONMENT_CONTRACT.md`
+- Modify: retired ENVIRONMENT_CONTRACT
 
 - [ ] **Step 1: Add a composition section to `ARCHITECTURE.md`**
 
@@ -1688,7 +1688,7 @@ Above the generated seam table, add a hand-written section stating the six rules
 
 - [ ] **Step 2: Record the correction in the environment contract**
 
-`ENVIRONMENT_CONTRACT.md` §6 says the `GenericEnvironmentPlugin` rename is blocked on §5b's trust boundary. Under composition the environment adapter is no longer a competing plugin, which changes that assessment. Append, dated:
+retired ENVIRONMENT_CONTRACT §6 says the `GenericEnvironmentPlugin` rename is blocked on §5b's trust boundary. Under composition the environment adapter is no longer a competing plugin, which changes that assessment. Append, dated:
 
 ```
 **Amended 2026-09-20:** Phase 1 of the provider-composition spec makes the
@@ -1704,7 +1704,7 @@ architecture. Re-evaluate §6 against the stack before acting on it.
 ```bash
 python -m pytest packages/omnidriver/tests/core/test_documentation_inventory_contracts.py -v
 python3 scripts/export-capability-seams.py --check
-git add ARCHITECTURE.md future/ENVIRONMENT_CONTRACT.md
+git add ARCHITECTURE.md retired ENVIRONMENT_CONTRACT
 git commit -m "docs: the composition contract, and a dated amendment to §6"
 ```
 

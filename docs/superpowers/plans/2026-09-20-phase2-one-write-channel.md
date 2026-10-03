@@ -23,7 +23,7 @@ describe asset-free synthesis as a patch.
 **Tech Stack:** Python 3.11+, pytest. No new runtime dependency.
 
 **Source spec:** `docs/superpowers/specs/2026-09-20-provider-composition-design.md` §5,
-as **superseded** by [`docs/audits/2026-09-22-implementation-roadmap.md`](../../audits/2026-09-22-implementation-roadmap.md)
+as **superseded** by retired 2026-09-22-implementation-roadmap
 §4 where the two disagree. §4's disposition table is the authority on every task
 below; the audit's proposal defects **W1** and **W2** are the specific mistakes
 this rewrite exists to avoid.
@@ -34,8 +34,8 @@ closed. Task 1 below must not start before it is.
 
 ## Status
 
-**Rewritten 2026-09-22.** The [pre-implementation audit and revised
-roadmap](../../audits/2026-09-22-implementation-roadmap.md) retained the
+**Rewritten 2026-09-22.** The pre-implementation audit and revised
+roadmap (retired 2026-09-22-implementation-roadmap) retained the
 one-transaction-channel goal and rejected the previous plan's contract and
 examples. This document replaces them. The former task snippets are gone
 rather than annotated: leaving a refuted contract next to its replacement is how

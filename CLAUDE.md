@@ -148,8 +148,9 @@ cardiacFOAM and cardiacCore are both OpenFOAM-based, so they do every shared job
 and declare where you look; supply everything else. A case root has no ambient
 truth, so discovering one *invents* an answer — that is why core could not plan
 a case from a wheel. Scheduler-allocated resources (MPI ranks, `OMP_NUM_THREADS`)
-do have ambient truth, so reading them is right. Full reasoning:
-`future/ENVIRONMENT_CONTRACT.md` §12.
+do have ambient truth, so reading them is right. Core owns the concepts of
+an environment (entrypoint, case directories, a binary root) and a plugin their
+bindings; `ARCHITECTURE.md`'s "Rule 1 in practice" is the checkable form.
 
 **Evaluate defaults lazily.** The same bug appeared twice in `core/specs/paths.py`
 consumers: a fallback computed *before* the branch that would have avoided it,
@@ -162,13 +163,14 @@ stages.
 **"No Python imports" does not mean unused.** `gmsh` is declared for the
 **binary** its wheel installs, which cardiac tutorials invoke as a workflow
 command. An import scan reads it as dead; removing it breaks four tutorials at
-runtime, silently.
+runtime, silently. The same holds for "no callers in core": a name core never
+reads may be a hook a plugin or a test conftest calls, and a count of grep hits
+is not a count of concepts. Delete on evidence from every package and script.
 
 ## Where authority lives
 
-- `future/ENVIRONMENT_CONTRACT.md` — what core owns and how. Supersedes
-  `ARCHITECTURE.md`'s Rule 1. §12 is the supplied-vs-discovered rule.
-- `ARCHITECTURE.md` — the layer map.
+- `ARCHITECTURE.md` — the layer map, the package-independence rules and what
+  core may name.
 - `docs/superpowers/ROADMAP.md` — what is open. `docs/superpowers/specs/` and
   `plans/` are the design reasoning and the executed record; the newest plan,
   `plans/2026-10-01-pass2-convergence.md`, holds the owner's decisions.
@@ -177,10 +179,6 @@ runtime, silently.
   and authoring a plugin or a tutorial. Its minimal plugin is a tested fixture
   (`test_agent_guide_plugin.py`); the rest is not import-checked, so verify a
   module path before relying on it.
-
-**Read for reasoning, not for locations:** `CHANGELOG.md` and
-`MIGRATION_AUDIT_v2.md`, which describe the retired flat `openfoam_driver/`
-tree. Both carry a banner saying so.
 
 ## House style
 

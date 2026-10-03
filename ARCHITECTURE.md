@@ -63,10 +63,10 @@ alone, core from a built wheel, the static gates). The durable claim is
 
 Rule 1's second sentence is not "core names no OpenFOAM word". `Allrun`,
 `system/controlDict` and `$FOAM_APPBIN` are one environment's bindings of
-concepts core legitimately owns. `future/ENVIRONMENT_CONTRACT.md` restates the
-rule as something checkable: core may name a binding only where it is reached
-through a declared role, a provider member or a documented, overridable
-default. `scripts/check-core-shape.py` holds what is left to a recorded
+concepts core legitimately owns, and core owns the concept, not its spelling.
+The checkable rule: core may name a binding only where it is reached through a
+declared role, a provider member or a documented, overridable default; a
+hardcoded string with no declaration path is a defect. `scripts/check-core-shape.py` holds what is left to a recorded
 baseline (`scripts/core-shape-baseline.txt`) that can only shrink, and
 `scripts/check-import-boundaries.py` enforces the import directions above.
 What is still open is tracked in `docs/superpowers/ROADMAP.md`.

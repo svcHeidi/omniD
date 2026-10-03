@@ -14,7 +14,7 @@
 **Goal:** Copy the actively-developed `openfoam_driver` package from
 `noFrontendCardiacFoam/applications/scripts/driverFoam` into this repo's three
 namespace packages (`omnidriver`, `omnidriver-openfoam`, `omnidriver-cardiac`),
-fixing the core/OpenFOAM coupling points identified in `MIGRATION_AUDIT_v2.md`
+fixing the core/OpenFOAM coupling points identified in retired MIGRATION_AUDIT_v2
 as part of the move rather than after it.
 
 **Architecture:** PEP 420 namespace packages under `packages/*/src/omnidriver/`.
@@ -713,7 +713,7 @@ git commit -m "feat: add ConfigValueCapability so core reads config values witho
 **Interfaces:**
 - Consumes: `driver_context.capabilities.config_values.read(path, key)` from
   Task 5, and `case_files` filtered by `role` (already existing core
-  vocabulary, see `MIGRATION_AUDIT_v2.md` §2-3).
+  vocabulary, see retired MIGRATION_AUDIT_v2 §2-3).
 
 - [ ] **Step 1: Replace the `mutators` import and the two hardcoded reads**
 
@@ -831,7 +831,7 @@ import — these now cross a package boundary, matching the pattern in Task 5
 Step 3).
 
 `sweep_materialize.py::_materialize_case_legacy` is dead code (nothing calls
-it — confirmed in `MIGRATION_AUDIT_v2.md` §Task 4). Delete the function
+it — confirmed in retired MIGRATION_AUDIT_v2 §Task 4). Delete the function
 instead of fixing its import:
 
 ```bash

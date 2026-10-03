@@ -72,7 +72,7 @@ reader to start here, and there was no table). Built from `git log`.
 - **No skips, no fallbacks.** A check that cannot run is a failure that names why. `native_opencarp` tests (openCARP) and `native` tests (cardiacFOAM) **fail, not skip**, when their environment variables are unset.
   - Where a declared default exists (a plain `produces` path means format `"file"`), it is the data model's stated meaning, not a fallback.
   - An absent reader is reported as `not_evaluated` with a reason, never as a pass.
-- **Supplied, never discovered** (`future/ENVIRONMENT_CONTRACT.md` §12):
+- **Supplied, never discovered** (`CLAUDE.md`'s "Supplied versus discovered"):
   - native trees come from `OMNIDRIVER_OPENCARP_TUTORIALS` (openCARP) and `OMNIDRIVER_NATIVE_TUTORIALS` (cardiacFOAM);
   - openCARP's library path is the ambient `DYLD_LIBRARY_PATH`;
   - the reference file's path, each run's sweep output, case and plugin, the sampling points, the pairing and the tolerance all come from the agent's comparison request. Core finds none of them itself.

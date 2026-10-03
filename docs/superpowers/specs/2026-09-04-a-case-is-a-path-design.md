@@ -145,7 +145,7 @@ break the generative tutorials.
 Accepting an arbitrary path introduces no new exposure. `SECURITY.md` already
 classes case content as *"untrusted, unsandboxed by design — running a case
 runs its scripts"*, and
-`future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md` explicitly records
+retired CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL explicitly records
 "arbitrary code inside an invoked `Allrun`" as accepted and not mitigated. The
 root never provided containment and was never claimed to. Naming a directory
 is the operator's explicit opt-in, the same act as naming it under a root
@@ -236,7 +236,7 @@ exists it will show its own shape, and there will be a concrete case instead
 of a guess.
 
 What the discussion did settle is a rule worth stating, recorded in
-`future/ENVIRONMENT_CONTRACT.md` §12: **discover only what genuinely exists
+`CLAUDE.md`'s "Supplied versus discovered": **discover only what genuinely exists
 ambiently, and declare where you look.** A case root has no ambient truth, so
 discovering one invents an answer — that is this document's defect. Execution
 resources do have ambient truth (a scheduler allocated them), so discovering

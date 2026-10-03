@@ -9,7 +9,7 @@ reception), three on the execution side (run path, materialization and sweeps,
 tools and subprocess), one on the agent-facing surface.
 
 **Relationship to existing authority.** This document does not supersede
-`future/ENVIRONMENT_CONTRACT.md`; it depends on it. §9 of that document
+retired ENVIRONMENT_CONTRACT; it depends on it. §9 of that document
 concluded that "the seam *mechanism* is sound" and that "the defects are
 concentrated in fallback bodies and closed enums, not in the architecture."
 The audits confirm that conclusion and extend it in one direction §9 did not
@@ -99,7 +99,7 @@ The redesign must not damage these. Each was verified by audit, not assumed.
 |---|---|
 | one executor | `runtime.workflow_runner.run_workflow_step` is the only `subprocess.Popen` for a workflow step; `openfoam`, `cardiacfoam` and `cardiaccore` do not import `subprocess` for invocation at all |
 | one authorization point | `runtime.workflow.validate_workflow_commands`, reached from `strict_planning`, `run_document_exec`, and `dict_builder.build_and_launch` |
-| one environment path | `EnvironmentPreflightCapability`, in two modes — `load` (source fresh) and `configure` (overlay ambient), correctly implementing `ENVIRONMENT_CONTRACT.md` §12 |
+| one environment path | `EnvironmentPreflightCapability`, in two modes — `load` (source fresh) and `configure` (overlay ambient), correctly implementing `CLAUDE.md`'s "Supplied versus discovered" |
 | one run pipeline | CLI → `strict_plan` → `normalize_workflow_dag` → `run_workflow` → `run_workflow_step`; `--run-document` rejoins at `_dispatch_context` |
 | no identity forks | grep for `plugin_id ==` in core returns only a docstring recording their deletion |
 | the four same-named file pairs | `command_authorization`, `dict_builder`, `mesh_geometry`, `mesh_provisioning` are one concern split correctly at the environment/vocabulary boundary; in every case the cardiac half *imports* the OpenFOAM half rather than restating it |
@@ -300,7 +300,7 @@ This is ordinary hygiene in Phase 0 and becomes load-bearing in §4.4.
 ### 4.1 The unit of composition is the capability
 
 A closed `kind` enum (`environment` | `solver` | …) is rejected. That is the
-shape `ENVIRONMENT_CONTRACT.md` §9 identifies as where the defects concentrate,
+shape retired ENVIRONMENT_CONTRACT §9 identifies as where the defects concentrate,
 and a better unit already exists: the 24 capabilities.
 
 A provider declares **which capabilities it provides**, must fully implement
@@ -308,7 +308,7 @@ every member of those, and core composes per capability. This also resolves
 §3.1's loose end: "required" stops being a property of every plugin and becomes
 "every member of a capability you declared."
 
-**Declared or discovered?** `ENVIRONMENT_CONTRACT.md` §12 settles it. The set of
+**Declared or discovered?** `CLAUDE.md`'s "Supplied versus discovered" settles it. The set of
 methods present on a class is genuinely ambient — core can discover it. Intent
 is not ambient, so it must be supplied. Therefore `plugin.yaml` declares
 `provides:`, core discovers what is actually implemented, and a guard errors
@@ -685,7 +685,7 @@ New guards this specification requires:
    whether some are legitimately dev-time only.** The audit established that an
    agent driving an installed CLI cannot see them; it did not establish that all
    five belong in a runtime payload.
-3. **A second non-OpenFOAM provider.** `ENVIRONMENT_CONTRACT.md` §9 states that
+3. **A second non-OpenFOAM provider.** retired ENVIRONMENT_CONTRACT §9 states that
    a FEniCS plugin cannot be written today because `get_profile()` fails on the
    role vocabulary. Nothing in this specification verifies that Phases 0–2 make
    one writable; that claim needs a real second provider before it is made.

@@ -52,7 +52,7 @@ string in it names cardiacFoam.
 the legacy `driverFoam` tree has already done and validated; two are
 relocations; one deletes code that Phase 1 proved unreachable. The design rule
 they serve is
-[`future/ENVIRONMENT_CONTRACT.md`](../../../future/ENVIRONMENT_CONTRACT.md) §4.
+retired ENVIRONMENT_CONTRACT §4.
 
 **Tech Stack:** Python ≥3.11 (verify on 3.13), pytest, `ast` (for the static
 guards), the existing `compatibility.track_fallback_calls()` contextmanager.
@@ -372,7 +372,7 @@ statement rather than trusting the two named above.
 which the boundary gate exempts. That is a real improvement (core's own module
 tree stops parsing C++) and it is *not* a full decoupling — `strict_planning`
 still reaches OpenFOAM at runtime. It joins the eight ungated fallbacks the
-`ENVIRONMENT_CONTRACT` names as the honest cost of core owning the OpenFOAM
+retired ENVIRONMENT_CONTRACT names as the honest cost of core owning the OpenFOAM
 execution model. Do not describe it as removing the dependency.
 
 Update importers: `scripts/scan-dict-keys.py:52`,
@@ -714,7 +714,7 @@ unconditionally whenever a plugin does not implement the hook:
 The twelfth is `tests/core/test_sweep_materialize.py:98` importing
 `omnidriver.openfoam` directly.
 
-Per `ENVIRONMENT_CONTRACT.md` §4, those fallbacks are a legitimate documented
+Per retired ENVIRONMENT_CONTRACT §4, those fallbacks are a legitimate documented
 default that a plugin may override — so the fix is not to delete them. It is
 that **core's own tests must exercise core with a plugin that overrides them**,
 which is also the only way core's suite proves core works without OpenFOAM.
@@ -779,7 +779,7 @@ hooks with genuinely non-OpenFOAM answers:
 """A plugin that answers the environment hooks itself, with no OpenFOAM.
 
 core's compatibility fallbacks for these two hooks import omnidriver.openfoam
-unconditionally -- a documented default (future/ENVIRONMENT_CONTRACT.md §4),
+unconditionally -- a documented default (retired ENVIRONMENT_CONTRACT §4),
 not a defect. But it means a core test that omits them is not testing core, it
 is testing core-plus-OpenFOAM. This double is what lets core's own suite prove
 core runs without a sibling package installed.
@@ -1295,7 +1295,7 @@ from both sibling prefixes. Narrow it to openfoam only:
         if path == COMPATIBILITY_FILE:
             # Still exempt for omnidriver.openfoam: the ungated environment
             # fallbacks are a documented, overridable default
-            # (future/ENVIRONMENT_CONTRACT.md §4). NOT exempt for
+            # (retired ENVIRONMENT_CONTRACT §4). NOT exempt for
             # omnidriver.cardiacfoam any more -- after Phase 2 the only cardiac
             # imports left serve the public compatibility edge, and any new one
             # is a regression.
@@ -1362,7 +1362,7 @@ it. Sequencing 3 in wave 1 and 7 in wave 3 keeps them apart.
 
 ## Related
 
-- [`future/ENVIRONMENT_CONTRACT.md`](../../../future/ENVIRONMENT_CONTRACT.md) — §4's rule, and §5b's deferral of the trust boundary
+- retired ENVIRONMENT_CONTRACT — §4's rule, and §5b's deferral of the trust boundary
 - [`2026-08-27-core-completion.md`](2026-08-27-core-completion.md) — Phase 1, landed
 - `GITHUB_MIGRATION.md` §3 — the round-2 scope this plan closes
 - The legacy tree at `noFrontendCardiacFoam/applications/scripts/driverFoam` — Tasks 3, 5 and 7 are ports of work already validated there

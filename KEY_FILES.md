@@ -20,7 +20,6 @@ repository root.
 | `packages/omnidriver/src/omnidriver/core/tutorial_records.py` | `TutorialRecord` and the record study contract; `case_folder_record()` builds the ad hoc one-step record `--case` runs. |
 | `benchmarks/` | Published, solver-neutral reference definitions (e.g. `niederer2011.json`) a comparison request cites by id; `scripts/check-benchmark-references.py` gates them. |
 | `ARCHITECTURE.md` | The layer map, the package-independence rules and "Provider composition". |
-| `CHANGELOG.md` | History of the retired flat `openfoam_driver/` tree, kept for reasoning, not for locations. |
 
 ---
 

@@ -9,7 +9,7 @@ now passes C1–C10, so a second solver exists to prove each change against.
 **Evidence:** a read-only map of every OpenFOAM-shaped concept in core
 (2026-09-26, summarised in §2), the core shape gate's baseline
 (`scripts/core-shape-baseline.txt`), and the audit
-`docs/audits/2026-09-25-generality-and-landscape.md` §2.
+retired 2026-09-25-generality-and-landscape §2.
 
 ## 1. Why
 

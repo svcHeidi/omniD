@@ -7,7 +7,7 @@ wait for `tutorials-are-pointers` step 5. The dated corrections below record
 where the implementation settled differently from this document's original
 text.
 
-**Reasoning and evidence:** `docs/audits/2026-09-25-generality-and-landscape.md`.
+**Reasoning and evidence:** retired 2026-09-25-generality-and-landscape.
 **Builds on:** `2026-09-24-tutorials-are-pointers-design.md` (tutorial records,
 axes, one commit per case). Its core steps are on branch
 `claude/festive-cray-9d30ca` and **not yet on `main`**. Nothing here is
@@ -136,7 +136,7 @@ Each package adds a thin pytest parametrization over its own targets, one test
 per (target, check).
 
 **Input.** One `ConformanceTarget` per solver, everything supplied, nothing
-discovered (supplied-vs-discovered, `ENVIRONMENT_CONTRACT.md` §12):
+discovered (supplied-vs-discovered, `CLAUDE.md`'s "Supplied versus discovered"):
 
 ```python
 @dataclass(frozen=True)

@@ -84,8 +84,7 @@ class PositionalArg:
     """Argument name, e.g. 'vtk_file'."""
 
     argument_kind: str
-    """Plugin-chosen, non-empty. Not validated against a closed set (see
-    ``future/ENVIRONMENT_CONTRACT.md`` §10)."""
+    """Plugin-chosen, non-empty. Not validated against a closed set."""
 
     description: str
     """What the argument represents."""
@@ -106,7 +105,7 @@ class UtilityFlag:
 
     argument_kind: str = ""
     """Plugin-chosen; empty means not specified. Not validated against a
-    closed set (see ``future/ENVIRONMENT_CONTRACT.md`` §10)."""
+    closed set."""
 
     required: bool = False
     """Whether the flag is mandatory."""

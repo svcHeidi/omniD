@@ -44,7 +44,7 @@ def resolve_scratch_root(
             "no scratch root was supplied, and this operation stages a case: pass "
             f"--scratch-dir <dir> (or set {SCRATCH_ENV_VAR}) naming a writable "
             "directory outside the cases root. There is no default; a native "
-            "tutorials tree is never written (future/ENVIRONMENT_CONTRACT.md §12)"
+            "tutorials tree is never written"
         )
     if cases_root is not None:
         cases = Path(cases_root).expanduser()

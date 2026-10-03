@@ -46,12 +46,6 @@ completion establishes scientific validity.
 | CC-1 | Source-only onboarding case: cardiacCoreStandalone `bivCase` | Native `Allrun`, dictionaries, source utilities, README, named local asset case | Native vertical slice completed with a separately staged local asset bundle; clean-clone asset-distribution closure pending |
 | S-3 | Non-cardiac OpenFOAM solver/workflow | To be selected before a generality claim | Required for broad claim |
 
-`CC-1` is a clean committed snapshot at
-`/private/tmp/omnidriver-experiments/cardiaccore-omnidriver-onboarding-source`.
-Its previous agent catalog, schema, intent, and pipeline JSON files are
-excluded from implementation input.  Native case data such as
-`electrodePositions.json` remains available.
-
 ## Unit of evidence
 
 One record per plan or execution attempt, with:
@@ -64,7 +58,7 @@ One record per plan or execution attempt, with:
 - reason for a failure, repair, retry, or refusal.
 
 The OmniD `run_document.json`, `workflow_state.json`, staged inputs, logs, and
-produced artifacts are primary evidence.  This ledger indexes them; it does
+produced artifacts are primary evidence.  A study ledger indexes them; it does
 not replace them.
 
 ## Acceptance levels
@@ -93,25 +87,6 @@ not replace them.
 - If external users participate: task completion, time, errors, and ability to
   explain the selected configuration and output.  Without participants, do
   not claim measured usability.
-
-## Initial evidence ledger
-
-| ID | Date | Case | Intervention | Outcome | Evidence |
-| --- | --- | --- | --- | --- | --- |
-| CF-1.1 | 2026-09-14 | cardiacFOAM coupled 1D-3D | Scoped stale `rPvj` / `couplingMode` overrides | Three authored four-point sweeps completed | `/private/tmp/omnidriver-experiments/paper-repro-coupled-*-run/` |
-| CC-1.0 | 2026-09-14 | cardiacCoreStandalone | Created committed, JSON-stripped source-only fixture | Ready for generic onboarding gate | Fixture path above |
-| CC-1.1 | 2026-09-14 | cardiacCore standalone adapter | Implemented neutral OmniD API-v2 scaffold; tested a controlled marker `Allrun` | Contract and controlled execution passed (2 tests); wheel-build gate blocked because the prepared interpreter has no importable setuptools backend and network installation is unavailable | `/private/tmp/omnidriver-experiments/omnidriver-cardiaccore-plugin/` |
-| CC-1.2 | 2026-09-14 | cardiacCore `bivCase` | Built tracked utilities; declared the native four-stage wrapper, its inputs, and its generated fields in the out-of-tree adapter | Strict plan was 100% ready; a clean staged run completed each utility once; 8 required fields reconciled, while two paired conductivity fields were correctly optional and absent | `cardiacCoreStandalone@7ebf126`, `cases/bivCase/Allrun`, `/private/tmp/omnidriver-experiments/cardiaccore-biv-preprocessing-provenance-run/bivCase/` |
-| CC-1.3 | 2026-09-14 | cardiacCore `bivCase` provenance | Reclassified generated utility fields from the adapter's utility manifests, preserving the explicitly consumed intermediate `0/Conductivity` | Fresh staged rerun completed; final resume provenance excludes generated anatomy/Purkinje fields and retains only the declared intermediate dependency | Adapter tests (4 passed) and `workflow_state.json` in the CC-1.2 staged case |
-| CC-1.4 | 2026-09-14 | cardiacCore `bivCase` input catalog | Reused OmniD's existing OpenFOAM dictionary catalog/read infrastructure; published 12 reviewed x values from the four authored dictionaries and separated unexercised conditional branches | Adapter tests (5 passed); public `describe` exposes the four document groups and the separate conditional-input catalog. No mutation interface was enabled yet | `/private/tmp/omnidriver-experiments/omnidriver-cardiaccore-plugin/`, `/private/tmp/omnidriver-experiments/cardiaccore-describe.json` |
-| CC-1.5 | 2026-09-14 | cardiacCore cross-solver conditions | Owner clarified the semantic roles of conditional branches: manual AHA segmentation, pig Purkinje morphometry, and bidomain tensors | Conditions remain unvalidated against a consuming cardiacFoam solver until that solver/workflow is supplied; the builder contract now requires an explicit producer-to-consumer closure pass | [BUILDER_AGENT_EVIDENCE_CONTRACT.md](BUILDER_AGENT_EVIDENCE_CONTRACT.md) |
-| CC-1.6 | 2026-09-14 | cardiacCore `bivCase` JSON interface | Implemented `input_overrides`: a validated run/sweep JSON maps the 12 reviewed x values to the four native dictionaries in a disposable case; added the adapter-owned `preprocessing` configuration phase and RunDocument reader | Normal JSON run with `thickness=0.05` completed all four utilities. A two-value sweep strictly planned both staged cases. Sweep execution is pending installed-plugin discovery: an uninstalled `PYTHONPATH` adapter cannot be rediscovered by the sweep's child process. | `/private/tmp/omnidriver-experiments/cardiaccore-json-runtime-run/bivCase/`, `/private/tmp/omnidriver-experiments/cardiaccore-json-sweep-plan/` |
-| CC-1.7 | 2026-09-14 | cardiacCore clean-user asset closure | Staged only mesh and raw input fields from the separately named `cardiacCore-local-cases/bivCase_Pig_Morphometric_Tree` into the clean `bivCase` source fixture; retained the source dictionaries and workflow | The adapter completed all four preprocessing utilities with the JSON slab-thickness override (`0.05`); the eight expected generated fields were present. This validates the external asset interface. A distributed canonical asset bundle or declared native generator remains required for a clone-and-run claim. | `/private/tmp/omnidriver-experiments/cardiaccore-local-asset-run.idJ6BG/bivCase/workflow_state.json`, [BUILDER_AGENT_EVIDENCE_CONTRACT.md](BUILDER_AGENT_EVIDENCE_CONTRACT.md) |
-| CC-1.8 | 2026-09-15 | cardiacCore capability comparison | Compared the original user-authored agent contracts, catalogs, variant intents, and checks to the tested four-utility OmniD adapter | The current adapter covers fibre/sheet conductivity, AHA outputs, slab, and morphometry. The next required vertical slice is explicit Purkinje-tree generation with anatomy-portable seeds, density/coverage checks, and later graph hand-off. Scar and VTK import are separate workflows. | [CARDIACCORE_CAPABILITY_COMPARISON.md](CARDIACCORE_CAPABILITY_COMPARISON.md) |
-| CC-1.9 | 2026-09-15 | cardiacCore package integration | Moved the tested adapter from the temporary experiment package to `packages/omnidriver-cardiaccore/` using the repository's `omnidriver.cardiaccore` namespace | Package and Core regression tests passed (10 tests). Editable install and entry-point discovery remain blocked in the prepared virtual environment because it lacks `setuptools` and cannot access PyPI; this is recorded without bypassing package installation. | `packages/omnidriver-cardiaccore/`, local package test output |
-| CC-1.10 | 2026-09-15 | cardiacCore explicit Purkinje trees | Declared and executed named human endocardial and pig morphometric/transmural workflows. The pig path declares its morphometry weight fields as generator dependencies; both run the generator from the staged case CWD. | Both fresh staged OmniD runs completed: human 3 stages and pig 4 stages. All declared face sets, VTKs, parameter file, per-step logs, and resume evidence were recorded. Tree seed/growth configuration remains fixed pending validation/coverage criteria. | `/private/tmp/omnidriver-experiments/cardiaccore-human-tree-omnid.OSzvX3/bivCase/workflow_state.json`, `/private/tmp/omnidriver-experiments/cardiaccore-pig-morphometric-omnid.d5S2HV/bivCase/workflow_state.json` |
-| CC-1.11 | 2026-09-15 | cardiacCore tree-validation normalization | Reconciled the standalone seed-deduction/coverage helpers, tutorial notes, and historical results into one adapter-owned executable seed/coverage contract exposed as a named catalog. | The contract encodes LV basal-septal AHA {2,3}, the recovered-RV-septum UVC rule, mid/apical coverage requirements where endocardium exists, and basal warnings. It records node/terminal/distance measures without inventing a global threshold. | `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/tree_validation.py`, adapter tests |
-| CC-1.12 | 2026-09-15 | cardiacCore native Purkinje seed bridge | Added a strict writer for the five native seed entries used by `generatePurkinjeTree`. | Contract tests pass; a recorded native `generatePurkinjeTreeDict` was copied to a disposable path and updated while growth/terminal settings remained unchanged. Native surface/field sampling and graph hand-off remain separate. | `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/operations/purkinje.py`, `test_operation_contracts.py` |
 
 ## Positioning references to develop
 

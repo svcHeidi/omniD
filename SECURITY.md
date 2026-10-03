@@ -46,34 +46,20 @@ results directory — it is not forced under `caseRoot`.
   from the plugin's own static profile — never from the agent-authored
   `RunDocument` or case-folder content this document actually distrusts — so
   a plugin naming its own entrypoint doesn't change who can shadow `PATH`,
-  only lets an already-trusted plugin author pick their own name. See
-  `future/CASE_SCRIPT_COMMANDS_ENTRYPOINT_THREAT_MODEL.md` for the full
-  reasoning and the six call sites this touches.
+  only lets an already-trusted plugin author pick their own name (a plugin
+  that names it `python` or `bash` shadows that name for itself: a
+  plugin-author footgun, not an escalation).
 - Workflow `cwd` cannot escape `caseRoot`.
 - `caseRoot` must be an existing directory; `caseRoot`/`outputDir` resolved to
   canonical paths; opt-in `OMNIDRIVER_ALLOWED_RUNS_ROOT` containment.
-  **Corrected 2026-09-26 (final review M10):** this variable was renamed from
-  `DRIVERFOAM_ALLOWED_RUNS_ROOT` with no dated note at the time, against this
-  file's own house style (CLAUDE.md). The old name is gone, not read under
-  either name, and there is no fallback: `core/runtime/run_document_exec.py`'s
-  `_allowed_runs_root` reads `OMNIDRIVER_ALLOWED_RUNS_ROOT` only. This was an
-  owner decision (no external caller of the old name is known), but its
-  trade-off is real and worth stating plainly: an operator who still sets
-  only `DRIVERFOAM_ALLOWED_RUNS_ROOT` gets no containment and no warning --
-  the boundary is silently off, not silently on. A named refusal for the old
-  variable was considered and rejected: `scripts/check-core-shape.py`'s gate
-  on core naming OpenFOAM/driver-specific vocabulary matches an unbounded
-  `FOAM_` substring, so spelling the retired name literally in core to refuse
-  it would itself grow the shape debt the gate exists to shrink. If a refusal
-  is wanted later, it belongs at the OpenFOAM-free CLI edge, or the string
-  would need to be built from two joined fragments to dodge the substring
-  match -- ugly enough that the owner should choose deliberately rather than
-  have an implementer default to it.
+  `core/runtime/run_document_exec.py`'s `_allowed_runs_root` reads
+  `OMNIDRIVER_ALLOWED_RUNS_ROOT` only; no other name is read, so an operator
+  who sets some other variable gets no containment and no warning.
 - Steps run argv-style (no shell).
 - Override / spec **values** are rejected at the `update_foam_entry` write
   path if they are directive- or entry-terminating-shaped. The command
   allowlist gates *what binary runs*, not the *content* of the dicts it
-  reads, so this is enforced at the write path instead: `mutators._format_value`
+  reads, so this is enforced at the write path instead: `literals._format_value`
   (tier 1 — the path almost every override takes) raises `ValueError` on any
   value containing `;`, a newline, or `#`, before the value is written. The
   foamlib tier (tier 2, the line-scanner fallback) has its own explicit
@@ -81,11 +67,10 @@ results directory — it is not forced under `caseRoot`.
   on foamlib's incidental type-strictness, which is narrower (foamlib only
   objects to a string that would read back as a different type, so it lets
   `'#includeEtcFuncs'`, a bare `'#'`, and `'PCG#calc'` through unconverted).
-  This closes the gap previously recorded here as documented-but-unenforced:
-  a value carrying `;` can no longer append a second dictionary entry, and a
-  `#codeStream` / `#calc` / coded-function-object value can no longer reach a
-  dict file through `update_foam_entry` to be compiled and executed by the
-  solver at run time. This guard covers `update_foam_entry` specifically —
+  A value carrying `;` cannot append a second dictionary entry, and a
+  `#codeStream` / `#calc` / coded-function-object value cannot reach a dict
+  file through `update_foam_entry` to be compiled and executed by the solver at
+  run time. This guard covers `update_foam_entry` specifically —
   see the case builder gap noted below, which it does not cover.
 
 ## Explicitly NOT mitigated

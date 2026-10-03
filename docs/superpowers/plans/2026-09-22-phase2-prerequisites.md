@@ -15,7 +15,7 @@ because Task 7 deletes a workaround Task 5 makes unnecessary.
 
 **Tech Stack:** Python 3.11+, pytest, `graphlib`. No new runtime dependency.
 
-**Source:** [`docs/audits/2026-09-22-implementation-roadmap.md`](../../audits/2026-09-22-implementation-roadmap.md)
+**Source:** retired 2026-09-22-implementation-roadmap
 §3 (findings C1, C2, C3, F1, F1b, F2, S1, S2, S3) and §5 gate **G0**.
 This plan is gate G0 in full. Gates G1–G3 are
 [`2026-09-20-phase2-one-write-channel.md`](2026-09-20-phase2-one-write-channel.md),
@@ -253,7 +253,7 @@ implementer's report:
 3. Where a task's fix moved an existing test's expectation, the new expectation
    is correct for the fixed behaviour — not restored to what passed before.
 4. The pre-existing WIP (`run_config.py`, `test_validate_configuration.py`,
-   `docs/OMNIDRIVER_ROADMAP.md`, the Phase 2 plan) was preserved, and Task 6/7's
+   retired OMNIDRIVER_ROADMAP, the Phase 2 plan) was preserved, and Task 6/7's
    unavoidable inclusion of the first two is declared in their commit bodies.
 5. Both static gates and all four installation shapes pass at the final revision.
 6. What is recorded as **untested against a native runtime** is accurate — F1b's
@@ -277,7 +277,7 @@ Reviewing per task would not catch items 3, 5 or 6, which are gate-level facts.
 - Do not invent a physiological range, unit, or scientific default. Every task
   here is mechanical: addressing, typing, determinism, and evidence. A task that
   finds itself choosing a number for a physical quantity has left its scope.
-- **Do not stage pre-existing work.** `docs/OMNIDRIVER_ROADMAP.md`,
+- **Do not stage pre-existing work.** retired OMNIDRIVER_ROADMAP,
   `docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md`,
   `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/run_config.py`
   and `packages/omnidriver-cardiaccore/tests/test_validate_configuration.py` were

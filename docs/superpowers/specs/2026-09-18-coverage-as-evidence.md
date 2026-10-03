@@ -51,7 +51,7 @@ returns `launchable=True`; `regenerate-ionic-catalog.py --check` prints that it
 has no usable source root and returns zero; `strict_dict_key_report` with a
 missing root, empty entries and empty allowlist returns `ok`.
 
-`docs/OMNIDRIVER_ROADMAP.md` already forbids this: "Missing or skipped checks
+retired OMNIDRIVER_ROADMAP already forbids this: "Missing or skipped checks
 must never increase a readiness score or appear as proven compatibility." The
 rule is stated and not implemented.
 
@@ -180,7 +180,7 @@ documented migration onto this policy rather than silent removal.
 The enumeration boundary is sound and is **not** widened. `enumerate_case_inputs`
 stays exhaustive within declared walk roots, keeping the safety property that an
 unrecognised file inside a root becomes a `required_input`. A whole-case-tree
-digest stays rejected: `CLEAN_INSTALL_ACCEPTANCE_2026-09-08.md` rules that
+digest stays rejected: retired CLEAN_INSTALL_ACCEPTANCE_2026-09-08 rules that
 integration must not content-hash the historical tutorial tree against a ~204 GiB
 checkout. Coverage is declared and recorded, not bought by walking everything.
 

@@ -32,7 +32,7 @@ dependencies.
 ## Global Constraints
 
 - **Spec:** `docs/superpowers/specs/2026-09-04-a-case-is-a-path-design.md`.
-  Principle recorded in `future/ENVIRONMENT_CONTRACT.md` §12.
+  Principle recorded in `CLAUDE.md`'s "Supplied versus discovered".
 - **Verification interpreters:** `/tmp/od_all/bin/python` (3.13, all three
   packages), `/tmp/od311b/bin/python` (3.11, all three),
   `/tmp/od_core/bin/python` (core only), `/tmp/wheelenv/bin/python` (core
@@ -346,7 +346,7 @@ In `packages/omnidriver/src/omnidriver/core/specs/paths.py`, delete
 # No tutorials_root_default() here any more. It returned repo_root_default() /
 # "tutorials", so core invented a location for a caller's cases and raised
 # outside a checkout -- which is why core could not plan a case from an
-# installed wheel. A base is supplied now; see future/ENVIRONMENT_CONTRACT.md
+# installed wheel. A base is supplied now; see retired ENVIRONMENT_CONTRACT
 # §12 on supplied-versus-discovered.
 ```
 
@@ -369,7 +369,7 @@ def resolve_cases_root(explicit: str | Path | None = None) -> Path:
     Three steps, no fourth. The environment variable covers CI, containers and
     HPC without a flag on every invocation; a config-file tier is deliberately
     omitted until there is evidence one is needed
-    (future/ENVIRONMENT_CONTRACT.md §12).
+    (`CLAUDE.md`'s "Supplied versus discovered").
     """
     if explicit is not None:
         return Path(explicit).expanduser()
@@ -731,4 +731,4 @@ git commit -m "test: guard against inventing a root, and run the suite against t
   does not cover it — flagged in the spec's Risks as the likeliest surprise,
   and it needs its own decision about what a run script is relative to.
 - **The four parallel tutorials** still need their case on disk or an explicit
-  `num_subdomains`; see `future/ENVIRONMENT_CONTRACT.md` §12.
+  `num_subdomains`; see `CLAUDE.md`'s "Supplied versus discovered".

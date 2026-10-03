@@ -61,7 +61,7 @@ workflow."
 `is_launchable` inherits it: `environment_ok = not environment_errors`, and
 `not ()` is `True`.
 
-`docs/OMNIDRIVER_ROADMAP.md` already forbids this — "Missing or skipped checks
+retired OMNIDRIVER_ROADMAP already forbids this — "Missing or skipped checks
 must never increase a readiness score or appear as proven compatibility." The
 rule is stated and not implemented.
 
@@ -194,7 +194,7 @@ This changes `SCHEMA_VERSION`, which by existing convention encodes policy
 rather than layout. Old snapshots remain readable for inspection and cannot
 resume -- the established rule.
 
-**Explicitly rejected: a whole-case-tree digest.** `CLEAN_INSTALL_ACCEPTANCE_2026-09-08.md`
+**Explicitly rejected: a whole-case-tree digest.** retired CLEAN_INSTALL_ACCEPTANCE_2026-09-08
 rules that integration "must not copy or content-hash the whole historical
 tutorial tree on every attempt" against a ~204 GiB checkout. Coverage is
 declared and recorded, not bought by walking everything.
@@ -428,7 +428,7 @@ running.
   a package boundary; rearranging packages would have moved all of them
   untouched.
 
-  `docs/OMNIDRIVER_ROADMAP.md` independently reaches the same conclusion from
+  retired OMNIDRIVER_ROADMAP independently reaches the same conclusion from
   the other direction, describing "two logical layers with three ownership
   boundaries" and declining a "wholesale rewrite".
 - **A regenerated `dict_entries.json`.** It existed at

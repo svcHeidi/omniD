@@ -53,7 +53,7 @@ reader to start here, and there was no table). Built from `git log`.
 - **No skips.** A check that cannot run is a failure that names why. `native` and `native_opencarp` tests **fail, not skip**, when their environment variable is unset. Never weaken a guard or add a skip to make a task pass.
 - **No fallbacks, no shims, no aliases.** Every rename deletes the old name in the same commit, across every package, test plugin and test.
   - "The old name" means the renamed symbol. Each task ends with a grep gate that lists exactly what, if anything, may still match.
-- **Supplied, never discovered** (`future/ENVIRONMENT_CONTRACT.md` §12):
+- **Supplied, never discovered** (`CLAUDE.md`'s "Supplied versus discovered"):
   - native trees come from `OMNIDRIVER_NATIVE_TUTORIALS` (cardiacFOAM) and `OMNIDRIVER_OPENCARP_TUTORIALS` (openCARP);
   - openCARP's library path comes from the ambient `DYLD_LIBRARY_PATH`;
   - the scratch root is always supplied. Tests pass `scratch_root=`/`--scratch-dir`, or set `OMNIDRIVER_SCRATCH_DIR` in a child env dict, never in `os.environ`.
@@ -1858,7 +1858,7 @@ Inside `omnidriver-openfoam`, the value really is a shell script to source. Open
 - Modify, openfoam tests: `test_case_dict_keys.py`, `test_environment_preflight.py`, `test_code_contract_repairs.py`, `test_apply_through_the_channel.py`.
 - Modify, cardiacfoam tests: `test_strict_planning.py`, `test_environment_preflight_composition.py`, `test_reference_experiment_manifests.py`, and the fixtures `fixtures/reference_experiments/niederer_tissue.json` and `single_cell_tworld.json`.
 - Modify: `scripts/core-shape-baseline.txt` (delete all six `bashrc` lines).
-- Modify: `future/ENVIRONMENT_CONTRACT.md` (a dated note).
+- Modify: retired ENVIRONMENT_CONTRACT (a dated note).
 
 **Interfaces:**
 - Produces:
@@ -2024,7 +2024,7 @@ Inside `omnidriver-openfoam`, the value really is a shell script to source. Open
       Renamed 2026-09-26 (spec 2026-09-26-core-generality-design.md §2, A1)
       from ``explicit_bashrc``/``--environment-bashrc``, a shell-profile word
       in a parameter every environment shares. It was ``openfoam_bashrc`` /
-      ``--openfoam-bashrc`` before that (future/ENVIRONMENT_CONTRACT.md §10).
+      ``--openfoam-bashrc`` before that (retired ENVIRONMENT_CONTRACT §10).
       No old name is aliased.
   ```
   The protocol's `diagnostics` signature takes `environment_source: str | None = None,` in place of `explicit_bashrc: str | None = None,`.
@@ -2241,7 +2241,7 @@ Inside `omnidriver-openfoam`, the value really is a shell script to source. Open
 
 - [ ] **Step 8: Record the rename in the environment contract**
 
-  Append to `future/ENVIRONMENT_CONTRACT.md` §10:
+  Append to retired ENVIRONMENT_CONTRACT §10:
   ```
   **2026-09-26 (topic A, A1):** `explicit_bashrc` / `--environment-bashrc` became `environment_source` / `--environment-source`: one opaque value core passes to the plugin's environment hooks and never reads. The OpenFOAM layer sources it as a bashrc (its own helpers now take `bashrc_path`); openCARP ignores it. `generic_case` no longer stores it (it was dead data). No alias.
   ```
@@ -2255,7 +2255,7 @@ Inside `omnidriver-openfoam`, the value really is a shell script to source. Open
   | 2026-09-26 | core generality (A) | A1: `explicit_bashrc`/`--environment-bashrc` renamed `environment_source`/`--environment-source` in every hook, adapter, CLI path and test; removed from `generic_case`; OpenFOAM's own helpers take `bashrc_path` | a shell-profile word named a parameter every environment shares | neutral: core passes the value through unchanged (`test_environment_source_is_opaque.py`); the shape baseline loses all six `bashrc` lines (69 hits) |
   ```
   ```bash
-  git -C $W add -A packages scripts future/ENVIRONMENT_CONTRACT.md docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md
+  git -C $W add -A packages scripts retired ENVIRONMENT_CONTRACT docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md
   git -C $W commit -m "refactor: the environment source is opaque to core (A1)
 
   Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -2822,7 +2822,7 @@ Where a test's *fake plugin* changes shape (Task 8), what it asserts about which
   - `packages/omnidriver-openfoam/tests/core/test_provenance_integration.py`
   - `packages/omnidriver-cardiacfoam/tests/test_case_provenance_capability.py`
   - `packages/omnidriver-cardiaccore/tests/test_biv_preprocessing_contract.py`
-- Modify, docs: `ARCHITECTURE.md` (regenerated table; the `single` examples row), `future/ENVIRONMENT_CONTRACT.md` (a dated note).
+- Modify, docs: `ARCHITECTURE.md` (regenerated table; the `single` examples row), retired ENVIRONMENT_CONTRACT (a dated note).
 
 **Interfaces:**
 - Produces:
@@ -3125,7 +3125,7 @@ Where a test's *fake plugin* changes shape (Task 8), what it asserts about which
 
   `ARCHITECTURE.md`, the `single` row of the composition table: replace the example `get_selected_start_time` with `get_case_runtime_conventions`. Regenerate the seam table: `cd $W && /tmp/odA-core-gen-a2/bin/python scripts/export-capability-seams.py`.
 
-  Append to `future/ENVIRONMENT_CONTRACT.md` §10:
+  Append to retired ENVIRONMENT_CONTRACT §10:
   ```
   **2026-09-26 (topic A, A2):** the Tier 3 "bare optional hooks" `selected_start_time` and `decomposition_dirname_prefix` are gone. Core now reads only plugin-declared vocabulary: `CaseRuntimeConventions.instance_directory_pattern`/`preserved_instance_names`/`replica_directory_globs`, the `{instance}` placeholder, and `CaseProvenanceCapability.input_roots`, through which the OpenFOAM layer declares its start time and replicas.
   ```
@@ -3162,7 +3162,7 @@ Where a test's *fake plugin* changes shape (Task 8), what it asserts about which
   | 2026-09-26 | core generality (A) | A2c: provenance hook `CaseProvenanceCapability.input_roots(case_root, resolved_case)` (member `get_input_roots`, `sequence`); `CaseIntrospectionCapability.selected_start_time` and `get_selected_start_time` deleted; `required_inputs`/`generated_output_globs` lose the start-time argument; the OpenFOAM layer declares its start time and replicas | core computed OpenFOAM's restart directory and walked its replicas | neutral: characterization test `test_the_start_time_is_walked_serially_and_in_every_replica` passes before and after; native provenance of every registered cardiacFOAM/cardiacCore tutorial is byte-identical; a stack declaring no roots walks only its case-file roots |
   ```
   ```bash
-  git -C $W add -A packages ARCHITECTURE.md future/ENVIRONMENT_CONTRACT.md docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md
+  git -C $W add -A packages ARCHITECTURE.md retired ENVIRONMENT_CONTRACT docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md
   git -C $W commit -m "refactor: the plugin declares its provenance input roots; core stops knowing start time (A2c)
 
   Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"

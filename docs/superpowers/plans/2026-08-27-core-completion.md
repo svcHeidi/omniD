@@ -29,7 +29,7 @@ an existing `CaseFileRule.role` to the code that should already have been
 reading it, moves a module-scope filesystem walk behind a function call, or
 ports a plugin method that the legacy `driverFoam` tree already has. Design
 rationale and the ownership rule these changes serve:
-[`future/ENVIRONMENT_CONTRACT.md`](../../../future/ENVIRONMENT_CONTRACT.md).
+retired ENVIRONMENT_CONTRACT.
 
 **Tech Stack:** Python ≥3.11 (verify on 3.13, not the repo's own 3.14 `.venv`),
 pytest, `tomllib`, `importlib.metadata`, setuptools.
@@ -452,7 +452,7 @@ In `packages/omnidriver/src/omnidriver/core/plugin_profile.py`, above
 #: document rather than to either. Consumers split on that prefix
 #: (tutorial_contracts.py) and look up specific roles by exact string
 #: (provenance_inputs.py, registry.py), so an unvalidated typo silently
-#: reclassifies a file instead of failing. See future/ENVIRONMENT_CONTRACT.md.
+#: reclassifies a file instead of failing. See retired ENVIRONMENT_CONTRACT.
 #:
 #: Adding a role here is a contract change: document it in
 #: core/generic-plugin.yaml's role reference in the same edit.
@@ -480,7 +480,7 @@ existing `required` check (`plugin_profile.py:109–114`):
                 profile_path,
                 f"unknown case-file role {values['role']!r}; known roles are "
                 + ", ".join(sorted(KNOWN_ROLES))
-                + " (see future/ENVIRONMENT_CONTRACT.md)",
+                + " (see retired ENVIRONMENT_CONTRACT)",
             )
 ```
 
@@ -550,7 +550,7 @@ contains a dot, which is what makes the filter exact.
 nothing. `Allrun` is hardcoded four lines away at `registry.py:79`, and again at
 `:88` and `:302`. This wires the declaration to the three consumers.
 
-**Scope boundary — read `future/ENVIRONMENT_CONTRACT.md` §5b before starting.**
+**Scope boundary — read retired ENVIRONMENT_CONTRACT §5b before starting.**
 This task touches only read-only filesystem predicates (is this a case? is it
 runnable? keep the placeholder DAG?). It must **not** touch
 `workflow.py:74 CASE_SCRIPT_COMMANDS`, which is the trust boundary deciding
@@ -580,7 +580,7 @@ Create `packages/omnidriver/tests/core/test_entrypoint_is_plugin_declared.py`:
 
 'Allrun' is OpenFOAM's spelling of a concept every simulation environment has.
 Core is entitled to the concept; the spelling belongs to the plugin, declared as
-role 'openfoam.entrypoint'. See future/ENVIRONMENT_CONTRACT.md.
+role 'openfoam.entrypoint'. See retired ENVIRONMENT_CONTRACT.
 
 Scope: discovery and runnability only. Which bare command names may resolve to a
 case-local executable is a trust decision and stays in CASE_SCRIPT_COMMANDS.
@@ -743,7 +743,7 @@ In `packages/omnidriver/src/omnidriver/core/runtime/registry.py`, above
 #: Historical entrypoint name, used when the active plugin declares no
 #: ``openfoam.entrypoint`` rule (and when no context is available at all).
 #: Documented and overridable rather than hardcoded -- see
-#: future/ENVIRONMENT_CONTRACT.md §4.
+#: retired ENVIRONMENT_CONTRACT §4.
 _DEFAULT_ENTRYPOINT_RELPATHS: tuple[str, ...] = ("Allrun",)
 
 
@@ -1305,6 +1305,6 @@ present, now provably unreachable), `CASE_SCRIPT_COMMANDS`,
 
 ## Related
 
-- [`future/ENVIRONMENT_CONTRACT.md`](../../../future/ENVIRONMENT_CONTRACT.md) — the ownership rule these tasks serve, and why §5b is out of scope
+- retired ENVIRONMENT_CONTRACT — the ownership rule these tasks serve, and why §5b is out of scope
 - `GITHUB_MIGRATION.md` §3 — round-2 scope, corrected 2026-08-27
 - `docs/superpowers/plans/2026-08-27-test-core-decoupling.md` — the completed test-tree pass this follows

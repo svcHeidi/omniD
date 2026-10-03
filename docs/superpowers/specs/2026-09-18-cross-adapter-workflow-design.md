@@ -111,7 +111,7 @@ context_kwargs = {} if context is None else {"driver_context": context}
 `driver_contexts` is `Mapping[str, DriverContext]`, **supplied by the caller,
 never discovered by core**. Core learns one relation — *a step names a context
 by key* — and never learns that cardiacCore exists. This is
-`future/ENVIRONMENT_CONTRACT.md` §12, and the same rule that made
+`CLAUDE.md`'s "Supplied versus discovered", and the same rule that made
 `own_driver_context` necessary on 2026-09-18: an identity has no ambient truth,
 so discovering it invents an answer.
 

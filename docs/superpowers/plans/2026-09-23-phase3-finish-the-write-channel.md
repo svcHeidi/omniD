@@ -114,7 +114,7 @@ phases, and G5 needs owner decisions this plan does not make.
 - Prefer naming a **symbol** over a `file.py:123` line number.
 - Record a document correction with a date rather than overwriting it silently.
 - Do not add a `LICENSE` file or a `license` field.
-- **Do not stage the owner's work.** `docs/OMNIDRIVER_ROADMAP.md` (modified) and
+- **Do not stage the owner's work.** retired OMNIDRIVER_ROADMAP (modified) and
   `docs/audits/` (untracked) are theirs. Never `git add -A`.
 - Gate scripts need the venv interpreter, not bare `python3`:
   `/tmp/od311/bin/python scripts/check-import-boundaries.py` and
@@ -2209,7 +2209,7 @@ above.
 With `cases_root` supplied inside `--config` rather than as `--cases-root`
 (a pre-existing `cli.py:1180` behaviour, `99f3168`, 2026-09-04 -- **not this
 task's to fix**; `resolve_cases_root` deliberately has no config-file tier,
-`ENVIRONMENT_CONTRACT.md` §12; the coordinator is tracking it separately),
+`CLAUDE.md`'s "Supplied versus discovered"; the coordinator is tracking it separately),
 the CLI resolves a different root than the caller intended. The staged
 preview then genuinely cannot find `constant/electroProperties` and raises.
 Before this correction, `_write_surface` caught that failure inside

@@ -65,11 +65,11 @@ independently revertable and independently verified.
 | `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/case_provenance.py` | 3 | "Task 2b" |
 | `KEY_FILES.md` | 4 | every path predates the package split |
 | `AGENT_GUIDE.md` | 4 | every import path and CLI example predates the package split |
-| `CHANGELOG.md` | 4 | one "Known open" item names a deleted file |
+| retired CHANGELOG | 4 | one "Known open" item names a deleted file |
 | `SECURITY.md` | 4 | trust-boundary paths predate the package split |
-| `MIGRATION_AUDIT_v2.md` | 4 | undated "still live" note that is false |
-| `future/ENVIRONMENT_CONTRACT.md` | 4 | two sections numbered 8 |
-| `future/STRICT_PLANNING_FOAMLIB_COUPLING.md` | 4 | §6 asserts a fixed problem is still open |
+| retired MIGRATION_AUDIT_v2 | 4 | undated "still live" note that is false |
+| retired ENVIRONMENT_CONTRACT | 4 | two sections numbered 8 |
+| retired STRICT_PLANNING_FOAMLIB_COUPLING | 4 | §6 asserts a fixed problem is still open |
 | `docs/superpowers/plans/2026-08-27-core-completion-phase-2.md` | 4 | banner says three completed tasks are "not started" |
 | `docs/superpowers/plans/2026-08-25-monorepo-package-migration.md` | 4 | plans a package name that was never used |
 
@@ -296,7 +296,7 @@ The reason survives; only the pointer to a function that no longer exists goes.
 ```bash
 git grep -c "openfoam.bashrc\|openfoam_bashrc" -- packages/omnidriver/src/omnidriver/cli.py
 ```
-Expected: no match. `future/ENVIRONMENT_CONTRACT.md` §10 Tier 3 says the alias
+Expected: no match. retired ENVIRONMENT_CONTRACT §10 Tier 3 says the alias
 was "first shipped as deprecated aliases, then removed outright the same day",
 and `test_openfoam_bashrc_kwarg_is_no_longer_accepted` asserts a `TypeError`.
 Replace with:
@@ -304,7 +304,7 @@ Replace with:
 ```
     ``--environment-bashrc``. ``--openfoam-bashrc`` was shipped as a deprecated
     alias and then removed outright the same day, pre-publication (future/
-    ENVIRONMENT_CONTRACT.md §10, Tier 3) -- this sentence used to claim the
+    retired ENVIRONMENT_CONTRACT §10, Tier 3) -- this sentence used to claim the
     alias still worked.
 ```
 
@@ -330,7 +330,7 @@ plugin, not hardcoded: core names no solver's utilities.
 and drop the ``UTILITY_CATALOG`` line from the `Schema` block, leaving
 ``UtilityManifest`` and ``load_utility_manifests``. The eager module-level
 catalog and ``UTILITIES_ROOT`` were removed (future/
-UTILITY_CATALOG_STANDALONE_GAP.md, status resolved); only this header still
+retired UTILITY_CATALOG_STANDALONE_GAP, status resolved); only this header still
 described them.
 
 - [x] **Step 4: Fix dict_builder.py's "still tracked" claim**
@@ -562,11 +562,11 @@ the files a new reader or agent is pointed at first.
 - Modify: `ARCHITECTURE.md` (the self-contradicting metric)
 - Modify: `KEY_FILES.md` (every path)
 - Modify: `AGENT_GUIDE.md` (banner)
-- Modify: `CHANGELOG.md:199`
+- Modify: retired CHANGELOG
 - Modify: `SECURITY.md` (trust-boundary paths)
-- Modify: `MIGRATION_AUDIT_v2.md` (undated false note)
-- Modify: `future/ENVIRONMENT_CONTRACT.md` (duplicate section number)
-- Modify: `future/STRICT_PLANNING_FOAMLIB_COUPLING.md` §6
+- Modify: retired MIGRATION_AUDIT_v2 (undated false note)
+- Modify: retired ENVIRONMENT_CONTRACT (duplicate section number)
+- Modify: retired STRICT_PLANNING_FOAMLIB_COUPLING §6
 - Modify: `docs/superpowers/plans/2026-08-27-core-completion-phase-2.md` (banner)
 - Modify: `docs/superpowers/plans/2026-08-25-monorepo-package-migration.md` (banner)
 
@@ -650,9 +650,9 @@ banner immediately under the title that stops a reader acting on it:
 > the current layout. Rewriting this file is tracked as its own task.
 ```
 
-This matches the convention `MIGRATION_AUDIT_v2.md` already uses.
+This matches the convention retired MIGRATION_AUDIT_v2 already uses.
 
-- [x] **Step 4: Fix CHANGELOG.md's false "Known open" item**
+- [x] **Step 4: Fix retired CHANGELOG's false "Known open" item**
 
 Line 199 says the `$ELECTRO_MODEL_COEFFS` sentinel is "still hardcoded in …
 `scripts/_dict_keys_scanner.py`". Verify:
@@ -681,7 +681,7 @@ ls packages/omnidriver-openfoam/src/omnidriver/openfoam/apply_overrides.py \
 Rewrite each path to its real location and add a dated correction note. Do not
 change any security claim — those were verified accurate.
 
-- [x] **Step 6: Date and correct MIGRATION_AUDIT_v2.md's "still live" note**
+- [x] **Step 6: Date and correct retired MIGRATION_AUDIT_v2's "still live" note**
 
 Its top callout says `sweep_materialize.py::_materialize_case_legacy` "is dead
 code called from nowhere. It still exists." Verify:
@@ -699,11 +699,11 @@ Expected: no output. Replace the callout with:
 > Nothing in this document is still live.
 ```
 
-- [x] **Step 7: Fix the duplicate section number in future/ENVIRONMENT_CONTRACT.md**
+- [x] **Step 7: Fix the duplicate section number in retired ENVIRONMENT_CONTRACT**
 
 Verify:
 ```bash
-grep -n "^## " future/ENVIRONMENT_CONTRACT.md
+grep -n "^## " retired ENVIRONMENT_CONTRACT
 ```
 Expected: two headings numbered `## 8.` (lines 214 and 232), with `## Related`
 between them.
@@ -711,14 +711,14 @@ between them.
 Code cites §4, §7, §10 and §11 of this document by number, so renumbering is
 dangerous. Confirm what is cited before touching anything:
 ```bash
-git grep -o "ENVIRONMENT_CONTRACT.md §[0-9]*" -- packages scripts | sort -u
+git grep -o "retired ENVIRONMENT_CONTRACT §[0-9]*" -- packages scripts | sort -u
 ```
 Renumber only the SECOND `## 8.` (line 232, "What only running the code
 revealed") to `## 8b.`, leaving 9/10/11 untouched. This resolves the duplicate
 without shifting any number that code depends on. Move `## Related` to the end
 of the document, where its siblings put it.
 
-- [x] **Step 8: Correct STRICT_PLANNING_FOAMLIB_COUPLING.md §6**
+- [x] **Step 8: Correct retired STRICT_PLANNING_FOAMLIB_COUPLING §6**
 
 It says `omnidriver/cli.py` "still has two direct `omnidriver.openfoam`
 imports". Verify:
