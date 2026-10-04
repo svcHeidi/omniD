@@ -804,7 +804,8 @@ regions are `electro` / `solid`; read the keys that are there rather than
 assuming a fixed set. Author `workflowDag` commands and `functions{}` field lists against this instead of guessing — a command outside `allowed_commands` is rejected before execution, and a field outside `samplable_fields` is dropped silently by the solver (see below).
 
 A plan reports a note about an uncatalogued or unread key only for a dictionary
-the case holds; `catalog --uncatalogued` and `--unread` list them all.
+the case holds; a read the scan cannot place in a dictionary is not noted.
+`catalog --uncatalogued` and `--unread` list them all.
 
 ## What the rules catch
 

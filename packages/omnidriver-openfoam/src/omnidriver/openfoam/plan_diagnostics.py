@@ -148,8 +148,8 @@ def _catalog_diagnostics(
     driver_context: Any, mapping: Any, source_root: Path | None, report: dict | None, *, held: set[str],
 ) -> tuple[StrictDiagnostic, ...]:
     """The catalogue compared with the C++, never failing the plan: warnings for disagreements, notes for unread and
-    uncatalogued keys. A note about a dictionary the case does not hold (``held``, by file name) is left to
-    ``omnidriver catalog``."""
+    uncatalogued keys. A note about a dictionary the case does not hold (``held``, by file name), or about a read
+    the scan cannot place in one, is left to ``omnidriver catalog``."""
     if mapping is None:
         return ()
     cxx_mapping_source = driver_context.identity.resolutions["get_profile"]
@@ -184,6 +184,6 @@ def _catalog_diagnostics(
             source=source, field=item.get("path", ""),
         )
         for item in report.get("uncatalogued", ())
-        if "documents" not in item or held.intersection(item["documents"])
+        if held.intersection(item.get("documents", ()))
     )
     return disagreements + unread + notes

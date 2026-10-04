@@ -98,7 +98,7 @@ def test_what_the_cxx_disagrees_with_never_fails_the_plan(tmp_path):
         }],
         "uncatalogued": [{
             "kind": "key", "key": "c", "path": "c", "required": True, "method": "get", "type": "word", "default": None,
-            "source": "x.C:3", "function": "f", "entry": {"driver_path": None},
+            "source": "x.C:3", "function": "f", "entry": {"driver_path": None}, "documents": ["toyDict"],
         }],
         "unresolved": [{"key": "d"}],
     }
@@ -114,7 +114,7 @@ def test_what_the_cxx_disagrees_with_never_fails_the_plan(tmp_path):
     assert "'c' as get<word> with no default, so it is required, at x.C:3 (f)" in diagnostics[2].message
 
 
-def test_notes_about_a_dictionary_the_case_does_not_hold_are_left_to_the_catalog_command(tmp_path):
+def test_notes_about_a_dictionary_the_case_does_not_hold_or_a_read_with_no_known_one_are_left_to_the_catalog_command(tmp_path):
     (tmp_path / "tree" / "src").mkdir(parents=True)
     read = {"kind": "key", "key": "c", "path": "c", "required": False, "method": "get", "type": "word",
             "default": None, "source": "x.C:3", "function": "f", "entry": {"driver_path": None}}
@@ -135,8 +135,8 @@ def test_notes_about_a_dictionary_the_case_does_not_hold_are_left_to_the_catalog
     context, _scans = _context(_mapping(tmp_path), report=report, owned=("heldDict", "otherDict"))
     messages = [d.message for d in _diagnose(context, tmp_path, {"TOY_NATIVE_TREE": str(tmp_path / "tree")})]
     assert any("$S.kept" in message for message in messages) and not any("$S.dropped" in message for message in messages)
-    assert any("'inHeld'" in message for message in messages) and any("'unplaced'" in message for message in messages)
-    assert not any("'inOther'" in message for message in messages)
+    assert any("'inHeld'" in message for message in messages)
+    assert not any("'inOther'" in message or "'unplaced'" in message for message in messages)
 
 
 def test_a_stack_without_a_cxx_mapping_adds_no_catalogue_diagnostics(tmp_path):
