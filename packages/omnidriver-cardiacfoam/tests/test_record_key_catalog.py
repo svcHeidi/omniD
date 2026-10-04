@@ -68,3 +68,30 @@ def test_a_pre_pacing_file_the_case_holds_is_listed_by_the_keys_a_study_may_set(
     keys = {e["key"] for e in CardiacFoamPlugin().get_record_key_catalog(case) if e["document"] == "constant/prePacingProperties"}
     assert {"tolerance", "maxBeats", "regions.<region_name>.maxBeats", "singleCellStimulus.stim_start", "regions.<region_name>.singleCellStimulus.stim_start"} <= keys
     assert not [key for key in keys if "$" in key]
+
+
+def test_describe_lists_only_the_keys_the_cases_own_solver_allows():
+    plugin = CardiacFoamPlugin()
+    listed = plugin.get_record_key_catalog(CASE)
+    narrowed = plugin.select_applicable_record_keys(listed, CASE)
+    kept = {(e["document"], e["key"]) for e in narrowed}
+    gone = {(e["document"], e["key"]) for e in listed} - kept
+    assert gone, "a single-cell case rules out the keys of the other solvers"
+    # What a study can make apply by setting another key (here the ionic model) stays listed.
+    assert ("constant/electroProperties", "singleCellSolverCoeffs.tissue") in kept
+    by_key = {(e["document"], e["key"]): e for e in listed}
+    for item in (by_key[key] for key in gone):
+        assert (
+            "singleCellSolver" not in item.get("applicable_when", {}).get("myocardiumSolver", ["singleCellSolver"])
+            or item.get("forbidden_when", {}).get("myocardiumSolver")
+        ), item["key"]
+    assert any(e.get("applicable_when", {}).get("ionicModel") for e in narrowed)
+    assert [e for e in listed if e["document"] != "constant/electroProperties"] == [
+        e for e in narrowed if e["document"] != "constant/electroProperties"
+    ]
+
+
+def test_a_case_with_no_electro_properties_is_listed_whole(tmp_path):
+    plugin = CardiacFoamPlugin()
+    keys = ({"document": "system/controlDict", "key": "<any>", "validated": False},)
+    assert plugin.select_applicable_record_keys(keys, tmp_path) == keys

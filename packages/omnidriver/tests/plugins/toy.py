@@ -523,6 +523,17 @@ class AuxiliaryOnlyPreflightPlugin(ToyStack):
         return (StrictDiagnostic(level="error", code="toy_command_not_found", message=f"'toy-mesher' is not on PATH={path!r}"),)
 
 
+class NamedCatalogPlugin(ToyStack):
+    """Two tables of named items and a plain list, as a solver's catalogues of models are."""
+
+    def get_named_catalogs(self):
+        return {"models": {
+            "schema_version": "1.0",
+            "models": {"alpha": {"states": ["u"], "notes": "n"}, "beta": {"states": ["v"]}},
+            "rules": [{"valid": True}],
+        }}
+
+
 class SilentSurfacePlugin(ToyStack):
     """No record surface: an agent reading describe learns nothing it may address."""
 

@@ -61,9 +61,15 @@ def record_surface(
         }
         for input_ in sorted(record.inputs, key=lambda input_: input_.name)
     ]
+    listed = stack.call("get_record_key_catalog", Path(native_case_root))
+    keys = stack.call("select_applicable_record_keys", listed, Path(native_case_root))
     return {
         "axes": axes,
-        "keys": [dict(entry) for entry in stack.call("get_record_key_catalog", Path(native_case_root))],
+        "keys": [dict(entry) for entry in keys],
+        **({"keys_omitted": {
+            "count": len(listed) - len(keys),
+            "why": "their applicable_when rules out this case's own solver; `omnidriver catalog` lists every key",
+        }} if len(keys) < len(listed) else {}),
         "guidance": [dict(item) for item in stack.call("get_agent_guidance")],
         "case_documentation": documentation,
         "inputs": inputs,

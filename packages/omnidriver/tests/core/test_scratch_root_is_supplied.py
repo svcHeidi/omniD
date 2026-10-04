@@ -237,9 +237,8 @@ def test_a_sweep_output_dir_wins_and_needs_no_scratch(tmp_path):
 
 # --- core as a whole ----------------------------------------------------------
 
-#: The two places that name an ambient directory, and why: the CLI's last-step
-#: default for the cases root, and `--fresh`'s refusal to wipe the home directory.
-_AMBIENT_DIRECTORY_EXEMPT = {("cli.py", "resolve_cases_root"), ("core/runtime/fresh.py", "check_fresh_deletion_allowed")}
+#: The one place that names an ambient directory, and why: `--fresh`'s refusal to wipe the home directory.
+_AMBIENT_DIRECTORY_EXEMPT = {("core/runtime/fresh.py", "check_fresh_deletion_allowed")}
 
 
 def _ambient_directory_uses() -> list[tuple[str, str, str]]:
@@ -270,7 +269,7 @@ def _ambient_directory_uses() -> list[tuple[str, str, str]]:
 
 def test_core_never_invents_a_filesystem_root():
     """Core reads no directory from its own location, the working directory or the home directory,
-    except where a supplied value is refused or the CLI's documented last default applies."""
+    except where a supplied value is refused."""
     uses = _ambient_directory_uses()
     assert {use[:2] for use in uses} == _AMBIENT_DIRECTORY_EXEMPT, "the scan finds the exemptions it names"
     assert [use for use in uses if use[:2] not in _AMBIENT_DIRECTORY_EXEMPT] == []

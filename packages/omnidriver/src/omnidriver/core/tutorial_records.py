@@ -492,6 +492,9 @@ class TutorialRecord:
     #: How ``omnidriver check`` exercises the record briefly against the real
     #: solver; ``None`` for a record that declares none.
     conformance: "ConformanceStudy | None" = None
+    #: A record whose solve has nothing to split across processes (one cell):
+    #: a run asking for ``parallel`` is refused by name when it is planned.
+    serial_only: bool = False
 
     def __post_init__(self) -> None:
         if not self.name:

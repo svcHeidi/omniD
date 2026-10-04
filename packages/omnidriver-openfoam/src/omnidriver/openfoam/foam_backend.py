@@ -8,6 +8,8 @@ from typing import Any
 
 from foamlib import Dimensioned, FoamFile
 
+from omnidriver.core.case_write import CaseKeyNotFound
+
 from .literals import BOOLEAN_WORDS
 
 ScopeArg = str | list[str] | tuple[str, ...] | None
@@ -187,7 +189,7 @@ def update_entry(
                 try:
                     foam_file[path]
                 except KeyError as exc:
-                    raise KeyError(
+                    raise CaseKeyNotFound(
                         f"Key '{key}' not found in scope '{scope}' in {file_path}"
                         if scope is not None
                         else f"Key '{key}' not found in {file_path}"
@@ -237,7 +239,7 @@ def remove_dict(
     except KeyError:
         if missing_ok:
             return
-        raise KeyError(f"Dictionary '{dict_name}' not found in {file_path}") from None
+        raise CaseKeyNotFound(f"Dictionary '{dict_name}' not found in {file_path}") from None
     except (TypeError, ValueError) as exc:
         # Mirrors update_entry's mapping: `del` re-parses the whole file, so
         # a FoamFileDecodeError elsewhere in the file (a ValueError subclass)

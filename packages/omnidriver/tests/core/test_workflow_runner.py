@@ -77,6 +77,18 @@ def test_run_workflow_step_completes_and_records_logs_and_state_file() -> None:
         assert json.loads(state_path.read_text()) == payload
 
 
+def test_a_step_starts_with_pwd_set_to_its_working_directory(tmp_path) -> None:
+    (tmp_path / "sub").mkdir()
+    dag = _dag(sys.executable, ["-c", "import os; print(os.environ['PWD']); print(os.getcwd())"])
+    dag["steps"][0]["cwd"] = "sub"
+    result = run_workflow_step(
+        dag, initial_workflow_state(dag), "run", case_root=tmp_path, log_dir=tmp_path / "logs",
+        env={"PWD": "/somewhere/else"},
+    )
+    pwd, cwd = Path(result.stdout_log).read_text().splitlines()
+    assert pwd == cwd == str((tmp_path / "sub").resolve())
+
+
 def test_run_workflow_step_marks_nonzero_exit_failed() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)

@@ -9,6 +9,8 @@ import json
 from importlib.metadata import entry_points
 from pathlib import Path
 
+from .refusal import Refusal, RefusingParser, print_refusal
+
 BUILDERS_GROUP = "omnidriver.builders"
 
 
@@ -23,7 +25,14 @@ def _pairs(parser: argparse.ArgumentParser, flag: str, values: list[str]) -> dic
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(
+    try:
+        return _build(argv)
+    except Refusal as exc:
+        return print_refusal(exc, action="build")
+
+
+def _build(argv: list[str]) -> int:
+    parser = RefusingParser(
         prog="omnidriver build",
         description=(
             "Build a case from the catalogue into --out and hold it to the same pre-run rules a "

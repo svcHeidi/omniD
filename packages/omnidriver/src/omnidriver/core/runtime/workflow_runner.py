@@ -417,7 +417,8 @@ def run_workflow_step(
                 cwd=resolved_cwd,
                 stdout=stdout_handle,
                 stderr=stderr_handle,
-                env=dict(env) if env is not None else None,
+                # A shell-started tool compares $PWD with getcwd() and warns when they differ.
+                env={**(os.environ if env is None else env), "PWD": os.path.realpath(resolved_cwd)},
                 text=True,
                 start_new_session=(os.name == "posix"),
             )

@@ -55,10 +55,14 @@ def test_a_failed_build_exits_non_zero_with_its_reason(monkeypatch, tmp_path, ca
     assert outcome != "refusal" or report["error"] == "no such solver"
 
 
-def test_a_plugin_without_a_builder_and_a_repeated_name_are_refused(monkeypatch, tmp_path):
+def test_a_plugin_without_a_builder_and_a_repeated_name_are_refused_in_the_one_json_shape(monkeypatch, tmp_path, capsys):
     _declare(monkeypatch, lambda *a, **k: {"status": "ok"})
 
-    with pytest.raises(SystemExit):
-        cli.main(["build", "--plugin", "other", "--out", str(tmp_path)])
-    with pytest.raises(SystemExit):
-        cli.main(["build", "--plugin", "toy", "--out", str(tmp_path), "--select", "a=1", "--select", "a=2"])
+    for argv, fragment in (
+        (["--plugin", "other", "--out", str(tmp_path)], "declares no case builder"),
+        (["--plugin", "toy", "--out", str(tmp_path), "--select", "a=1", "--select", "a=2"], "each NAME once"),
+        (["--plugin", "toy"], "--out"),
+    ):
+        assert cli.main(["build", *argv]) == 1
+        report = json.loads(capsys.readouterr().out)
+        assert report["status"] == "failed" and report["action"] == "build" and fragment in report["error"]

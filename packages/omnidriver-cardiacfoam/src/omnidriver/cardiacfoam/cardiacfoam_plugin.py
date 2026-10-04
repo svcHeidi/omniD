@@ -175,6 +175,13 @@ class CardiacFoamPlugin:
 
         return record_key_catalog(case_root)
 
+    def select_applicable_record_keys(self, keys, case_root) -> tuple:
+        """``keys`` less those the case's solver rules out
+        (``record_key_validation.applicable_record_keys``)."""
+        from omnidriver.cardiacfoam.record_key_validation import applicable_record_keys
+
+        return applicable_record_keys(keys, case_root)
+
     def get_agent_guidance(self) -> tuple:
         """What this stack's validator and catalogues enforce, and the
         pre-processing rule, stated for an agent before it writes a study

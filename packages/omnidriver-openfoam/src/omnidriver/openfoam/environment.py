@@ -84,21 +84,22 @@ class OpenFOAMEnvironmentPlugin:
             driver_context=driver_context,
         )
 
-    def get_configured_environment(self, env, driver_context):
-        from .openfoam_environment import configure_plugin_environment
+    def resolve_supplied_variables(self, environ):
+        """``OPENFOAM_BASHRC``, when unset, as a run resolves it, and from where
+        (``openfoam_environment.resolve_bashrc``)."""
+        from .openfoam_environment import resolve_bashrc
 
-        return configure_plugin_environment(env, driver_context).env
+        resolved = None if environ.get("OPENFOAM_BASHRC") else resolve_bashrc(base_env=environ)
+        if resolved is None:
+            return {}
+        bashrc, source = resolved
+        return {"OPENFOAM_BASHRC": {"value": str(bashrc), "resolved_from": source}}
 
     def get_loaded_environment(self, *, environment_source=None, driver_context=None):
         """``environment_source`` is, for OpenFOAM, a bashrc to source."""
         from .openfoam_environment import load_openfoam_environment
 
-        return dict(
-            load_openfoam_environment(
-                bashrc_path=environment_source,
-                driver_context=driver_context,
-            ).env
-        )
+        return dict(load_openfoam_environment(bashrc_path=environment_source).env)
 
     def get_config_value_reader(self):
         return _read_config_value_by_key_path

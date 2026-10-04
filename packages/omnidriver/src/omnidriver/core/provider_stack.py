@@ -80,6 +80,7 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     "inspect_effective_configuration": ("sequence", None),
     # environment
     "get_environment_diagnostics": ("sequence", _no_environment_validation),
+    "resolve_supplied_variables": ("map", None),
     "get_loaded_environment": ("single", lambda: dict(os.environ)),
     "get_configured_environment": ("chain", None),
     "get_case_runtime_conventions": ("single", _no_conventions),
@@ -94,6 +95,7 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     # records
     "get_tutorial_records": ("map", None),
     "get_record_key_catalog": ("sequence", None),
+    "select_applicable_record_keys": ("chain", None),
     "get_agent_guidance": ("sequence", None),
     "get_record_key_validator": ("single", _RECORD),
     "get_case_value_comparator": ("single", _RECORD),

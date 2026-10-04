@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence
 
 from ..case_transaction import commit_case_write
-from ..case_write import CaseMutationRequest, CaseWritePlan, CaseWriteRecord, render_mutation, resolve_mutation
+from ..case_write import CaseKeyNotFound, CaseMutationRequest, CaseWritePlan, CaseWriteRecord, render_mutation, resolve_mutation
 from ..provider_stack import MemberAbsent
 from ..sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
 from .models import DataArtifact
@@ -329,17 +329,22 @@ def _workflow_commands(dag: Mapping[str, Any]) -> dict[str, list[str]]:
 @contextlib.contextmanager
 def _refusal_as_record_error(
     record: TutorialRecord, documents: frozenset[str], action: str,
-    *, refused_by: str = "the case writer",
+    *, refused_by: str = "the case writer", scratch: Path | None = None,
 ) -> Iterator[None]:
-    """Turn a ``ValueError`` (the writer's refusal type) into a ``TutorialRecordError`` naming the record; other errors propagate."""
+    """Turn a ``ValueError`` or the writer's :class:`CaseKeyNotFound` into a ``TutorialRecordError`` naming the record; other errors propagate.
+    ``scratch``, the temporary folder a renderer worked in, is dropped from the message so a document is named by its case path."""
     try:
         yield
     except TutorialRecordError:
         raise
-    except ValueError as exc:
+    except (ValueError, CaseKeyNotFound) as exc:
+        reason = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
+        if scratch is not None:
+            for spelling in {str(scratch), str(scratch.resolve())}:
+                reason = reason.replace(f"{spelling}/", "")
         raise TutorialRecordError(
             f"tutorial record {record.name!r}: {action} {', '.join(sorted(documents))} "
-            f"was refused by {refused_by} ({type(exc).__name__}): {exc}"
+            f"was refused by {refused_by} ({type(exc).__name__}): {reason}"
         ) from exc
 
 
@@ -414,7 +419,7 @@ def _commit_patches(
         _seed_snapshot_root(
             snapshot_root, case_root=staged_case_root, documents=documents,
         )
-        with _refusal_as_record_error(record, documents, "rendering"):
+        with _refusal_as_record_error(record, documents, "rendering", scratch=snapshot_root):
             rendered = render_mutation(
                 driver_context, resolved, snapshot_root=snapshot_root, execution_env=execution_env,
             )
@@ -641,6 +646,12 @@ def _parallel_workflow_dag(
 ) -> dict[str, Any]:
     """Replace each solve step with the stack's ``get_parallel_steps`` form; core checks only that ids and ``produces`` hold."""
     stack = driver_context.stack
+    if record.serial_only:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r} is serial only: the run asks for "
+            f"{PARALLEL_STUDY_NAME!r} = {request!r}, but its solve has nothing to split across processes; "
+            f"omit {PARALLEL_STUDY_NAME!r}, or set it false, to run serial"
+        )
     if not stack.implements("get_parallel_steps"):
         raise TutorialRecordError(
             f"tutorial record {record.name!r}: the run asks for "

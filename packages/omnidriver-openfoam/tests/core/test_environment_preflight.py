@@ -467,3 +467,29 @@ def test_the_bashrc_is_never_searched_for(tmp_path):
 def test_a_supplied_bashrc_that_does_not_exist_is_refused_by_name(tmp_path):
     loaded = load_openfoam_environment(base_env={"OPENFOAM_BASHRC": str(tmp_path / "absent")})
     assert loaded.error == f"OpenFOAM bashrc not found: {tmp_path / 'absent'}"
+
+
+def test_env_reports_the_bashrc_a_run_would_source_and_where_it_found_it(tmp_path):
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+    from omnidriver.openfoam.openfoam_environment import openfoam_bashrc
+
+    install = tmp_path / "install"
+    (install / "etc").mkdir(parents=True)
+    (install / "etc" / "bashrc").write_text("")
+    runtime_file = tmp_path / "runtime.yaml"
+    runtime_file.write_text("openfoam:\n  bashrc: /from/runtime/file\n")
+    plugin = OpenFOAMEnvironmentPlugin()
+    sourced_shell = {"WM_PROJECT_DIR": str(install)}
+
+    assert plugin.resolve_supplied_variables(sourced_shell) == {
+        "OPENFOAM_BASHRC": {"value": str(install / "etc" / "bashrc"), "resolved_from": "WM_PROJECT_DIR"},
+    }
+    assert plugin.resolve_supplied_variables(sourced_shell)["OPENFOAM_BASHRC"]["value"] == str(
+        openfoam_bashrc(base_env=sourced_shell),
+    )
+    configured = plugin.resolve_supplied_variables({**sourced_shell, "OMNIDRIVER_RUNTIME_CONFIG": str(runtime_file)})
+    assert configured["OPENFOAM_BASHRC"] == {
+        "value": "/from/runtime/file", "resolved_from": "OMNIDRIVER_RUNTIME_CONFIG",
+    }
+    assert plugin.resolve_supplied_variables({"OPENFOAM_BASHRC": "/named", **sourced_shell}) == {}
+    assert plugin.resolve_supplied_variables({}) == {}

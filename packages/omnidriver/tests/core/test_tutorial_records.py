@@ -9,7 +9,7 @@ import pytest
 
 from omnidriver.core.runtime.attempt_lease import acquire_case_lease
 
-from omnidriver.core.case_write import ParameterAssignment, ResolvedMutation, RenderedFile, _digest_bytes
+from omnidriver.core.case_write import CaseKeyNotFound, ParameterAssignment, ResolvedMutation, RenderedFile, _digest_bytes
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime import record_execution
@@ -1323,6 +1323,40 @@ def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(t
     )
     written = json.loads((tmp_path / "staged" / "constant" / "physics.json").read_text())
     assert written["modelName"] == "modelBeta"
+
+
+def test_a_renderer_refusal_names_the_document_by_its_case_path_not_the_render_scratch(tmp_path, monkeypatch):
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
+
+    def refuse(driver_context, resolved, *, snapshot_root, execution_env):
+        raise CaseKeyNotFound(f"Key 'modelNme' not found in {snapshot_root}/constant/physics.json")
+
+    monkeypatch.setattr(record_execution, "render_mutation", refuse)
+    with pytest.raises(TutorialRecordError) as excinfo:
+        record_execution.commit_record_case(
+            _record(axes=()), cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+            study_by_source={"base": {"constant/physics.json:modelName": "modelBeta"}},
+            driver_context=_context_with_writer(),
+        )
+    message = str(excinfo.value)
+    assert "Key 'modelNme' not found in constant/physics.json" in message
+    assert "omnidriver-record-render" not in message
+
+
+def test_a_key_error_that_is_not_the_writers_lookup_miss_is_a_defect_and_propagates(tmp_path, monkeypatch):
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
+
+    def defect(driver_context, resolved, *, snapshot_root, execution_env):
+        raise KeyError("a bug in a renderer")
+
+    monkeypatch.setattr(record_execution, "render_mutation", defect)
+    with pytest.raises(KeyError, match="a bug in a renderer") as excinfo:
+        record_execution.commit_record_case(
+            _record(axes=()), cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+            study_by_source={"base": {"constant/physics.json:modelName": "modelBeta"}},
+            driver_context=_context_with_writer(),
+        )
+    assert not isinstance(excinfo.value, TutorialRecordError)
 
 
 def test_commit_record_case_preserves_sibling_keys_in_a_multi_key_document(tmp_path):

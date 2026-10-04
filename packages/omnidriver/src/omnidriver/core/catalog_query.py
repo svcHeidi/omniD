@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
 from .runtime.record_surface import ANY_KEY, key_pattern, lists_key
-from .tutorial_records import lookup_record
+from .tutorial_records import TutorialRecordError, lookup_record
 
 if TYPE_CHECKING:
     from .plugin_interface import DriverContext
@@ -80,18 +80,27 @@ def scan_query(driver_context: "DriverContext", *, cache_root: Path | None, unre
     """``omnidriver catalog --uncatalogued`` (every read the C++ makes that the
     catalogue lacks, with its scanned type, default, scope, source location and
     the entry arguments the scan can fill) or, with ``unread``, ``catalog
-    --unread`` (every catalogued key the C++ no longer reads)."""
+    --unread`` (every catalogued key the C++ no longer reads). Refused
+    (``TutorialRecordError``) when the stack has no C++ or none was supplied:
+    an empty list would read as "everything is catalogued"."""
     cxx = cxx_evidence(driver_context, os.environ, cache_root=cache_root)
+    if cxx is None:
+        raise TutorialRecordError("the stack declares no C++ source, so there is nothing to scan")
+    if not cxx["scanned"]:
+        raise TutorialRecordError(
+            f"nothing was scanned ({cxx['reason']}): pass --repo, or set {cxx['variable']} to the tutorials "
+            "folder beside the C++ source"
+        )
     listed = ("unread",) if unread else ("uncatalogued", "unresolved")
     return {
         "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
         "cxx_source": {
-            key: value for key, value in (cxx or {}).items()
+            key: value for key, value in cxx.items()
             if key not in ("uncatalogued", "unresolved", "unread", "disagreements", "selector_values")
-        } if cxx is not None else None,
+        },
         "how": _UNREAD_HOW if unread else _UNCATALOGUED_HOW,
-        **{name: (cxx or {}).get(name, []) for name in listed},
-        **({} if unread else {"disagreements": (cxx or {}).get("disagreements", [])}),
+        **{name: cxx[name] for name in listed},
+        **({} if unread else {"disagreements": cxx["disagreements"]}),
     }
 
 

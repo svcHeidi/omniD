@@ -1345,7 +1345,9 @@ class CatalogReport:
     ``disagreements`` are catalogue claims the C++ refutes, each stating both
     sides; ``unread`` are catalogued keys the C++ no longer reads;
     ``uncatalogued`` are what the C++ reads and the catalogue lacks, each with
-    the ``DictEntry`` arguments the scan can fill; ``unresolved`` are reads the
+    the ``DictEntry`` arguments the scan can fill and, when the read is of
+    particular dictionaries, their names (``documents``; an ``unread`` entry
+    names its ``document``); ``unresolved`` are reads the
     scan could not place (their receiver is not shown to be a dictionary)."""
 
     digest: str
@@ -1445,6 +1447,7 @@ def catalog_report(
     disagreements: list[str] = []
     unread: list[dict] = []
     menus: dict[str, ComparedMenu] = {}
+    menu_documents: dict[str, str] = {}
     found = document_scans(scan, catalogue.documents)
     listings: dict[str, list[tuple]] = {}
     containers: dict[str, list[tuple]] = {}
@@ -1457,8 +1460,8 @@ def catalog_report(
         gone = unread_entries(view, document_entries, reviewed)
         unread += [
             {
-                "driver_path": entry.driver_path, "value_kind": entry.value_kind, "required": entry.required,
-                "description": entry.description, "source_refs": list(entry.source_refs),
+                "document": document, "driver_path": entry.driver_path, "value_kind": entry.value_kind,
+                "required": entry.required, "description": entry.description, "source_refs": list(entry.source_refs),
                 "note": "catalogued; the supplied C++ no longer reads it",
             }
             for entry in gone
@@ -1490,7 +1493,9 @@ def catalog_report(
                     f"{entry.driver_path}: catalogue says optional; the C++ reads it with no default ("
                     + ", ".join(sorted({f"{read.file}:{read.line}" for read in reads})) + ")"
                 )
-        menus.update(compared_menus(found[document], document_entries, reviewed))
+        compared = compared_menus(found[document], document_entries, reviewed)
+        menus.update(compared)
+        menu_documents.update(dict.fromkeys(compared, document))
     disagreements += [
         f"unseen_reads names {path}, which the catalogue does not list"
         for path in sorted(set(unseen) - {entry.driver_path for entry in entries})
@@ -1512,8 +1517,14 @@ def catalog_report(
         required = _unconditional(read, guarded)
         places = {place for document in homes for place in found[document].placed.get(read.root, ())}
         driver_path = ".".join(next(iter(places)) + read_path) if len(places) == 1 else None
+        # A read whose receiver is no dictionary's root or place belongs to none in particular.
+        owners = sorted(
+            {document for document in homes if read.root in found[document].placed}
+            | ({read.root.removeprefix("document:")} if (read.root or "").startswith("document:") else set())
+        )
         uncatalogued.append({
             "kind": "dictionary" if read.subdict else "key",
+            **({"documents": owners} if owners else {}),
             "key": read.key, "path": ".".join(read_path), "root": read.root,
             "type": read.type, "value_kind": value_kind_of(read.type), "default": read.default,
             "method": read.method, "required": required, "source": f"{read.file}:{read.line}",
@@ -1527,7 +1538,10 @@ def catalog_report(
     for path, menu in sorted(menus.items()):
         listed = next(entry.enum_values for entry in entries if entry.driver_path == path)
         uncatalogued += [
-            {"kind": "compared_value", "path": path, "value": value, "source": menu.named_at[value]}
+            {
+                "kind": "compared_value", "documents": [menu_documents[path]], "path": path, "value": value,
+                "source": menu.named_at[value],
+            }
             for value in sorted(menu.values - set(listed))
         ]
         if menu.closed and set(listed) - menu.values:

@@ -6,6 +6,8 @@ import pytest
 
 from omnidriver.cli import build_parser
 
+from cli_refusal import refusal
+
 
 def _parse(argv: list[str]):
     return build_parser().parse_args(argv)
@@ -21,6 +23,5 @@ def test_no_flag_leaves_environment_source_none() -> None:
 
 
 @pytest.mark.parametrize("old", ["--environment-bashrc", "--openfoam-bashrc"])
-def test_the_old_flag_names_are_not_recognised(old: str) -> None:
-    with pytest.raises(SystemExit):
-        _parse(["plan", "--entry", "x", old, "/path/to/bashrc"])
+def test_the_old_flag_names_are_not_recognised(old: str, capsys) -> None:
+    assert "unrecognized arguments" in refusal(capsys, ["plan", "--entry", "x", old, "/path/to/bashrc"])

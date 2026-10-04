@@ -179,6 +179,12 @@ class SolverPlugin(Protocol):
         """Preflight of the environment a plan will run in.
         ``environment_source`` is the operator's opaque ``--environment-source``."""
 
+    def resolve_supplied_variables(self, environ: Mapping[str, str]) -> Mapping[str, Mapping[str, str]]:
+        """Each variable this provider declares, unset in ``environ``, that it
+        resolves from somewhere other than the process environment, by the
+        order its run and plan commands use: ``{name: {"value": ...,
+        "resolved_from": ...}}``. ``omnidriver env`` reports through it."""
+
     def get_loaded_environment(self, *, environment_source: str | None, driver_context: Any) -> dict[str, str]:
         """The execution environment built from scratch, e.g. by sourcing
         ``environment_source``."""
@@ -226,6 +232,13 @@ class SolverPlugin(Protocol):
         ``<name>``) is ``runtime.record_surface``'s. A document written as
         asked without a catalogue is listed once with key ``"<any>"`` and
         ``validated: False``."""
+
+    def select_applicable_record_keys(
+        self, keys: tuple[Mapping[str, Any], ...], case_root: Path,
+    ) -> tuple[Mapping[str, Any], ...]:
+        """``keys`` (a ``get_record_key_catalog`` answer) less the ones this
+        case's own selector (its solver) rules out by their ``applicable_when``. ``describe``
+        lists the narrowed keys; ``catalog`` lists them all."""
 
     def get_agent_guidance(self) -> tuple[Mapping[str, str], ...]:
         """Advice an agent reads before writing a study: ``title``, ``text``."""

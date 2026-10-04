@@ -121,11 +121,14 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
     from .provider_stack import provider_profile
 
     environ = dict(os.environ if environ is None else environ)
+    resolved = dict(driver_context.stack.call("resolve_supplied_variables", dict(environ)))
+    environ.update({name: found["value"] for name, found in resolved.items()})
     connection, declared_by = stack_connection(driver_context)
     variables = [
         {
             "name": variable.name, "required": variable.required, "set": bool(environ.get(variable.name)),
             "value": environ.get(variable.name), "why": variable.why, "declared_by": declared_by[variable.name],
+            **({"resolved_from": resolved[variable.name]["resolved_from"]} if variable.name in resolved else {}),
         }
         for variable in connection.supplied
     ]
@@ -169,16 +172,26 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
         command: shutil.which(command, path=applied.get("PATH"))
         for command in (*solvers, *others)
     }
-    steps = [{"id": command, "command": command, "args": []} for command in solvers]
+
+    def preflight(steps: list[dict[str, Any]]) -> list[dict[str, str]]:
+        found = stack.call(
+            "get_environment_diagnostics", {"steps": steps}, env=applied, driver_context=driver_context,
+        )
+        return [asdict(item) if not isinstance(item, dict) else dict(item) for item in found]
+
+    diagnostics += preflight([{"id": command, "command": command, "args": []} for command in solvers])
+    report["status"] = "failed" if any(item["level"] == "error" for item in diagnostics) else "ok"
     if connection.mpi_launcher is not None:
         report["launcher"] = mpi.identity(connection.mpi_launcher, applied)
-        steps += [
+        # Reported beside the status, never in it: a serial-only user needs no working launcher.
+        # What the serial preflight already said is not said again.
+        parallel = [item for item in preflight([
             mpi.wrap({"id": f"{command}.parallel", "command": command}, _PROBE_RANKS, connection.mpi_launcher)
             for command in solvers
-        ]
-    preflight = stack.call(
-        "get_environment_diagnostics", {"steps": steps}, env=applied, driver_context=driver_context,
-    )
-    diagnostics += [asdict(item) if not isinstance(item, dict) else dict(item) for item in preflight]
-    report["status"] = "failed" if any(item["level"] == "error" for item in diagnostics) else "ok"
+        ]) if item not in diagnostics]
+        report["parallel"] = {
+            "ranks": _PROBE_RANKS,
+            "status": "failed" if any(item["level"] == "error" for item in parallel) else "ok",
+            "diagnostics": parallel,
+        }
     return report

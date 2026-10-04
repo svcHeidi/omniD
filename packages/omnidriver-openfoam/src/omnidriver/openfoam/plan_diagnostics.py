@@ -31,7 +31,10 @@ def plan_diagnostics(
     mapping = driver_context.stack.call("get_profile").cxx_mapping
     source_root = mapping.source_root(env) if mapping is not None else None
     report = _report(driver_context, mapping, source_root, scratch_root)
-    catalog = _catalog_diagnostics(driver_context, mapping, source_root, report)
+    held = _owned_dict_relpaths(case_root, driver_context)
+    catalog = _catalog_diagnostics(
+        driver_context, mapping, source_root, report, held={relpath.rsplit("/", 1)[-1] for relpath in held},
+    )
     manifest = capability_manifest(driver_context)
     function_objects = function_object_field_diagnostics(
         case_root, samplable=manifest.get("samplable_fields", {}),
@@ -43,7 +46,7 @@ def plan_diagnostics(
     keys = case_dict_key_diagnostics(
         case_root,
         catalogued_paths=catalogued_paths(driver_context.stack.call("get_dict_entries")),
-        dict_relpaths=_owned_dict_relpaths(case_root, driver_context),
+        dict_relpaths=held,
         scanned=scanned,
         unread=[slot_key(item["driver_path"]) for item in (report or {}).get("unread", ())],
     )
@@ -142,9 +145,11 @@ def _report(driver_context: Any, mapping: Any, source_root: Path | None, scratch
 
 
 def _catalog_diagnostics(
-    driver_context: Any, mapping: Any, source_root: Path | None, report: dict | None,
+    driver_context: Any, mapping: Any, source_root: Path | None, report: dict | None, *, held: set[str],
 ) -> tuple[StrictDiagnostic, ...]:
-    """The catalogue compared with the C++, never failing the plan: warnings for disagreements, notes for unread and uncatalogued keys."""
+    """The catalogue compared with the C++, never failing the plan: warnings for disagreements, notes for unread and
+    uncatalogued keys. A note about a dictionary the case does not hold (``held``, by file name), or about a read
+    the scan cannot place in one, is left to ``omnidriver catalog``."""
     if mapping is None:
         return ()
     cxx_mapping_source = driver_context.identity.resolutions["get_profile"]
@@ -170,7 +175,7 @@ def _catalog_diagnostics(
             "(omnidriver catalog --unread lists every one)",
             source=source, field=item["driver_path"],
         )
-        for item in report.get("unread", ())
+        for item in report.get("unread", ()) if item["document"] in held
     )
     notes = tuple(
         diagnostic(
@@ -179,5 +184,6 @@ def _catalog_diagnostics(
             source=source, field=item.get("path", ""),
         )
         for item in report.get("uncatalogued", ())
+        if held.intersection(item.get("documents", ()))
     )
     return disagreements + unread + notes

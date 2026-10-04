@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Mapping
 
 import yaml
 
@@ -56,26 +56,39 @@ def configured_openfoam_bashrc(env: Mapping[str, str]) -> str | None:
     return str(value) if value else None
 
 
-def openfoam_bashrc(
+def resolve_bashrc(
     *,
     bashrc_path: str | Path | None = None,
     base_env: Mapping[str, str] | None = None,
-) -> Path | None:
-    """The bashrc to source: ``bashrc_path`` (``--environment-source``), else
-    ``OPENFOAM_BASHRC``, else the runtime file's ``openfoam.bashrc``, else the
+) -> tuple[Path, str] | None:
+    """The bashrc to source and where it came from: ``bashrc_path``
+    (``--environment-source``; ``"flag"``), else ``OPENFOAM_BASHRC``, else the
+    runtime file's ``openfoam.bashrc`` (``OMNIDRIVER_RUNTIME_CONFIG``), else the
     ``etc/bashrc`` of the install a sourced shell already names through
     ``WM_PROJECT_DIR`` (macOS strips ``DYLD_*`` when bash starts, so a step
     needs that bashrc sourced again). Nothing is searched for; a supplied path
     that is not a file is the caller's to refuse."""
     if bashrc_path:
-        return Path(bashrc_path).expanduser()
+        return Path(bashrc_path).expanduser(), "flag"
     env = os.environ if base_env is None else base_env
-    named = env.get("OPENFOAM_BASHRC") or configured_openfoam_bashrc(env)
-    if named:
-        return Path(named).expanduser()
+    if env.get("OPENFOAM_BASHRC"):
+        return Path(env["OPENFOAM_BASHRC"]).expanduser(), "OPENFOAM_BASHRC"
+    configured = configured_openfoam_bashrc(env)
+    if configured:
+        return Path(configured).expanduser(), RUNTIME_CONFIG_ENV
     install = env.get("WM_PROJECT_DIR")
     sourced = Path(install).expanduser() / "etc" / "bashrc" if install else None
-    return sourced if sourced is not None and sourced.is_file() else None
+    return (sourced, "WM_PROJECT_DIR") if sourced is not None and sourced.is_file() else None
+
+
+def openfoam_bashrc(
+    *,
+    bashrc_path: str | Path | None = None,
+    base_env: Mapping[str, str] | None = None,
+) -> Path | None:
+    """The bashrc to source (:func:`resolve_bashrc`), without where it came from."""
+    resolved = resolve_bashrc(bashrc_path=bashrc_path, base_env=base_env)
+    return None if resolved is None else resolved[0]
 
 
 _BASHRC_SOURCE_TIMEOUT_S = 20.0
@@ -85,7 +98,6 @@ def load_openfoam_environment(
     *,
     bashrc_path: str | Path | None = None,
     base_env: Mapping[str, str] | None = None,
-    driver_context: Any | None = None,
 ) -> OpenFOAMEnvironment:
     """Return an environment suitable for strict OpenFOAM execution.
 
@@ -96,7 +108,7 @@ def load_openfoam_environment(
     env = dict(base_env or os.environ)
     bashrc = openfoam_bashrc(bashrc_path=bashrc_path, base_env=env)
     if bashrc is None:
-        return _configure_plugin_environment(OpenFOAMEnvironment(env=env), driver_context)
+        return OpenFOAMEnvironment(env=env)
     if not bashrc.is_file():
         return OpenFOAMEnvironment(env=env, error=f"OpenFOAM bashrc not found: {bashrc}")
 
@@ -154,24 +166,4 @@ def load_openfoam_environment(
         temp_path.unlink(missing_ok=True)
     sourced_env = _parse_exported_environment(raw_env)
 
-    sourced = OpenFOAMEnvironment(env=sourced_env, bashrc=str(bashrc))
-    return _configure_plugin_environment(sourced, driver_context)
-
-
-def _configure_plugin_environment(
-    environment: OpenFOAMEnvironment,
-    driver_context: Any | None,
-) -> OpenFOAMEnvironment:
-    """Return the sourced environment unchanged; project-specific library selection belongs to a composing provider."""
-    return environment
-
-
-def configure_plugin_environment(
-    env: Mapping[str, str],
-    driver_context: Any | None,
-) -> OpenFOAMEnvironment:
-    """Apply a plugin environment contract without sourcing OpenFOAM again."""
-    return _configure_plugin_environment(
-        OpenFOAMEnvironment(env=dict(env)),
-        driver_context,
-    )
+    return OpenFOAMEnvironment(env=sourced_env, bashrc=str(bashrc))

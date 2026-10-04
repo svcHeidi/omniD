@@ -48,8 +48,10 @@ from the working directory:
   stack itself (see "Repository scripts").
 - `--cases-root <dir>` or `$OMNIDRIVER_CASES_ROOT`, when it is a repository's
   tutorials folder: the cases root itself or its parent holds an
-  `omnidriver.toml` whose `tutorials` is that folder. The working-directory
-  default for the cases root infers nothing.
+  `omnidriver.toml` whose `tutorials` is that folder. There is no
+  working-directory default: a command that needs a cases root and has neither
+  `--repo`, `--cases-root` nor `$OMNIDRIVER_CASES_ROOT` is refused by name, and
+  so is a cases root that is not a folder.
 - `--plugin <id>`, for a solver with no repository (openCARP, the test toys):
   an installed id from the `omnidriver.plugins` entry-point group, or
   `module.path:PluginClass` (a colon always selects this trusted
@@ -244,7 +246,7 @@ additionally runs each. A one-case study is a one-value axis. A `sweep.json`
 has two top-level objects:
 
 - `"base"`: `entry` (the record) and `cases_root` (where its native case
-  lives, relative to the directory the sweep runs from), both required: a
+  lives; a relative path is read against the root of the `--repo` repository, and refused by name without one), both required: a
   record has no ambient cases root, and the sweep commands refuse
   `--cases-root`. Every other key is a study value fixed across every case.
 - `"sweep"`: `"mode"` (`"cross_product"` or `"zip"`), `"independent"` (axis
@@ -352,6 +354,10 @@ What each layer does with it:
 |---|---|---|
 | OpenFOAM (cardiacFOAM) | `<solve>.decompose` (`decomposePar -force`) → `<solve>` as `mpirun -np N cardiacFoam -parallel` → `<solve>.reconstruct` (`reconstructPar`); the steps after the solve (`postProcess -latestTime`) run on the reconstructed case | the staged case's `system/decomposeParDict:numberOfSubdomains`, read as the run will see it. Set N with that study key; `parallel: N` must equal it, or the plan is refused naming both. The decompose step consumes the dictionary, so provenance fingerprints it |
 | openCARP | `<solve>` as `mpirun -np N openCARP ...`; outputs keep their names, node order and location (`docs/solver-learning/opencarp.md` I7) | the scheduler's allocation for `parallel: true`, or the `N` you supply. `true` outside a scheduler is refused. The `mpirun` first on PATH must be the launcher of the MPI openCARP was built against; preflight refuses another MPI's (`opencarp_mpi_launcher_mismatch`, I2, I5) |
+
+A record whose solve has nothing to split across processes declares itself
+`serial_only` (cardiacFOAM `singleCell`, one cell; `describe` with no `--entry`
+lists it), and a request for `parallel` on it is refused by name when it is planned.
 
 `describe --entry <record> --parallel` previews the form before anything runs:
 `record_preview.workflow_commands` shows each step's command line, with N as
@@ -719,7 +725,9 @@ Each plugin's manifest declares its environment: the variables you supply
 (each with why it is needed and whether it is required), the file to source,
 the directories to put first on `PATH`, and its MPI launcher. The OpenFOAM
 layer declares one shell for cardiacFOAM and cardiacCore. `env` reads only
-what is set; it never searches the disk. It prints JSON with:
+what is set; it never searches the disk, except that OpenFOAM's
+`OPENFOAM_BASHRC`, when unset, is resolved in the order `plan` and `run` use
+(see "Environment preflight" below). It prints JSON with:
 - each variable, set or unset, with its value;
 - `shell_prefix`, the bash commands in the one safe order: source first, then
   every export (macOS strips `DYLD_*` when bash starts), then `PATH`;
@@ -727,11 +735,14 @@ what is set; it never searches the disk. It prints JSON with:
   version;
 - every authorized command's path, or `null`;
 - `preflight`: the stack's own preflight on that environment, over its solver
-  command and a 2-rank solve.
+  command;
+- `parallel`: the same preflight over a 2-rank solve, reported on its own
+  (`ranks`, `status`, `diagnostics`). It never changes `status`: a serial-only
+  user needs no working launcher.
 
 Run commands behind the prefix: `bash -c '<shell_prefix> omnidriver run ...'`.
 It exits 1, with the refusal named, when a required variable is unset or the
-check fails. Each solver's shell puts only its own MPI first, and a launcher
+serial check fails. Each solver's shell puts only its own MPI first, and a launcher
 from the other MPI is refused (`openfoam_mpi_launcher_mismatch`,
 `opencarp_mpi_launcher_mismatch`). Every step a run executes records where
 it ran in `workflow_state.json`, under `steps[].host`: host name, OS, CPU,
@@ -760,17 +771,45 @@ a check fails if anything under the cases root changed while it ran.
 
 ## Discovering what's valid
 
-Three layers of discovery:
+Every answer below is a command, not a module to import. Each prints JSON, and a
+command a caller got wrong prints one shape, `{"status": "failed", "error": ...}`,
+on stdout with exit 1 (`--help` is argparse's own text).
 
-1. **What records exist?** The `records` key of `describe --entry <record>`'s output (`describe_entry(...)` programmatically) lists every tutorial record the selected stack registers.
-2. **What dict keys can I set?** Iterate `omnidriver.cardiacfoam.dict_entries_catalog.ELECTRO_PROPERTY_ENTRY_GROUPS` and `omnidriver.cardiacfoam.common_dict_entries.PHYSICS_PROPERTY_ENTRIES` for case-physics entries. For time-control use `omnidriver.cardiacfoam.common_dict_entries.CONTROL_DICT_ENTRIES` (`deltaT`, `endTime`). Each entry carries `driver_path`, `value_kind`, `enum_values`, `unit`, `typical_value`, and structured constraints (`applicable_when`, `forbidden_when`, `required_when`, `mutually_exclusive_with`). These live in the `omnidriver-cardiacfoam` package, not in core.
-3. **What ionic models can I pick?** `from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG`. Each entry carries `states`, `algebraic`, `compatible_solvers`, `compatible_tissues`, `species`, `cardiac_region`, `recommended_exports`.
-4. **What utilities are known?** `driver_context.stack.call("get_utility_manifests")` is the stack's `dict[str, UtilityManifest]`. Strict planning fails when a workflow command has missing required `produces` metadata. There is no `UTILITY_CATALOG` module-level constant — core names no solver's utilities by design.
-5. **What does the C++ read that the catalogue lacks?** `omnidriver catalog --plugin P --uncatalogued` (see "The C++ scan" above). (`omnidriver.plugins` is the entry-point group name, not a package path.)
+1. **What does this stack offer?** `omnidriver describe --repo <tree>` (or
+   `--plugin <id>`), with no `--entry`, lists `records` (name, native case,
+   axes, inputs, `serial_only`), the repository's `scripts`, and
+   `installed_plugins`, the ids `--plugin` takes. An unknown `--plugin` is
+   refused with the same list.
+2. **What may I set in this record?** `describe --entry <record>`:
+   `record_surface.keys` lists the keys the record's own solver allows (a
+   relation on the solver selector holds), and `keys_omitted` counts the rest;
+   a key another setting makes apply stays listed.
+   `omnidriver catalog --entry <record>` lists every key, narrowed with
+   `--document` or `--key`. Each entry carries `driver_path`, `value_kind`,
+   `menu`, `unit`, `typical_value` and its relations (`applicable_when`,
+   `forbidden_when`, `required_when`, `mutually_exclusive_with`).
+3. **What models can I pick?** `describe` lists each named catalog's items by
+   name (`plugin_catalogs`: for cardiacFOAM the ionic and active-tension
+   models). `omnidriver catalog --plugin P --named ionic_model_catalog` prints
+   the catalog in full and `--item TNNP` one model: its states, compatible
+   solvers and tissues, recommended exports.
+4. **What utilities are known?** `driver_context.stack.call("get_utility_manifests")`
+   is the stack's `dict[str, UtilityManifest]`. Strict planning fails when a
+   workflow command has missing required `produces` metadata. Core names no
+   solver's utilities by design.
+5. **What does the C++ read that the catalogue lacks?** `omnidriver catalog --repo <tree> --uncatalogued`
+   (see "The C++ scan" above). It fails by name when nothing was scanned (no C++
+   source supplied, or a stack with no C++): an empty list would read as "all
+   catalogued". (`omnidriver.plugins` is the entry-point group name, not a
+   package path.)
 6. **What commands may a workflow step run, and what fields may a function object sample?** Read the `capability_manifest` block emitted by both `describe --entry <name>` and `plan --strict --entry <name>` (and `describe_entry(...)` / `strict_plan(...).to_json()` programmatically). It is the authoritative, machine-readable accept-surface: `allowed_commands` (`core`, `case_scripts`, `utilities`, plus the `$FOAM_APPBIN` note) mirrors the command allowlist exactly, and `samplable_fields` lists the field names the *resolved* model exposes,
 keyed by region. **Both blocks are plugin-dependent.** For cardiacFoam the
 regions are `electro` / `solid`; read the keys that are there rather than
 assuming a fixed set. Author `workflowDag` commands and `functions{}` field lists against this instead of guessing — a command outside `allowed_commands` is rejected before execution, and a field outside `samplable_fields` is dropped silently by the solver (see below).
+
+A plan reports a note about an uncatalogued or unread key only for a dictionary
+the case holds; a read the scan cannot place in a dictionary is not noted.
+`catalog --uncatalogued` and `--unread` list them all.
 
 ## What the rules catch
 
@@ -833,9 +872,9 @@ cardiacFoam-specific:**
   sample are this solver's: membrane voltage `Vm`, `activationTime`, total
   ionic current `Iion`; active tension `Ta` and fibre stretch `lambda`;
   bidomain potentials `phiE` / `phiI`; per-ionic-model species (e.g. `Ca_i`).
-  The authoritative, model-specific list is the catalogs already noted under
-  "Discovering what's valid" (`IONIC_MODEL_CATALOG` states / algebraic /
-  `recommended_exports`, `ACTIVE_TENSION_MODEL_CATALOG`). Sample only names that
+  The authoritative, model-specific list is the catalogs under
+  "Discovering what's valid" (`catalog --named ionic_model_catalog --item <model>`:
+  states / algebraic / `recommended_exports`; `active_tension_catalog`). Sample only names that
   exist for your chosen model, or the solver drops them.
 - **Regions (multi-region cases only).** Electromechanical cases split fields
   across two regions: `electro` (`Vm`, `Ca_i`, ionic state) and `solid` (`Ta`,
@@ -1013,7 +1052,8 @@ These are real limitations; the agent must not assume them:
   searched for: `--environment-source`, else `OPENFOAM_BASHRC`, else `openfoam.bashrc`
   in the file `OMNIDRIVER_RUNTIME_CONFIG` names, else the `etc/bashrc` of the install
   a sourced shell names through `WM_PROJECT_DIR`; a plan that needs OpenFOAM and has
-  none refuses with `missing_openfoam_env`.
+  none refuses with `missing_openfoam_env`. `omnidriver env` resolves an unset
+  `OPENFOAM_BASHRC` by the same order, minus `--environment-source`, and says where it found the file in that variable's `resolved_from` (`OMNIDRIVER_RUNTIME_CONFIG` or `WM_PROJECT_DIR`).
 
 - **Active-tension models beyond NashPanfilov and GoktepeKuhl** are not in `active_tension_catalog.py`. Future C++ models must be registered there before artifact prediction will cover their state variables.
 

@@ -1,6 +1,7 @@
 """A record runs parallel through its solver layer."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import subprocess
@@ -19,6 +20,7 @@ from omnidriver.core.tutorial_records import (
     PARALLEL_STUDY_NAME, AxisContract, AxisResult, TutorialRecord, TutorialRecordError, WorkflowStep,
 )
 
+from cli_refusal import refusal
 from plugins.toy import PARALLEL_TOY_PLUGIN
 
 TESTS_ROOT = Path(__file__).resolve().parents[1]
@@ -104,6 +106,14 @@ def test_a_stack_without_a_parallel_form_is_refused_by_name():
         )
     message = str(excinfo.value)
     assert "'threeSteps'" in message and "get_parallel_steps" in message and "serial" in message
+
+
+def test_a_serial_only_record_is_refused_by_name_even_where_the_stack_has_a_parallel_form():
+    record = dataclasses.replace(THREE_STEPS, serial_only=True)
+    with pytest.raises(TutorialRecordError, match="serial only") as excinfo:
+        _parallel_workflow_dag(record, _serial(record), request=True, driver_context=_toy_context(),
+                               read_value=_reader({}), allocation=None)
+    assert "'threeSteps'" in str(excinfo.value)
 
 
 def test_a_record_with_no_declared_solve_step_is_refused_by_name():
@@ -337,9 +347,7 @@ def test_describe_previews_the_cli_request(tmp_path, capsys, monkeypatch):
     ["recover", "--case-root", "c", "--output-dir", "o", "--parallel"],
 ])
 def test_the_flag_is_refused_where_nothing_is_planned(argv, capsys):
-    with pytest.raises(SystemExit):
-        main(argv)
-    assert "--parallel" in capsys.readouterr().err
+    assert "--parallel" in refusal(capsys, argv)
 
 
 def test_a_sweep_compares_serial_against_parallel_and_both_run(tmp_path, monkeypatch):

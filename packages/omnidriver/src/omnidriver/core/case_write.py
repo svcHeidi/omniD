@@ -15,6 +15,11 @@ from typing import Any, Mapping
 
 from .contracts.dictionary import VALUE_KINDS, validate_value_shape
 
+class CaseKeyNotFound(KeyError):
+    """A writer was asked to edit a key or block its document does not hold. The one ``KeyError`` a
+    tutorial record's case write turns into a refusal by name; any other is a defect and propagates."""
+
+
 #: Bumped whenever a field is added, removed or reinterpreted. A plan
 #: serialized under one version is not readable under another: a reader that
 #: accepted an older payload would fill a missing field with a default nobody

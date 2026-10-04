@@ -171,3 +171,23 @@ def test_a_default_reaches_a_block_instance_and_the_listing():
     ]
     assert _violations(entries, {"nets.a.other": 1, "nets.b.kind": "fast"}) == {("nets.a.cv", "nets.a.cv is required when nets.<name>.kind=slow.")}
     assert listed_entry("doc", "kind", entries[0])["default"] == "slow"
+
+
+def test_only_a_relation_on_a_selector_key_is_judged_against_the_selectors():
+    from omnidriver.core.contracts.dictionary import DictEntry
+    from omnidriver.openfoam.case_rules import applicable_given
+
+    def entry(path, **relations):
+        return DictEntry(driver_path=path, description="", value_kind="word", **relations)
+
+    gated_on_solver = entry("a", applicable_when={"solver": ("one", "two")})
+    gated_on_other_solver = entry("b", applicable_when={"solver": ("three",)})
+    gated_on_a_setting = entry("c", applicable_when={"model": ("x",)})
+    both = entry("d", applicable_when={"solver": ("three",), "model": ("x",)})
+    forbidden = entry("e", forbidden_when={"solver": ("one",)})
+    ungated = entry("f")
+    kept = applicable_given(
+        [gated_on_solver, gated_on_other_solver, gated_on_a_setting, both, forbidden, ungated], {"solver": "one"},
+    )
+    assert [e.driver_path for e in kept] == ["a", "c", "f"]
+    assert applicable_given([gated_on_other_solver], {}) == [gated_on_other_solver]

@@ -120,7 +120,7 @@ A skip here hides exactly what the guard exists to find.
 |---|---|
 | core imports nothing cardiac | `scripts/check-import-boundaries.py` (empty waiver list) |
 | core declares no solver vocabulary | `test_core_declares_no_phase_vocabulary`, `test_core_exports_no_phase_vocabulary` |
-| core never invents a filesystem root | `test_core_never_invents_a_filesystem_root` (no `__file__`, `Path.cwd`, `Path.home` or `os.getcwd` in the package but two named uses); for the scratch root, `test_the_scratch_resolver_invents_no_default` and `test_nothing_rebuilds_a_dot_omnidriver_scratch_default` |
+| core never invents a filesystem root | `test_core_never_invents_a_filesystem_root` (no `__file__`, `Path.cwd`, `Path.home` or `os.getcwd` in the package but one named use); for the scratch root, `test_the_scratch_resolver_invents_no_default` and `test_nothing_rebuilds_a_dot_omnidriver_scratch_default` |
 | core threads its `DriverContext` through the public edge | `test_core_threads_its_context_through_the_public_edge` |
 | every plugin contract member is optional: `provider_stack.MEMBERS` gives each its composition and its answer when no provider implements it, and an operation that needs one refuses by name; a provider's public callable that names no member is refused | `test_plugin_contract.py` |
 | no fallback reaches cardiac code: the stack's only fallbacks are the member table's absent answers, which take no argument and sit in a module importing nothing outside core | `test_no_fallback_reaches_cardiac_code_at_all` |

@@ -91,7 +91,9 @@ _RECORD_NON_STUDY_BASE_KEYS: frozenset[str] = frozenset({"entry", "cases_root"})
 def _sweep_record(
     sweep_spec: dict[str, Any], *, driver_context: "DriverContext",
 ) -> tuple[Any, Path]:
-    """The ``(record, cases_root)`` named by ``base``; a record has no ambient cases root, so both are required."""
+    """The ``(record, cases_root)`` named by ``base``; a record has no ambient cases root, so both are required.
+    A relative ``cases_root`` is read against the root of the repository the stack was selected with
+    (``--repo``), and refused by name when there is none."""
     base = sweep_spec.get("base", {})
     entry = base.get("entry")
     if entry is None:
@@ -106,7 +108,17 @@ def _sweep_record(
             "'base' must supply 'cases_root' naming where its native "
             "case lives (there is no ambient cases root to discover)"
         )
-    return record, Path(cases_root_value)
+    cases_root = Path(cases_root_value)
+    if not cases_root.is_absolute():
+        repository = driver_context.repository
+        if repository is None:
+            raise TutorialRecordError(
+                f"tutorial record {entry!r} cannot be swept: sweep.json's 'cases_root' {cases_root_value!r} "
+                "is relative, and a relative path is read against the root of the repository given with "
+                "--repo; pass --repo, or write an absolute path"
+            )
+        cases_root = repository.root / cases_root
+    return record, cases_root
 
 
 def _record_case_study_by_source(

@@ -117,6 +117,11 @@ class CardiacCorePlugin:
 
         return record_key_catalog(case_root)
 
+    def select_applicable_record_keys(self, keys: tuple, case_root: Path) -> tuple:
+        from .record_key_validation import applicable_record_keys
+
+        return applicable_record_keys(keys, case_root)
+
     def get_agent_guidance(self) -> tuple[dict[str, str], ...]:
         text = resources.files(__package__).joinpath("guidance.md").read_text()
         return ({"title": "cardiacCore: records, study keys and coordinate conventions", "text": text},)

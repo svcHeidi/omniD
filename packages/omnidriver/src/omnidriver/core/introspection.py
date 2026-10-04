@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from .plugin_interface import DriverContext
 
 from .capability_manifest import capability_manifest
+from .plugin_discovery import discover_plugins
 from .scripts import list_scripts
 from .tutorial_records import TutorialRecord, TutorialRecordError, lookup_record
 
@@ -30,13 +31,63 @@ def _serialize(value: Any) -> Any:
     return repr(value)
 
 
+def _is_table_of_items(value: Any) -> bool:
+    return isinstance(value, dict) and bool(value) and all(isinstance(item, dict) for item in value.values())
+
+
 def _plugin_catalogs(driver_context: "DriverContext") -> dict[str, Any]:
-    # The catalog names and their contents are plugin vocabulary (e.g. the
-    # cardiac plugin's ionic_model_catalog/active_tension_catalog); core only
-    # namespaces the whole mapping under this key and serializes it.
-    return _serialize(
-        dict(driver_context.stack.call("get_named_catalogs"))
-    )
+    """The stack's named catalogs, each table of named items listed by name:
+    ``omnidriver catalog --named <catalog> [--item <name>]`` gives the detail.
+
+    The catalog names and their contents are plugin vocabulary (e.g. the
+    cardiac plugin's ionic_model_catalog/active_tension_catalog); core only
+    namespaces the whole mapping under this key and serializes it."""
+    return {
+        name: {
+            section: sorted(content) if _is_table_of_items(content) else content
+            for section, content in catalog.items()
+        } if isinstance(catalog, dict) else catalog
+        for name, catalog in _serialize(dict(driver_context.stack.call("get_named_catalogs"))).items()
+    }
+
+
+def named_catalog(driver_context: "DriverContext", name: str, item: str | None = None) -> dict[str, Any]:
+    """One named catalog in full, or, with ``item``, the entry of that name in each of its tables."""
+    catalogs = _serialize(dict(driver_context.stack.call("get_named_catalogs")))
+    if name not in catalogs:
+        raise TutorialRecordError(f"no named catalog {name!r}; the stack has {sorted(catalogs)}")
+    catalog = catalogs[name]
+    if item is None:
+        return {"catalog": name, "content": catalog}
+    found = {
+        section: content[item] for section, content in catalog.items()
+        if _is_table_of_items(content) and item in content
+    } if isinstance(catalog, dict) else {}
+    if not found:
+        raise TutorialRecordError(f"named catalog {name!r} has no item {item!r}")
+    return {"catalog": name, "item": item, "content": found}
+
+
+def describe_stack(driver_context: "DriverContext") -> dict[str, Any]:
+    """What the selected stack offers, for a caller that has not chosen a record:
+    its records (with their axes, inputs and whether a run may be parallel), the
+    repository's scripts, and the plugin ids installed here (what ``--plugin`` takes)."""
+    records = driver_context.stack.call("get_tutorial_records")
+    return {
+        "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
+        "records": [
+            {
+                "name": name,
+                "native_case_relpath": record.native_case_relpath,
+                "axes": sorted(record.axis_names()),
+                "inputs": sorted(input_.name for input_ in record.inputs),
+                "serial_only": record.serial_only,
+            }
+            for name, record in sorted(records.items())
+        ],
+        "scripts": list_scripts(driver_context),
+        "installed_plugins": sorted(discover_plugins()),
+    }
 
 
 def describe_entry(
