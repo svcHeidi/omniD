@@ -38,7 +38,8 @@ def _environment_identity(environment: Mapping[str, str], driver_context: Driver
     connection, _ = stack_connection(driver_context)
     located = {connection.source, *connection.path_prepend}
     names = sorted(
-        variable.name for variable in connection.supplied if variable.name not in located
+        variable.name for variable in connection.supplied
+        if not variable.locates and variable.name not in located
     )
     identity: dict = {
         "variables": {name: _digest(environment[name]) if name in environment else None for name in names},

@@ -49,6 +49,9 @@ class SuppliedVariable:
     name: str
     required: bool
     why: str
+    #: True for a variable that only says where a tree is, so a resume need
+    #: not find it unchanged; set for the C++ source root a mapping implies.
+    locates: bool = False
 
 
 @dataclass(frozen=True)

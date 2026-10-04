@@ -229,10 +229,9 @@ def _toy_run_argv(tmp_path: Path, cases_root: Path, *extra: str) -> list[str]:
 @pytest.mark.parametrize("flag", ["--entry", "--case"])
 def test_fresh_is_refused_with_entry_and_case_because_they_always_restage(tmp_path, capsys, flag):
     value = "toyTutorial" if flag == "--entry" else str(_native_toy_case(tmp_path) / "toyTutorial")
-    with pytest.raises(SystemExit):
-        main(["run", "--strict", "--plugin", "plugins.toy:ToyStack", flag, value, "--fresh",
-              "--scratch-dir", str(tmp_path / "scratch")])
-    assert "always restage" in capsys.readouterr().err
+    assert main(["run", "--strict", "--plugin", "plugins.toy:ToyStack", flag, value, "--fresh",
+                 "--scratch-dir", str(tmp_path / "scratch")]) == 1
+    assert "always restage" in json.loads(capsys.readouterr().out)["error"]
 
 
 def test_a_symlinked_staged_case_root_is_refused_not_followed(tmp_path, capsys):
