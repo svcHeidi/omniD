@@ -20,6 +20,7 @@ from .core.runtime.workflow_state import workflow_state_from_json
 from .core.runtime.case_records import (
     CASE_RECORD_FILENAME,
     build_standalone_case_record,
+    refresh_case_record,
     write_case_record,
 )
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
@@ -197,6 +198,8 @@ def _execute_step(
             payload["workflow_state_path"] = str(state_path)
         print(json.dumps(payload, indent=2))
         return 1
+    finally:
+        refresh_case_record(output_dir)
     payload = dict(result.payload)
     if result.status != "rejected":
         payload["artifact_reconciliation"] = _reconciliation_payload(

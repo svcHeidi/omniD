@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import os
 import signal
@@ -249,7 +250,7 @@ def _record_deep_set(node: dict, key_path: list, value: str) -> None:
 
 
 def _record_known_catalog_validator(document: str, key_path: tuple, value):
-    catalog = {("constant/mesh.json", ("cells",)): "integer"}
+    catalog = {("constant/mesh.json", ("cells",)): "integer", ("constant/mesh.json", ("label",)): "string"}
     if (document, key_path) in catalog:
         return catalog[(document, key_path)], True
     raise KeyError(f"{document}:{'.'.join(key_path)} not in this test's catalog")
@@ -726,3 +727,105 @@ def test_sweep_run_child_process_rebuilds_the_parent_context(tmp_path, monkeypat
     assert [case["status"] for case in result["cases"]] == ["completed", "completed"], result
     assert result["failed_count"] == 0
     assert (tmp_path / "out" / "cases" / "2" / "solved.marker").is_file()
+
+
+def _completing_child(cmd, **kwargs):
+    run_doc = json.loads(Path(cmd[cmd.index("--run-document") + 1]).read_text())
+    state_path = Path(run_doc["launch"]["outputDir"]) / "workflow_state.json"
+    state_path.write_text(json.dumps({"status": "completed"}))
+    return mock.Mock(returncode=0, stdout="", stderr="")
+
+
+def _run_toy_sweep(tmp_path, child, *, values=(2, 3)):
+    cases_root = _native_toy_case(tmp_path)
+    spec = _record_sweep_spec(cases_root=cases_root, values=values)
+    spec["base"]["constant/mesh.json:label"] = "base"
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(spec))
+    with mock.patch("omnidriver.core.runtime.sweep_runner.run_child", side_effect=child):
+        return sweep_run(
+            spec_path, output_dir=tmp_path / "out", driver_context=_record_driver_context(),
+        )
+
+
+def test_a_sweep_case_has_one_folder_holding_its_case_run_document_state_and_record(tmp_path):
+    result = _run_toy_sweep(tmp_path, _completing_child)
+
+    out = tmp_path / "out"
+    assert sorted(p.name for p in out.iterdir()) == ["cases", "sweep_manifest.json"]
+    for case in result["cases"]:
+        folder = out / "cases" / case["case_id"]
+        assert case["run_document_path"] == f"cases/{case['case_id']}/run_document.json"
+        assert (folder / "run_document.json").is_file()
+        record = json.loads((folder / "case_record.json").read_text())
+        assert record["case_id"] == case["case_id"]
+        assert record["resolved_axis_values"]["number_cells"] in (2, 3)
+        assert record["run_document_path"] == case["run_document_path"]
+        document = json.loads((folder / "run_document.json").read_text())
+        assert str(folder / "run_document.json") in document["launch"]["command"]
+
+
+def test_the_manifest_stamps_a_case_before_its_child_starts_and_records_the_base_study(tmp_path):
+    seen = []
+
+    def child(cmd, **kwargs):
+        manifest = json.loads((tmp_path / "out" / "sweep_manifest.json").read_text())
+        seen.append([(c["case_id"], c["status"], c["started_at"] is not None) for c in manifest["cases"]])
+        return _completing_child(cmd, **kwargs)
+
+    _run_toy_sweep(tmp_path, child)
+
+    assert seen == [[("2", "running", True)], [("2", "completed", True), ("3", "running", True)]]
+    manifest = json.loads((tmp_path / "out" / "sweep_manifest.json").read_text())
+    assert manifest["base_study"] == {"constant/mesh.json:label": "base"}
+    assert manifest["cli_study"] == {}
+
+
+def test_a_failed_case_carries_the_childs_reasons_into_its_summary_and_the_manifest(tmp_path):
+    refusal = {
+        "status": "failed", "error": "Execution environment preflight failed.",
+        "environment_diagnostics": [{"level": "error", "code": "launcher_mismatch", "message": "wrong MPI"}],
+        "failure_context": {"step_id": "solve", "diagnostics": [{"code": "solver_entry_missing"}]},
+    }
+
+    def child(cmd, **kwargs):
+        return mock.Mock(returncode=1, stdout=json.dumps(refusal), stderr="")
+
+    result = _run_toy_sweep(tmp_path, child)
+
+    manifest = json.loads((tmp_path / "out" / "sweep_manifest.json").read_text())
+    for case, entry in zip(result["cases"], manifest["cases"]):
+        assert case["status"] == "failed"
+        for key in ("error", "environment_diagnostics", "failure_context"):
+            assert case[key] == refusal[key] == entry["failure"][key]
+
+
+def test_a_child_that_dies_without_a_report_leaves_its_stderr_tail(tmp_path):
+    def child(cmd, **kwargs):
+        return mock.Mock(returncode=3, stdout="", stderr="Traceback ...\nSomeError: boom\n")
+
+    result = _run_toy_sweep(tmp_path, child, values=(2,))
+
+    assert "exited 3 without a report" in result["cases"][0]["error"]
+    assert "SomeError: boom" in result["cases"][0]["error"]
+
+
+def test_a_plan_that_cannot_run_says_why_in_plan_error(tmp_path):
+    from omnidriver.core.runtime import sweep_runner
+
+    real = sweep_runner._strict_plan_for_spec
+
+    def blocked(*args, **kwargs):
+        report = real(*args, **kwargs)
+        from omnidriver.core.planning_types import diagnostic
+        return dataclasses.replace(
+            report, status="blocked",
+            environment_diagnostics=(diagnostic("error", "launcher_mismatch", "wrong MPI first on PATH"),),
+        )
+
+    with mock.patch.object(sweep_runner, "_strict_plan_for_spec", side_effect=blocked):
+        result = _run_toy_sweep(tmp_path, _completing_child, values=(2,))
+
+    case = result["cases"][0]
+    assert case["status"] == "failed"
+    assert case["plan_error"] == "launcher_mismatch: wrong MPI first on PATH"

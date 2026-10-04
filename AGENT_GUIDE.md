@@ -335,18 +335,24 @@ One case with study values is the same spec with one-value axes:
 ```
 
 Each case is staged from the native case into `<output_dir>/cases/<case_id>/`
-and committed there; the native tree is never written. A `caseId` dependent
+and committed there; the native tree is never written. That one folder is the
+case: its `run_document.json`, `workflow_state.json`, `workflow_logs/` and
+`case_record.json` sit beside the case files. A `caseId` dependent
 entry becomes the case's directory name (validated for uniqueness and
 path-safety); otherwise cases are named `case_0001`, `case_0002`, ... in
 expansion order. A case that cannot be staged or planned fails alone
-(`materialization_error`, or `plan_error` in `sweep-run`), not the whole
-sweep. `sweep-plan` reports each
+(`materialization_error`, or `plan_error` in `sweep-run`, which lists the plan's
+error diagnostics), not the whole sweep. `sweep-plan` reports each
 case's `status`, `record_commit_status`, `unchanged_patches` (a patch that
 already matched the case) and its full `plan`.
 
 `sweep-run` plans and runs the cases serially, each as a child
-`omnidriver run --run-document <output_dir>/<case_id>/run_document.json`, and
-records them in `sweep_manifest.json`. A sweep does not resume across
+`omnidriver run --run-document <output_dir>/cases/<case_id>/run_document.json`, and
+records them in `sweep_manifest.json` (the shared `base_study`, and per case its
+start time, outcome and, when it failed, why). A case that did not complete
+carries the child's own `error`, `environment_diagnostics` and `failure_context`
+(with the failed step's diagnostics, such as `solver_entry_missing`) in its
+summary and manifest entry. A sweep does not resume across
 invocations: an `--output-dir` that already holds a manifest is refused by
 name, and `--fresh` clears the `--output-dir` (it must hold a
 `sweep_manifest.json`; the spec is validated first) and starts over.
@@ -463,7 +469,9 @@ updated after every step, so the read above is safe at any instant.
 
 `build_sweep_context` (`core/runtime/case_records.py`) reads the sweep's own
 record (`sweep_manifest.json`) and returns one `SweepContext`: each case's
-status, resolved axis values and `workflow_state_path`. Core never inspects
+status, resolved axis values and `workflow_state_path`. A case's status is what
+its own `workflow_state.json` says now, so a case a later `step` completed is
+completed for `compare`; the manifest keeps the status the sweep saw. Core never inspects
 solver output. If an agent needs deeper reasoning than the flat summary, it
 reads one case's `workflow_state.json` from the path the `SweepContext` records
 for it.
