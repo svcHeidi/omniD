@@ -189,7 +189,7 @@ nothing:
 | `PYTHON` | both | a Python with `omnidriver`, `omnidriver-openfoam`, `omnidriver-cardiacfoam` and `omnidriver-opencarp` installed |
 | `OMNIDRIVER_NATIVE_TUTORIALS` | cardiacFOAM | the native tutorials tree. `level_study.py` writes it into each level study as its `cases_root`. Use a clean `git worktree` or `git archive` of the native branch at `0489be3c` or later |
 | `OPENFOAM_BASHRC` | cardiacFOAM | OpenFOAM's `etc/bashrc` (v2412 here). It is sourced for cardiacFOAM only, and it puts OpenFOAM's MPI (Open MPI here) first on `PATH` |
-| `OMNIDRIVER_OPENCARP_TUTORIALS` | openCARP | openCARP's tutorials tree (`<prefix>/share/tutorials`), written into its level studies the same way |
+| `OPENCARP_TUTORIALS` | openCARP | openCARP's tutorials tree (`<prefix>/share/tutorials`), written into its level studies the same way |
 | `OPENCARP_MPI_BIN` | openCARP | **the bin directory of the MPI openCARP was built against, put first on `PATH`.** A bundled-MPICH install has `<prefix>/lib/petsc/bin`. Another MPI's `mpirun` (e.g. Open MPI's) silently starts N serial copies of the whole problem, racing on one output directory. omniD's preflight refuses that by name (`opencarp_mpi_launcher_mismatch`; opencarp.md I2, I5) |
 | `CAMPAIGN_DYLD_LIBRARY_PATH` | both, **macOS only** | appended to `DYLD_LIBRARY_PATH` inside each solver's shell (here `/opt/homebrew/lib`, for openCARP's `libsundials_cvode`). macOS strips `DYLD_*` when it starts `bash`, so it cannot be exported from outside. Leave it unset on Linux |
 | `HYDRA_IFACE` | openCARP, some hosts | only where the host name does not resolve, which MPICH's hydra needs (`lo0` on this workstation; opencarp.md I3) |
@@ -252,7 +252,7 @@ python level_study.py --cases-root $OMNIDRIVER_NATIVE_TUTORIALS \
 
 For openCARP at 0.1 mm on N = 16, `level_study.py` reads
 `studies/opencarp_cartesianConvergence.json` with `--where dx=100.0` and
-`--cases-root $OMNIDRIVER_OPENCARP_TUTORIALS`. The
+`--cases-root $OPENCARP_TUTORIALS`. The
 run is `(export PATH=$OPENCARP_MPI_BIN:$PATH; python -m omnidriver sweep-run --plugin
 opencarp --spec ... --output-dir <campaign>/runs/opencarp/cartesianConvergence/dx0.1
 --scratch-dir <campaign>/runs/scratch --parallel 16)`.
@@ -286,7 +286,7 @@ export OMP_NUM_THREADS=1
 export PYTHON=$HOME/venvs/omnidriver/bin/python
 export OMNIDRIVER_NATIVE_TUTORIALS=$HOME/cardiacFoam/tutorials         # clean, at 0489be3c or later
 export OPENFOAM_BASHRC=/opt/OpenFOAM/OpenFOAM-v2412/etc/bashrc
-export OMNIDRIVER_OPENCARP_TUTORIALS=/opt/opencarp/share/tutorials
+export OPENCARP_TUTORIALS=/opt/opencarp/share/tutorials
 export OPENCARP_MPI_BIN=/opt/opencarp/lib/petsc/bin                    # the MPI openCARP was built against
 cd $HOME/omnidriver/benchmarks/niederer2011/campaign
 ./campaign.sh level "$SOLVER" "$DX" "$SLURM_NTASKS"
@@ -470,7 +470,7 @@ supplied environment of this workstation:
 ```bash
 PYTHON=/tmp/odA-campaign/bin/python \
 OMNIDRIVER_NATIVE_TUTORIALS=<native worktree>/tutorials OPENFOAM_BASHRC=/Volumes/OpenFOAM-v2412/etc/bashrc \
-OMNIDRIVER_OPENCARP_TUTORIALS=/usr/local/lib/opencarp/share/tutorials \
+OPENCARP_TUTORIALS=/usr/local/lib/opencarp/share/tutorials \
 OPENCARP_MPI_BIN=/usr/local/lib/opencarp/lib/petsc/bin CAMPAIGN_DYLD_LIBRARY_PATH=/opt/homebrew/lib HYDRA_IFACE=lo0 \
   ./campaign.sh proof
 ```

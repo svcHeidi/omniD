@@ -3,7 +3,7 @@
 #   PYTHON                          a Python with omnidriver and both plugins installed (default: python3)
 #   OMNIDRIVER_NATIVE_TUTORIALS     cardiacFOAM's native tutorials tree
 #   OPENFOAM_BASHRC                 OpenFOAM's etc/bashrc, sourced for cardiacFOAM only
-#   OMNIDRIVER_OPENCARP_TUTORIALS   openCARP's tutorials tree
+#   OPENCARP_TUTORIALS              openCARP's tutorials tree
 #   OPENCARP_MPI_BIN                the bin directory of the MPI openCARP was built against, put first on
 #                                   PATH for openCARP only (a bundled-MPICH install: <prefix>/lib/petsc/bin)
 #   CAMPAIGN_DYLD_LIBRARY_PATH      macOS only: appended to DYLD_LIBRARY_PATH inside each solver's shell
@@ -60,7 +60,7 @@ sweep_run() {  # solver spec output N
       "$PYTHON" -m omnidriver sweep-run --plugin cardiacfoam --spec "$spec" --output-dir "$output" \
         --scratch-dir "$RUNS/scratch" $([ "$n" -gt 1 ] && echo --parallel) )
   else
-    need OMNIDRIVER_OPENCARP_TUTORIALS; need OPENCARP_MPI_BIN
+    need OPENCARP_TUTORIALS; need OPENCARP_MPI_BIN
     ( export PATH="$OPENCARP_MPI_BIN:$PATH"
       [ -n "${CAMPAIGN_DYLD_LIBRARY_PATH:-}" ] && export DYLD_LIBRARY_PATH="${DYLD_LIBRARY_PATH:+$DYLD_LIBRARY_PATH:}$CAMPAIGN_DYLD_LIBRARY_PATH"
       "$PYTHON" -m omnidriver sweep-run --plugin opencarp --spec "$spec" --output-dir "$output" \
@@ -78,7 +78,7 @@ level_spec() {  # solver out N where...
     tutorials=$OMNIDRIVER_NATIVE_TUTORIALS
     [ "$n" -gt 1 ] && sets=(--set "system/decomposeParDict:numberOfSubdomains=$n")
   else
-    need OMNIDRIVER_OPENCARP_TUTORIALS; tutorials=$OMNIDRIVER_OPENCARP_TUTORIALS
+    need OPENCARP_TUTORIALS; tutorials=$OPENCARP_TUTORIALS
   fi
   local wheres=(); for w in "$@"; do wheres+=(--where "$w"); done
   "$PYTHON" "$HERE/level_study.py" --study "$source" --cases-root "$tutorials" "${wheres[@]}" ${sets[@]+"${sets[@]}"} --out "$out"
