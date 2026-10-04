@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.openfoam.case_rules import match_dynamic_entry
+from omnidriver.openfoam.control_dict import CONTROL_DICT_DOCUMENT, control_dict_document, control_dict_listing
 from omnidriver.openfoam.record_key_validation import (
     CataloguedDocument, listed_entry, make_validator, open_system_documents,
 )
 
-from .common_dict_entries import CONTROL_DICT_ENTRIES, PHYSICS_PROPERTY_ENTRIES, PRE_PACING_PROPERTY_ENTRIES
+from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES, PRE_PACING_PROPERTY_ENTRIES
 from .detection import detect_myocardium_solver_name
 from .dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from .physics_layout import PhysicsLayoutError, region_of
@@ -20,7 +21,6 @@ from .physics_layout import PhysicsLayoutError, region_of
 ELECTRO_DOCUMENT = "constant/electroProperties"
 PHYSICS_DOCUMENT = "constant/physicsProperties"
 PRE_PACING_DOCUMENT = "constant/prePacingProperties"
-CONTROL_DOCUMENT = "system/controlDict"
 
 #: The scope token every coeffs-scoped catalogue ``driver_path`` starts with.
 _COEFFS_TOKEN = "$ELECTRO_MODEL_COEFFS"
@@ -31,7 +31,6 @@ _ELECTRO_ENTRIES_BY_PATH = {
 }
 _PHYSICS_ENTRIES_BY_PATH = {entry.driver_path: entry for entry in PHYSICS_PROPERTY_ENTRIES}
 _PRE_PACING_ENTRIES_BY_PATH = {entry.driver_path: entry for entry in PRE_PACING_PROPERTY_ENTRIES}
-_CONTROL_ENTRIES_BY_PATH = {entry.driver_path: entry for entry in CONTROL_DICT_ENTRIES}
 
 
 def _coeffs_names() -> "frozenset[str]":
@@ -94,11 +93,6 @@ def _pre_pacing_declares_members(key_path: "tuple[str, ...]") -> bool:
     return key_path[-1:] == ("singleCellStimulus",) and (len(key_path) == 1 or key_path[:1] == ("regions",) and len(key_path) == 3)
 
 
-def _control_match(key_path: "tuple[str, ...]"):
-    entry = _CONTROL_ENTRIES_BY_PATH.get(".".join(key_path))
-    return None if entry is None else (entry, {})
-
-
 def cardiacfoam_mapping() -> Any:
     from .cardiacfoam_plugin import CardiacFoamPlugin
 
@@ -130,13 +124,7 @@ record_key_validator = make_validator(
             scan=lambda key_path: (_PRE_PACING_TOKEN, *key_path),
             members=_pre_pacing_declares_members,
         ),
-        CONTROL_DOCUMENT: CataloguedDocument(
-            label="controlDict",
-            entries=_CONTROL_ENTRIES_BY_PATH.values,
-            match=_control_match,
-            scan=lambda key_path: key_path,
-            open=True,
-        ),
+        CONTROL_DICT_DOCUMENT: control_dict_document(),
     },
     mapping=cardiacfoam_mapping,
     owner="cardiacFOAM",
@@ -178,6 +166,4 @@ def record_key_catalog(case_root: Path) -> tuple[dict[str, Any], ...]:
             listed_entry(PRE_PACING_DOCUMENT, path.removeprefix(f"{_PRE_PACING_TOKEN}."), entry)
             for path, entry in _PRE_PACING_ENTRIES_BY_PATH.items()
         ]
-    if (case_root / CONTROL_DOCUMENT).is_file():
-        entries += [listed_entry(CONTROL_DOCUMENT, path, entry) for path, entry in _CONTROL_ENTRIES_BY_PATH.items()]
-    return (*entries, *open_system_documents(case_root))
+    return (*entries, *control_dict_listing(case_root), *open_system_documents(case_root))

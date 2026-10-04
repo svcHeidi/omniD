@@ -553,38 +553,6 @@ class TestEmptyExportListIsKnownEmpty(unittest.TestCase):
             )
 
 
-class TestControlDictEntries(unittest.TestCase):
-    """CONTROL_DICT_ENTRIES catalog shape contract."""
-
-    def test_catalog_exposes_delta_t_and_end_time(self) -> None:
-        from omnidriver.cardiacfoam.common_dict_entries import CONTROL_DICT_ENTRIES
-        driver_paths = {e.driver_path for e in CONTROL_DICT_ENTRIES}
-        self.assertIn("deltaT", driver_paths)
-        self.assertIn("endTime", driver_paths)
-
-    def test_time_entries_carry_seconds_unit(self) -> None:
-        from omnidriver.cardiacfoam.common_dict_entries import CONTROL_DICT_ENTRIES
-        time_entries = {"deltaT", "endTime", "startTime", "writeInterval"}
-        for entry in CONTROL_DICT_ENTRIES:
-            if entry.driver_path in time_entries:
-                self.assertTrue(
-                    entry.unit.startswith("s"),
-                    f"{entry.driver_path} must carry a seconds unit, got '{entry.unit}'"
-                )
-
-    def test_entries_belong_to_solver_phase(self) -> None:
-        from omnidriver.cardiacfoam.common_dict_entries import CONTROL_DICT_ENTRIES
-        for entry in CONTROL_DICT_ENTRIES:
-            self.assertIn("solver", entry.phases,
-                          f"{entry.driver_path} must be in solver phase")
-
-    def test_entries_are_marked_required(self) -> None:
-        from omnidriver.cardiacfoam.common_dict_entries import CONTROL_DICT_ENTRIES
-        for entry in CONTROL_DICT_ENTRIES:
-            self.assertTrue(entry.required,
-                            f"{entry.driver_path} must be required=True")
-
-
 if __name__ == "__main__":
     unittest.main()
 

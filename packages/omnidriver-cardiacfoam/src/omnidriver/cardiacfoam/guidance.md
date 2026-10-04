@@ -43,11 +43,10 @@ enforces; none is new. The last section is about the mesh.
   entry, and the case's sub-dictionary is replaced by exactly the map's
   members. This is how a patch moves from one map to another.
 - **`system/controlDict` is partly catalogued.** The keys the catalogue lists
-  (`deltaT`, `endTime`, `startTime`, `writeInterval`, ...) are checked by
-  shape and bounds: `deltaT` and `writeInterval` must be more than 0 and
-  `endTime` at least 0. Any other key of it, and every key of `fvSchemes`,
-  `fvSolution`, `blockMeshDict` and any other `system/` document, is listed
-  once with `validated: false` and written as asked: omniD has no catalogue of
+  (`omnidriver catalog` shows each with its bounds) are checked by shape and
+  bounds. Any other key of it, and every key of `fvSchemes`, `fvSolution`,
+  `blockMeshDict` and any other `system/` document, is listed once with
+  `validated: false` and written as asked: omniD has no catalogue of
   OpenFOAM's other keys, so it cannot tell whether the solver reads them.
 - **Any other document is refused** by name, so a misspelt document is never
   taken for an OpenFOAM one.

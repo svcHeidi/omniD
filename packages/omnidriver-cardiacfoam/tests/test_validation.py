@@ -8,10 +8,8 @@ import pytest
 
 from omnidriver.dict_entries import DictEntry
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
-from omnidriver.cardiacfoam.common_dict_entries import (
-    CONTROL_DICT_ENTRIES,
-    PHYSICS_PROPERTY_ENTRIES,
-)
+from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from omnidriver.openfoam.control_dict import CONTROL_DICT_ENTRIES
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
@@ -826,10 +824,8 @@ Fixture-to-solver mapping (derived from each spec's defaults.ELECTRO_PROPERTIES_
 import pytest
 
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
-from omnidriver.cardiacfoam.common_dict_entries import (
-    CONTROL_DICT_ENTRIES,
-    PHYSICS_PROPERTY_ENTRIES,
-)
+from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from omnidriver.openfoam.control_dict import CONTROL_DICT_ENTRIES
 from omnidriver.core.contracts.catalogue_paths import slot_key
 from omnidriver.openfoam.case_rules import rule_diagnostics
 

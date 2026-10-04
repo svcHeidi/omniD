@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections import Counter
 
-from omnidriver.cardiacfoam.common_dict_entries import CONTROL_DICT_ENTRIES, PHYSICS_PROPERTY_ENTRIES
+from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
+from omnidriver.openfoam.control_dict import CONTROL_DICT_ENTRIES
 
 
 def test_no_duplicate_source_refs_within_a_single_entry():

@@ -8,11 +8,11 @@ from pathlib import Path
 
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from omnidriver.cardiacfoam.common_dict_entries import (
-    CONTROL_DICT_ENTRIES,
     PHYSICS_PROPERTY_ENTRIES,
     PRE_PACING_PROPERTY_ENTRIES,
 )
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
+from omnidriver.openfoam.control_dict import CONTROL_DICT_ENTRIES
 
 if TYPE_CHECKING:
     from omnidriver.core.contracts.dictionary import DictEntry

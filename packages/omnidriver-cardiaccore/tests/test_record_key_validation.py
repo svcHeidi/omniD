@@ -63,7 +63,21 @@ def test_a_key_the_supplied_cxx_reads_is_accepted_at_the_type_it_reads(tmp_path,
 def test_a_document_the_catalogue_does_not_hold_is_refused_unless_it_is_a_system_file():
     with pytest.raises(KeyError, match="neither a cardiacCore-catalogued document"):
         record_key_validator("constant/anything", ("a",), 1)
-    assert record_key_validator("system/controlDict", ("endTime",), 1) == ("integer", False)
+    assert record_key_validator("system/fvSchemes", ("default",), "Gauss linear") == ("string", False)
+
+
+def test_control_dict_is_validated_as_for_every_openfoam_solver_and_otherwise_open():
+    assert record_key_validator("system/controlDict", ("deltaT",), 1e-3) == ("scalar", True)
+    with pytest.raises(ValueError, match="must be more than 0"):
+        record_key_validator("system/controlDict", ("deltaT",), 0)
+    assert record_key_validator("system/controlDict", ("writePrecision",), 8) == ("integer", False)
+
+
+def test_the_catalogue_lists_the_control_dict_keys_beside_the_open_row_when_the_case_holds_one(tmp_path):
+    (tmp_path / "system").mkdir()
+    (tmp_path / "system" / "controlDict").write_text("")
+    listed = {(item["document"], item["key"]) for item in record_key_catalog(tmp_path)}
+    assert {("system/controlDict", "deltaT"), ("system/controlDict", "<any>")} <= listed
 
 
 def test_the_catalogue_lists_every_key_the_validator_accepts(tmp_path):

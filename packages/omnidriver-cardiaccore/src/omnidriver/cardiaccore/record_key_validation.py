@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.core.runtime.record_surface import key_pattern
+from omnidriver.openfoam.control_dict import CONTROL_DICT_DOCUMENT, control_dict_document, control_dict_listing
 from omnidriver.openfoam.record_key_validation import (
     CataloguedDocument, listed_entry, make_validator, open_system_documents,
 )
@@ -50,7 +51,7 @@ def _cardiaccore_mapping() -> Any:
 
 
 record_key_validator = make_validator(
-    {document: _document(by_key) for document, by_key in _ENTRIES_BY_DOCUMENT.items()},
+    {**{document: _document(by_key) for document, by_key in _ENTRIES_BY_DOCUMENT.items()}, CONTROL_DICT_DOCUMENT: control_dict_document()},
     mapping=_cardiaccore_mapping,
     owner="cardiacCore",
 )
@@ -64,5 +65,6 @@ def record_key_catalog(case_root: Path) -> "tuple[dict[str, Any], ...]":
             for document, by_key in _ENTRIES_BY_DOCUMENT.items()
             for key, entry in by_key.items()
         ),
+        *control_dict_listing(case_root),
         *open_system_documents(case_root, exclude=_ENTRIES_BY_DOCUMENT),
     )

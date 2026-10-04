@@ -36,9 +36,12 @@ A study addresses a utility's dictionary directly, as
   `uncatalogued` and checked against the type the C++ reads it as
   (`omnidriver catalog --uncatalogued` lists them). Any other key of a
   catalogued dictionary is refused by name.
-- **Any other `system/` document** (`controlDict`, `fvSchemes`, ...) is
-  written as asked and flagged `validated: false`: omniD has no catalogue of
-  OpenFOAM's keys.
+- **`system/controlDict`** is partly catalogued, as for every OpenFOAM-based
+  solver: the keys `Foam::Time` reads that the catalogue lists are checked by
+  shape and bounds (`omnidriver catalog` lists them), and any other key is
+  written as asked and flagged `validated: false`.
+- **Any other `system/` document** (`fvSchemes`, ...) is written as asked and
+  flagged `validated: false`: omniD has no catalogue of OpenFOAM's keys.
 - **Any other document** (anything outside `system/`) is refused by name.
 
 ## Coordinates are case inputs

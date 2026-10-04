@@ -5,10 +5,8 @@ from __future__ import annotations
 
 from omnidriver.core.runtime.remediation import STATIC_REMEDIATION_HINTS, RemediationHint
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
-from omnidriver.cardiacfoam.common_dict_entries import (
-    CONTROL_DICT_ENTRIES,
-    PHYSICS_PROPERTY_ENTRIES,
-)
+from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from omnidriver.openfoam.control_dict import CONTROL_DICT_ENTRIES
 
 _PREFIX = "$ELECTRO_MODEL_COEFFS."
 
