@@ -24,6 +24,7 @@ from omnidriver.openfoam.case_builder import (
     write_documents,
 )
 from omnidriver.openfoam.case_rules import applicable_entries, forbidden_in, match_dynamic_entry, rule_diagnostics
+from omnidriver.openfoam.control_dict import CONTROL_DICT_DOCUMENT, CONTROL_DICT_ENTRIES
 from omnidriver.openfoam.literals import BOOLEAN_WORDS, parse_vector3_literal
 from omnidriver.openfoam.plan_diagnostics import cxx_source_not_supplied
 from omnidriver.openfoam.record_key_validation import scanned_key
@@ -423,21 +424,31 @@ def _fv_solution(solver: str) -> str:
 
 
 def _control_dict(delta_t: float, end_time: float) -> str:
+    """The ``controlDict`` text, held to ``Foam::Time``'s catalogue rules before it is written."""
+    leaves = {
+        "startFrom": "startTime", "startTime": 0, "stopAt": "endTime", "endTime": end_time, "deltaT": delta_t,
+        "writeControl": "runTime", "writeInterval": min(0.1, end_time), "purgeWrite": 0, "writeFormat": "ascii",
+    }
+    broken = [item.message for item in rule_diagnostics(CONTROL_DICT_ENTRIES, leaves, document=CONTROL_DICT_DOCUMENT)]
+    if end_time <= leaves["startTime"]:
+        broken.append(f"endTime is {end_time!r}, not after the startTime {leaves['startTime']} the built case starts from.")
+    if broken:
+        raise ValueError("build_case: the controlDict breaks:\n  - " + "\n  - ".join(broken))
     return (
         _foam_header("system", "controlDict")
         + f"""
 application     cardiacFoam;
 
-startFrom       startTime;
-startTime       0;
-stopAt          endTime;
+startFrom       {leaves['startFrom']};
+startTime       {leaves['startTime']};
+stopAt          {leaves['stopAt']};
 endTime         {end_time};
 deltaT          {delta_t};
 
-writeControl    runTime;
-writeInterval   {min(0.1, end_time)};
-purgeWrite      0;
-writeFormat     ascii;
+writeControl    {leaves['writeControl']};
+writeInterval   {leaves['writeInterval']};
+purgeWrite      {leaves['purgeWrite']};
+writeFormat     {leaves['writeFormat']};
 writePrecision  6;
 writeCompression off;
 

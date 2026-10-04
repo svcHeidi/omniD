@@ -73,6 +73,18 @@ def test_one_of_a_group_is_judged_in_each_instance_of_a_block():
     assert _violations(entries, context) == {("nets.a.edges", "one of nets.a.edgeList, nets.a.edges is required.")}
 
 
+def test_a_number_outside_the_entrys_bounds_is_refused_and_a_value_that_is_no_number_is_not_judged():
+    entries = [
+        _entry("$S.dt", value_kind="scalar", exclusive_minimum=0), _entry("$S.n", value_kind="integer", minimum=1),
+    ]
+    assert _violations(entries, {"dt": 0, "n": 0}) == {
+        ("dt", "dt is 0, outside the catalogue's bounds: must be more than 0."),
+        ("n", "n is 0, outside the catalogue's bounds: must be at least 1."),
+    }
+    assert _violations(entries, {"dt": 1e-5, "n": 1}) == set()
+    assert _violations(entries, {"dt": "$step", "n": "#calc \"2*3\""}) == set()
+
+
 def test_a_switch_is_compared_by_meaning_not_spelling():
     entries = [_entry("$S.scale", required=True, applicable_when={"enabled": "true"})]
     assert _violations(entries, {"enabled": True}) == {("scale", "scale is required.")}

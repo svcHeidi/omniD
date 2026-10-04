@@ -1,5 +1,5 @@
-"""cardiacCore's catalogue relations, run over the utility dictionaries a
-resolved case holds."""
+"""cardiacCore's catalogue relations, run over the utility dictionaries and the
+``controlDict`` a resolved case holds."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from omnidriver.openfoam.case_rules import read_leaves, rule_diagnostics
+from omnidriver.openfoam.control_dict import control_dict_diagnostics
 
 from .catalogs.inputs import CATALOG
 
@@ -27,4 +28,4 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple[StrictDia
             ))
             continue
         found += rule_diagnostics(entries, leaves, document=f"system/{name}", mapping=mapping, catalogue=CATALOG)
-    return tuple(found)
+    return (*found, *control_dict_diagnostics(case_root))

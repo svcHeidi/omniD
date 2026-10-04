@@ -1128,3 +1128,22 @@ def test_an_external_stimulus_with_both_corners_breaks_no_rule(tmp_path):
         "stimulusLocationMin (0 0 0); stimulusLocationMax (1 1 1); stimulusDuration 0.002; stimulusIntensity 50000;",
     )
     assert not any("stimulus" in message for message in errors)
+
+
+def test_the_resolved_control_dict_is_judged_beside_electro_properties(tmp_path):
+    from omnidriver.cardiacfoam.validation import case_diagnostics
+
+    constant, system = tmp_path / "constant", tmp_path / "system"
+    constant.mkdir()
+    system.mkdir()
+    header = "FoamFile { version 2.0; format ascii; class dictionary; object x; }\n"
+    (constant / "electroProperties").write_text(
+        header + "myocardiumSolver singleCellSolver;\nsingleCellSolverCoeffs { ionicModel TNNP; }\n"
+    )
+    (system / "controlDict").write_text(header + "deltaT 0; startFrom startTime; stopAt endTime;\n")
+    messages = {item.message for item in case_diagnostics(tmp_path) if item.source == "system/controlDict"}
+    assert messages == {
+        "deltaT is 0, outside the catalogue's bounds: must be more than 0.",
+        "startTime is required when startFrom=startTime.", "endTime is required when stopAt=endTime.",
+        "one of writeFrequency, writeInterval is required.",
+    }

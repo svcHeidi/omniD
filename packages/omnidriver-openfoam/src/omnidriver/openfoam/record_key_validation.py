@@ -13,6 +13,7 @@ from typing import Any, Iterable
 from omnidriver.core.contracts.dictionary import validate_value_shape
 from omnidriver.core.runtime.record_surface import ANY_KEY
 
+from .case_rules import bound_reasons
 from .dict_keys_scanner import cxx_value_kind, document_scans, supplied_scan
 
 from .mutators import check_dictionary_word_is_safe
@@ -133,16 +134,6 @@ def scanned_key(
             f"{matching[0].type} ({matching[0].file}:{matching[0].line}): {'; '.join(reasons)}"
         )
     return kind, True
-
-
-def bound_reasons(entry: Any, value: Any) -> tuple[str, ...]:
-    """Reasons a number lies outside the entry's declared bounds; empty when it fits or none is declared."""
-    reasons = []
-    if entry.minimum is not None and value < entry.minimum:
-        reasons.append(f"must be at least {entry.minimum:g}")
-    if entry.exclusive_minimum is not None and value <= entry.exclusive_minimum:
-        reasons.append(f"must be more than {entry.exclusive_minimum:g}")
-    return tuple(reasons)
 
 
 def check_binding(entry: Any, placeholder: str, bound_value: str) -> None:

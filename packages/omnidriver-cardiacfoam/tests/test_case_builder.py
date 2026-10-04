@@ -532,6 +532,21 @@ class TestBuildCase(unittest.TestCase):
         self.assertIn("deltaT          0.001;", text)
         self.assertIn("endTime         0.002;", text)
 
+    def test_a_time_step_or_end_time_the_controlDict_rules_refuse_writes_nothing(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from omnidriver.cardiacfoam.case_builder import build_case
+
+        for options, message in (
+            ({"delta_t": 0}, "deltaT is 0, outside the catalogue's bounds: must be more than 0."),
+            ({"end_time": -1}, "endTime is -1, not after the startTime 0 the built case starts from."),
+        ):
+            with tempfile.TemporaryDirectory() as temp:
+                case_dir = Path(temp) / "case"
+                with self.assertRaisesRegex(ValueError, message.replace("(", r"\(").replace(")", r"\)")):
+                    build_case(_SINGLE_CELL, case_dir=case_dir, driver_context=_CTX, **options)
+                self.assertFalse(case_dir.exists())
+
     def test_a_failed_commit_leaves_no_partial_case(self) -> None:
         import tempfile
         from pathlib import Path

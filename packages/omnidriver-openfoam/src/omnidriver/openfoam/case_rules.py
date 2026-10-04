@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable, Mapping
+from numbers import Real
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,18 @@ def read_leaves(path: Path, scope: tuple[str, ...] = ()) -> dict[str, Any]:
     for segment in scope:
         node = node[segment]
     return flatten(node)
+
+
+def bound_reasons(entry: Any, value: Any) -> tuple[str, ...]:
+    """Reasons a number lies outside the entry's declared bounds; empty when it fits, none is declared or the value is no number."""
+    if entry.value_kind not in ("scalar", "integer") or isinstance(value, bool) or not isinstance(value, Real):
+        return ()
+    reasons = []
+    if entry.minimum is not None and value < entry.minimum:
+        reasons.append(f"must be at least {entry.minimum:g}")
+    if entry.exclusive_minimum is not None and value <= entry.exclusive_minimum:
+        reasons.append(f"must be more than {entry.exclusive_minimum:g}")
+    return tuple(reasons)
 
 
 def _present(value: Any) -> bool:
@@ -336,6 +349,8 @@ def rule_diagnostics(
                     else "the catalogue lists or the supplied C++ compares" if named else "the catalogue lists"
                 )
                 violated(concrete, f"{concrete} is {value!r}, not one of the values {source}: {sorted(menu)}.")
+            if reasons := bound_reasons(entry, value):
+                violated(concrete, f"{concrete} is {value!r}, outside the catalogue's bounds: {'; '.join(reasons)}.")
             for sibling in entry.mutually_exclusive_with:
                 if instance.is_set(sibling):
                     violated(concrete, f"{concrete} is mutually exclusive with {instance.resolve(sibling)}.")

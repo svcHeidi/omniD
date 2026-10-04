@@ -5,10 +5,13 @@ The catalogue lists the keys ``Foam::Time`` reads; any other key of the dictiona
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Final
 
 from omnidriver.core.contracts.dictionary import DictEntry
+from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
+from .case_rules import read_leaves, rule_diagnostics
 from .record_key_validation import CataloguedDocument, listed_entry
 
 CONTROL_DICT_DOCUMENT: Final = "system/controlDict"
@@ -165,3 +168,15 @@ def control_dict_listing(case_root: Any) -> tuple[dict[str, Any], ...]:
     if not (case_root / CONTROL_DICT_DOCUMENT).is_file():
         return ()
     return tuple(listed_entry(CONTROL_DICT_DOCUMENT, path, entry) for path, entry in CONTROL_DICT_ENTRIES_BY_PATH.items())
+
+
+def control_dict_diagnostics(case_root: Path) -> tuple[StrictDiagnostic, ...]:
+    """The catalogue's rules over the resolved case's ``controlDict``: what ``Foam::Time`` requires, its menus and bounds."""
+    path = Path(case_root) / CONTROL_DICT_DOCUMENT
+    if not path.is_file():
+        return ()
+    try:
+        leaves = read_leaves(path)
+    except (OSError, ValueError, KeyError) as exc:
+        return (diagnostic("error", "case_unreadable", f"{path} cannot be read: {exc}", source=CONTROL_DICT_DOCUMENT),)
+    return tuple(rule_diagnostics(CONTROL_DICT_ENTRIES, leaves, document=CONTROL_DICT_DOCUMENT))
