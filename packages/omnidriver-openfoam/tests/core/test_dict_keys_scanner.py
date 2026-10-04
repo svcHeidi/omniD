@@ -430,6 +430,189 @@ READ_COORDINATE_SYSTEM = '''inline CoordinateSystem readCoordinateSystem
 '''
 
 
+# cardiacCore src/setCardiacConductivity/setCardiacConductivity.C: writeConductivity to its first
+# conditional read, and the `small` constructor main applies to a field (the last two lines close the function).
+WRITE_CONDUCTIVITY = '''#include "fvCFD.H"
+
+namespace
+{
+
+void writeConductivity
+(
+    const Foam::word& fieldName,
+    const Foam::dictionary& coefficients,
+    const Foam::dimensionSet& conductivityDim,
+    const Foam::volVectorField& fiber,
+    const Foam::volVectorField* sheetPtr,
+    const Foam::volVectorField* normalPtr
+)
+{
+    using namespace Foam;
+
+    const dimensionedScalar df
+    (
+        "df",
+        conductivityDim,
+        coefficients.get<scalar>("df")
+    );
+
+    fiber /= (mag(fiber) + dimensionedScalar("small", dimless, VSMALL));
+}
+}
+'''
+
+# cardiacFOAM src/electroModels/conductionSystemModels/eikonalSolver1D/eikonalSolver1D.H: the class head and its
+# members, and eikonalSolver1D.C's constructor.
+EIKONAL_SOLVER_1D = '''namespace Foam
+{
+
+class eikonalSolver1D
+:
+    public conductionSystemSolver
+{
+    dimensionedScalar purkinjeCV_;        //- conduction velocity [m/s]
+    bool warnedRootStartTimes_;           //- extra rootStimulus entries already reported
+};
+
+eikonalSolver1D::eikonalSolver1D(const fvMesh&, const dictionary& solverCoeffs)
+:
+    purkinjeCV_("purkinjeCV", solverCoeffs),
+    warnedRootStartTimes_(false)
+{}
+}
+'''
+
+# cardiacFOAM src/electroModels/core/verificationModels/electroVerificationModel.C and
+# src/electroModels/ecgModels/eikonalECG/eikonalECG.C: a dimensioned constructor made of constants.
+DIMENSIONED_OF_CONSTANTS = '''void electroVerificationModel::allocateFields(const fvMesh& mesh)
+{
+    volScalarField field
+    (
+        mesh,
+        dimensioned<scalar>("zero", dimless, scalar(0)),
+        "zeroGradient"
+    );
+    volVectorField other
+    (
+        mesh,
+        dimensionedVector("zero", dimVoltage/dimLength, Zero)
+    );
+    const volScalarField sum = field + dimensionedScalar("smallG", dimTime, SMALL);
+}
+'''
+
+# cardiacFOAM src/electroModels/core: the class heads of electroModel.H and
+# electrophysiologyModel/electrophysiologyModel.H, and electrophysiologyModel.C's constructor with the include that
+# makes the summary printer part of it.
+ELECTROPHYSIOLOGY_MODEL = '''namespace Foam
+{
+
+class electroModel
+:
+  public physicsModel,
+  public IOdictionary,
+  public electroStateProvider
+{
+};
+
+class electrophysiologyModel
+:
+    public electroModel
+{
+    //- Run-time selectable ionic model
+    autoPtr<ionicModel> ionicModelPtr_;
+};
+}
+
+Foam::electrophysiologyModel::electrophysiologyModel
+(
+    Time& runTime,
+    const word& region
+)
+:
+    electroModel(readSolverType(runTime, region), runTime, region)
+{
+    configureECGDomains();
+
+#   include "printElectrophysiologySummary.H"
+}
+'''
+
+# cardiacFOAM src/electroModels/core/electrophysiologyModel/printElectrophysiologySummary.H: the lines that
+# read and test myocardiumSolver and tissue (the closing braces join the two pieces and end the block).
+PRINT_ELECTROPHYSIOLOGY_SUMMARY = '''{
+    const word myoSolver(this->lookupOrDefault<word>("myocardiumSolver", "none"));
+    if (myoSolver != "none" && this->found(myoSolver + "Coeffs"))
+    {
+        const dictionary& coeffs = this->subDict(myoSolver + "Coeffs");
+
+        else
+        {
+            const word tissue = coeffs.lookupOrDefault<word>("tissue", "none");
+            if (tissue != "none")
+            {
+                Info<< "    Tissue Region     : " << tissue << nl;
+            }
+        }
+    }
+}
+'''
+
+# cardiacFOAM src/activeTensionModels: the dictionary member of activeTensionModel.H, the class heads of
+# batchedActiveTensionModel.H and LandNiedererBatched.H, and LandNiedererBatched.C's constructor, whose
+# couplingSignal menu fails on any other value (the first lines of its body).
+COUPLING_SIGNAL = '''namespace Foam
+{
+
+class activeTensionModel
+{
+protected:
+
+    const dictionary& dict_;
+    const label nIntegrationPoints_;
+};
+
+class batchedActiveTensionModel
+:
+    public activeTensionModel
+{
+protected:
+
+    // Protected Data
+};
+
+class LandNiedererBatched
+:
+    public batchedActiveTensionModel
+{
+    LandNiedererBatched(const LandNiedererBatched&) = delete;
+    void operator=(const LandNiedererBatched&) = delete;
+};
+
+LandNiedererBatched::LandNiedererBatched
+(
+    const dictionary& dict,
+    const label num
+)
+:
+    batchedActiveTensionModel(dict, num, NUM_STATES, NUM_ALGEBRAIC),
+    CONSTANTS_(NUM_CONSTANTS, 0.0),
+    prevLambda_(num, 1.0),
+    lambdaRate_(num, 0.0),
+    restartTa_(num, 0.0)
+{
+    const word requestedSignal = dict_.lookupOrDefault<word>("couplingSignal", "Cai");
+    if (!(requestedSignal == "Cai" || requestedSignal == "cai"))
+    {
+        FatalErrorInFunction
+            << "Unknown LandNiedererBatched 'couplingSignal' value: "
+            << requestedSignal << nl << "Valid option is: Cai."
+            << exit(FatalError);
+    }
+}
+}
+'''
+
 def _tree(tmp_path: Path, **files: str) -> Path:
     root = tmp_path / "src"
     for name, text in files.items():
@@ -695,6 +878,32 @@ def test_a_check_nested_in_another_branch_names_a_value_without_closing_the_menu
     assert (mode.compared, mode.closed) == (("blend", "hard"), True)
     smoothing = _read(scan, "smoothing", "lookup")
     assert (smoothing.compared, smoothing.closed) == (("smoothstep",), False)
+
+
+def test_a_test_against_the_reads_own_default_in_a_function_that_accepts_any_value_names_no_menu_value(tmp_path):
+    scan = scan_source(_tree(tmp_path, **{
+        "electrophysiologyModel.C": ELECTROPHYSIOLOGY_MODEL, "printElectrophysiologySummary.H": PRINT_ELECTROPHYSIOLOGY_SUMMARY,
+    }))
+    assert _read(scan, "myocardiumSolver").compared == ()
+    assert _read(scan, "tissue").compared == ()
+
+
+def test_a_test_against_the_default_still_names_a_value_when_the_function_fails_on_any_other(tmp_path):
+    signal = _read(scan_source(_tree(tmp_path, **{"LandNiedererBatched.C": COUPLING_SIGNAL})), "couplingSignal")
+    assert (signal.compared, signal.closed) == (("Cai", "cai"), True)
+
+
+def test_a_dimensioned_constructor_of_constants_is_no_read_and_one_of_a_dictionary_is_typed(tmp_path):
+    constants = scan_source(_tree(tmp_path, **{"electroVerificationModel.C": DIMENSIONED_OF_CONSTANTS}))
+    assert [read.key for read in constants.reads if read.method == "dimensioned"] == []
+    member = _read(scan_source(_tree(tmp_path, **{"eikonalSolver1D.C": EIKONAL_SOLVER_1D})), "purkinjeCV")
+    assert (member.method, member.type, member.scope) == ("dimensioned", "dimensionedScalar", ())
+    assert member.root == "param:eikonalSolver1D::eikonalSolver1D:solverCoeffs"
+
+
+def test_a_dimensioned_constructor_around_a_read_is_that_one_read(tmp_path):
+    scan = scan_source(_tree(tmp_path, **{"setCardiacConductivity.C": WRITE_CONDUCTIVITY}))
+    assert [(read.key, read.method, read.type) for read in scan.reads] == [("df", "get", "scalar")]
 
 
 def test_a_key_the_function_does_not_compare_has_no_menu(tmp_path):

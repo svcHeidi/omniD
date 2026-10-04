@@ -49,7 +49,10 @@ _DIMENSIONED = re.compile(
 _MEMBER_INIT = re.compile(r"(?<![\w.>:])(?P<member>[A-Za-z_]\w*)\s*\((?=\s*\")")
 #: Any call: ``name(``, ``Qual::name(``, ``.name(``, ``->name(``.
 _CALL = re.compile(r"(?P<callee>(?:[A-Za-z_]\w*\s*::\s*)*[A-Za-z_]\w*)\s*\(")
-_NUMBER = re.compile(r"\s*[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?\s*")
+#: An argument that may name a dictionary: a variable, member or dereferenced pointer, with member
+#: calls and indices, and not one of OpenFOAM's constants (``SMALL``, ``VSMALL``, ``Zero``).
+_DICTIONARY_ARGUMENT = re.compile(r"\*?\s*[A-Za-z_]\w*(?:\s*(?:\.|->)\s*\w+\s*(?:\([^()]*\))?|\s*\[[^\]]*\])*")
+_CONSTANT = re.compile(r"[A-Z][A-Z0-9_]+|Zero|One")
 _DECLARED_WRAPPER = re.compile(r"\b(?P<type>[A-Za-z_][\w:]*(?:<[^<>;()]*>)?)\s+[A-Za-z_]\w*\s*[({]\s*$")
 _FUNCTIONAL_CAST = re.compile(r"\b(?P<type>word|Switch|scalar|label|bool|fileName|vector|point|tensor)\s*\(\s*$")
 _DICT_DECL = re.compile(
@@ -858,7 +861,7 @@ def _reads_in(
         key = _literal(args[0]) if args else None
         if kind == "dimensioned":
             scope = environment.resolve(args[-1]) if len(args) >= 2 else None
-            if scope is NOT_A_DICTIONARY or (scope is None and _NUMBER.fullmatch(args[-1] if args else "")):
+            if scope is NOT_A_DICTIONARY or (scope is None and not _names_a_dictionary(args[-1] if args else "")):
                 continue
             member = match.groupdict().get("member")
             method, default = "dimensioned", None
@@ -894,6 +897,12 @@ def _reads_in(
             None if kind == "dimensioned" else _bound_variable(structure, start, function.start),
         )
     yield from _with_comparisons(text, structure, function, produced)
+
+
+def _names_a_dictionary(argument: str) -> bool:
+    """Whether the last argument of a ``dimensioned`` constructor can be the dictionary it reads from, not a value or a read of its own."""
+    argument = argument.strip()
+    return _DICTIONARY_ARGUMENT.fullmatch(argument) is not None and not _CONSTANT.fullmatch(argument)
 
 
 def _bound_variable(structure: str, start: int, floor: int) -> str | None:
@@ -942,6 +951,11 @@ def _with_comparisons(
             compared[owner].add(literal)
             closed[owner] = closed[owner] or _rejects(structure, function, chains, position, name, comparisons)
     for (read, _start, _close, _variable), literals, shut in zip(produced, compared, closed):
+        if not shut and read.default is not None:
+            # Where the function accepts any other value, a test against the
+            # read's own default asks whether the key was left unset; it names
+            # no value a case may choose.
+            literals.discard(_literal(read.default))
         yield replace(read, compared=tuple(sorted(literals)), closed=shut) if literals else read
 
 

@@ -667,7 +667,10 @@ disappears from the C++ never fails a plan. A plan compares them with the scan:
 - a key, sub-dictionary, menu value or selection table the C++ reads and the
   catalogue lacks is a `plugin_catalog_uncatalogued` note carrying what was
   scanned (type, default, whether it is required, where, and the `entry`
-  arguments to write the catalogue entry from);
+  arguments to write the catalogue entry from). A literal the C++ compares a
+  value against is a menu value, except a test against the read's own default
+  in a function that accepts any other value: that asks whether the key is
+  unset;
 - a catalogued key the C++ no longer reads is a `plugin_catalog_unread` note
   ("catalogued; the supplied C++ no longer reads it"), and a case or study that
   sets it gets an `unread_case_dict_key` warning saying it has no effect;
