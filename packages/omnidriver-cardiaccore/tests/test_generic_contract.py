@@ -24,6 +24,14 @@ def test_plugin_has_a_valid_context() -> None:
     assert context.stack.call("get_case_runtime_conventions").case_entrypoints == ("Allrun",)
 
 
+def test_a_case_gets_the_openfoam_layers_documentation_and_regression_rules() -> None:
+    context = driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
+
+    roles = {rule.role: rule.path for rule in context.stack.call("get_profile").case_files}
+    assert roles["case.documentation"] == "README.md"
+    assert roles["case.regression_test"] == "regression/regressionTest.sh"
+
+
 def test_plugin_exposes_named_catalogs() -> None:
     catalogs = CardiacCorePlugin().get_named_catalogs()
     assert catalogs["cardiaccore_field_conventions"]["cobiveco_raw"]["tm"] == "0=epicardium, 1=endocardium"

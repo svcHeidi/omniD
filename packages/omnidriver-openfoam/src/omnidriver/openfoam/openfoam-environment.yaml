@@ -16,6 +16,34 @@ case_profile:
       kind: case_script
       role: openfoam.entrypoint
       required: conditional
+    - path: system/fvSchemes
+      kind: openfoam_dictionary
+      role: openfoam.discretisation
+      required: always
+    - path: system/fvSolution
+      kind: openfoam_dictionary
+      role: openfoam.solver_settings
+      required: always
+    - path: system/decomposeParDict
+      kind: openfoam_dictionary
+      role: openfoam.decomposition
+      required: conditional
+    - path: system/blockMeshDict
+      kind: openfoam_dictionary
+      role: openfoam.mesh_generation
+      required: conditional
+    - path: Allclean
+      kind: case_script
+      role: openfoam.cleanup
+      required: conditional
+    - path: README.md
+      kind: documentation
+      role: case.documentation
+      required: conditional
+    - path: regression/regressionTest.sh
+      kind: case_script
+      role: case.regression_test
+      required: conditional
 # The shell every OpenFOAM-based stack (cardiacFOAM, cardiacCore) runs in,
 # declared once here (one reality). `omnidriver env --plugin P` renders and
 # checks it; nothing is searched for.

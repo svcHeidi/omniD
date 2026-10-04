@@ -33,14 +33,6 @@ runtime:
           - libphysicsModel
 case_profile:
   dictionaries:
-    - path: system/fvSchemes
-      kind: openfoam_dictionary
-      role: openfoam.discretisation
-      required: always
-    - path: system/fvSolution
-      kind: openfoam_dictionary
-      role: openfoam.solver_settings
-      required: always
     - path: constant/electroProperties
       kind: openfoam_dictionary
       role: plugin.configuration
@@ -52,26 +44,6 @@ case_profile:
     - path: constant/prePacingProperties
       kind: openfoam_dictionary
       role: plugin.configuration
-      required: conditional
-    - path: system/decomposeParDict
-      kind: openfoam_dictionary
-      role: openfoam.decomposition
-      required: conditional
-    - path: system/blockMeshDict
-      kind: openfoam_dictionary
-      role: openfoam.mesh_generation
-      required: conditional
-    - path: Allclean
-      kind: case_script
-      role: openfoam.cleanup
-      required: conditional
-    - path: README.md
-      kind: documentation
-      role: case.documentation
-      required: conditional
-    - path: regression/regressionTest.sh
-      kind: case_script
-      role: case.regression_test
       required: conditional
 # The C++ source the key scanner reads: supplied, never discovered. The
 # variable is the native tutorials tree; `relative` is the native repository's
