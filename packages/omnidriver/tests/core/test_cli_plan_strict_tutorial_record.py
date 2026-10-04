@@ -226,32 +226,28 @@ def _toy_run_argv(tmp_path: Path, cases_root: Path, *extra: str) -> list[str]:
     ]
 
 
-def test_run_entry_fresh_clears_the_old_case_before_staging_so_the_run_still_has_its_case(tmp_path, capsys):
+@pytest.mark.parametrize("flag", ["--entry", "--case"])
+def test_fresh_is_refused_with_entry_and_case_because_they_always_restage(tmp_path, capsys, flag):
+    value = "toyTutorial" if flag == "--entry" else str(_native_toy_case(tmp_path) / "toyTutorial")
+    with pytest.raises(SystemExit):
+        main(["run", "--strict", "--plugin", "plugins.toy:ToyStack", flag, value, "--fresh",
+              "--scratch-dir", str(tmp_path / "scratch")])
+    assert "always restage" in capsys.readouterr().err
+
+
+def test_a_symlinked_staged_case_root_is_refused_not_followed(tmp_path, capsys):
     cases_root = _native_toy_case(tmp_path)
-    assert main(_toy_run_argv(tmp_path, cases_root)) == 0
-    capsys.readouterr()
-    staged = tmp_path / "scratch" / "records" / "toyTutorial"
-    (staged / "left-over.txt").write_text("from the first run")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "keep.txt").write_text("keep")
+    records = tmp_path / "scratch" / "records"
+    records.mkdir(parents=True)
+    (records / "toyTutorial").symlink_to(elsewhere)
 
-    assert main(_toy_run_argv(tmp_path, cases_root, "--fresh")) == 0
-    payload = json.loads(capsys.readouterr().out)
+    assert main(_toy_run_argv(tmp_path, cases_root)) == 1
 
-    assert payload["status"] == "ok"
-    assert (staged / "constant" / "mesh.json").is_file()
-    assert not (staged / "left-over.txt").exists()
-
-
-def test_run_entry_fresh_refuses_a_scratch_folder_that_holds_no_omnidriver_artifact(tmp_path, capsys):
-    cases_root = _native_toy_case(tmp_path)
-    staged = tmp_path / "scratch" / "records" / "toyTutorial"
-    staged.mkdir(parents=True)
-    (staged / "notes.txt").write_text("not ours")
-
-    assert main(_toy_run_argv(tmp_path, cases_root, "--fresh")) == 1
-    payload = json.loads(capsys.readouterr().out)
-
-    assert "no recognizable omnidriver artifact" in payload["error"]
-    assert (staged / "notes.txt").read_text() == "not ours"
+    assert "symlink" in json.loads(capsys.readouterr().out)["error"]
+    assert (elsewhere / "keep.txt").read_text() == "keep"
 
 
 def test_sweep_run_fresh_never_deletes_a_folder_whose_marker_is_only_one_level_down(tmp_path, capsys):
@@ -314,3 +310,22 @@ def test_a_completed_run_document_is_replayed_and_says_so_while_an_entry_always_
     assert main(_toy_run_argv(tmp_path, cases_root)) == 0
     again = json.loads(capsys.readouterr().out)
     assert "replayed" not in again and [step["step"] for step in again["steps"]] == ["solve"]
+
+
+def test_sweep_run_fresh_refuses_an_output_dir_that_is_a_symlink(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "sweep_manifest.json").write_text("{}")
+    (real / "important.txt").write_text("keep")
+    link = tmp_path / "link"
+    link.symlink_to(real)
+
+    exit_code = main([
+        "sweep-run", "--plugin", "plugins.toy:ToyStack", "--spec", str(_one_case_sweep(tmp_path, cases_root)),
+        "--output-dir", str(link), "--fresh",
+    ])
+
+    assert exit_code == 1
+    assert "symlink" in json.loads(capsys.readouterr().out)["error"]
+    assert (real / "important.txt").read_text() == "keep"

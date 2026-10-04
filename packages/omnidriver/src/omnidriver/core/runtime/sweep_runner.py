@@ -373,6 +373,11 @@ def _stage_entry_case(
         if driver_context is not None else CaseRuntimeConventions()
     )
     replica_globs = replica_directory_globs(driver_context)
+    if Path(staged_case_root).is_symlink():
+        raise TutorialRecordError(
+            f"the staged case root {staged_case_root} is a symlink; staging replaces it, so it "
+            "must be a real directory (remove the link, or use another --scratch-dir)"
+        )
     source_case_root = Path(source_case_root).resolve()
     staged_case_root = Path(staged_case_root).resolve()
 
@@ -638,12 +643,14 @@ def sweep_run(
     record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
     # Resolved to absolute before staging: commit_record_case requires
     # CaseMutationRequest.case_root to be absolute.
-    output_dir = Path(output_dir).resolve()
+    requested_dir = Path(output_dir)
+    output_dir = requested_dir.resolve()
     # The spec is validated before --fresh deletes anything.
     _validate_record_sweep_upfront(record, sweep_spec, driver_context=driver_context)
     resolved_cases = expand_sweep(sweep_spec, get_derivation=get_derivation)
+    # The path as given: resolving it first would hide a symlink.
     fresh_error = ensure_fresh_output_dir(
-        output_dir, fresh=fresh, allowed_root=_allowed_runs_root(),
+        requested_dir, fresh=fresh, allowed_root=_allowed_runs_root(),
     )
     if fresh_error is not None:
         raise SweepValidationError(fresh_error)

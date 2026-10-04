@@ -27,6 +27,8 @@ def check_fresh_deletion_allowed(output_dir: Path, *, allowed_root: Path | None)
     output_dir need not exist -- a nonexistent directory always passes (there
     is nothing to lose).
     """
+    if output_dir.is_symlink():
+        return f"--fresh refuses to delete {output_dir}: it is a symlink, which could lead anywhere."
     resolved = output_dir.resolve()
     if resolved.parent == resolved:
         return f"--fresh refuses to delete the filesystem root ({resolved})."

@@ -460,7 +460,6 @@ def _context_from_entry(
     scratch_dir: str | None = None,
     cli_study: dict | None = None,
     inputs: dict | None = None,
-    fresh: bool = False,
 ) -> tuple[_ExecutionContext | None, int]:
     label = getattr(selected_entry, "name", selected_entry)
 
@@ -473,7 +472,6 @@ def _context_from_entry(
             scratch_root=scratch_dir,
             cli_study=cli_study,
             inputs=inputs,
-            fresh=fresh,
             driver_context=driver_context,
         )
 
@@ -539,9 +537,7 @@ def _dispatch_context(args, context: _ExecutionContext) -> int:
 def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
     output_existed = context.output_dir.exists()
     with acquire_attempt_lease(context.output_dir):
-        # An entry's case is re-staged by every run, so its --fresh was
-        # applied before staging; only a run document's output is cleared here.
-        if args.fresh and output_existed and context.source_path is not None:
+        if args.fresh and output_existed:
             if context.case_root.resolve().is_relative_to(context.output_dir.resolve()):
                 print(json.dumps({
                     "status": "failed",
@@ -549,8 +545,8 @@ def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
                     "action": args.action,
                     "error": (
                         f"--fresh would delete the case itself: its output directory "
-                        f"{context.output_dir} holds the case. Plan again, or run with "
-                        "--entry and --fresh, to restage it"
+                        f"{context.output_dir} holds the case. Plan again "
+                        "(plan --strict --entry) to restage it"
                     ),
                 }, indent=2))
                 return 1
@@ -1058,6 +1054,11 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
             parser.error(f"--strict/--run-document/--step/--apply are not valid with action={args.action}")
     if args.action in {"sweep-plan", "sweep-run"} and not args.spec:
         parser.error(f"action={args.action} requires --spec")
+    if args.fresh and (args.entry or args.case):
+        parser.error(
+            "--fresh is not valid with --entry/--case: they always restage the case, replacing the "
+            "previous one; use --fresh with --run-document or sweep-run"
+        )
     if args.fresh and args.action not in {"step", "run", "sweep-run"}:
         parser.error("--fresh is only valid with action=step, action=run, or action=sweep-run")
     if args.max_cases != 200 and args.action not in {"sweep-plan", "sweep-run"}:
@@ -1449,7 +1450,6 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             scratch_dir=args.scratch_dir,
             cli_study=cli_study,
             inputs=cli_inputs,
-            fresh=args.fresh,
         )
         if context is None:
             return failure_code

@@ -138,3 +138,15 @@ def test_the_legacy_allowed_root_variable_name_is_not_read(monkeypatch, tmp_path
     assert _allowed_runs_root() == current.resolve()
 
 
+
+
+def test_refuses_a_symlink_even_when_what_it_points_at_holds_a_marker(tmp_path):
+    real = tmp_path / "a" / "b" / "real"
+    real.mkdir(parents=True)
+    (real / "workflow_state.json").write_text("{}")
+    link = tmp_path / "a" / "b" / "link"
+    link.symlink_to(real)
+    error = check_fresh_deletion_allowed(link, allowed_root=None)
+    assert error is not None and "symlink" in error
+    assert ensure_fresh_output_dir(link, fresh=True, allowed_root=None) == error
+    assert (real / "workflow_state.json").exists()
