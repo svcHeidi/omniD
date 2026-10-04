@@ -43,7 +43,7 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
         minimum=0,
         notes="OpenFOAM ends a run whose endTime precedes its startTime before the first step.",
         unit="s",
-        required=True,
+        required_when={"stopAt": "endTime"},
         typical_value="",
     ),
     DictEntry(
@@ -53,7 +53,7 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
         source_refs=_SOURCE,
         value_kind="scalar",
         unit="s",
-        required=True,
+        required_when={"startFrom": "startTime"},
         typical_value="0",
     ),
     DictEntry(
@@ -67,7 +67,7 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
         source_refs=_SOURCE,
         value_kind="enum",
         enum_values=("startTime", "firstTime", "latestTime"),
-        required=True,
+        default="latestTime",
         typical_value="startTime",
     ),
     DictEntry(
@@ -77,7 +77,6 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
         source_refs=_SOURCE,
         value_kind="enum",
         enum_values=("endTime", "writeNow", "noWriteNow", "nextWrite"),
-        required=True,
         typical_value="endTime",
     ),
     DictEntry(
@@ -99,7 +98,6 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "none", "timeStep", "runTime", "adjustable", "adjustableRunTime",
             "clockTime", "cpuTime",
         ),
-        required=True,
         typical_value="runTime",
     ),
     DictEntry(
@@ -113,8 +111,17 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
         value_kind="scalar",
         exclusive_minimum=0,
         unit="s (when writeControl=runTime)",
-        required=True,
+        required_one_of=("writeFrequency",),
         typical_value="5e-3",
+    ),
+    DictEntry(
+        driver_path="writeFrequency",
+        phases=frozenset({"solver"}),
+        description="Older name of writeInterval, read when writeInterval is absent.",
+        source_refs=_SOURCE,
+        value_kind="scalar",
+        unit="s (when writeControl=runTime)",
+        required_one_of=("writeInterval",),
     ),
     DictEntry(
         driver_path="writeFormat",
@@ -123,7 +130,6 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
         source_refs=_SOURCE,
         value_kind="enum",
         enum_values=("ascii", "binary"),
-        required=True,
         typical_value="ascii",
     ),
     DictEntry(
@@ -135,7 +141,6 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
         ),
         source_refs=_SOURCE,
         value_kind="integer",
-        required=True,
         typical_value="0",
     ),
 )
