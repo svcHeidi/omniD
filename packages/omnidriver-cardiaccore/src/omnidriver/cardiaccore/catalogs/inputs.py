@@ -46,25 +46,51 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.ds",
-        description="Sheet-direction conductivity coefficient used to construct Conductivity.",
+        description="Sheet-direction conductivity coefficient used to construct Conductivity; read only when sheetField is set.",
         source_refs=("cases/bivCase/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
         notes=(
             "The utility constructs a dimensional conductivity field, but this adapter "
             "has not independently verified the physical unit for this input."
         ),
         value_kind="scalar",
-        required=True,
+        co_required_with=(
+            "$CARDIAC_CONDUCTIVITY.dn",
+            "$CARDIAC_CONDUCTIVITY.sheetField",
+        ),
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.dn",
-        description="Normal-direction conductivity coefficient used to construct Conductivity.",
+        description="Normal-direction conductivity coefficient used to construct Conductivity; read only when sheetField is set.",
         source_refs=("cases/bivCase/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
         notes=(
             "The utility constructs a dimensional conductivity field, but this adapter "
             "has not independently verified the physical unit for this input."
         ),
         value_kind="scalar",
-        required=True,
+        co_required_with=(
+            "$CARDIAC_CONDUCTIVITY.ds",
+            "$CARDIAC_CONDUCTIVITY.sheetField",
+        ),
+    ),
+    # setCardiacConductivity.C: without a sheetField the utility writes
+    # dt*I + (df - dt)*f f for the unit fibre f, and reads no ds or dn; with
+    # one it reads ds and dn and never dt. The C++ names the basis by the key's
+    # presence, so sheetField, ds and dn are a co-required group and dt is
+    # exclusive with sheetField. A fibre-only case must still set dt, which no
+    # relation can say: dt is read only in a branch of its function.
+    DictEntry(
+        driver_path="$CARDIAC_CONDUCTIVITY.dt",
+        description=(
+            "Conductivity across the fibre, along every direction normal to it, used when sheetField is absent: "
+            "Conductivity is dt*I + (df - dt)*f f for the unit fibre f. Not read when sheetField is set."
+        ),
+        source_refs=("cases/bivCase/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
+        notes=(
+            "The utility constructs a dimensional conductivity field, but this adapter "
+            "has not independently verified the physical unit for this input."
+        ),
+        value_kind="scalar",
+        mutually_exclusive_with=("$CARDIAC_CONDUCTIVITY.sheetField",),
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.fiberField",
@@ -75,10 +101,16 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.sheetField",
-        description="Name of the vector field defining the sheet direction.",
+        description=(
+            "Name of the vector field defining the sheet direction; its presence selects the orthotropic basis. "
+            "Absent, the utility writes a transversely isotropic Conductivity from the fibre alone, from df and dt."
+        ),
         source_refs=("cases/bivCase/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
         value_kind="word",
-        required=True,
+        co_required_with=(
+            "$CARDIAC_CONDUCTIVITY.ds",
+            "$CARDIAC_CONDUCTIVITY.dn",
+        ),
     ),
     # setCardiacConductivity.C: hasIntracellular and hasExtracellular are each
     # a bare diffDict.found(...) check; a FatalIOError fires when exactly one
@@ -87,83 +119,85 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     # (which fires when both are set -- here both-set is required). Declared
     # with `co_required_with` on every member so the validator reports a
     # half-set pair before a case is staged, instead of at native run time.
+    # Each block takes the top-level sheetField's basis: df with either ds and
+    # dn, or dt.
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
         description="Longitudinal conductivity coefficient for the intracellular bidomain tensor.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
-        co_required_with=(
-            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
-            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
-            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
-            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
-            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
-        ),
+        co_required_with=("$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",),
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
-        description="Sheet-direction conductivity coefficient for the intracellular bidomain tensor.",
+        description="Sheet-direction conductivity coefficient for the intracellular bidomain tensor; read only when sheetField is set.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
         co_required_with=(
-            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
             "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
-            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
             "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
             "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
+            "$CARDIAC_CONDUCTIVITY.sheetField",
         ),
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
-        description="Normal-direction conductivity coefficient for the intracellular bidomain tensor.",
+        description="Normal-direction conductivity coefficient for the intracellular bidomain tensor; read only when sheetField is set.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
         co_required_with=(
-            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
             "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
-            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
             "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
             "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
+            "$CARDIAC_CONDUCTIVITY.sheetField",
         ),
+    ),
+    DictEntry(
+        driver_path="$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dt",
+        description="Conductivity across the fibre for the intracellular bidomain tensor, used when sheetField is absent.",
+        source_refs=(_CONDUCTIVITY_SOURCE,),
+        value_kind="scalar",
+        co_required_with=("$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dt",),
+        mutually_exclusive_with=("$CARDIAC_CONDUCTIVITY.sheetField",),
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
         description="Longitudinal conductivity coefficient for the extracellular bidomain tensor.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
-        co_required_with=(
-            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
-            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
-            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
-            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
-            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
-        ),
+        co_required_with=("$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",),
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
-        description="Sheet-direction conductivity coefficient for the extracellular bidomain tensor.",
+        description="Sheet-direction conductivity coefficient for the extracellular bidomain tensor; read only when sheetField is set.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
         co_required_with=(
-            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
             "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
             "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
-            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
-            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
+            "$CARDIAC_CONDUCTIVITY.sheetField",
         ),
     ),
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
-        description="Normal-direction conductivity coefficient for the extracellular bidomain tensor.",
+        description="Normal-direction conductivity coefficient for the extracellular bidomain tensor; read only when sheetField is set.",
         source_refs=(_CONDUCTIVITY_SOURCE,),
         value_kind="scalar",
         co_required_with=(
-            "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
+            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
             "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds",
             "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
-            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
-            "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
+            "$CARDIAC_CONDUCTIVITY.sheetField",
         ),
+    ),
+    DictEntry(
+        driver_path="$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dt",
+        description="Conductivity across the fibre for the extracellular bidomain tensor, used when sheetField is absent.",
+        source_refs=(_CONDUCTIVITY_SOURCE,),
+        value_kind="scalar",
+        co_required_with=("$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dt",),
+        mutually_exclusive_with=("$CARDIAC_CONDUCTIVITY.sheetField",),
     ),
 )
 

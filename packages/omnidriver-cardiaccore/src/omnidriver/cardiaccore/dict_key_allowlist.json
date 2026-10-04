@@ -1,5 +1,19 @@
 {
-  "description": "Reviewed facts the C++ scan cannot establish for cardiacCore's catalogue (omnidriver.openfoam.dict_keys_scanner.catalog_report), in the same format as cardiacFOAM's. unseen_reads: catalogued paths whose read the scan cannot see, grouped by why.",
+  "description": "Reviewed facts the C++ scan cannot establish for cardiacCore's catalogue (omnidriver.openfoam.dict_keys_scanner.catalog_report), in the same format as cardiacFOAM's. unseen_reads: catalogued paths whose read the scan cannot see, grouped by why. caller_guarded: catalogued optional paths the C++ reads without a default in a function every caller reaches only after testing the key.",
+  "caller_guarded": {
+    "main calls writeConductivity with the sheet and normal fields only when diffDict.found(\"sheetField\"); the fibre-only branch returns before ds and dn are read": [
+      "$CARDIAC_CONDUCTIVITY.dn",
+      "$CARDIAC_CONDUCTIVITY.ds"
+    ],
+    "main calls writeConductivity on a bidomain subdictionary only when diffDict.found(\"conductivityIntracellular\") and found(\"conductivityExtracellular\")": [
+      "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.df",
+      "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.dn",
+      "$CARDIAC_CONDUCTIVITY.conductivityExtracellular.ds",
+      "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.df",
+      "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.dn",
+      "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds"
+    ]
+  },
   "unseen_reads": {
     "read by setCardiacScar and setPurkinjeScar on the scar branch; main removed both utilities (c53a0d7), and the catalogue cites the branch (scar-branch: source_refs)": [
       "$CARDIAC_SCAR.channelField",
