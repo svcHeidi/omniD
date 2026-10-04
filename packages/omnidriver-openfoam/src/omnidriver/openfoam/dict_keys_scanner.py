@@ -10,7 +10,7 @@ import json
 import os
 import re
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Iterable, Iterator
 
@@ -75,6 +75,20 @@ _NOT_A_CALL = {"if", "for", "while", "switch", "return", "sizeof", "catch", "def
 #: A local holding a constructor looked up in a runtime-selection table:
 #: ``auto* ctorPtr = dictionaryConstructorTable(type);``.
 _CONSTRUCTOR_VARIABLE = re.compile(r"\b(\w+)\s*=\s*[^;=]*\w*ConstructorTable\w*\s*\(")
+_LITERAL = r'"(?P<{}>(?:\\.|[^"\\\n])*)"'
+_AS_STRING = r"(?:(?:Foam::)?(?:word|string)\s*\(\s*)?"
+#: ``name == "literal"`` and ``"literal" == name`` (``!=`` too), with ``name`` a plain variable or ``this->member``.
+_COMPARISON = re.compile(
+    r"(?<![\w.>:])(?:this\s*->\s*)?(?P<lhs>[A-Za-z_]\w*)\s*(?P<lop>[=!]=)\s*" + _AS_STRING + _LITERAL.format("left")
+    + r"|" + _LITERAL.format("right") + r"\s*(?P<rop>[=!]=)\s*(?:this\s*->\s*)?(?P<rhs>[A-Za-z_]\w*)\b(?!\s*(?:[(.\[]|->|::))"
+)
+_IF = re.compile(r"\bif\s*(?:constexpr\s*)?\(")
+_COMPARED_AFTER = re.compile(r"\s*[=!]=\s*" + _AS_STRING + _LITERAL.format("literal"))
+_COMPARED_BEFORE = re.compile(_LITERAL.format("literal") + r"\s*[=!]=\s*$")
+_CAST_OPEN = re.compile(r"(?:Foam::)?\b(?:word|string|fileName)\s*\(\s*$")
+#: The name a value is bound to: ``name = <read>``, ``Type name(<read>)``, ``member_(<read>)``.
+_BOUND_TO = re.compile(r"(?P<name>[A-Za-z_]\w*)\s*(?:=(?!=)|[({])\s*$")
+_STRING_TYPES = {None, "word", "string", "fileName"}
 
 
 @dataclass(frozen=True)
@@ -99,6 +113,15 @@ class DictRead:
     #: The read runs only under a branch, loop, ``?:`` or short-circuit of its
     #: own function, so the case cannot be judged to need its key.
     conditional: bool = False
+    #: The string literals the value is compared against with ``==`` or
+    #: ``!=`` in its own function: directly, or through the variable the read
+    #: is bound to. Sorted; empty when the value is never compared.
+    compared: tuple[str, ...] = ()
+    #: The function fails on a value outside ``compared``: an ``if`` chain
+    #: that ends in an error, or a ``!=`` test guarding one, neither nested
+    #: in another branch. ``compared`` is then the whole menu, and otherwise
+    #: only the values the C++ happens to name.
+    closed: bool = False
 
     @property
     def subdict(self) -> bool:
@@ -148,6 +171,7 @@ class Scan:
         reads = [read for read in self.reads if not read.subdict]
         values = [read for read in reads if read.method not in _PROBES]
         total = len(reads) or 1
+        words = [read for read in values if read.value_read and _plain(read.type) in _STRING_TYPES - {None}]
         return {
             "reads": len(reads),
             "subdict_reads": len(self.reads) - len(reads),
@@ -155,6 +179,7 @@ class Scan:
             "resolved_scope": round(100 * sum(r.scope is not None for r in reads) / total, 1),
             "resolved_type": round(100 * sum(r.type is not None for r in values) / (len(values) or 1), 1),
             "selected_class": round(100 * sum(bool(r.selected_as) for r in reads) / total, 1),
+            "compared_word": round(100 * sum(bool(r.compared) for r in words) / (len(words) or 1), 1),
         }
 
 
@@ -810,6 +835,11 @@ def _reads_in(
     ]
     candidates += [(m.start(), m, "call") for m in _CALL.finditer(region)]
     selected_as = tuple(selected.get(function.owner or "", ()))
+    produced: list[tuple[DictRead, int, int, str | None]] = []
+
+    def emit(read: DictRead, start: int, close_at: int, variable: str | None) -> None:
+        produced.append((read, start, close_at, variable))
+
     for offset, match, kind in sorted(candidates, key=lambda item: item[0]):
         position = function.start + offset
         environment.bind(position)
@@ -839,7 +869,10 @@ def _reads_in(
                     if enum_scope is not None and enum_scope is not NOT_A_DICTIONARY:
                         scope, value_type = enum_scope, "word"
                         default = args[2] if method.endswith("OrDefault") and len(args) > 2 else None
-                        yield _read(key, method, value_type, default, scope, text, position, function, relative, selected_as, structure)
+                        emit(
+                            _read(key, method, value_type, default, scope, text, position, function, relative, selected_as, structure),
+                            start, close_at, _bound_variable(structure, start, function.start),
+                        )
                         continue
                 if scope is NOT_A_DICTIONARY:
                     continue
@@ -851,7 +884,149 @@ def _reads_in(
             default = args[1] if len(args) > 1 and method.endswith(("OrDefault", "OrAdd")) else None
             if method == "lookup" and value_type is None:
                 value_type = _wrapping_type(structure, start, function.start)
-        yield _read(key, method, value_type, default, scope, text, position, function, relative, selected_as, structure)
+        emit(
+            _read(key, method, value_type, default, scope, text, position, function, relative, selected_as, structure),
+            start if kind != "dimensioned" else position, close_at,
+            None if kind == "dimensioned" else _bound_variable(structure, start, function.start),
+        )
+    yield from _with_comparisons(text, structure, function, produced)
+
+
+def _bound_variable(structure: str, start: int, floor: int) -> str | None:
+    """The variable a read's value is declared or assigned to."""
+    before = structure[floor:start]
+    cast = _CAST_OPEN.search(before)
+    if cast:
+        before = before[:cast.start()]
+    bound = _BOUND_TO.search(before)
+    if bound is None or bound.group("name") in _KEYWORDS | _NOT_A_CALL:
+        return None
+    return bound.group("name")
+
+
+def _with_comparisons(
+    text: str, structure: str, function: _Function, produced: list[tuple[DictRead, int, int, str | None]],
+) -> Iterator[DictRead]:
+    """``produced`` reads with the literals their value is compared against in ``function``."""
+    compared: list[set[str]] = [set() for _ in produced]
+    closed = [False] * len(produced)
+    comparisons: list[tuple[int, str, str, bool]] = []
+    chains = dict(_if_chains(structure, function))
+    for match in _COMPARISON.finditer(text, function.start, function.end):
+        if match.group("lhs") is not None and structure[match.start()] != text[match.start()]:
+            continue
+        comparisons.append((
+            match.start(), match.group("lhs") or match.group("rhs"), match.group("left") or match.group("right"),
+            (match.group("lop") or match.group("rop")) == "!=",
+        ))
+    for index, (read, start, close_at, _variable) in enumerate(produced):
+        if not read.value_read or _plain(read.type) not in _STRING_TYPES:
+            continue
+        direct = _COMPARED_AFTER.match(text, close_at + 1)
+        if direct:
+            compared[index].add(direct.group("literal"))
+        before = _COMPARED_BEFORE.search(text, function.start, start)
+        if before:
+            compared[index].add(before.group("literal"))
+    for position, name, literal, _negated in comparisons:
+        bound = [
+            index for index, (read, _start, close_at, variable) in enumerate(produced)
+            if variable == name and close_at < position and read.value_read and _plain(read.type) in _STRING_TYPES
+        ]
+        if bound:
+            owner = max(bound, key=lambda index: produced[index][2])
+            compared[owner].add(literal)
+            closed[owner] = closed[owner] or _rejects(structure, function, chains, position, name, comparisons)
+    for (read, _start, _close, _variable), literals, shut in zip(produced, compared, closed):
+        yield replace(read, compared=tuple(sorted(literals)), closed=shut) if literals else read
+
+
+def _if_chains(structure: str, function: _Function) -> Iterator[tuple[int, list[tuple[tuple[int, int], tuple[int, int]]]]]:
+    """The ``(condition, body)`` spans of each unnested ``if`` chain, by its start; a final ``else`` has the condition ``(-1, -1)``."""
+    for head in _IF.finditer(structure, function.start, function.end):
+        if re.search(r"\belse\s*$", structure[function.start:head.start()]) or _conditional(structure, head.start(), function.start):
+            continue
+        links, at = [], head.end() - 1
+        while True:
+            close_at = _close(structure, at)
+            if close_at < 0:
+                break
+            body = (close_at + 1, _statement_end(structure, close_at + 1, function.end))
+            links.append(((at, close_at), body))
+            tail = re.compile(r"\s*else\b\s*").match(structure, body[1], function.end)
+            if tail is None:
+                break
+            following = _IF.match(structure, tail.end())
+            if following:
+                at = following.end() - 1
+                continue
+            links.append(((-1, -1), (tail.end(), _statement_end(structure, tail.end(), function.end))))
+            break
+        yield head.start(), links
+
+
+def _statement_end(structure: str, at: int, limit: int) -> int:
+    """Where the statement starting at ``at`` ends: after its braced block, or its ``;``."""
+    while at < limit and structure[at].isspace():
+        at += 1
+    if at < limit and structure[at] == "{":
+        close_at = _close(structure, at)
+        return close_at + 1 if close_at > 0 else limit
+    depth = 0
+    for index in range(at, limit):
+        if structure[index] in "([{":
+            depth += 1
+        elif structure[index] in ")]}":
+            depth -= 1
+        elif structure[index] == ";" and depth == 0:
+            return index + 1
+    return limit
+
+
+def _rejects(structure, function, chains, position, name, comparisons) -> bool:
+    """Whether the code testing ``name`` at ``position`` is an error for every value it does not name."""
+    # Only a chain whose conditions do nothing but compare ``name`` is a menu:
+    # ``!found(x) && x != "a"`` also admits what ``found`` accepts. It is
+    # closed by a final ``else`` that is an error, a ``!=`` or negated link
+    # guarding one, or an error right after it (sequential ``if (x == "a") return;``).
+    named = re.compile(r"\b" + re.escape(name) + r"\s*[=!]=\s*" + _AS_STRING + r'"[^"]*"|"[^"]*"\s*[=!]=\s*' + re.escape(name) + r"\b")
+
+    def only_compares(lo: int, hi: int) -> bool:
+        return not re.sub(r"[\s!&|()]+", "", named.sub("", structure[lo + 1:hi]))
+
+    def fails(at: int, limit: int) -> bool:
+        return re.compile(r"\s*\{?\s*(?:Fatal(?:IO)?Error\w*|SeriousError\w*|throw\b)").match(structure, at, limit) is not None
+
+    def error_follows(at: int) -> bool:
+        while True:
+            if fails(at, function.end):
+                return True
+            links = chains.get(next((i for i in range(at, function.end) if not structure[i].isspace()), -1))
+            if links is None or not all(only_compares(*span) for span, _body in links if span != (-1, -1)):
+                return False
+            at = links[-1][1][1]
+
+    for links in chains.values():
+        tested = [index for index, ((lo, hi), _body) in enumerate(links) if lo <= position <= hi]
+        if not tested:
+            continue
+        conditions = [span for span, _body in links if span != (-1, -1)]
+        if not all(only_compares(*span) for span in conditions):
+            continue
+        if links[-1][0] == (-1, -1) and fails(*links[-1][1]) or error_follows(links[-1][1][1]):
+            return True
+        for index in tested:
+            (lo, hi), body = links[index]
+            negated = structure[lo + 1:hi].lstrip().startswith("!") or any(
+                lo <= at <= hi and who == name and no for at, who, _literal, no in comparisons
+            )
+            if negated and fails(*body):
+                return True
+    return False
+
+
+def _plain(cxx_type: str | None) -> str | None:
+    return cxx_type.replace("Foam::", "").strip() if cxx_type else None
 
 
 _BRANCH_HEAD = re.compile(r"\b(?:if|while|for|switch)\s*$")
@@ -1064,6 +1239,15 @@ def locate(scan: Scan, entries: Iterable, *, document: str) -> dict[str, frozens
         placed.update({root: frozenset(places) for root, places in found.items()})
 
 
+def _placements(scan: Scan, entries: tuple, documents: Iterable[str]) -> dict[str, set[tuple[str, ...]]]:
+    """Where each root sits in any of ``documents``, as :func:`locate` places it."""
+    placed: dict[str, set[tuple[str, ...]]] = {}
+    for name in documents:
+        for root, places in locate(scan, entries, document=name).items():
+            placed.setdefault(root, set()).update(places)
+    return placed
+
+
 def reads_at(scan: Scan, placed: dict[str, frozenset[tuple[str, ...]]], trail: tuple[str, ...]) -> bool:
     """Whether some read in ``scan`` names the key (or sub-dictionary) at
     ``trail``, a path from a document's root: a read whose root ``locate``
@@ -1267,10 +1451,7 @@ def catalog_report(
     ]
 
     documents = sorted({read.root.split(":", 1)[1] for read in scan.reads if (read.root or "").startswith("document:")})
-    placed: dict[str, set[tuple[str, ...]]] = {}
-    for name in documents or [""]:
-        for root, places in locate(scan, entries, document=name).items():
-            placed.setdefault(root, set()).update(places)
+    placed = _placements(scan, entries, documents or [""])
     uncatalogued: list[dict] = []
     seen: set[tuple] = set()
     for read in scan.reads:
@@ -1296,6 +1477,18 @@ def catalog_report(
     selection = runtime_selection_report(
         scan.registrations, entries=entries, mapping=reviewed.get("runtime_selection", {}),
     ) if "runtime_selection" in reviewed else {"disagreements": [], "uncatalogued": [], "selector_values": {}}
+    menus = compared_menus(scan, entries, reviewed, documents=documents, placed=placed)
+    for path, menu in sorted(menus.items()):
+        listed = next(entry.enum_values for entry in entries if entry.driver_path == path)
+        uncatalogued += [
+            {"kind": "compared_value", "path": path, "value": value, "source": menu.named_at[value]}
+            for value in sorted(menu.values - set(listed))
+        ]
+        if menu.closed and set(listed) - menu.values:
+            disagreements.append(
+                f"{path}: menu lists {sorted(set(listed) - menu.values)}, which the C++ never compares the value "
+                f"against; it fails on any value but {sorted(menu.values)} ({', '.join(menu.sources)})"
+            )
     return CatalogReport(
         digest=scan.digest,
         resolution=scan.resolution(),
@@ -1306,7 +1499,7 @@ def catalog_report(
             {"key": read.key, "method": read.method, "source": f"{read.file}:{read.line}", "function": read.function}
             for read in scan.reads if read.scope is None and read.key is not None and read.method not in _PROBES
         ],
-        selector_values=selection["selector_values"],
+        selector_values={**{path: sorted(menu.values) for path, menu in menus.items()}, **selection["selector_values"]},
     )
 
 
@@ -1324,6 +1517,62 @@ def registered_menus(reviewed: dict, scan: Scan, entries: Iterable) -> dict[str,
         )
         for path, rule in by_path.items() if rule.get("mode") != "subset"
     }
+
+
+@dataclass(frozen=True)
+class ComparedMenu:
+    """The literals the C++ compares one enum's value against."""
+
+    values: frozenset[str]
+    #: Some read's function fails on any other value, so ``values`` is the whole menu.
+    closed: bool
+    #: ``file:line`` of each read that compares.
+    sources: tuple[str, ...]
+    #: Where each value is first compared.
+    named_at: dict[str, str]
+
+
+def compared_menus(
+    scan: Scan, entries: Iterable, reviewed: dict, *, documents: Iterable[str],
+    placed: dict[str, set[tuple[str, ...]]] | None = None,
+) -> dict[str, ComparedMenu]:
+    """The menu the C++ implies for each catalogue enum that no selection
+    table backs, by the enum's ``driver_path``: the literals its reads compare
+    the value against (``DictRead.compared``). A read counts for an entry when
+    it is anchored to it (``_anchored``) or its root is placed where the entry
+    sits in one of ``documents`` (``placed`` when the caller has them)."""
+    entries = tuple(entries)
+    placed = _placements(scan, entries, documents) if placed is None else placed
+    by_path = reviewed.get("runtime_selection", {}).get("by_path", {})
+    menus: dict[str, ComparedMenu] = {}
+    for entry in entries:
+        if entry.value_kind != "enum" or not entry.enum_values or entry.driver_path in by_path:
+            continue
+        path, full = tuple(slot_key(entry.driver_path).split(".")), tuple(entry.driver_path.split("."))
+        reads = [
+            read for read in scan.reads
+            if read.compared and read.value_read and read.key == path[-1]
+            and _path_matches(read.scope + (read.key,), path)
+            and (_anchored(read, path, entry) or _placed_at(read, full, placed))
+        ]
+        if reads:
+            named_at: dict[str, str] = {}
+            for read in sorted(reads, key=lambda read: (read.file, read.line)):
+                for value in read.compared:
+                    named_at.setdefault(value, f"{read.file}:{read.line}")
+            menus[entry.driver_path] = ComparedMenu(
+                values=frozenset(named_at), closed=any(read.closed for read in reads),
+                sources=tuple(sorted({f"{read.file}:{read.line}" for read in reads})), named_at=named_at,
+            )
+    return menus
+
+
+def _placed_at(read: DictRead, full: tuple[str, ...], placed: dict[str, set[tuple[str, ...]]]) -> bool:
+    route = read.scope + (read.key,)
+    return any(
+        len(place) + len(route) == len(full) and all(_segment_matches(*pair) for pair in zip(place + route, full))
+        for place in placed.get(read.root, ())
+    )
 
 
 def built_when(reviewed: dict, scan: Scan) -> dict[str, frozenset[str]]:

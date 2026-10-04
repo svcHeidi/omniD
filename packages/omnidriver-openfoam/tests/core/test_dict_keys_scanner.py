@@ -212,6 +212,223 @@ READ_TRANSMURAL_CONVENTION = '''inline TransmuralConvention readTransmuralConven
 '''
 
 
+# cardiacFOAM (feat/heart-in-bath) src/electroModels/electroDomains/extracellularPotentialDomain/
+# extracellularPotentialDomain.C: the constructor, to the check of the interpolation scheme.
+EXTRACELLULAR_CONSTRUCTOR = '''extracellularPotentialDomain::extracellularPotentialDomain
+(
+    const fvMesh& baseMesh,
+    myocardiumDomainInterface& heartDomain,
+    const dictionary& dict
+)
+:
+    baseMesh_(baseMesh),
+    heartDomain_(heartDomain),
+    sigmaTotalPtr_(),
+    sigmaIglobalPtr_(),
+    sigmaExtracellularfPtr_(),
+    interfaceConductivityInterpolation_
+    (
+        dict.lookupOrDefault<word>
+        (
+            "interfaceConductivityInterpolation",
+            "distanceWeightedHarmonic"
+        )
+    ),
+    phiEPtr_(),
+    VmGlobalPtr_(),
+    heartCellToBaseCell_(),
+    phiEReferencePoint_
+    (
+        dict.found("phiERefPoint")
+      ? dict.get<point>("phiERefPoint")
+      : point::zero
+    ),
+    phiEReferenceValue_(dict.lookupOrDefault<scalar>("phiEReferenceValue", 0.0)),
+    hasPhiEReferencePoint_(dict.found("phiERefPoint")),
+    bathCellZoneNames_(dict.lookup("bathCellZones")),
+    bathConductivityFieldName_
+    (
+        dict.lookupOrDefault<word>
+        (
+            "bathConductivityField",
+            "bodyAndOrgansConductivity"
+        )
+    ),
+    surfaceCurrentPatchNames_(),
+    surfaceCurrentPatchValues_(),
+    hasDirichletPatch_(false),
+    nNonOrthogonalCorrectors_
+    (
+        resolveNonOrthogonalCorrectors(baseMesh)
+    ),
+    sealedHeartBoundary_
+    (
+        dict.parent().get<Switch>("sealedHeartBoundary")
+    )
+{
+    if
+    (
+        interfaceConductivityInterpolation_ != "unweightedHarmonic"
+     && interfaceConductivityInterpolation_ != "distanceWeightedHarmonic"
+     && interfaceConductivityInterpolation_ != "conormalHarmonic"
+    )
+    {
+        FatalErrorInFunction
+            << "Unknown interfaceConductivityInterpolation '"
+            << interfaceConductivityInterpolation_ << "'. Valid values are "
+            << "unweightedHarmonic, distanceWeightedHarmonic and "
+            << "conormalHarmonic."
+            << exit(FatalError);
+    }
+}
+'''
+
+# cardiacFOAM src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C: configureRegionHeterogeneity.
+CONFIGURE_REGION_HETEROGENEITY = '''void Foam::ionicHeterogeneityOrchestrator::configureRegionHeterogeneity
+(
+    const ionicModel& model,
+    const scalarField& transmuralDistance,
+    const dictionary& heterogeneityDict,
+    PtrList<scalarField>& heterogeneousConstants,
+    PtrList<scalarField>* heterogeneousInitialStates
+)
+{
+    const auto* statesPtr = model.ioStatesPtr();
+
+    if (statesPtr && transmuralDistance.size() != statesPtr->size())
+    {
+        FatalErrorInFunction
+            << "Transmural distance field has " << transmuralDistance.size()
+            << " values, but " << model.type() << " was configured with "
+            << statesPtr->size() << " integration points."
+            << exit(FatalError);
+    }
+
+    if (!heterogeneityDict.found("mode"))
+    {
+        FatalErrorInFunction
+            << "ionicHeterogeneity for ionic model " << model.type()
+            << " has no 'mode' entry. 'mode' is required: namedRegions or "
+            << "cellZoneRegions."
+            << exit(FatalError);
+    }
+
+    const word mode(heterogeneityDict.lookup("mode"));
+
+    if (mode == "namedRegions")
+    {
+        configureNamedRegionHeterogeneity
+        (
+            model, transmuralDistance, heterogeneityDict, heterogeneousConstants,
+            heterogeneousInitialStates
+        );
+        return;
+    }
+
+    if (mode == "cellZoneRegions")
+    {
+        configureCellZoneRegionHeterogeneity
+        (
+            model, transmuralDistance, heterogeneityDict, heterogeneousConstants,
+            heterogeneousInitialStates
+        );
+        return;
+    }
+
+    FatalErrorInFunction
+        << "Unsupported " << model.type() << " ionicHeterogeneity mode '"
+        << mode << "'. Supported modes: namedRegions, cellZoneRegions."
+        << exit(FatalError);
+}
+'''
+
+# cardiacFOAM src/ionicModels/ionicModel/ionicHeterogeneityOrchestrator.C:
+# configureNamedRegionHeterogeneity, to the check of `smoothing`.
+CONFIGURE_NAMED_REGIONS = '''void Foam::ionicHeterogeneityOrchestrator::configureNamedRegionHeterogeneity
+(
+    const ionicModel& model,
+    const scalarField& fieldValues,
+    const dictionary& heterogeneityDict,
+    PtrList<scalarField>& heterogeneousConstants,
+    PtrList<scalarField>* heterogeneousInitialStates
+)
+{
+    if (!heterogeneityDict.found("transitionMode"))
+    {
+        FatalErrorInFunction
+            << "ionicHeterogeneity mode namedRegions requires a "
+            << "'transitionMode' entry for ionic model " << model.type()
+            << ". Supported: blend, hard."
+            << exit(FatalError);
+    }
+
+    const word transitionMode(heterogeneityDict.lookup("transitionMode"));
+
+    if (transitionMode != "blend" && transitionMode != "hard")
+    {
+        FatalErrorInFunction
+            << "Unsupported ionicHeterogeneity transitionMode '"
+            << transitionMode << "' for mode namedRegions. Supported: "
+            << "blend, hard."
+            << exit(FatalError);
+    }
+
+    word smoothing;
+    scalar transitionWidth = 0.0;
+
+    if (transitionMode == "blend")
+    {
+        if (!heterogeneityDict.found("transitionWidth"))
+        {
+            FatalErrorInFunction
+                << "ionicHeterogeneity mode namedRegions with "
+                << "transitionMode blend requires a 'transitionWidth' "
+                << "entry for ionic model " << model.type() << "."
+                << exit(FatalError);
+        }
+
+        if (!heterogeneityDict.found("smoothing"))
+        {
+            FatalErrorInFunction
+                << "ionicHeterogeneity mode namedRegions with "
+                << "transitionMode blend requires a 'smoothing' entry "
+                << "for ionic model " << model.type() << "."
+                << exit(FatalError);
+        }
+
+        transitionWidth = heterogeneityDict.get<scalar>("transitionWidth");
+        smoothing = word(heterogeneityDict.lookup("smoothing"));
+
+        if (smoothing != "smoothstep")
+        {
+            FatalErrorInFunction
+                << "Unsupported ionicHeterogeneity smoothing '" << smoothing
+                << "' for mode namedRegions. Supported: smoothstep."
+                << exit(FatalError);
+        }
+    }
+}
+'''
+
+# cardiacCore src/coordinatesConvention/coordinatesConvention.H: readCoordinateSystem.
+READ_COORDINATE_SYSTEM = '''inline CoordinateSystem readCoordinateSystem
+(
+    const dictionary& conventionDict
+)
+{
+    const word cs = conventionDict.get<word>("coordinateSystem");
+    if (cs == "uvc") return CoordinateSystem::uvc;
+    if (cs == "cobiveco") return CoordinateSystem::cobiveco;
+
+    FatalErrorInFunction
+        << "coordinateSystem must be 'uvc' or 'cobiveco'; got " << cs
+        << exit(FatalError);
+
+    return CoordinateSystem::uvc;
+}
+'''
+
+
 def _tree(tmp_path: Path, **files: str) -> Path:
     root = tmp_path / "src"
     for name, text in files.items():
@@ -439,3 +656,89 @@ def test_a_value_is_checked_against_the_kind_the_cxx_reads_not_the_one_the_catal
     assert validate("system/setPurkinjeSlabDict", ("thickness",), 0.2) == ("scalar", True)
     with pytest.raises(ValueError, match="value_kind .scalar., which the supplied C\\+\\+ reads it as .the catalogue says .word."):
         validate("system/setPurkinjeSlabDict", ("thickness",), "thick")
+
+
+def test_a_word_read_into_a_member_is_compared_in_its_constructor_body(tmp_path):
+    scan = scan_source(_tree(tmp_path, **{"extracellularPotentialDomain.C": EXTRACELLULAR_CONSTRUCTOR}))
+    scheme = _read(scan, "interfaceConductivityInterpolation")
+    assert scheme.compared == ("conormalHarmonic", "distanceWeightedHarmonic", "unweightedHarmonic")
+    assert scheme.closed
+    assert _read(scan, "bathConductivityField").compared == ()
+
+
+def test_a_local_compared_by_sequential_ifs_before_an_error_is_a_closed_menu(tmp_path):
+    scan = scan_source(_tree(tmp_path, **{"ionicHeterogeneityOrchestrator.C": CONFIGURE_REGION_HETEROGENEITY}))
+    mode = _read(scan, "mode", "lookup")
+    assert (mode.compared, mode.closed) == (("cellZoneRegions", "namedRegions"), True)
+    scan = scan_source(_tree(tmp_path, **{"coordinatesConvention.H": READ_COORDINATE_SYSTEM}))
+    system = _read(scan, "coordinateSystem")
+    assert (system.compared, system.closed) == (("cobiveco", "uvc"), True)
+
+
+def test_a_check_nested_in_another_branch_names_a_value_without_closing_the_menu(tmp_path):
+    scan = scan_source(_tree(tmp_path, **{"ionicHeterogeneityOrchestrator.C": CONFIGURE_NAMED_REGIONS}))
+    mode = _read(scan, "transitionMode", "lookup")
+    assert (mode.compared, mode.closed) == (("blend", "hard"), True)
+    smoothing = _read(scan, "smoothing", "lookup")
+    assert (smoothing.compared, smoothing.closed) == (("smoothstep",), False)
+
+
+def test_a_key_the_function_does_not_compare_has_no_menu(tmp_path):
+    scan = scan_source(_tree(tmp_path, **{"setPurkinjeSlab.C": SET_PURKINJE_SLAB}))
+    assert all(read.compared == () and not read.closed for read in scan.reads)
+
+
+_SCHEME = "$ELECTRO_MODEL_COEFFS.bathPotentialDomain.interfaceConductivityInterpolation"
+
+
+def _scheme_report(tmp_path, listed, **fields):
+    entry = _entry(_SCHEME, "enum", enum_values=listed, **fields)
+    return _report(tmp_path, (entry,), **{"extracellularPotentialDomain.C": EXTRACELLULAR_CONSTRUCTOR})
+
+
+def test_a_value_the_cxx_compares_and_the_menu_lacks_is_uncatalogued_not_refuted(tmp_path):
+    report = _scheme_report(tmp_path, ("unweightedHarmonic", "distanceWeightedHarmonic"), source_refs=(
+        "src/extracellularPotentialDomain.C",
+    ))
+    assert report["disagreements"] == []
+    (note,) = [item for item in report["uncatalogued"] if item["kind"] == "compared_value"]
+    assert (note["path"], note["value"], note["source"]) == (_SCHEME, "conormalHarmonic", "extracellularPotentialDomain.C:15")
+    assert report["selector_values"][_SCHEME] == ["conormalHarmonic", "distanceWeightedHarmonic", "unweightedHarmonic"]
+
+
+def test_a_menu_value_a_closed_chain_never_compares_is_a_disagreement(tmp_path):
+    cited = ("src/extracellularPotentialDomain.C",)
+    report = _scheme_report(tmp_path, (
+        "unweightedHarmonic", "distanceWeightedHarmonic", "conormalHarmonic", "gone",
+    ), source_refs=cited)
+    assert report["disagreements"] == [
+        f"{_SCHEME}: menu lists ['gone'], which the C++ never compares the value against; it fails on any "
+        "value but ['conormalHarmonic', 'distanceWeightedHarmonic', 'unweightedHarmonic'] "
+        "(extracellularPotentialDomain.C:15)",
+    ]
+    assert [item for item in report["uncatalogued"] if item["kind"] == "compared_value"] == []
+
+
+def test_a_menu_the_function_leaves_open_is_never_refuted(tmp_path):
+    entry = _entry("$HETEROGENEITY.smoothing", "enum", enum_values=("smoothstep", "linear"), source_refs=(
+        "src/ionicHeterogeneityOrchestrator.C",
+    ))
+    report = _report(tmp_path, (entry,), **{"ionicHeterogeneityOrchestrator.C": CONFIGURE_NAMED_REGIONS})
+    assert report["disagreements"] == []
+
+
+def test_an_enum_a_selection_table_backs_takes_its_menu_from_the_table(tmp_path):
+    reviewed = {"runtime_selection": {"by_path": {_SCHEME: {"base": "scheme", "mode": "subset"}}}}
+    entry = _entry(_SCHEME, "enum", enum_values=("unweightedHarmonic",), source_refs=("src/extracellularPotentialDomain.C",))
+    report = _report(tmp_path, (entry,), reviewed, **{"extracellularPotentialDomain.C": EXTRACELLULAR_CONSTRUCTOR})
+    assert [item for item in report["uncatalogued"] if item["kind"] == "compared_value"] == []
+
+
+def test_a_read_is_placed_by_a_sibling_key_when_the_entry_cites_no_file(tmp_path):
+    cited = ("src/extracellularPotentialDomain.C",)
+    entries = (
+        _entry(_SCHEME, "enum", enum_values=("unweightedHarmonic", "distanceWeightedHarmonic")),
+        _entry("$ELECTRO_MODEL_COEFFS.bathPotentialDomain.phiEReferenceValue", source_refs=cited),
+    )
+    report = _report(tmp_path, entries, **{"extracellularPotentialDomain.C": EXTRACELLULAR_CONSTRUCTOR})
+    assert [item["value"] for item in report["uncatalogued"] if item["kind"] == "compared_value"] == ["conormalHarmonic"]

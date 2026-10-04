@@ -67,7 +67,7 @@ _UNCATALOGUED_HOW = (
     "then add the entry to the plugin's catalogue; `selected_as` names the selection-table "
     "class that reads it, and `required` is true when the read has no default and is not "
     "tested first. A `menu_value` or `selection_table` item names a model to add to an enum's "
-    "enum_values."
+    "enum_values, and a `compared_value` item a literal the C++ compares the enum's value against."
 )
 _UNREAD_HOW = (
     "Each key is catalogued, and the supplied C++ no longer reads it, so setting it has no "

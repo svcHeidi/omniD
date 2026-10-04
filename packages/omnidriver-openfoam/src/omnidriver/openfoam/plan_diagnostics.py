@@ -99,6 +99,11 @@ def _owned_dict_relpaths(case_root: Path, driver_context: Any) -> tuple[str, ...
 
 def _describe_uncatalogued(item: dict) -> str:
     """One scanned read the catalogue lacks, as a sentence an agent can act on."""
+    if item.get("kind") == "compared_value":
+        return (
+            f"the C++ compares {item['path']!r} against {item['value']!r} at {item['source']}, which the "
+            "catalogue's menu lacks; the value is accepted"
+        )
     if item.get("kind") != "key":
         return f"the C++ reads {json.dumps(item, sort_keys=True)}, which the catalogue lacks"
     how = "with no default, so it is required" if item["required"] else (

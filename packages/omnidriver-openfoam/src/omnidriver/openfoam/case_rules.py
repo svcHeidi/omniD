@@ -151,15 +151,20 @@ def match_dynamic_entry(key: str, entries: Iterable[Any]) -> tuple[Any, dict[str
 
 def _scan_facts(mapping: Any, entries: tuple[Any, ...], document: str):
     """What the supplied C++ adds to the catalogue's rules; nothing when the source is not supplied."""
-    from .dict_keys_scanner import built_when, registered_menus, required_reads, supplied_scan, unread_entries
+    from .dict_keys_scanner import (
+        built_when, compared_menus, registered_menus, required_reads, supplied_scan, unread_entries,
+    )
 
     scan = supplied_scan(mapping)
     if scan is None:
-        return {}, {}, {}, set()
+        return {}, {}, {}, {}, set()
     reviewed = json.loads(Path(mapping.allowlist_path).read_text())
+    name = document.rsplit("/", 1)[-1]
+    compared = compared_menus(scan, entries, reviewed, documents=[name])
     return (
-        required_reads(scan, entries, document=document.rsplit("/", 1)[-1]),
+        required_reads(scan, entries, document=name),
         registered_menus(reviewed, scan, entries),
+        {path: menu.values for path, menu in compared.items()},
         built_when(reviewed, scan),
         {entry.driver_path for entry in unread_entries(scan, entries, reviewed)},
     )
@@ -250,9 +255,9 @@ def rule_diagnostics(
     outside its menu and, when the plugin's ``mapping`` supplies its C++
     source, each key that C++ requires and ``context`` lacks. A menu is the names
     the C++ registers for the enum when its source is supplied and maps it to a
-    selection table, the catalogue's otherwise."""
+    selection table; otherwise the catalogue's, with the literals the C++ compares the value against."""
     entries = tuple(entries)
-    requirements, registered, built, unread = _scan_facts(mapping, entries, document)
+    requirements, registered, compared, built, unread = _scan_facts(mapping, entries, document)
     templates = {
         key[: match.end()]
         for entry in entries if entry.dynamic_path
@@ -295,10 +300,14 @@ def rule_diagnostics(
                 violated(concrete, f"{concrete} is required{condition}.")
             if not set_here:
                 continue
-            menu = registered.get(entry.driver_path) or set(entry.enum_values)
+            named = compared.get(entry.driver_path, frozenset())
+            menu = registered.get(entry.driver_path) or set(entry.enum_values) | named
             value = _word(context.get(instance.resolve(entry.driver_path)))
             if entry.value_kind == "enum" and menu and _present(value) and value not in menu:
-                source = "the supplied C++ registers" if entry.driver_path in registered else "the catalogue lists"
+                source = (
+                    "the supplied C++ registers" if entry.driver_path in registered
+                    else "the catalogue lists or the supplied C++ compares" if named else "the catalogue lists"
+                )
                 violated(concrete, f"{concrete} is {value!r}, not one of the values {source}: {sorted(menu)}.")
             for sibling in entry.mutually_exclusive_with:
                 if instance.is_set(sibling):
