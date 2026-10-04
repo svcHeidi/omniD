@@ -271,6 +271,20 @@ def _explained_by_the_logs(
     return tuple({**asdict(item), "field": item.field or step_id} for item in found)
 
 
+def _solver_log_signatures(driver_context: Any, cwd: Path) -> dict[Path, tuple[int, int, int]]:
+    """The logs the stack says its solver writes in ``cwd``, each as (``st_mtime_ns``, ``st_size``, ``st_ino``)."""
+    if driver_context is None:
+        return {}
+    signatures = {}
+    for log in driver_context.stack.call("get_step_log_files", cwd):
+        try:
+            stat = log.stat()
+        except OSError:
+            continue
+        signatures[log] = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+    return signatures
+
+
 def redact_step_logs(paths: Any, patterns: Any) -> None:
     """Replace every match of each pattern, whole, with ``[REDACTED]``.
 
@@ -413,7 +427,7 @@ def run_workflow_step(
 
     exit_code: int | None = None
     diagnostics: tuple[dict[str, Any], ...] = ()
-    started = time.time()
+    solver_logs_before = _solver_log_signatures(driver_context, resolved_cwd)
     try:
         with stdout_log.open("w") as stdout_handle, stderr_log.open("w") as stderr_handle:
             with spawning():
@@ -485,9 +499,10 @@ def run_workflow_step(
         },)
 
     if exit_code is not None and not diagnostics and driver_context is not None:
+        after = _solver_log_signatures(driver_context, resolved_cwd)
         solver_logs = tuple(
-            log for log in driver_context.stack.call("get_step_log_files", resolved_cwd)
-            if log.is_file() and log.stat().st_mtime >= started
+            log for log, signature in sorted(after.items(), key=lambda item: item[1][0])
+            if solver_logs_before.get(log) != signature
         )
         captured = (stdout_log, stderr_log) if exit_code != 0 else ()
         if captured or solver_logs:

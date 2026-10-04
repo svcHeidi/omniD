@@ -15,8 +15,8 @@ from omnidriver.cli import main
 from cli_refusal import refusal
 from omnidriver.core import case_transaction
 from plugins.toy import (
-    EXPLAINING_PLUGIN, FAILS_UNTIL_SEVEN_CELLS_PLUGIN, RULE_CHECKING_PLUGIN, SOLVER_LOG_EXPLAINING_PLUGIN,
-    STALE_SOLVER_LOG_PLUGIN, TWO_STEP_PLUGIN, write_toy_native_case,
+    EXPLAINING_PLUGIN, FAILS_UNTIL_SEVEN_CELLS_PLUGIN, ORDERED_SOLVER_LOGS_PLUGIN, RULE_CHECKING_PLUGIN,
+    SOLVER_LOG_EXPLAINING_PLUGIN, STALE_SOLVER_LOG_PLUGIN, TWO_STEP_PLUGIN, write_toy_native_case,
 )
 
 PLUGIN = "plugins.toy:ToyStack"
@@ -246,6 +246,20 @@ def test_a_solver_log_the_step_did_not_write_explains_nothing(tmp_path):
     os.utime(case.root / "solver.log", (1, 1))
     code, payload = case.step()
     assert code == 0 and payload["status"] == "ok", payload
+
+
+def test_solver_logs_are_read_in_the_order_they_were_written(tmp_path):
+    case = _Case(tmp_path, ORDERED_SOLVER_LOGS_PLUGIN)
+    code, payload = case.step()
+    (explained,) = payload["failure_context"]["diagnostics"]
+    assert explained["message"] == "first second"
+
+
+def test_a_solver_log_a_step_rewrote_is_read_though_it_existed_before(tmp_path):
+    case = _Case(tmp_path, SOLVER_LOG_EXPLAINING_PLUGIN)
+    (case.root / "solver.log").write_text("stale\n")
+    code, payload = case.step()
+    assert code == 1 and payload["failure_context"]["diagnostics"][0]["code"] == "widget_missing"
 
 
 def test_a_run_document_names_the_stack_it_was_planned_for(case, monkeypatch):

@@ -481,6 +481,20 @@ class StaleSolverLogPlugin(SolverLogExplainingPlugin):
     RECORDS = {"toyTutorial": _toy_record(_solve(("touch", "solved.marker")))}
 
 
+class OrderedSolverLogsPlugin(SolverLogExplainingPlugin):
+    """Its solve step writes b.log, then a.log, and the stack says what it read, in order."""
+
+    RECORDS = {"toyTutorial": _toy_record(
+        _solve(("sh", "-c", "echo first > b.log; sleep 0.05; echo second > a.log; touch solved.marker")),
+    )}
+
+    def get_step_log_files(self, cwd):
+        return tuple(sorted(Path(cwd).glob("*.log")))
+
+    def explain_step_failure(self, log_text, case_root, *, driver_context):
+        return (diagnostic("error", "read_logs", " ".join(log_text.split())),)
+
+
 def _catalogue_matches(env):
     return True, "3 models match"
 
@@ -1024,6 +1038,7 @@ RULE_CHECKING_PLUGIN = _selector("RuleCheckingPlugin")
 EXPLAINING_PLUGIN = _selector("ExplainingFailurePlugin")
 SOLVER_LOG_EXPLAINING_PLUGIN = _selector("SolverLogExplainingPlugin")
 STALE_SOLVER_LOG_PLUGIN = _selector("StaleSolverLogPlugin")
+ORDERED_SOLVER_LOGS_PLUGIN = _selector("OrderedSolverLogsPlugin")
 FAILS_UNTIL_SEVEN_CELLS_PLUGIN = _selector("FailsUntilSevenCellsPlugin")
 TWO_STEP_PLUGIN = _selector("TwoStepPlugin")
 SLEEPING_PLUGIN = _selector("SleepingPlugin")
