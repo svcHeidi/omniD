@@ -954,9 +954,8 @@ The mesh is a generic slab sized by `dx`, which must divide it evenly
 refuses `dx`. An existing `system/blockMeshDict` is always kept. A short `endTime`
 still writes its last time step. The case holds only what the catalogue
 places: keys the built solver requires that the catalogue lacks are yours to
-`--set` (for example `$ELECTRO_MODEL_COEFFS.sealedHeartBoundary` and
-`sealedWallTrace` of a bidomain case), and a binary built from a different
-source than the scanned tree may require more.
+`--set` (the plan names each one), and a binary built from a different source
+than the scanned tree may require more.
 
 The module is `omnidriver.cardiacfoam.case_builder`, and its OpenFOAM
 primitives are `omnidriver.openfoam.case_builder`. A solver package offers a

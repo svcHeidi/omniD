@@ -67,6 +67,19 @@ is about 28,300 non-blank lines and tests about 28,800, down from 48,200 and
 | `origin/feat/heart-in-bath` (on top of insulated-wall) | pre-resolved in **`omnid/heart-in-bath`** (`dadb2fe`). Its `bathBidomain/insulatedWall` uses `interfaceConductivityInterpolation conormalHarmonic`, a value chosen by an `if` chain. The scan reads the literals the chain compares as the menu, so the case plans `ok` and `conormalHarmonic` is an `uncatalogued` note |
 | `origin/codex/regression-and-restart-fixes` | merges cleanly |
 
+**Provisional work.** Everything only on a feature branch is provisional:
+the insulated wall, the heart in a bath, the conormal interpolation and their
+keys and cases. omnidriver treats it that way:
+- it adds no catalogue entry and no record for it;
+- nothing on omniD `main` depends on it;
+- scanning such a branch shows its keys only as `uncatalogued` notes.
+
+`omnid/insulated-wall` and `omnid/heart-in-bath` are provisional too. When
+the work lands on native `main`, omnidriver's change is small: catalogue
+entries for its keys, and a record for any new tutorial a study needs. A few
+omniD tests use verbatim snippets of that C++ as frozen fixtures for the
+generic scanner; they test the mechanism, not the feature.
+
 What the owner's feature branches add, as omnidriver will see it:
 
 - **Two required keys.** `sealedHeartBoundary` (`Switch`, read in
