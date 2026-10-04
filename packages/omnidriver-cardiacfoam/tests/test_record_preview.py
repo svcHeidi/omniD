@@ -147,3 +147,13 @@ def test_apply_edits_the_staged_cases_own_dictionaries_through_the_real_renderer
     assert {patch["status"] for patch in applied} == {"changed"}
     assert read_foam_entry(case_root / "system" / "controlDict", "endTime") == "0.05"
     assert read_foam_entry(case_root / "constant" / "electroProperties", "tissue", scope=["singleCellSolverCoeffs"]) == "epicardialCells"
+
+
+def test_single_cell_refuses_a_parallel_run_by_name():
+    from omnidriver.cardiacfoam.records.single_cell import RECORD as SINGLE_CELL_RECORD
+
+    with pytest.raises(TutorialRecordError, match="'singleCell' is serial only"):
+        record_execution.preview_record_case(
+            SINGLE_CELL_RECORD, cases_root=TUTORIALS, study_by_source={"base": {"parallel": True}},
+            driver_context=_stack(),
+        )

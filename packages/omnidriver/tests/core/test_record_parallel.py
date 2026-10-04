@@ -1,6 +1,7 @@
 """A record runs parallel through its solver layer."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import subprocess
@@ -104,6 +105,14 @@ def test_a_stack_without_a_parallel_form_is_refused_by_name():
         )
     message = str(excinfo.value)
     assert "'threeSteps'" in message and "get_parallel_steps" in message and "serial" in message
+
+
+def test_a_serial_only_record_is_refused_by_name_even_where_the_stack_has_a_parallel_form():
+    record = dataclasses.replace(THREE_STEPS, serial_only=True)
+    with pytest.raises(TutorialRecordError, match="serial only") as excinfo:
+        _parallel_workflow_dag(record, _serial(record), request=True, driver_context=_toy_context(),
+                               read_value=_reader({}), allocation=None)
+    assert "'threeSteps'" in str(excinfo.value)
 
 
 def test_a_record_with_no_declared_solve_step_is_refused_by_name():

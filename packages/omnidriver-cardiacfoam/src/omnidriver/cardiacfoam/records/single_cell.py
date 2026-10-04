@@ -31,4 +31,5 @@ RECORD = TutorialRecord(
         block_mesh_step((_BLOCK_MESH_DICT_DOCUMENT, "system/controlDict")),
         solve_step(("postProcessing/*.txt",)),
     ),
+    serial_only=True,
 )

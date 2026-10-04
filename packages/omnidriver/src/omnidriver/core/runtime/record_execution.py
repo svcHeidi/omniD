@@ -641,6 +641,12 @@ def _parallel_workflow_dag(
 ) -> dict[str, Any]:
     """Replace each solve step with the stack's ``get_parallel_steps`` form; core checks only that ids and ``produces`` hold."""
     stack = driver_context.stack
+    if record.serial_only:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r} is serial only: the run asks for "
+            f"{PARALLEL_STUDY_NAME!r} = {request!r}, but its solve has nothing to split across processes; "
+            f"omit {PARALLEL_STUDY_NAME!r}, or set it false, to run serial"
+        )
     if not stack.implements("get_parallel_steps"):
         raise TutorialRecordError(
             f"tutorial record {record.name!r}: the run asks for "
