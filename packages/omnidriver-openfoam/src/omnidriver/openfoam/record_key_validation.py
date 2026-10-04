@@ -5,6 +5,7 @@ A plugin supplies how a key path finds its catalogue entry (:class:`CataloguedDo
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -136,6 +137,23 @@ def scanned_key(
     return kind, True
 
 
+#: An OpenFOAM value that is computed when the dictionary is read: ``$name``, ``#eval``, ``#calc``.
+_DIRECTIVE = re.compile(r"^\s*\$|#(?:eval|calc)\b")
+
+
+def _numeric_spelling(kind: str, value: Any) -> "tuple[Any, bool]":
+    """``(value, computed)`` for a number a study spells as text: a numeric string is read as the number,
+    and a directive is ``computed``, so nothing can be checked of it."""
+    if kind not in ("scalar", "integer") or not isinstance(value, str):
+        return value, False
+    if _DIRECTIVE.search(value):
+        return value, True
+    try:
+        return (int(value) if kind == "integer" else float(value)), False
+    except ValueError:
+        return value, False
+
+
 def check_binding(entry: Any, placeholder: str, bound_value: str) -> None:
     """Refuse a dynamic-path binding the entry's own ``allowed_bindings``
     does not sanction: an undeclared placeholder, an open domain whose value
@@ -230,6 +248,9 @@ def make_validator(
             kind = (
                 scan is not None and cxx_value_kind(views[scan.digest][document.rsplit("/", 1)[-1]].scan, entry)
             ) or entry.value_kind
+            value, computed = _numeric_spelling(kind, value)
+            if computed:
+                return kind, True
             reasons = validate_value_shape(kind, value)
             if not reasons and (bounded := bound_reasons(entry, value)):
                 raise ValueError(f"{document}:{dotted} = {value!r} is outside the catalogue's bounds: {'; '.join(bounded)}")

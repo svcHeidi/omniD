@@ -170,11 +170,20 @@ def test_a_catalogued_control_dict_key_is_validated_by_kind_and_bounds():
     assert record_key_validator("system/controlDict", ("deltaT",), 1e-5) == ("scalar", True)
     with pytest.raises(ValueError, match="must be a number"):
         record_key_validator("system/controlDict", ("deltaT",), "abc")
-    with pytest.raises(ValueError, match="must be at least 0"):
-        record_key_validator("system/controlDict", ("endTime",), -5)
     with pytest.raises(ValueError, match="must be more than 0"):
         record_key_validator("system/controlDict", ("deltaT",), 0)
-    assert record_key_validator("system/controlDict", ("endTime",), 0) == ("scalar", True)
+    assert record_key_validator("system/controlDict", ("endTime",), 0.2) == ("scalar", True)
+
+
+def test_a_number_spelled_as_text_is_read_and_a_directive_is_left_to_openfoam():
+    assert record_key_validator("system/controlDict", ("deltaT",), "1e-5") == ("scalar", True)
+    with pytest.raises(ValueError, match="must be more than 0"):
+        record_key_validator("system/controlDict", ("deltaT",), "0")
+    for computed in ("$dt", '#eval{ 2*$dt }', '#calc "2*$dt"'):
+        assert record_key_validator("system/controlDict", ("deltaT",), computed) == ("scalar", True)
+    assert record_key_validator("constant/prePacingProperties", ("maxBeats",), "5") == ("integer", True)
+    with pytest.raises(ValueError, match="must be an integer"):
+        record_key_validator("constant/prePacingProperties", ("maxBeats",), "5.5")
 
 
 def test_a_control_dict_key_the_catalogue_lacks_is_written_as_asked():

@@ -1147,3 +1147,9 @@ def test_the_resolved_control_dict_is_judged_beside_electro_properties(tmp_path)
         "startTime is required when startFrom=startTime.", "endTime is required when stopAt=endTime.",
         "one of writeFrequency, writeInterval is required.",
     }
+
+
+def test_an_empty_external_stimulus_block_still_needs_its_corners(tmp_path):
+    assert "one of externalStimulus.stimulusLocationMin, externalStimulus.stimulusLocationMinList is required." in (
+        _external_stimulus_case(tmp_path, "")
+    )

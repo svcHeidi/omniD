@@ -540,6 +540,7 @@ class TestBuildCase(unittest.TestCase):
         for options, message in (
             ({"delta_t": 0}, "deltaT is 0, outside the catalogue's bounds: must be more than 0."),
             ({"end_time": -1}, "endTime is -1, not after the startTime 0 the built case starts from."),
+            ({"end_time": 0}, "endTime is 0, not after the startTime 0 the built case starts from."),
         ):
             with tempfile.TemporaryDirectory() as temp:
                 case_dir = Path(temp) / "case"

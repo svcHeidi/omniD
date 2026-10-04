@@ -482,29 +482,45 @@ eikonalSolver1D::eikonalSolver1D(const fvMesh&, const dictionary& solverCoeffs)
 }
 '''
 
-# cardiacFOAM src/electroModels/core/verificationModels/electroVerificationModel.C and
-# src/electroModels/ecgModels/eikonalECG/eikonalECG.C: a dimensioned constructor made of constants.
-DIMENSIONED_OF_CONSTANTS = '''void electroVerificationModel::allocateFields(const fvMesh& mesh)
+# cardiacFOAM src/electroModels/core/verificationModels/electroVerificationModel.C: allocateFields, whose
+# dimensioned constructor is made of constants.
+DIMENSIONED_OF_CONSTANTS = r'''void electroVerificationModel::allocateFields
+(
+    const wordList& fieldNames,
+    const fvMesh& mesh,
+    const word& prefix,
+    PtrList<volScalarField>& fields
+)
 {
-    volScalarField field
-    (
-        mesh,
-        dimensioned<scalar>("zero", dimless, scalar(0)),
-        "zeroGradient"
-    );
-    volVectorField other
-    (
-        mesh,
-        dimensionedVector("zero", dimVoltage/dimLength, Zero)
-    );
-    const volScalarField sum = field + dimensionedScalar("smallG", dimTime, SMALL);
+    fields.setSize(fieldNames.size());
+    forAll(fieldNames, i)
+    {
+        fields.set
+        (
+            i,
+            new volScalarField
+            (
+                IOobject
+                (
+                    prefix + fieldNames[i],
+                    mesh.time().timeName(),
+                    mesh,
+                    IOobject::NO_READ,
+                    IOobject::NO_WRITE
+                ),
+                mesh,
+                dimensioned<scalar>("zero", dimless, scalar(0)),
+                "zeroGradient"
+            )
+        );
+    }
 }
 '''
 
 # cardiacFOAM src/electroModels/core: the class heads of electroModel.H and
-# electrophysiologyModel/electrophysiologyModel.H, and electrophysiologyModel.C's constructor with the include that
-# makes the summary printer part of it.
-ELECTROPHYSIOLOGY_MODEL = '''namespace Foam
+# electrophysiologyModel/electrophysiologyModel.H (their members left out, so the braces are closed
+# at once), and electrophysiologyModel.C's constructor, which includes the summary printer below.
+ELECTROPHYSIOLOGY_MODEL = r'''namespace Foam
 {
 
 class electroModel
@@ -519,8 +535,6 @@ class electrophysiologyModel
 :
     public electroModel
 {
-    //- Run-time selectable ionic model
-    autoPtr<ionicModel> ionicModelPtr_;
 };
 }
 
@@ -530,22 +544,127 @@ Foam::electrophysiologyModel::electrophysiologyModel
     const word& region
 )
 :
-    electroModel(readSolverType(runTime, region), runTime, region)
+    // Pass the user-selected solver type (e.g. "monodomainSolver") to the
+    // base class so it reads the correct <type>Coeffs sub-dictionary.
+    electroModel(readSolverType(runTime, region), runTime, region),
+    ionicModelPtr_(),
+    verificationModelPtr_(),
+    outFields_(),
+    postProcessFields_()
 {
+    // Assemble MyocardiumDomain (FVM kernel + ionic model + optional
+    // verification) or EikonalMyocardiumDomain. The builder reads the
+    // solver type from the active Coeffs sub-dict name.
+    electrophysicsSystemBuilder::configureMyocardiumDomain
+    (
+        domainSystem_,
+        mesh(),
+        electroProperties(),
+        outFields_,
+        wordList(),         // postProcessFieldNames (filled by verification)
+        postProcessFields_,
+        ionicModelPtr_,
+        verificationModelPtr_,
+        runTime.deltaTValue()
+    );
+
+    readRestartState();
+
+    electrophysicsSystemBuilder::configureAdvanceScheme
+    (
+        domainSystem_,
+        electroProperties()
+    );
+
+    electrophysicsSystemBuilder::configureBathPotentialDomain
+    (
+        domainSystem_,
+        mesh(),
+        electroProperties()
+    );
+
+    electrophysicsSystemBuilder::configureConductionDomains
+    (
+        domainSystem_,
+        mesh(),
+        electroProperties(),
+        runTime.deltaTValue()
+    );
+
     configureECGDomains();
 
 #   include "printElectrophysiologySummary.H"
 }
+
 '''
 
-# cardiacFOAM src/electroModels/core/electrophysiologyModel/printElectrophysiologySummary.H: the lines that
-# read and test myocardiumSolver and tissue (the closing braces join the two pieces and end the block).
-PRINT_ELECTROPHYSIOLOGY_SUMMARY = '''{
+# cardiacFOAM src/electroModels/core/electrophysiologyModel/printElectrophysiologySummary.H, whole.
+PRINT_ELECTROPHYSIOLOGY_SUMMARY = r'''/*---------------------------------------------------------------------------*\
+License
+    This file is part of cardiacFoam.
+
+    cardiacFoam is free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by the
+    Free Software Foundation, either version 3 of the License, or (at your
+    option) any later version.
+
+    cardiacFoam is distributed in the hope that it will be useful, but
+    WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
+
+Description
+    Code snippet to print a formatted summary of the electrophysiology solver
+    configuration, including myocardium, conduction networks, and ECG domains.
+
+Author
+    Simao Nieto de Castro, UCD.
+\*---------------------------------------------------------------------------*/
+
+{
     const word myoSolver(this->lookupOrDefault<word>("myocardiumSolver", "none"));
     if (myoSolver != "none" && this->found(myoSolver + "Coeffs"))
     {
         const dictionary& coeffs = this->subDict(myoSolver + "Coeffs");
 
+        const word advanceScheme(this->lookupOrDefault<word>("electrophysicsAdvanceScheme", "staggeredElectrophysicsAdvanceScheme"));
+
+        const label meshDim = this->mesh().nGeometricD();
+        string dimStr = Foam::name(meshDim) + "D";
+        if (coeffs.found("conductionNetworkDomains"))
+        {
+            dimStr += "-1D";
+        }
+
+        string solverHeader = dimStr + " solver";
+        string solverUnderline(solverHeader.size(), '-');
+
+        Info<< nl
+            << "=========================================================" << nl
+            << "         _   _                                           " << nl
+            << "        / \\_/ \\                                          " << nl
+            << "        \\     /          Cardiac Electrophysiology       " << nl
+            << "         \\   /                                           " << nl
+            << "          \\_/                                            " << nl
+            << "=========================================================" << nl
+            << "  Advance Scheme      : " << advanceScheme << nl << nl
+            << "  " << solverHeader << nl
+            << "  " << solverUnderline << nl;
+
+        // 1. Myocardium
+        const word myoIonic = coeffs.lookupOrDefault<word>("ionicModel", "none");
+        Info<< "  myocardium          : " << myoSolver << nl
+            << "    Ionic Model       : " << myoIonic << nl;
+
+        if (coeffs.found("ionicHeterogeneity"))
+        {
+            const dictionary& het = coeffs.subDict("ionicHeterogeneity");
+            const word mode = het.lookupOrDefault<word>("mode", "none");
+            Info<< "    Heterogeneity     : " << mode << nl;
+        }
         else
         {
             const word tissue = coeffs.lookupOrDefault<word>("tissue", "none");
@@ -554,6 +673,87 @@ PRINT_ELECTROPHYSIOLOGY_SUMMARY = '''{
                 Info<< "    Tissue Region     : " << tissue << nl;
             }
         }
+
+        // 2. Conduction / Purkinje
+        if (coeffs.found("conductionNetworkDomains"))
+        {
+            const dictionary& condDicts = coeffs.subDict("conductionNetworkDomains");
+            forAllConstIters(condDicts, iter)
+            {
+                if (iter().isDict())
+                {
+                    const word condName = iter().keyword();
+                    const dictionary& condDict = iter().dict();
+                    const word condSolverWrapper = condDict.lookupOrDefault<word>("conductionSystemDomain", "none");
+
+                    if (condSolverWrapper != "none" && condDict.found(condSolverWrapper + "Coeffs"))
+                    {
+                        const dictionary& condCoeffs = condDict.subDict(condSolverWrapper + "Coeffs");
+                        const word innerSolver = condCoeffs.lookupOrDefault<word>("conductionSystemSolver", condSolverWrapper);
+                        const word cIonic = condCoeffs.lookupOrDefault<word>("ionicModel", "none");
+
+                        string padCond("  " + condName);
+                        while(padCond.size() < 22) padCond += " ";
+
+                        Info<< nl << padCond.c_str() << ": " << innerSolver << nl;
+                        if (cIonic != "none")
+                        {
+                            Info<< "    Ionic Model       : " << cIonic << nl;
+                        }
+
+                        if (condCoeffs.found("ionicHeterogeneity"))
+                        {
+                            const dictionary& het = condCoeffs.subDict("ionicHeterogeneity");
+                            const word mode = het.lookupOrDefault<word>("mode", "none");
+                            Info<< "    Heterogeneity     : " << mode << nl;
+                        }
+                        else
+                        {
+                            const word cTissue = condCoeffs.lookupOrDefault<word>("tissue", "none");
+                            if (cTissue != "none")
+                            {
+                                Info<< "    Tissue Region     : " << cTissue << nl;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        string padCond("  " + condName);
+                        while(padCond.size() < 22) padCond += " ";
+                        Info<< nl << padCond.c_str() << ": " << condSolverWrapper << nl;
+                    }
+                }
+            }
+        }
+
+        // 3. ECG Domains
+        if (coeffs.found("ecgDomains"))
+        {
+            const dictionary& ecgDicts = coeffs.subDict("ecgDomains");
+            forAllConstIters(ecgDicts, iter)
+            {
+                if (iter().isDict())
+                {
+                    const word ecgName = iter().keyword();
+                    const dictionary& ecgDict = iter().dict();
+                    const word ecgSolver = ecgDict.lookupOrDefault<word>("ecgSolver", "none");
+
+                    string padEcg("  " + ecgName);
+                    while(padEcg.size() < 22) padEcg += " ";
+
+                    Info<< nl << padEcg.c_str() << ": " << ecgSolver << nl;
+
+                    if (ecgDict.found("electrodePositions"))
+                    {
+                        const dictionary& leadsDict = ecgDict.subDict("electrodePositions");
+                        wordList leads = leadsDict.toc();
+                        Info<< "    Leads             : " << leads.size() << " leads" << nl;
+                    }
+                }
+            }
+        }
+
+        Info<< "=========================================================" << nl << endl;
     }
 }
 '''
@@ -884,8 +1084,8 @@ def test_a_test_against_the_reads_own_default_in_a_function_that_accepts_any_val
     scan = scan_source(_tree(tmp_path, **{
         "electrophysiologyModel.C": ELECTROPHYSIOLOGY_MODEL, "printElectrophysiologySummary.H": PRINT_ELECTROPHYSIOLOGY_SUMMARY,
     }))
-    assert _read(scan, "myocardiumSolver").compared == ()
-    assert _read(scan, "tissue").compared == ()
+    tests = [read for read in scan.reads if read.key in ("myocardiumSolver", "conductionSystemDomain", "tissue")]
+    assert len(tests) == 4 and all(read.default == '"none"' and read.compared == () for read in tests)
 
 
 def test_a_test_against_the_default_still_names_a_value_when_the_function_fails_on_any_other(tmp_path):

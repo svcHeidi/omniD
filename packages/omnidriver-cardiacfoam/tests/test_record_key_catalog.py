@@ -55,7 +55,7 @@ def test_the_catalogued_control_dict_keys_are_listed_with_their_bounds_beside_th
     control = [e for e in _catalogue() if e["document"] == "system/controlDict"]
     delta_t = next(e for e in control if e["key"] == "deltaT")
     assert delta_t["exclusive_minimum"] == 0 and delta_t["value_kind"] == "scalar"
-    assert next(e for e in control if e["key"] == "endTime")["minimum"] == 0
+    assert "minimum" not in next(e for e in control if e["key"] == "endTime")
     assert [e for e in control if e["key"] == ANY_KEY] == [{"document": "system/controlDict", "key": ANY_KEY, "validated": False}]
 
 

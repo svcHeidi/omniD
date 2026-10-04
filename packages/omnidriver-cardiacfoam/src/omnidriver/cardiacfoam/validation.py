@@ -43,12 +43,16 @@ _VIRTUAL_PRESENCE_TRIGGERS: tuple[tuple[str, str], ...] = (
 )
 
 
-def infer_virtual_presence(ctx: dict[str, Any]) -> None:
+def infer_virtual_presence(ctx: dict[str, Any], *, empty_blocks: "frozenset[str]" = frozenset()) -> None:
     """Set, in place, the virtual keys that a leaf of `ctx` under a block
     implies, and for each ECG domain holding ``personalizedTemplates`` the
-    domain's own ``$personalizedTemplates_present``. Idempotent."""
+    domain's own ``$personalizedTemplates_present``. A block named in
+    ``empty_blocks`` (the case holds it with no leaf) counts as present. Idempotent."""
     for prefix, virtual_key in _VIRTUAL_PRESENCE_TRIGGERS:
         if virtual_key in ctx:
+            continue
+        if prefix.removesuffix(".") in empty_blocks:
+            ctx[virtual_key] = True
             continue
         for existing_key in ctx:
             if existing_key.startswith(prefix):
@@ -641,7 +645,9 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDi
     document = electro_path.relative_to(case_root).as_posix()
     entries = tuple(_ELECTRO_ENTRIES_BY_PATH.values())
     rule_context = dict(context)
-    infer_virtual_presence(rule_context)
+    # The C++ takes the stimulus boxes from externalStimulus whenever it is found, empty or not.
+    held = frozenset(name for name in ("externalStimulus",) if hasattr(parsed[f"{solver}Coeffs"].get(name), "keys"))
+    infer_virtual_presence(rule_context, empty_blocks=held)
     found = rule_diagnostics(entries, rule_context, document=document, mapping=mapping, catalogue=catalogue)
     found += control_dict_diagnostics(case_root)
     pre_pacing = region_document(case_root, "electro", "prePacingProperties")
