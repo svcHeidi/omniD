@@ -187,7 +187,7 @@ class CardiacFoamPlugin:
         pre-processing rule, stated for an agent before it writes a study
         (``guidance.md``; conformance C10).
         The case's own README reaches the agent separately, through the
-        ``case.documentation`` role this plugin's profile declares."""
+        ``case.documentation`` role the OpenFOAM layer's profile declares."""
         from importlib import resources
 
         text = resources.files(__package__).joinpath("guidance.md").read_text()
