@@ -15,6 +15,7 @@
       "stopAt",
       "writeControl",
       "writeFormat",
+      "writeFrequency",
       "writeInterval"
     ],
     "read by upstream OpenFOAM's ODESolver from the dictionary ionicModel hands to ODESolver::New": [
