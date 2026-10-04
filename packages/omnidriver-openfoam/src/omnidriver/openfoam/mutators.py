@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from omnidriver.core.case_write import CaseKeyNotFound
+
 from . import foam_backend
 from .literals import _format_value
 
@@ -221,7 +223,7 @@ def _find_dict_block_bounds(
         if resolved is not None:
             return _find_dict_block_bounds(lines, resolved, start=start, end=end)
 
-    raise KeyError(f"Scope '{dict_name}' not found")
+    raise CaseKeyNotFound(f"Scope '{dict_name}' not found")
 
 
 def _resolve_search_region(
@@ -565,5 +567,5 @@ def remove_foam_entry(
     if missing_ok:
         return
     if scope is None:
-        raise KeyError(f"Entry '{entry_name}' not found in {file_path}")
-    raise KeyError(f"Entry '{entry_name}' not found in scope '{scope}' in {file_path}")
+        raise CaseKeyNotFound(f"Entry '{entry_name}' not found in {file_path}")
+    raise CaseKeyNotFound(f"Entry '{entry_name}' not found in scope '{scope}' in {file_path}")

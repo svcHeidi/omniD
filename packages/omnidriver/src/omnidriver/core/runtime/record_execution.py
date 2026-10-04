@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence
 
 from ..case_transaction import commit_case_write
-from ..case_write import CaseMutationRequest, CaseWritePlan, CaseWriteRecord, render_mutation, resolve_mutation
+from ..case_write import CaseKeyNotFound, CaseMutationRequest, CaseWritePlan, CaseWriteRecord, render_mutation, resolve_mutation
 from ..provider_stack import MemberAbsent
 from ..sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
 from .models import DataArtifact
@@ -331,13 +331,13 @@ def _refusal_as_record_error(
     record: TutorialRecord, documents: frozenset[str], action: str,
     *, refused_by: str = "the case writer", scratch: Path | None = None,
 ) -> Iterator[None]:
-    """Turn a ``ValueError`` or ``KeyError`` (the writer's refusal types) into a ``TutorialRecordError`` naming the record; other errors propagate.
+    """Turn a ``ValueError`` or the writer's :class:`CaseKeyNotFound` into a ``TutorialRecordError`` naming the record; other errors propagate.
     ``scratch``, the temporary folder a renderer worked in, is dropped from the message so a document is named by its case path."""
     try:
         yield
     except TutorialRecordError:
         raise
-    except (ValueError, KeyError) as exc:
+    except (ValueError, CaseKeyNotFound) as exc:
         reason = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
         if scratch is not None:
             for spelling in {str(scratch), str(scratch.resolve())}:
