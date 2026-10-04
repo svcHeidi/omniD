@@ -648,7 +648,7 @@ def _compare_quantities(args) -> int:
     try:
         report = run_quantity_comparison(Path(args.comparison_request), Path(args.report))
     except QuantityComparisonError as exc:
-        print(json.dumps({"status": "failed", "action": "compare", "error": str(exc)}, indent=2))
+        print(json.dumps({"status": "failed", "action": "compare", "error": str(exc), "errors": list(exc.errors)}, indent=2))
         return 1
     print(json.dumps(report, indent=2))
     return 0

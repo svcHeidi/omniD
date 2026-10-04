@@ -618,8 +618,8 @@ The report is written once, read-only, to a path that must not exist; a
 changed request is a new report, and the request's digest is recorded in it.
 `compare` exits 0 whenever a report is written, whatever its `status`: read
 the report's `status`, not the exit code. Exit 1 means the request was refused
-(malformed, an existing report path, ...), with an `error` in the JSON and no
-file. Core cannot verify that the request was written before the results were
+(malformed, an existing report path, ...), with an `error` in the JSON, every
+problem found as the `errors` list, and no file. Core cannot verify that the request was written before the results were
 seen; that is the agent's discipline.
 
 Each pair in `metrics` has a `status`: `within_tolerance`,
@@ -627,7 +627,9 @@ Each pair in `metrics` has a `status`: `within_tolerance`,
 conversion and never converted), `reached_on_one_side`, `sampled_off_point`, or
 `not_evaluated` (a `reason` says why: the case did not complete, no reader for
 the format, a missing artifact, a reader error, or no reported location to
-check). Each side shows its `value`, `unit`, `sampling_rule`, `sampled_at`,
+check). Each point of a run is read on its own when the run's batch read is
+refused, so one point the reader cannot place is `not_evaluated` and the run's other
+points are still compared. Each side shows its `value`, `unit`, `sampling_rule`, `sampled_at`,
 `requested_at` and `sampling_offset`, each with its unit, so a wrong pairing or
 frame is visible in the report. The overall `status` is `failed` when any pair
 is outside tolerance, reached on one side, sampled off point or, with
