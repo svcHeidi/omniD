@@ -26,7 +26,7 @@ from .record_execution import (
 from .run_command import omnidriver_run_command
 from .run_document_exec import RUN_DOCUMENT_FILENAME, _allowed_runs_root
 from .workflow_orchestrator import STATE_FILENAME
-from .workflow_runner import _terminate_process_group, utc_now
+from .workflow_runner import _terminate_process_group, terminate_recorded_steps, utc_now
 from .sweep_manifest import (
     SWEEP_MANIFEST_FILENAME,
     CaseManifestEntry,
@@ -46,8 +46,13 @@ def _run_case_process(
     *,
     env: dict[str, str],
     timeout: float | None,
+    state_path: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run one sweep case, owning its POSIX process group on timeout."""
+    """Run one sweep case, owning its POSIX process group on timeout.
+
+    The case's step is a session of its own, so on timeout the step recorded
+    in ``state_path`` is ended too, before the omnidriver that started it.
+    """
     if timeout is None:
         return subprocess.run(command, capture_output=True, text=True, env=env)
     process = subprocess.Popen(
@@ -61,6 +66,8 @@ def _run_case_process(
     try:
         stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as exc:
+        if state_path is not None:
+            terminate_recorded_steps(state_path)
         _terminate_process_group(process)
         stdout, stderr = process.communicate()
         raise subprocess.TimeoutExpired(
@@ -259,6 +266,7 @@ def _record_sweep_run(
                     omnidriver_run_command(driver_context, "--run-document", str(run_document_path)),
                     env=execution_environment,
                     timeout=case_timeout_s,
+                    state_path=workflow_state_path,
                 )
                 artifact_reconciliation = _child_reconciliation(result.stdout)
                 if workflow_state_path.exists():

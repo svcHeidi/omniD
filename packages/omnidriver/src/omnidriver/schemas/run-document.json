@@ -198,6 +198,7 @@
                 "type": "array",
                 "items": {"$ref": "#/$defs/diagnostic"}
               },
+              "pid": {"type": "integer", "description": "The step's process id while its status is running."},
               "host": {
                 "type": "object",
                 "description": "Where this attempt ran, recorded when it started (core.runtime.host_facts): hostname, os, machine, cpu_model, cpu_count, ambient (set SLURM_*/OMP_*/OPENBLAS_*/MKL_* variables), declared (the stack's declared environment variables that are set) and, under an MPI launcher, launcher {command, path, real_path, version, ranks}. Recorded, never interpreted.",

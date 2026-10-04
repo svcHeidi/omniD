@@ -653,6 +653,13 @@ class FailsUntilSevenCellsPlugin(RuleCheckingPlugin):
     RECORDS = {"toyTutorial": _toy_record(_solve(("sh", "-c", "grep -q 7 constant/mesh.json && touch solved.marker")))}
 
 
+class SleepingPlugin(ToyStack):
+    """Its one step sleeps for a minute, for tests that end a running step."""
+
+    SOLVER_COMMANDS = frozenset({"sleep"})
+    RECORDS = {"toyTutorial": _toy_record(_solve(("sleep", "60"), produces=()))}
+
+
 class TwoStepPlugin(ToyStack):
     """A ``mesh`` step, then the ``solve`` step that depends on it."""
 
@@ -979,6 +986,7 @@ RULE_CHECKING_PLUGIN = _selector("RuleCheckingPlugin")
 EXPLAINING_PLUGIN = _selector("ExplainingFailurePlugin")
 FAILS_UNTIL_SEVEN_CELLS_PLUGIN = _selector("FailsUntilSevenCellsPlugin")
 TWO_STEP_PLUGIN = _selector("TwoStepPlugin")
+SLEEPING_PLUGIN = _selector("SleepingPlugin")
 ACCEPTING_PLUGIN = _selector("AcceptingAnyKeyPlugin")
 BROKEN_RULE_PLUGIN = _selector("AlwaysBrokenCasePlugin")
 PARALLEL_TOY_PLUGIN = _selector("ParallelToyPlugin")

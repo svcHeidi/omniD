@@ -15,7 +15,9 @@ from .remediation_audit import append_remediation_record
 from .resume import checkpoint_snapshot, validate_resume
 from .transaction_mechanics import atomic_write_json
 from .workflow_orchestrator import STATE_FILENAME, WORKFLOW_LOGS_DIRNAME
-from .workflow_runner import WorkflowStepRunResult, _step_state_by_id, check_step_runnable, run_workflow_step
+from .workflow_runner import (
+    WorkflowStepRunResult, _step_state_by_id, check_step_runnable, run_workflow_step, settle_interrupted_steps,
+)
 from .workflow_state import workflow_digest, workflow_state_from_json
 from ..case_transaction import CaseTransactionError
 
@@ -52,7 +54,9 @@ def execute_step_owned(
     state_path = output_dir / STATE_FILENAME
     workflow_state = context.planned_state
     if state_path.exists():
-        workflow_state = workflow_state_from_json(json.loads(state_path.read_text()))
+        workflow_state = settle_interrupted_steps(
+            workflow_state_from_json(json.loads(state_path.read_text())), state_path,
+        )
         validate_resume(
             workflow_state,
             context.workflow_dag,
