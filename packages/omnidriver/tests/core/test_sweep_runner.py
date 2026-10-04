@@ -416,18 +416,29 @@ def test_sweep_run_over_a_record_entry_refuses_a_missing_member_upfront_before_s
     assert not (tmp_path / "out").exists()
 
 
-def test_a_relative_cases_root_is_read_against_the_spec_file_not_the_working_directory(tmp_path, monkeypatch):
-    _native_toy_case(tmp_path)
-    spec = _record_sweep_spec(cases_root=Path("native"))
-    spec_path = tmp_path / "sweep.json"
-    spec_path.write_text(json.dumps(spec))
-    elsewhere = tmp_path / "elsewhere"
-    elsewhere.mkdir()
-    monkeypatch.chdir(elsewhere)
+def test_a_relative_cases_root_is_read_against_the_repository_root_not_the_working_directory(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from omnidriver.core.repository import Repository
 
-    result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_record_driver_context())
+    _native_toy_case(tmp_path)
+    spec_path = tmp_path / "elsewhere" / "sweep.json"
+    spec_path.parent.mkdir()
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=Path("native"))))
+    context = replace(_record_driver_context(), repository=Repository(
+        root=tmp_path, plugin="p", tutorials=tmp_path, source=tmp_path, scripts=tmp_path,
+    ))
+    monkeypatch.chdir(spec_path.parent)
+
+    result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=context)
 
     assert result["case_count"] == 2 and all(case["status"] == "ok" for case in result["cases"])
+
+
+def test_a_relative_cases_root_with_no_repository_is_refused_by_name(tmp_path):
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=Path("native"))))
+    with pytest.raises(TutorialRecordError, match="'native' is relative.*--repo"):
+        sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_record_driver_context())
 
 
 def test_sweep_plan_over_a_record_entry_previews_every_case_without_running(tmp_path):

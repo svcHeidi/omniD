@@ -246,7 +246,7 @@ additionally runs each. A one-case study is a one-value axis. A `sweep.json`
 has two top-level objects:
 
 - `"base"`: `entry` (the record) and `cases_root` (where its native case
-  lives; a relative path is read against the folder of the spec file), both required: a
+  lives; a relative path is read against the root of the `--repo` repository, and refused by name without one), both required: a
   record has no ambient cases root, and the sweep commands refuse
   `--cases-root`. Every other key is a study value fixed across every case.
 - `"sweep"`: `"mode"` (`"cross_product"` or `"zip"`), `"independent"` (axis

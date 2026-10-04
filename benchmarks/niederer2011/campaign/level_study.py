@@ -13,10 +13,10 @@ selection that keeps no row. Values are JSON (``dx=0.0005``, ``...=16``).
         --where system/controlDict:deltaT=5e-05 \\
         --set system/decomposeParDict:numberOfSubdomains=16 --out <file>
 
-A study reads a relative ``cases_root`` against its own folder, and the level
-study is written elsewhere, so ``--cases-root`` (where the tutorials are on
-this machine) is written into it as an absolute path. It is a place, not a
-study value.
+A relative ``cases_root`` is read against the root of the ``--repo`` repository,
+and the campaign runs with ``--plugin`` and no repository, so ``--cases-root``
+(where the tutorials are on this machine) is written into the level study as an
+absolute path. It is a place, not a study value.
 
 Case ids follow the kept rows' order (case_0001, case_0002, ...); the
 campaign's requests name them (README, "Levels and case ids").
