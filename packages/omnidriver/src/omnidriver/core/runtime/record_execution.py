@@ -329,17 +329,22 @@ def _workflow_commands(dag: Mapping[str, Any]) -> dict[str, list[str]]:
 @contextlib.contextmanager
 def _refusal_as_record_error(
     record: TutorialRecord, documents: frozenset[str], action: str,
-    *, refused_by: str = "the case writer",
+    *, refused_by: str = "the case writer", scratch: Path | None = None,
 ) -> Iterator[None]:
-    """Turn a ``ValueError`` (the writer's refusal type) into a ``TutorialRecordError`` naming the record; other errors propagate."""
+    """Turn a ``ValueError`` or ``KeyError`` (the writer's refusal types) into a ``TutorialRecordError`` naming the record; other errors propagate.
+    ``scratch``, the temporary folder a renderer worked in, is dropped from the message so a document is named by its case path."""
     try:
         yield
     except TutorialRecordError:
         raise
-    except ValueError as exc:
+    except (ValueError, KeyError) as exc:
+        reason = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
+        if scratch is not None:
+            for spelling in {str(scratch), str(scratch.resolve())}:
+                reason = reason.replace(f"{spelling}/", "")
         raise TutorialRecordError(
             f"tutorial record {record.name!r}: {action} {', '.join(sorted(documents))} "
-            f"was refused by {refused_by} ({type(exc).__name__}): {exc}"
+            f"was refused by {refused_by} ({type(exc).__name__}): {reason}"
         ) from exc
 
 
@@ -414,7 +419,7 @@ def _commit_patches(
         _seed_snapshot_root(
             snapshot_root, case_root=staged_case_root, documents=documents,
         )
-        with _refusal_as_record_error(record, documents, "rendering"):
+        with _refusal_as_record_error(record, documents, "rendering", scratch=snapshot_root):
             rendered = render_mutation(
                 driver_context, resolved, snapshot_root=snapshot_root, execution_env=execution_env,
             )

@@ -1325,6 +1325,24 @@ def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(t
     assert written["modelName"] == "modelBeta"
 
 
+def test_a_renderer_refusal_names_the_document_by_its_case_path_not_the_render_scratch(tmp_path, monkeypatch):
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
+
+    def refuse(driver_context, resolved, *, snapshot_root, execution_env):
+        raise KeyError(f"Key 'modelNme' not found in {snapshot_root}/constant/physics.json")
+
+    monkeypatch.setattr(record_execution, "render_mutation", refuse)
+    with pytest.raises(TutorialRecordError) as excinfo:
+        record_execution.commit_record_case(
+            _record(axes=()), cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+            study_by_source={"base": {"constant/physics.json:modelName": "modelBeta"}},
+            driver_context=_context_with_writer(),
+        )
+    message = str(excinfo.value)
+    assert "Key 'modelNme' not found in constant/physics.json" in message
+    assert "omnidriver-record-render" not in message
+
+
 def test_commit_record_case_preserves_sibling_keys_in_a_multi_key_document(tmp_path):
     """The renderer reads the case's existing documents from `snapshot_root`, so a patch to one key keeps its siblings."""
     _native_case(tmp_path, {
