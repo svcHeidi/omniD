@@ -634,13 +634,15 @@ PURKINJE_SCAR_ENTRIES: Final[tuple[DictEntry, ...]] = (
 # Shared across setCardiacAnatomy, setPurkinjeSlab, setPurkinjeMorphometry
 # and generatePurkinjeTree: each utility's coordinatesConvention.H reader only
 # pulls the sub-block(s)/leaves it needs, but the file exists once per case
-# and conventionally carries all blocks together.
+# and conventionally carries all blocks together. A leaf whose reader has no
+# default is `required` of a case that carries the file at all.
 COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.coordinateSystem",
         description="Selects which ventricular coordinate system the case's fields follow.",
         source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="enum",
+        required=True,
         enum_values=("uvc", "cobiveco"),
         notes=(
             "'uvc': Bayer et al. biventricular convention -- transmural and "
@@ -681,12 +683,14 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
         description="Intraventricular coordinate value identifying the LV chamber.",
         source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
+        required=True,
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.intraventricularChambers.RV",
         description="Intraventricular coordinate value identifying the RV chamber.",
         source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
+        required=True,
         notes="isLeftVentricle()/isRightVentricle() classify a cell by proximity to LV vs RV; the LV/RV seam is their midpoint.",
     ),
     DictEntry(
@@ -694,12 +698,14 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
         description="Transmural-coordinate value at the endocardium. Not necessarily numerically smaller than epicardium (e.g. CObiveco's tm reads 1=endocardium, 0=epicardium).",
         source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
+        required=True,
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.transmural.epicardium",
         description="Transmural-coordinate value at the epicardium.",
         source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
+        required=True,
     ),
 )
 
@@ -723,6 +729,7 @@ _TREE_ROOT_ENTRIES: Final[tuple[DictEntry, ...]] = (
         description="Common His/root point shared by the LV and RV trees in the glued output.",
         source_refs=("cases/bivCase/system/generatePurkinjeTreeDict", _TREE_SOURCE),
         value_kind="vector3",
+        required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.growthModel",
@@ -751,6 +758,7 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Initial point of the ventricular tree.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="vector3",
+        required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.lineEnd",
@@ -780,24 +788,28 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Initial trunk length.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
+        required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.N_it",
         description="Number of branching generations grown after the trunk.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="integer",
+        required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.length",
         description="Mean length of each new branch.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
+        required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.l_segment",
         description="Discretization step length used while growing each branch.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
+        required=True,
         constraints=("Must suit local mesh resolution (README): too coarse relative to surface triangle size/curvature can walk the march out of its local projection neighbourhood.",),
     ),
     DictEntry(
@@ -805,6 +817,7 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Half-angle between the two daughter branches at a bifurcation.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
+        required=True,
         unit="rad",
     ),
     DictEntry(
@@ -812,6 +825,7 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         description="Local branch-separation correction weight.",
         source_refs=(_TREE_SOURCE, _TREE_README),
         value_kind="scalar",
+        required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.transmuralMin",
