@@ -155,6 +155,10 @@ class DictEntry:
     constraints: tuple[str, ...] = ()
     unit: str = ""
     typical_value: str = ""
+    # The value the solver takes when this key is absent. Stated only for a
+    # selector whose absence another entry's predicate has to see as that value;
+    # ``typical_value`` is what a built case writes, not what an absent key means.
+    default: str = ""
     phases: frozenset[str] = frozenset()
     applicable_when: dict[str, str | tuple[str, ...]] = field(default_factory=dict)
     forbidden_when: dict[str, str | tuple[str, ...]] = field(default_factory=dict)
@@ -181,6 +185,11 @@ class DictEntry:
             raise ValueError(
                 f"{self.driver_path!r} declares value_kind {self.value_kind!r}, "
                 f"which is not one of {sorted(VALUE_KINDS)}"
+            )
+        if self.default and self.enum_values and self.default not in self.enum_values:
+            raise ValueError(
+                f"{self.driver_path!r} declares default {self.default!r}, "
+                f"which is not one of its enum_values"
             )
         if self.allowed_bindings and not self.dynamic_path:
             raise ValueError(

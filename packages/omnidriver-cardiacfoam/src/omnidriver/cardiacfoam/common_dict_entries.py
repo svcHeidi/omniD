@@ -157,11 +157,12 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
 
 
 _PRE_PACING_SOURCE = ("src/genericWriter/prePacingIO.H",)
-_PRE_PACING_SOLVERS = {"myocardiumSolver": ("monodomainSolver", "bidomainSolver", "singleCellSolver")}
+_PRE_PACING_SOLVERS = {"myocardiumSolver": ("monodomainSolver", "bidomainSolver")}
 
 #: The opt-in ``constant/prePacingProperties``: its absence disables pre-pacing,
-#: and ``regions.<name>`` overrides each key below for one tissue region. Every
-#: solver but the eikonal builds the myocardium domain that reads it.
+#: and ``regions.<name>`` overrides each key below for one tissue region.
+#: Monodomain and bidomain build the myocardium domain that reads it;
+#: singleCellSolver and the eikonal solver do not.
 PRE_PACING_PROPERTY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="tolerance",

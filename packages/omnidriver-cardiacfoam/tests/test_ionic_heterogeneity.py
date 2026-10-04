@@ -158,7 +158,7 @@ def test_gradient_axes_numeric_constraints():
 
 
 def test_heterogeneity_entries_are_optional_except_what_a_declared_axis_must_set():
-    axis_keys = {"beta", "scalingMin", "scalingMax", "variables"}
+    axis_keys = {"field", "beta", "scalingMin", "scalingMax", "variables"}
     for e in _het_entries():
         under_axis = ".gradientAxes.<axis_name>." in e.driver_path
         assert e.required is (under_axis and e.driver_path.rsplit(".", 1)[-1] in axis_keys), e.driver_path

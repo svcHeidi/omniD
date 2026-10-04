@@ -11,9 +11,9 @@ HETEROGENEITY_MODELS: tuple[str, ...] = (
     "TWorldcompactBatched", "ToRORd_dynClcompactBatched",
 )
 
-#: The models that build OpenFOAM's ODESolver and so read ``solver`` and
-#: ``maxSteps``; the batched models integrate in ``batchedIonicModel.H`` and
-#: never do (``ionicModel::odeSolver``).
+#: The models that build OpenFOAM's ODESolver and so read ``solver``; the
+#: batched models integrate in ``batchedIonicModel.H`` and never do
+#: (``ionicModel::odeSolver``).
 ODE_SOLVER_MODELS: tuple[str, ...] = tuple(
     name for name in IONIC_MODEL_CATALOG if name not in BATCHED_MODELS
 )
@@ -31,7 +31,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             phases=frozenset({'anatomy'}),
             description='Optional cell zone name. Restricts the myocardium domain and equations to a specific subset of the mesh cells.',
             source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C', 'src/electroModels/electroDomains/myocardiumDomain/eikonalMyocardiumDomain.C'),
-            notes='Read from the resolved <solver>Coeffs block, NOT the electroProperties root: myocardiumDomain.C:35-52 queries the coeffs dictionary (electroModel.C:109 builds it as subDict(type + "Coeffs")).',
+            notes='Read from the resolved <solver>Coeffs block, NOT the electroProperties root: createMyocardiumMeshSubset (myocardiumDomain.C) queries the coeffs dictionary, which electroModel.C builds as subDict(type + "Coeffs"). A cellZone at the root is never read, and the run then uses the whole mesh.',
             value_kind='word',
         ),
         DictEntry(
@@ -200,6 +200,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             allowed_bindings={"<axis_name>": None},
             examples=('apicobasal',),
             applicable_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver")},
+            required=True,
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.gradientAxes.<axis_name>.beta',
@@ -368,21 +369,22 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             driver_path='$ELECTRO_MODEL_COEFFS.solver',
             description="ODE solver selector passed through to OpenFOAM's ODESolver factory.",
             source_refs=('src/ionicModels/ionicModel/ionicModel.H', 'src/activeTensionModels/NashPanfilov/NashPanfilov.C'),
-            notes='The repository source shows pass-through to ODESolver::New(*this, dict_). Additional ODESolver-specific keys may exist beyond the commonly used entries listed here.',
+            notes='The repository source shows pass-through to ODESolver::New(*this, dict_). Additional ODESolver-specific keys may exist beyond the commonly used entries listed here. The active-tension models NashPanfilov, LandNiederer and LandNiedererTWorld read it from this block too, so a batched ionic model with one of them still needs it; the LandNiederer pair read it only without an ODESolver sub-dictionary.',
             value_kind='enum',
             enum_values=('RKF45', 'Euler'),
             required=True,
-            required_when={"ionicModel": ODE_SOLVER_MODELS},
+            required_when={
+                "ionicModel": ODE_SOLVER_MODELS,
+                "activeTensionModel": ("NashPanfilov", "LandNiederer", "LandNiedererTWorld"),
+            },
             typical_value='RKF45',
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.maxSteps',
             description='Maximum internal ODE steps allowed per macro time step.',
             source_refs=('src/ionicModels/ionicModel/ionicModel.H',),
-            notes='Pass-through key; commonly used in repository tutorials.',
+            notes='Pass-through key; defaults to 10000 (ODESolver.C). Commonly set in repository tutorials.',
             value_kind='integer',
-            required=True,
-            required_when={"ionicModel": ODE_SOLVER_MODELS},
             typical_value='1000',
         ),
         DictEntry(
@@ -1159,12 +1161,13 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.phiERefPoint',
             description='Point [m] used to locate the cell that pins the extracellular potential reference. The bidomain φE equation has pure Neumann boundary conditions, leaving φE determined only up to an additive constant — one cell must be clamped to break the indeterminacy. Monodomain solves only Vm with mixed BCs and does not need a reference point.',
-            notes='Read by bidomainSolver::referenceCell when it solves the local extracellular potential. A bath-bidomain case binds a global phiE through bathPotentialDomain instead, and sets bathPotentialDomain.phiERefPoint.',
+            notes='Read by bidomainSolver::referenceCell when it solves the local extracellular potential. A bath-bidomain case binds a global phiE through bathPotentialDomain instead, and sets bathPotentialDomain.phiERefPoint when no ground patch is fixedValue. manufacturedFDABidomainVerifier reads it unconditionally. A point in no cell pins nothing in a serial run and is fatal in a parallel one.',
             value_kind='vector3',
             unit='m',
             constraints=('Required for bidomainSolver unless bathPotentialDomain binds the global phiE.',),
             typical_value='(0 0 0)',
             applicable_when={"myocardiumSolver": "bidomainSolver"},
+            required_when={"$ELECTRO_MODEL_COEFFS.verificationModel.type": "manufacturedFDABidomainVerifier"},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.phiEReferenceValue',
@@ -1207,6 +1210,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             source_refs=('src/electroModels/electroDomains/conductionSystemDomain/conductionSystemSolver.C', 'src/electroModels/conductionSystemModels/monodomain1DSolver/monodomain1DSolver.H', 'src/electroModels/conductionSystemModels/eikonalSolver1D/eikonalSolver1D.H', 'src/electroModels/conductionSystemModels/restitutionEikonalSolver1D/restitutionEikonalSolver1D.H'),
             value_kind='enum',
             enum_values=('monodomain1DSolver', 'eikonalSolver1D', 'restitutionEikonalSolver1D'),
+            default='monodomain1DSolver',
             allowed_bindings={"<name>": None},
             constraints=('monodomain1DSolver valid only with monodomainSolver myocardium; eikonalSolver1D valid only with eikonalSolver myocardium.',),
         ),
@@ -1361,7 +1365,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='enum',
             enum_values=('AlievPanfilov', 'BuenoOrovio', 'Courtemanche', 'Fabbri', 'Gaur', 'Grandi', 'Stewart', 'TNNP', 'ToRORd_dynCl', 'Trovato', 'monodomainFDAManufactured', 'bidomainFDAManufactured', 'AlievPanfilovcompactBatched', 'BuenoOroviocompactBatched', 'CourtemanchecompactBatched', 'FabbricompactBatched', 'GaurcompactBatched', 'GrandicompactBatched', 'PerisYaguecompactBatched', 'StewartcompactBatched', 'TNNPcompactBatched', 'ToRORd_dynClcompactBatched', 'TrovatocompactBatched', 'TWorldcompactBatched'),
             allowed_bindings={"<name>": None},
-            constraints=('Required when conductionSystemSolver=monodomain1DSolver.',),
+            constraints=('Required when conductionSystemSolver is monodomain1DSolver or omitted (its default).',),
             required_when={"$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.conductionSystemSolver": ("monodomain1DSolver",)},
         ),
         DictEntry(

@@ -80,10 +80,16 @@ def _instances(prefix: str, reserved: set[str], context: Mapping[str, Any]) -> l
 
 
 class _Instance:
-    """One entry bound to one concrete instance name of its ``<name>`` block, or to none outside any block."""
+    """One entry bound to one concrete instance name of its ``<name>`` block, or to none outside any block.
 
-    def __init__(self, context: Mapping[str, Any], template: str | None = None, name: str | None = None):
+    A predicate on a key the context lacks sees the key's ``default`` where the catalogue states one."""
+
+    def __init__(
+        self, context: Mapping[str, Any], defaults: Mapping[str, str],
+        template: str | None = None, name: str | None = None,
+    ):
         self.context = context
+        self.defaults = defaults
         self.template = template
         self.bound = None if template is None else PLACEHOLDER.sub(name, template, count=1)
 
@@ -96,7 +102,8 @@ class _Instance:
     def holds(self, path: str, expected: Any) -> bool:
         key = self.resolve(path)
         if not PLACEHOLDER.search(key):
-            return key in self.context and _matches(self.context[key], expected)
+            value = self.context[key] if key in self.context else self.defaults.get(slot_key(path))
+            return value is not None and _matches(value, expected)
         pattern = re.compile(PLACEHOLDER.sub("[^.]+", re.escape(key)))
         return any(
             pattern.fullmatch(name) and _present(value) and _matches(value, expected)
@@ -119,17 +126,23 @@ class _Instance:
         return entry.required
 
 
+def _defaults(entries: Iterable[Any]) -> dict[str, str]:
+    return {slot_key(entry.driver_path): entry.default for entry in entries if entry.default}
+
+
 def applicable_entries(entries: Iterable[Any], context: Mapping[str, Any]) -> list[Any]:
     """The entries whose ``applicable_when`` holds in ``context`` and whose
     ``forbidden_when`` does not."""
-    instance = _Instance(context)
+    entries = tuple(entries)
+    instance = _Instance(context, _defaults(entries))
     return [entry for entry in entries if instance.applies(entry)]
 
 
 def forbidden_in(entries: Iterable[Any], context: Mapping[str, Any]) -> list[tuple[Any, dict[str, Any]]]:
     """Each entry ``context`` sets that its own ``forbidden_when`` forbids,
     with the predicates that hold."""
-    instance = _Instance(context)
+    entries = tuple(entries)
+    instance = _Instance(context, _defaults(entries))
     return [(entry, forbidden) for entry in entries if instance.is_set(entry.driver_path) and (forbidden := instance.forbidden_by(entry))]
 
 
@@ -264,6 +277,7 @@ def rule_diagnostics(
         for key in (slot_key(entry.driver_path),)
         for match in (PLACEHOLDER.search(key),) if match
     }
+    defaults = _defaults(entries)
     found: list[StrictDiagnostic] = []
 
     def violated(field: str, message: str) -> None:
@@ -273,7 +287,7 @@ def rule_diagnostics(
         key = slot_key(entry.driver_path)
         match = PLACEHOLDER.search(key) if entry.dynamic_path else None
         if match is None:
-            bound = [_Instance(context)]
+            bound = [_Instance(context, defaults)]
         else:
             prefix = key[: match.start()]
             reserved = {
@@ -282,7 +296,7 @@ def rule_diagnostics(
                 if not PLACEHOLDER.fullmatch(segment)
             }
             bound = [
-                _Instance(context, key[: match.end()], name)
+                _Instance(context, defaults, key[: match.end()], name)
                 for name in _instances(prefix, reserved, context)
             ]
         for instance in bound:

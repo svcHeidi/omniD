@@ -652,8 +652,10 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "generatePurkinjeTree applies (useSeptalFlip = coordinateSystem "
             "== uvc, generatePurkinjeTree.C). 'cobiveco': tm/tv/apicobasal "
             "fields solved independently per chamber, so no correction is "
-            "needed or performed. Unconditionally required (readCoordinateSystem "
-            "raises a FatalError for any other value)."
+            "needed or performed. Only generatePurkinjeTree reads it "
+            "(readCoordinateSystem: get<word> with no default, and a FatalError "
+            "for any other value); it is required of every case that carries the "
+            "file, so a case that never runs generatePurkinjeTree states it anyway."
         ),
     ),
     DictEntry(

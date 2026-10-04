@@ -12,7 +12,7 @@ from importlib import resources
 VALUE_KIND_BY_TYPE = {
     "Int": "integer", "Short": "integer", "Long": "integer",
     "Float": "scalar", "Double": "scalar",
-    "Flag": "boolean",                               # openCARP reads every other spelling as on, so this is always written 1/0
+    "Flag": "boolean",                               # only 0 and false read as off (no and off read as on), so this is always written 1/0
     "String": "string", "RFile": "string", "WFile": "string",
 }
 _INDEX = re.compile(r"\[\d+\]")

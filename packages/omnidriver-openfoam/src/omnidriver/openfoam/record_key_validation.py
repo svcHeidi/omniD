@@ -47,8 +47,9 @@ def listed_entry(document: str, key: str, entry: Any) -> dict[str, Any]:
     """One key-catalogue listing (`record_surface`'s grammar) for a
     catalogued `DictEntry`: what `describe` and `omnidriver catalog` show
     for it, including the relations ``case_rules`` judges a case by, so an
-    agent reads a rule before a plan refuses it. The catalogues record no
-    default, only a `typical_value`; a field the entry leaves empty is not
+    agent reads a rule before a plan refuses it. A `typical_value` is what a
+    built case writes; a `default` is stated only for a selector whose absence
+    the rules read as that value. A field the entry leaves empty is not
     listed."""
     listing = {
         "document": document, "key": key, "driver_path": entry.driver_path,
@@ -64,6 +65,7 @@ def listed_entry(document: str, key: str, entry: Any) -> dict[str, Any]:
         "forbidden_when": _listed_relation(entry.forbidden_when),
         "mutually_exclusive_with": list(entry.mutually_exclusive_with),
         "co_required_with": list(entry.co_required_with),
+        "default": entry.default,
         "allowed_bindings": {name: None if domain is None else list(domain) for name, domain in entry.allowed_bindings.items()},
         "constraints": list(entry.constraints),
         "examples": list(entry.examples),

@@ -75,8 +75,8 @@ class IonicModelEntry:
     (``dataclasses.replace(parent, ...)``, below) inherits its parent's value
     unless the ``replace()`` call overrides it, which none do for this field,
     so e.g. ``TWorldcompactBatched`` reads ``60.0`` too. The native
-    restitutionCurves_s1s2 default ``TWorld`` case reads 60 and singleCell's
-    default ``BuenoOrovio`` case 0.4.
+    restitutionCurves_s1s2 default ``BuenoOrovio`` case reads 0.4 and singleCell's
+    default ``TWorld`` case 60.
     """
 
     notes: str = ""

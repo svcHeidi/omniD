@@ -781,7 +781,8 @@ and the native case all count.
 - **Catalogue relations** (cardiacFOAM's `electroProperties`, each cardiacCore
   utility dictionary) — `applicable_when` / `required_when` / `forbidden_when` /
   `mutually_exclusive_with` / `co_required_with`, once per instance of a
-  `<name>` block. An enum value outside its menu is refused: the names the
+  `<name>` block. A predicate on a selector the case omits reads the
+  selector's catalogued `default` where it has one. An enum value outside its menu is refused: the names the
   supplied C++'s selection table registers when the source is supplied, the
   catalogue's menu otherwise. Value types are the C++'s: a study's value is
   checked against them when it is written.

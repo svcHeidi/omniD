@@ -106,3 +106,33 @@ def test_a_listing_shows_the_relations_a_case_is_judged_by_and_omits_what_an_ent
     assert listing["required"] is True and listing["required_when"] == {"mode": ["deep", "abyssal"]}
     assert (listing["mutually_exclusive_with"], listing["notes"], listing["examples"]) == (["$S.height"], "metres", ["3"])
     assert not {"forbidden_when", "co_required_with", "allowed_bindings", "constraints"} & set(listing)
+
+
+def test_an_absent_selector_is_read_as_the_default_the_catalogue_states():
+    entries = [
+        _entry("$S.method", value_kind="enum", enum_values=("direct", "iterative"), default="direct"),
+        _entry("$S.mode", value_kind="enum", enum_values=("a", "b")),
+        _entry("$S.limit", required_when={"method": "direct", "mode": "a"}),
+    ]
+    assert _violations(entries, {}) == {("limit", "limit is required when method=direct and mode=a.")}
+    assert _violations(entries, {"method": "iterative"}) == set()
+    assert _violations(entries, {"mode": "b"}) == {("limit", "limit is required when method=direct and mode=a.")}
+    assert _violations(entries, {"mode": "b", "limit": 1}) == set()
+
+
+def test_a_default_outside_the_menu_is_refused():
+    import pytest
+
+    with pytest.raises(ValueError, match="not one of its enum_values"):
+        _entry("$S.method", value_kind="enum", enum_values=("direct",), default="iterative")
+
+
+def test_a_default_reaches_a_block_instance_and_the_listing():
+    from omnidriver.openfoam.record_key_validation import listed_entry
+
+    entries = [
+        _entry("$S.nets.<name>.kind", value_kind="enum", enum_values=("slow", "fast"), default="slow"),
+        _entry("$S.nets.<name>.cv", required=True, required_when={"nets.<name>.kind": "slow"}),
+    ]
+    assert _violations(entries, {"nets.a.other": 1, "nets.b.kind": "fast"}) == {("nets.a.cv", "nets.a.cv is required when nets.<name>.kind=slow.")}
+    assert listed_entry("doc", "kind", entries[0])["default"] == "slow"
