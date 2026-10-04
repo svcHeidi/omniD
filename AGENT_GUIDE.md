@@ -212,6 +212,20 @@ that entrypoint. `--case` is valid with `describe`, `catalog`, `plan`, `step`
 and `run`, excludes `--entry` and `--cases-root`, and is refused by name where
 the stack declares no entrypoint (openCARP).
 
+A folder inside the repository supplied with `--repo` is staged at its
+repository-relative depth (`<scratch>/records/<dir name>/cases/<dir name>`, say),
+and the repository's declared `scripts` folder is linked beside it at its own
+relative path, so a native `Allrun` that calls `$case_dir/../../applications/scripts/...`
+finds the repository's layout; `check --regression` runs the native regression
+script the same way. A folder outside the repository, or with no `--repo`, is
+staged at `<scratch>/records/<dir name>`.
+
+When an OpenFOAM `Allrun` fails, the step carries the solver's own error (read from
+its `log.<application>`; see "Reading a failed strict step"). Fix the cause in
+`<dir>` and run `--case` again: it restages from `<dir>`. Do not rerun in the staged
+case: OpenFOAM's `runApplication` skips any application whose `log.<application>`
+exists, so a rerun there repeats nothing until you delete that log (or restage).
+
 ### Executing an agent-authored RunDocument
 
 `plan --strict` emits a complete `run_document` (RunDocument v3) in its JSON

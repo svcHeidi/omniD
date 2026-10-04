@@ -126,3 +126,77 @@ def test_a_sweep_over_an_unknown_record_is_refused_as_json(tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert code == 1
     assert "unknown tutorial record 'noSuchRecord'" in payload["error"]
+
+
+def _repository_with_a_case_that_reaches_its_scripts(root: Path) -> Path:
+    """cases/myCase/run-test-case runs ../../applications/scripts/helper, as a native cardiacCore ``Allrun`` does."""
+    (root / "applications" / "scripts").mkdir(parents=True)
+    helper = root / "applications" / "scripts" / "helper"
+    helper.write_text("#!/bin/sh\necho done\n")
+    helper.chmod(helper.stat().st_mode | stat.S_IXUSR)
+    (root / "omnidriver.toml").write_text(
+        f'plugin = "{_DECLARED}"\ntutorials = "cases"\nsource = "src"\nscripts = "applications/scripts"\n'
+    )
+    case = _case(root / "cases")
+    (case / "run-test-case").write_text('#!/bin/sh\n"$(dirname "$0")/../../applications/scripts/helper" > ran.marker\n')
+    return case
+
+
+def _run_case(case: Path, repo: Path, scratch: Path, *extra: str) -> int:
+    return main(["run", "--strict", "--repo", str(repo), "--case", str(case), "--scratch-dir", str(scratch), *extra])
+
+
+def test_a_case_inside_the_repository_is_staged_at_its_depth_beside_the_repository_scripts(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).resolve().parents[1]))
+    repo = tmp_path / "repo"
+    case = _repository_with_a_case_that_reaches_its_scripts(repo)
+    before = sorted(p.relative_to(repo).as_posix() for p in repo.rglob("*"))
+
+    assert _run_case(case, repo, tmp_path / "scratch") == 0, capsys.readouterr().out
+
+    staging = tmp_path / "scratch" / "records" / "myCase"
+    assert (staging / "cases" / "myCase" / "ran.marker").read_text() == "done\n"
+    link = staging / "applications" / "scripts"
+    assert link.is_symlink() and link.resolve() == (repo / "applications" / "scripts").resolve()
+    assert sorted(p.relative_to(repo).as_posix() for p in repo.rglob("*")) == before
+
+
+def test_the_guards_on_a_staged_case_hold_at_the_repository_depth(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).resolve().parents[1]))
+    repo = tmp_path / "repo"
+    case = _repository_with_a_case_that_reaches_its_scripts(repo)
+    scratch = tmp_path / "scratch"
+    assert _run_case(case, repo, scratch) == 0
+    capsys.readouterr()
+
+    assert _run_case(case, repo, scratch, "--fresh") == 1
+    assert "--fresh" in capsys.readouterr().out
+
+    assert _run_case(case, repo, repo / "cases" / "scratch") == 1
+    assert "is inside cases root" in capsys.readouterr().out
+
+
+def test_a_symlinked_staged_case_root_is_still_refused_at_the_repository_depth(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).resolve().parents[1]))
+    repo = tmp_path / "repo"
+    case = _repository_with_a_case_that_reaches_its_scripts(repo)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    staged = tmp_path / "scratch" / "records" / "myCase" / "cases" / "myCase"
+    staged.parent.mkdir(parents=True)
+    staged.symlink_to(elsewhere, target_is_directory=True)
+
+    assert _run_case(case, repo, tmp_path / "scratch") == 1
+    assert "is a symlink" in capsys.readouterr().out
+    assert list(elsewhere.iterdir()) == []
+
+
+def test_a_case_outside_the_repository_is_staged_flat(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).resolve().parents[1]))
+    repo = tmp_path / "repo"
+    _repository_with_a_case_that_reaches_its_scripts(repo)
+    outside = _case(tmp_path / "outside")
+
+    assert _run_case(outside, repo, tmp_path / "scratch") == 0, capsys.readouterr().out
+    assert (tmp_path / "scratch" / "records" / "myCase" / "ran.marker").is_file()
+    assert not (tmp_path / "scratch" / "records" / "myCase" / "applications").exists()

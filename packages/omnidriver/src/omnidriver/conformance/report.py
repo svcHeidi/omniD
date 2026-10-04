@@ -12,12 +12,14 @@ from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from omnidriver.core.environment_connection import load_environment
 from omnidriver.core.runtime.process_control import run_child
+from omnidriver.core.runtime.repository_staging import link_repository_scripts, staged_case_path
 
 from .checks import CHECKS, run_check
 from .target import ConformanceTarget
 
 if TYPE_CHECKING:
     from omnidriver.core.plugin_interface import DriverContext
+    from omnidriver.core.repository import Repository
 
 REGRESSION_ROLE = "case.regression_test"
 REGRESSION_TIMEOUT_S = 3600.0
@@ -38,10 +40,15 @@ def regression_script(driver_context: "DriverContext", native_case: Path) -> Pat
     return None
 
 
-def _regression(script: Path, native_case: Path, work: Path, timeout_s: float) -> dict[str, Any]:
-    """Run the native regression script in a copy under ``work``; the native case is never written."""
-    case = work / native_case.name
+def _regression(
+    script: Path, native_case: Path, work: Path, timeout_s: float, repository: Repository | None = None,
+) -> dict[str, Any]:
+    """Run the native regression script in a copy under ``work``, at its
+    repository-relative depth and beside the repository's scripts when there is
+    a repository; the native case is never written."""
+    case = staged_case_path(native_case, repository, staging_root=work, flat=work / native_case.name)
     shutil.rmtree(case, ignore_errors=True)
+    link_repository_scripts(repository, native_case, staging_root=work)
     shutil.copytree(native_case, case, symlinks=True)
     started = time.monotonic()
     try:
@@ -140,7 +147,10 @@ def check_report(
             native_case = cases_root / record.native_case_relpath
             script = regression_script(driver_context, native_case)
             entry["regression"] = (
-                _regression(script, native_case, scratch_root / record.name / "regression", REGRESSION_TIMEOUT_S)
+                _regression(
+                    script, native_case, scratch_root / record.name / "regression", REGRESSION_TIMEOUT_S,
+                    driver_context.repository,
+                )
                 if script is not None else {"status": "no_script", "detail": "the native case has no regression script"}
             )
     counts = [verdict["passed"] for entry in reported for verdict in entry.get("checks", ())]
