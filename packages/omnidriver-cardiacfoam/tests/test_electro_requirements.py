@@ -80,3 +80,15 @@ def test_a_personalized_template_solver_is_required_only_where_the_ionic_model_b
     prefix = "ecgDomains.ecg.personalizedTemplates.ionicModelConfig"
     context = {"myocardiumSolver": "monodomainSolver", "ecgDomains.ecg.ecgSolver": "eikonalECG", f"{prefix}.ionicModel": ionic}
     assert (f"{prefix}.solver" in _missing(context)) is needs_solver
+
+
+def test_the_batched_integrator_menu_and_its_review_name_the_two_values_the_cxx_accepts() -> None:
+    import json
+    from pathlib import Path
+
+    import omnidriver.cardiacfoam as package
+
+    entry = next(entry for entry in ENTRIES if entry.driver_path == "$ELECTRO_MODEL_COEFFS.batchedIntegrator")
+    assert entry.enum_values == ("euler", "rushLarsen")
+    reviewed = (Path(package.__file__).parent / "dict_key_allowlist.json").read_text()
+    assert "rushLarsenHeun" not in json.dumps(json.loads(reviewed))
