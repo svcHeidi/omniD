@@ -32,14 +32,6 @@ case_profile:
       kind: openfoam_dictionary
       role: cardiaccore.purkinje_morphometry_dictionary
       required: conditional
-    - path: system/setCardiacScarDict
-      kind: openfoam_dictionary
-      role: cardiaccore.scar_dictionary
-      required: conditional
-    - path: system/setPurkinjeScarDict
-      kind: openfoam_dictionary
-      role: cardiaccore.purkinje_scar_dictionary
-      required: conditional
     - path: system/coordinatesConventionDict
       kind: openfoam_dictionary
       role: cardiaccore.coordinates_convention_dictionary

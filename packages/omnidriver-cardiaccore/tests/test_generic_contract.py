@@ -17,7 +17,7 @@ def test_plugin_has_a_valid_context() -> None:
     # the ordered stack) is this plugin, per
     # `identity.to_json()["providers"][-1]["id"]`.
     assert context.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
-    assert len(context.stack.call("get_dict_entries")) == 91  # includes rvLocalBands
+    assert len(context.stack.call("get_dict_entries")) == 52  # includes rvLocalBands
     assert set(context.stack.call("get_tutorial_records")) == {
         "humanSlab", "idealizedHeart", "idealizedHeartEndocardial", "idealizedHeartPigTransmural",
     }
@@ -145,72 +145,6 @@ def test_every_dynamic_entry_declares_a_domain_for_every_placeholder() -> None:
         if placeholder not in entry.allowed_bindings
     )
     assert undeclared == [], undeclared
-
-
-def test_the_region_id_domain_is_declared_open_on_evidence() -> None:
-    """`<region_id>` is an *integer label*, not a case-author-chosen word:
-    `setPurkinjeScar.C`'s `policyForRegion` looks the sub-block up by
-    `Foam::name(region)`, where `region` is a `label` read from the
-    `regionField` (`ScarRegionID`) volScalarField -- so the key is the
-    decimal spelling of whatever integer that field carries, and the
-    README shows `regions { 3 { ... } }`. That is an unbounded set, so the
-    domain is declared open (`None`) rather than a closed tuple, and the
-    evidence for it is cited in the entries' own constraints."""
-    entries = {
-        e.driver_path: e
-        for e in driver_context(
-            OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test",
-        ).stack.call("get_dict_entries")
-    }
-    region_entries = [
-        entry for path, entry in entries.items()
-        if path.startswith("$PURKINJE_SCAR.regions.<region_id>.")
-    ]
-    assert len(region_entries) == 4, sorted(e.driver_path for e in region_entries)
-    for entry in region_entries:
-        assert entry.allowed_bindings == {"<region_id>": None}, entry.driver_path
-        joined = " ".join(entry.constraints) + " " + (entry.notes or "")
-        assert "ScarRegionID" in joined, entry.driver_path
-        # The evidence is not on main: `setPurkinjeScar/` and
-        # `setCardiacScar/` exist only on `origin/scar`, and main's
-        # `src/Allwmake` builds neither. A `source_refs` path that reads as
-        # mainline but only resolves on an unmerged branch is a citation
-        # that cannot be checked, so the branch must be named where the
-        # claim is made.
-        assert "scar" in joined and "branch" in joined, entry.driver_path
-
-
-def test_every_scar_source_ref_names_the_branch_it_resolves_on() -> None:
-    """A citation an agent cannot check is worse than no citation:
-    `src/setCardiacScar/` and `src/setPurkinjeScar/` exist only on the
-    `scar` branch, not on cardiacCore's main, and main's `src/Allwmake`
-    builds neither. Written as bare paths these read as mainline -- the
-    same shape as every other `source_refs` entry in this module -- so an
-    agent following one finds nothing and cannot tell whether the catalog
-    is wrong or its checkout is.
-
-    The sibling package has a real drift guard for this class
-    (`omnidriver-cardiacfoam/tests/test_source_refs_exist.py`, resolving
-    every ref against the native tree); this is the narrower check: not
-    "does the file exist" but "does the citation say where to look"."""
-    entries = list(
-        driver_context(OpenFOAMEnvironmentPlugin(), CardiacCorePlugin(), source="test")
-        .stack.call("get_dict_entries")
-    )
-    scar_dirs = ("setCardiacScar/", "setPurkinjeScar/")
-    cited = [
-        (entry.driver_path, ref)
-        for entry in entries
-        for ref in entry.source_refs
-        if any(directory in ref for directory in scar_dirs)
-    ]
-    assert cited, "no entry cites a scar source at all -- has the catalog changed?"
-    unqualified = sorted(
-        f"{driver_path} -> {ref}"
-        for driver_path, ref in cited
-        if not ref.startswith("scar-branch:")
-    )
-    assert unqualified == [], unqualified
 
 
 def test_every_record_declares_how_omnidriver_check_exercises_it() -> None:

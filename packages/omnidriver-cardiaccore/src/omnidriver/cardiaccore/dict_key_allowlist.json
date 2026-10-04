@@ -14,47 +14,5 @@
       "$CARDIAC_CONDUCTIVITY.conductivityIntracellular.ds"
     ]
   },
-  "unseen_reads": {
-    "read by setCardiacScar and setPurkinjeScar on the scar branch; main removed both utilities (c53a0d7), and the catalogue cites the branch (scar-branch: source_refs)": [
-      "$CARDIAC_SCAR.channelField",
-      "$CARDIAC_SCAR.channelRegionField",
-      "$CARDIAC_SCAR.channels.channelMultiplier",
-      "$CARDIAC_SCAR.channels.channelScale",
-      "$CARDIAC_SCAR.channels.enabled",
-      "$CARDIAC_SCAR.channels.selection",
-      "$CARDIAC_SCAR.coreMultiplier",
-      "$CARDIAC_SCAR.coreThreshold",
-      "$CARDIAC_SCAR.depthField",
-      "$CARDIAC_SCAR.distanceMode",
-      "$CARDIAC_SCAR.exponentialBeta",
-      "$CARDIAC_SCAR.fiberField",
-      "$CARDIAC_SCAR.function",
-      "$CARDIAC_SCAR.idArray",
-      "$CARDIAC_SCAR.logisticK",
-      "$CARDIAC_SCAR.logisticMidpoint",
-      "$CARDIAC_SCAR.maxConductivityScale",
-      "$CARDIAC_SCAR.normalizeByComponent",
-      "$CARDIAC_SCAR.normalizedDepthField",
-      "$CARDIAC_SCAR.power",
-      "$CARDIAC_SCAR.scaleConductivity",
-      "$CARDIAC_SCAR.scarField",
-      "$CARDIAC_SCAR.scarRegionField",
-      "$CARDIAC_SCAR.selection",
-      "$CARDIAC_SCAR.severityField",
-      "$CARDIAC_SCAR.sheetField",
-      "$CARDIAC_SCAR.writeDebugFields",
-      "$PURKINJE_SCAR.inputGraph",
-      "$PURKINJE_SCAR.outputGraph",
-      "$PURKINJE_SCAR.purkinjeScarPolicy.basePvjResistance",
-      "$PURKINJE_SCAR.purkinjeScarPolicy.conductanceBlockThreshold",
-      "$PURKINJE_SCAR.purkinjeScarPolicy.conductanceReduction",
-      "$PURKINJE_SCAR.purkinjeScarPolicy.resistanceMultiplier",
-      "$PURKINJE_SCAR.regionField",
-      "$PURKINJE_SCAR.regions.<region_id>.basePvjResistance",
-      "$PURKINJE_SCAR.regions.<region_id>.conductanceBlockThreshold",
-      "$PURKINJE_SCAR.regions.<region_id>.conductanceReduction",
-      "$PURKINJE_SCAR.regions.<region_id>.resistanceMultiplier",
-      "$PURKINJE_SCAR.severityField"
-    ]
-  }
+  "unseen_reads": {}
 }

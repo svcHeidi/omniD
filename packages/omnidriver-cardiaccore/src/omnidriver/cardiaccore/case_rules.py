@@ -26,5 +26,5 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple[StrictDia
                 source=f"system/{name}",
             ))
             continue
-        found += rule_diagnostics(entries, leaves, document=f"system/{name}", mapping=mapping)
+        found += rule_diagnostics(entries, leaves, document=f"system/{name}", mapping=mapping, catalogue=CATALOG)
     return tuple(found)

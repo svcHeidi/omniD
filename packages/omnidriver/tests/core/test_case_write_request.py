@@ -62,9 +62,9 @@ def test_a_parameter_keeps_its_document_scope():
     """Two documents declaring one leaf name are two parameters."""
     conductivity = _assignment(qualified_id="$CARDIAC_CONDUCTIVITY.fiberField",
                                document="system/setCardiacConductivityDict")
-    scar = _assignment(qualified_id="$CARDIAC_SCAR.fiberField",
-                       document="system/setCardiacScarDict")
-    assert conductivity.slot() != scar.slot()
+    anatomy = _assignment(qualified_id="$CARDIAC_ANATOMY.fiberField",
+                          document="system/setCardiacAnatomyDict")
+    assert conductivity.slot() != anatomy.slot()
 
 
 def test_two_assignments_to_one_slot_are_refused():
