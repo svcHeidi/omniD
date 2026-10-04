@@ -23,7 +23,7 @@ from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_b
 from omnidriver.core.conformance_study import ConformanceStudy
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from omnidriver.core.plugin_interface import CaseRuntimeConventions
-from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
+from omnidriver.core.plugin_profile import CaseFileRule, EnvironmentConnection, PluginProfile, SuppliedVariable
 from omnidriver.core.quantities import RawSample
 from omnidriver.core.runtime import mpi
 from omnidriver.core.runtime.models import DataArtifact
@@ -92,10 +92,10 @@ class ToyProvider:
         return self._case_value_comparator
 
 
-def _profile(provider, rules) -> PluginProfile:
+def _profile(provider, rules, environment=None) -> PluginProfile:
     return PluginProfile(
         path=Path(__file__), plugin_id=provider.plugin_id, api_version=provider.plugin_api_version,
-        case_files=tuple(rules), cxx_mapping=None,
+        case_files=tuple(rules), cxx_mapping=None, environment=environment,
         payload={
             "schema_version": 1,
             "plugin": {"id": provider.plugin_id, "api_version": provider.plugin_api_version},
@@ -294,13 +294,19 @@ class DeclaredCasePlugin(ToyProvider):
         return ()
 
 
+#: The one variable ResumeTestPlugin's connection supplies.
+RESUME_SUPPLIED_VARIABLE = "NUMERICAL_MODE"
+
+
 class ResumeTestPlugin(DeclaredCasePlugin):
-    """Declares one authored input, ``system/settings``, for the resume tests."""
+    """Declares one authored input, ``system/settings``, and one supplied variable, for the resume tests."""
 
     def get_profile(self) -> PluginProfile:
         return _profile(self, (CaseFileRule(
             path="system/settings", kind="test_configuration", role="test.configuration", required="always",
-        ),))
+        ),), environment=EnvironmentConnection(supplied=(
+            SuppliedVariable(RESUME_SUPPLIED_VARIABLE, False, "changes what the toy computes"),
+        )))
 
 
 class NeutralEnvironmentPlugin(ToyProvider):

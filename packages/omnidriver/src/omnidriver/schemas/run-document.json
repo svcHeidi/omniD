@@ -292,7 +292,7 @@
         "is_complete"
       ],
       "properties": {
-        "schema_version": {"const": "2.5-sha256-streaming-256mib-verified-absence-stable-env"},
+        "schema_version": {"const": "2.6-sha256-streaming-256mib-verified-absence-declared-env"},
         "components": {
           "type": "array",
           "items": {"$ref": "#/$defs/provenanceComponent"}
@@ -300,13 +300,13 @@
         "workflow_digest": {"$ref": "#/$defs/sha256Digest"},
         "plugin_identity": {
           "type": "object",
-          "description": "StackIdentity.to_json() (core.provider_identity) plus environment_digest -- runtime.resume.checkpoint_snapshot's own addition, not part of StackIdentity itself.",
+          "description": "StackIdentity.to_json() (core.provider_identity) plus environment (digests of the stack's declared variables and PATH, and the declared launcher's identity) -- runtime.resume.checkpoint_snapshot's own addition, not part of StackIdentity itself.",
           "required": [
             "providers",
             "composition_rule_version",
             "capability_digest",
             "resolutions",
-            "environment_digest"
+            "environment"
           ],
           "properties": {
             "providers": {
@@ -335,7 +335,18 @@
               "type": "object",
               "additionalProperties": {"type": "string", "minLength": 1}
             },
-            "environment_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            "environment": {
+              "type": "object",
+              "required": ["variables"],
+              "properties": {
+                "variables": {
+                  "type": "object",
+                  "additionalProperties": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+                },
+                "launcher": {"type": "object"}
+              },
+              "additionalProperties": false
+            }
           },
           "additionalProperties": false
         },

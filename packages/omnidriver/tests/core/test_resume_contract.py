@@ -17,7 +17,7 @@ from omnidriver.core.runtime.attempt_lease import acquire_attempt_lease, acquire
 from omnidriver.core.runtime.resume import validate_resume
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state, workflow_state_from_json
-from plugins.toy import ResumeTestPlugin
+from plugins.toy import RESUME_SUPPLIED_VARIABLE, ResumeTestPlugin
 
 
 def _completed(tmp_path):
@@ -68,13 +68,32 @@ def test_checkpoint_refuses_drift_or_unbound_state(tmp_path, change):
         dag = copy.deepcopy(dag)
         dag["steps"][0]["args"] = ["-c", "raise SystemExit(9)"]
     elif change == "environment":
-        environment = {"NUMERICAL_MODE": "changed"}
+        environment = {RESUME_SUPPLIED_VARIABLE: "changed"}
     elif change == "legacy":
         state = replace(state, workflow_digest=None, resume_snapshot=None)
     else:
         state = replace(state, completed_steps=())
     with pytest.raises(ValueError):
         validate_resume(state, dag, case_root=tmp_path, driver_context=context, env=environment)
+
+
+def test_an_undeclared_variable_does_not_invalidate_resume(tmp_path):
+    dag, context, output, state = _completed(tmp_path)
+    validate_resume(
+        state, dag, case_root=tmp_path, driver_context=context,
+        env={"FOO_UNRELATED": "1", "PWD": "/elsewhere", "TERM_SESSION_ID": "other"},
+    )
+
+
+def test_a_refused_resume_names_the_variable_that_changed(tmp_path):
+    dag, context, output, state = _completed(tmp_path)
+    with pytest.raises(ValueError, match=f"environment variable {RESUME_SUPPLIED_VARIABLE}") as raised:
+        validate_resume(
+            state, dag, case_root=tmp_path, driver_context=context, env={RESUME_SUPPLIED_VARIABLE: "s3cret-value"},
+        )
+    assert "s3cret-value" not in str(raised.value)
+    with pytest.raises(ValueError, match="environment variable PATH"):
+        validate_resume(state, dag, case_root=tmp_path, driver_context=context, env={"PATH": "/elsewhere"})
 
 
 def test_cli_does_not_report_stale_completed_state_as_success(tmp_path, capsys):

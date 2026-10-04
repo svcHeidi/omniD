@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-SCHEMA_VERSION = "2.5-sha256-streaming-256mib-verified-absence-stable-env"
+SCHEMA_VERSION = "2.6-sha256-streaming-256mib-verified-absence-declared-env"
 """Encodes the hashing and read policy, not just the field layout.
 
 Large required inputs use the same SHA-256 content identity as small inputs,
@@ -285,7 +285,7 @@ def compare(
     ``provider_identity.STACK_IDENTITY_COMPARISON_KEYS`` subset --
     ``resume.checkpoint_snapshot`` builds them from the full
     ``driver_context.identity.to_json()`` (``providers`` and its embedded
-    ``source`` included) plus an ``environment_digest``. That is deliberate,
+    ``source`` included) plus an ``environment`` of the stack's declared variables. That is deliberate,
     not an oversight: a *replay* must reproduce the exact bytes a checkpoint
     depends on, so a changed import ``source`` or a changed environment is
     exactly the kind of difference resume exists to catch, even though

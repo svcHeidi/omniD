@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Mapping
 
@@ -19,39 +20,67 @@ if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
 
 
-# ``load_openfoam_environment`` uses this path only to communicate a sourced
-# environment from a helper shell back to Python.  A fresh temporary filename
-# is created every load, and it is never inherited by the workflow command as
-# a solver setting.  Hashing it would make an unchanged CLI invocation
-# spuriously non-resumable.
-_VOLATILE_ENVIRONMENT_KEYS = frozenset({"_DRIVER_ENV_FILE"})
+def _digest(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
 
 
-def _environment_identity(environment: Mapping[str, str]) -> dict[str, str]:
-    """Return execution-relevant environment values for checkpoint identity."""
-    return {
-        key: value for key, value in environment.items()
-        if key not in _VOLATILE_ENVIRONMENT_KEYS
+def _environment_identity(environment: Mapping[str, str], driver_context: DriverContext) -> dict:
+    """What a replay must find unchanged: the variables the stack's connection supplies, ``PATH`` and the declared launcher.
+
+    Anything else in the environment (``PWD``, ``TERM_*``, a shell's own
+    variables) says nothing about what the solver does. Values are stored as
+    digests, so a refusal can name a variable without a secret being saved.
+    """
+    from ..environment_connection import stack_connection
+
+    connection, _ = stack_connection(driver_context)
+    names = sorted({*(variable.name for variable in connection.supplied), "PATH"})
+    identity: dict = {
+        "variables": {name: _digest(environment[name]) if name in environment else None for name in names},
     }
+    if connection.mpi_launcher is not None:
+        path = shutil.which(connection.mpi_launcher, path=environment.get("PATH"))
+        identity["launcher"] = {"path": path, "real_path": str(Path(path).resolve()) if path else None}
+    return identity
 
 
 def checkpoint_snapshot(case_root: Path, workflow_dag: dict, driver_context: DriverContext,
                         env: Mapping[str, str] | None) -> dict:
     """Build the identity a resumed run's evidence is compared against."""
     environment = dict(os.environ if env is None else env)
-    # Store only the digest, not potentially secret environment values.
-    stable_environment = _environment_identity(environment)
-    env_digest = hashlib.sha256(json.dumps(stable_environment, sort_keys=True).encode()).hexdigest()
     # Full identity, not provider_identity.STACK_IDENTITY_COMPARISON_KEYS: resuming replays a
     # specific prior attempt, so an import-path or environment change must force a fresh run
     # even though it wouldn't count as a "different stack" for plan/run/compare binding.
-    identity = {**driver_context.identity.to_json(), "environment_digest": env_digest}
+    identity = {
+        **driver_context.identity.to_json(),
+        "environment": _environment_identity(environment, driver_context),
+    }
     snapshot = snapshot_from_components(
         enumerate_case_inputs(case_root, workflow_dag=workflow_dag,
                               driver_context=driver_context, env=environment),
         workflow_digest=workflow_digest(workflow_dag), plugin_identity=identity,
     )
     return json.loads(snapshot.to_json())
+
+
+def _changed_names(before: Mapping, after: Mapping) -> list[str]:
+    """The identity entries that differ: each environment variable by name, every other entry by its key."""
+    names = []
+    for key in sorted({*before, *after}):
+        if before.get(key) == after.get(key):
+            continue
+        if key == "environment":
+            old, new = before.get(key) or {}, after.get(key) or {}
+            old_vars, new_vars = old.get("variables", {}), new.get("variables", {})
+            names += [
+                f"environment variable {name}" for name in sorted({*old_vars, *new_vars})
+                if old_vars.get(name) != new_vars.get(name)
+            ]
+            if old.get("launcher") != new.get("launcher"):
+                names.append("environment launcher")
+        else:
+            names.append(f"plugin {key}")
+    return names
 
 
 def validate_resume(state: WorkflowRunState, workflow_dag: dict, *, case_root: Path,
@@ -94,8 +123,15 @@ def validate_resume(state: WorkflowRunState, workflow_dag: dict, *, case_root: P
         raise ValueError("Saved workflow cannot resume with incomplete or metadata-only input evidence")
     differences = compare(before, after)
     if before.schema_version != after.schema_version or differences:
-        paths = ", ".join(diff.path for diff in differences)
-        raise ValueError(f"Saved workflow input evidence changed ({paths or 'fingerprint policy'}); create a fresh run")
+        changed = [
+            diff.path if diff.kind != "plugin"
+            else ", ".join(_changed_names(before.plugin_identity, after.plugin_identity))
+            for diff in differences
+        ]
+        raise ValueError(
+            f"Saved workflow input evidence changed ({', '.join(changed) or 'fingerprint policy'}); "
+            "create a fresh run"
+        )
     if state.status == "completed":
         report = reconcile_artifacts(
             case_root,
