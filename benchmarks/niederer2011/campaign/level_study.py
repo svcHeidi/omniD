@@ -8,10 +8,15 @@ each ``--set`` to ``base``. It changes no value the study states: a
 ``--set`` of a key the study already names is refused, and so is a
 selection that keeps no row. Values are JSON (``dx=0.0005``, ``...=16``).
 
-    python level_study.py --study <zip study> --where dx=0.0005 --out <file>
-    python level_study.py --study <zip study> --where dx=0.0001 \\
+    python level_study.py --study <zip study> --cases-root <tutorials> --where dx=0.0005 --out <file>
+    python level_study.py --study <zip study> --cases-root <tutorials> --where dx=0.0001 \\
         --where system/controlDict:deltaT=5e-05 \\
         --set system/decomposeParDict:numberOfSubdomains=16 --out <file>
+
+A study reads a relative ``cases_root`` against its own folder, and the level
+study is written elsewhere, so ``--cases-root`` (where the tutorials are on
+this machine) is written into it as an absolute path. It is a place, not a
+study value.
 
 Case ids follow the kept rows' order (case_0001, case_0002, ...); the
 campaign's requests name them (README, "Levels and case ids").
@@ -34,7 +39,9 @@ def _assignment(text: str) -> tuple[str, object]:
         raise argparse.ArgumentTypeError(f"{text!r}: the value is not JSON ({exc})") from None
 
 
-def level_study(study: dict, where: list[tuple[str, object]], sets: list[tuple[str, object]]) -> dict:
+def level_study(
+    study: dict, where: list[tuple[str, object]], sets: list[tuple[str, object]], cases_root: Path,
+) -> dict:
     sweep = study.get("sweep", {})
     if sweep.get("mode") != "zip" or sweep.get("dependent"):
         raise ValueError("only a zip study with no 'dependent' entries can be sliced by row")
@@ -46,7 +53,7 @@ def level_study(study: dict, where: list[tuple[str, object]], sets: list[tuple[s
             if all(independent[key][i] == value for key, value in where)]
     if not rows:
         raise ValueError(f"no row of the study has {dict(where)}")
-    base = dict(study.get("base", {}))
+    base = {**study.get("base", {}), "cases_root": str(cases_root.resolve())}
     for key, value in sets:
         if key in base or key in independent:
             raise ValueError(f"--set {key!r}: the study already states it; a level study adds, never overrides")
@@ -58,12 +65,13 @@ def level_study(study: dict, where: list[tuple[str, object]], sets: list[tuple[s
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--study", type=Path, required=True)
+    parser.add_argument("--cases-root", type=Path, required=True)
     parser.add_argument("--where", type=_assignment, action="append", default=[], required=True)
     parser.add_argument("--set", dest="sets", type=_assignment, action="append", default=[])
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        level = level_study(json.loads(args.study.read_text()), args.where, args.sets)
+        level = level_study(json.loads(args.study.read_text()), args.where, args.sets, args.cases_root)
     except (OSError, ValueError, KeyError) as exc:
         print(f"level_study: {exc}", file=sys.stderr)
         return 1

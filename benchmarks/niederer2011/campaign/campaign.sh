@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The campaign's commands (README, "Running it"). Every input is supplied:
 #   PYTHON                          a Python with omnidriver and both plugins installed (default: python3)
-#   OMNIDRIVER_NATIVE_TUTORIALS     cardiacFOAM's native tutorials tree (a directory named tutorials)
+#   OMNIDRIVER_NATIVE_TUTORIALS     cardiacFOAM's native tutorials tree
 #   OPENFOAM_BASHRC                 OpenFOAM's etc/bashrc, sourced for cardiacFOAM only
-#   OMNIDRIVER_OPENCARP_TUTORIALS   openCARP's tutorials tree (a directory named tutorials)
+#   OMNIDRIVER_OPENCARP_TUTORIALS   openCARP's tutorials tree
 #   OPENCARP_MPI_BIN                the bin directory of the MPI openCARP was built against, put first on
 #                                   PATH for openCARP only (a bundled-MPICH install: <prefix>/lib/petsc/bin)
 #   CAMPAIGN_DYLD_LIBRARY_PATH      macOS only: appended to DYLD_LIBRARY_PATH inside each solver's shell
@@ -46,8 +46,8 @@ dt_where() {  # solver dt-ms
   esac
 }
 
-# Runs `sweep-run` for one solver in that solver's own environment, from the
-# directory holding its tutorials tree (each study's cases_root is "tutorials").
+# Runs `sweep-run` for one solver in that solver's own environment. Each level
+# study names its tutorials tree by absolute path (level_study.py --cases-root).
 sweep_run() {  # solver spec output N
   local solver=$1 spec=$2 output=$3 n=$4
   if [ "$solver" = cardiacfoam ]; then
@@ -56,7 +56,6 @@ sweep_run() {  # solver spec output N
     # settings and files to source, and would otherwise see this function's.
     ( set -- ; set +eu; source "$OPENFOAM_BASHRC"; set -eu
       [ -n "${CAMPAIGN_DYLD_LIBRARY_PATH:-}" ] && export DYLD_LIBRARY_PATH="${DYLD_LIBRARY_PATH:+$DYLD_LIBRARY_PATH:}$CAMPAIGN_DYLD_LIBRARY_PATH"
-      cd "$(dirname "$OMNIDRIVER_NATIVE_TUTORIALS")"
       # OpenFOAM's N is the case's numberOfSubdomains (set in the spec); --parallel takes no count.
       "$PYTHON" -m omnidriver sweep-run --plugin cardiacfoam --spec "$spec" --output-dir "$output" \
         --scratch-dir "$RUNS/scratch" $([ "$n" -gt 1 ] && echo --parallel) )
@@ -64,7 +63,6 @@ sweep_run() {  # solver spec output N
     need OMNIDRIVER_OPENCARP_TUTORIALS; need OPENCARP_MPI_BIN
     ( export PATH="$OPENCARP_MPI_BIN:$PATH"
       [ -n "${CAMPAIGN_DYLD_LIBRARY_PATH:-}" ] && export DYLD_LIBRARY_PATH="${DYLD_LIBRARY_PATH:+$DYLD_LIBRARY_PATH:}$CAMPAIGN_DYLD_LIBRARY_PATH"
-      cd "$(dirname "$OMNIDRIVER_OPENCARP_TUTORIALS")"
       "$PYTHON" -m omnidriver sweep-run --plugin opencarp --spec "$spec" --output-dir "$output" \
         --scratch-dir "$RUNS/scratch" $([ "$n" -gt 1 ] && echo --parallel "$n") )
   fi
@@ -74,13 +72,16 @@ sweep_run() {  # solver spec output N
 # the rank count where the case states one (level_study.py adds, never overrides).
 level_spec() {  # solver out N where...
   local solver=$1 out=$2 n=$3; shift 3
-  local source="$HERE/studies/opencarp_$STUDY.json" sets=()
+  local source="$HERE/studies/opencarp_$STUDY.json" sets=() tutorials
   if [ "$solver" = cardiacfoam ]; then
     need OMNIDRIVER_NATIVE_TUTORIALS; source="$OMNIDRIVER_NATIVE_TUTORIALS/$NATIVE_STUDY"
+    tutorials=$OMNIDRIVER_NATIVE_TUTORIALS
     [ "$n" -gt 1 ] && sets=(--set "system/decomposeParDict:numberOfSubdomains=$n")
+  else
+    need OMNIDRIVER_OPENCARP_TUTORIALS; tutorials=$OMNIDRIVER_OPENCARP_TUTORIALS
   fi
   local wheres=(); for w in "$@"; do wheres+=(--where "$w"); done
-  "$PYTHON" "$HERE/level_study.py" --study "$source" "${wheres[@]}" ${sets[@]+"${sets[@]}"} --out "$out"
+  "$PYTHON" "$HERE/level_study.py" --study "$source" --cases-root "$tutorials" "${wheres[@]}" ${sets[@]+"${sets[@]}"} --out "$out"
 }
 
 case "${1:-}" in
