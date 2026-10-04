@@ -53,9 +53,10 @@ class StepExecutionContext:
     execution_env: dict[str, str] | None = None
     source_path: str | None = None
     driver_context: "DriverContext | None" = None
-    #: Edit the case with ``document:key`` patches; both are ``None`` for a
+    #: Edit the case with ``document:key`` patches, rolling the edit back when
+    #: the check it is given (the replan) refuses; both are ``None`` for a
     #: plan that has no record case to edit.
-    apply_study: Callable[[Mapping[str, Any]], tuple[dict[str, Any], ...]] | None = None
+    apply_study: Callable[[Mapping[str, Any], Callable[[], None]], tuple[dict[str, Any], ...]] | None = None
     replan_after_mutation: Callable[[], ReplannedExecution] | None = None
 
 

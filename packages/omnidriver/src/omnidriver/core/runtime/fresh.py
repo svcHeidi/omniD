@@ -17,17 +17,8 @@ _OMNIDRIVER_MARKER_NAMES = (STATE_FILENAME, SWEEP_MANIFEST_FILENAME, RUN_DOCUMEN
 
 
 def _has_omnidriver_marker(output_dir: Path) -> bool:
-    """Whether ``output_dir`` holds a marker at its top level or one level down (a walk of mesh trees is slow)."""
-    for name in _OMNIDRIVER_MARKER_NAMES:
-        if (output_dir / name).exists():
-            return True
-    for child in output_dir.iterdir():
-        if not child.is_dir():
-            continue
-        for name in _OMNIDRIVER_MARKER_NAMES:
-            if (child / name).exists():
-                return True
-    return False
+    """Whether ``output_dir`` itself holds a marker: one in a subdirectory says nothing about the rest of the tree."""
+    return any((output_dir / name).exists() for name in _OMNIDRIVER_MARKER_NAMES)
 
 
 def check_fresh_deletion_allowed(output_dir: Path, *, allowed_root: Path | None) -> str | None:
@@ -36,6 +27,8 @@ def check_fresh_deletion_allowed(output_dir: Path, *, allowed_root: Path | None)
     output_dir need not exist -- a nonexistent directory always passes (there
     is nothing to lose).
     """
+    if output_dir.is_symlink():
+        return f"--fresh refuses to delete {output_dir}: it is a symlink, which could lead anywhere."
     resolved = output_dir.resolve()
     if resolved.parent == resolved:
         return f"--fresh refuses to delete the filesystem root ({resolved})."
@@ -57,8 +50,8 @@ def check_fresh_deletion_allowed(output_dir: Path, *, allowed_root: Path | None)
         return (
             f"--fresh refuses to delete {resolved}: directory exists but contains "
             "no recognizable omnidriver artifact (workflow_state.json, "
-            "sweep_manifest.json, or run_document.json) at its top level or one "
-            "level of subdirectories. Check --output-dir for a typo."
+            "sweep_manifest.json, or run_document.json) at its top level. Check "
+            "--output-dir for a typo."
         )
     return None
 

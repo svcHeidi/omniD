@@ -127,7 +127,7 @@ def test_schema_accepts_serialized_workflow_identity_and_resume_evidence(schema)
         "steps": [],
         "workflow_digest": "sha256:" + "a" * 64,
         "resume_snapshot": {
-                "schema_version": "2.5-sha256-streaming-256mib-verified-absence-stable-env",
+                "schema_version": "2.6-sha256-streaming-256mib-verified-absence-declared-env",
             "components": [{
                 "kind": "file",
                 "path": "system/controlDict",
@@ -140,7 +140,7 @@ def test_schema_accepts_serialized_workflow_identity_and_resume_evidence(schema)
             }],
             "workflow_digest": "sha256:" + "a" * 64,
             # StackIdentity.to_json() (core.provider_identity) plus the
-            # environment_digest that runtime.resume.checkpoint_snapshot adds
+            # environment that runtime.resume.checkpoint_snapshot adds
             # -- not a flat PluginIdentity shape.
             "plugin_identity": {
                 "providers": [{
@@ -153,7 +153,7 @@ def test_schema_accepts_serialized_workflow_identity_and_resume_evidence(schema)
                 "composition_rule_version": "1",
                 "capability_digest": "b" * 64,
                 "resolutions": {"command_authorization": "org.example.test"},
-                "environment_digest": "c" * 64,
+                "environment": {"variables": {"NUMERICAL_MODE": "c" * 64, "HYDRA_IFACE": None}},
             },
             "aggregate_digest": "sha256:" + "d" * 64,
             "is_complete": True,

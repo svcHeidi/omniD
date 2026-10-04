@@ -1271,7 +1271,7 @@ def test_an_unchanged_case_is_checked_too(tmp_path):
         )
 
 
-def test_an_applied_edit_that_breaks_a_rule_is_refused_and_stays_in_the_case(tmp_path):
+def test_an_applied_edit_that_breaks_a_rule_is_refused_and_rolled_back(tmp_path):
     _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
     context = driver_context(
         _RuleCheckingPlugin(tutorial_records={}, record_key_validator=_known_catalog_validator),
@@ -1282,13 +1282,13 @@ def test_an_applied_edit_that_breaks_a_rule_is_refused_and_stays_in_the_case(tmp
         study_by_source={"base": {}}, driver_context=context,
     )
     with acquire_case_lease(tmp_path / "staged"), pytest.raises(
-        TutorialRecordError, match="12 cells exceed 10.*the edit stays in the case",
+        TutorialRecordError, match="12 cells exceed 10.*as it was before the edit",
     ):
         record_execution.apply_record_study(
             _record(), case_root=tmp_path / "staged",
             study={"constant/mesh.json:cells": 12}, driver_context=context,
         )
-    assert json.loads((tmp_path / "staged" / "constant" / "mesh.json").read_text())["cells"] == "12"
+    assert json.loads((tmp_path / "staged" / "constant" / "mesh.json").read_text())["cells"] == "5"
 
 
 def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(tmp_path):

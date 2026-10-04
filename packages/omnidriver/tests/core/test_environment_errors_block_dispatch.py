@@ -1,4 +1,4 @@
-"""An environment-only error does not fail a plan, and it stops the run before anything executes."""
+"""An environment-only error does not fail a plan but blocks it, and it stops the run before anything executes."""
 from __future__ import annotations
 
 import json
@@ -17,9 +17,9 @@ def _run(tmp_path, capsys, action):
     return code, json.loads(capsys.readouterr().out)
 
 
-def test_the_plan_stays_ok_while_the_environment_stage_is_blocked(tmp_path, capsys):
+def test_the_plan_is_blocked_not_failed_while_the_environment_stage_is_blocked(tmp_path, capsys):
     code, payload = _run(tmp_path, capsys, "plan")
-    assert code == 0 and payload["status"] == "ok"
+    assert code == 1 and payload["status"] == "blocked"
     assert payload["run_document"]["status"] == "planned"
     assert payload["run_document"]["validation"]["status"] == "ok"
     assert payload["readiness_score"]["status"] == "blocked"
@@ -33,3 +33,14 @@ def test_run_refuses_the_environment_error_before_executing(tmp_path, capsys):
     assert payload["error"] == "Execution environment preflight failed."
     assert [item["code"] for item in payload["environment_diagnostics"]] == ["toy_environment_missing"]
     assert not list((tmp_path / "scratch").rglob("solved.marker"))
+
+
+def test_a_plan_whose_environment_preflight_finds_nothing_is_ok(tmp_path, capsys):
+    from plugins.toy import SILENT_PREFLIGHT_PLUGIN
+
+    write_toy_native_case(tmp_path / "native")
+    code = main([
+        "plan", "--strict", "--plugin", SILENT_PREFLIGHT_PLUGIN, "--entry", "toyTutorial",
+        "--cases-root", str(tmp_path / "native"), "--scratch-dir", str(tmp_path / "scratch"),
+    ])
+    assert code == 0 and json.loads(capsys.readouterr().out)["status"] == "ok"

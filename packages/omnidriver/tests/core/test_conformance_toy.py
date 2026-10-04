@@ -181,7 +181,7 @@ def test_a_child_that_outlives_the_timeout_is_a_failed_verdict(check_id, tmp_pat
 def test_the_sweep_passes_the_timeout_per_case(tmp_path, monkeypatch):
     import subprocess
 
-    from omnidriver.conformance import checks
+    from omnidriver.conformance import checks, harness
 
     calls = []
 
@@ -189,11 +189,28 @@ def test_the_sweep_passes_the_timeout_per_case(tmp_path, monkeypatch):
         calls.append((argv, kwargs))
         raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"))
 
-    monkeypatch.setattr(checks.subprocess, "run", spy)
+    monkeypatch.setattr(harness, "run_child", spy)
     run_check("C7", dataclasses.replace(toy_conformance_target(tmp_path), timeout_s=42.0))
     [(argv, kwargs)] = calls
     assert kwargs["timeout"] == 42.0
     assert argv[argv.index("--case-timeout-s") + 1] == "42.0"
+
+
+def test_a_conformance_run_gives_its_state_file_so_a_timeout_ends_the_step_too(tmp_path, monkeypatch):
+    import subprocess
+
+    from omnidriver.conformance import checks
+
+    calls = []
+
+    def spy(argv, **kwargs):
+        calls.append(kwargs)
+        raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"))
+
+    monkeypatch.setattr(checks, "run_child", spy)
+    run_check("C6", toy_conformance_target(tmp_path))
+    [kwargs] = calls
+    assert kwargs["state_path"].name == "workflow_state.json"
 
 
 @pytest.mark.parametrize("inside", [".", "scratch", "toyTutorial/scratch"])
@@ -229,12 +246,13 @@ def test_an_absent_optional_artifact_fails_neither_run_check(check_id, tmp_path,
     import json
     import subprocess
 
-    from omnidriver.conformance import checks
+    from omnidriver.conformance import checks, harness
 
     def canned(argv, **kwargs):
         return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(_CANNED_CHILD_OUTPUT[check_id]), stderr="")
 
-    monkeypatch.setattr(checks.subprocess, "run", canned)
+    monkeypatch.setattr(checks, "run_child", canned)
+    monkeypatch.setattr(harness, "run_child", canned)
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert verdict.passed, verdict.detail
 
@@ -245,7 +263,7 @@ def test_an_absent_required_artifact_fails_both_run_checks(check_id, tmp_path, m
     import json
     import subprocess
 
-    from omnidriver.conformance import checks
+    from omnidriver.conformance import checks, harness
 
     output = copy.deepcopy(_CANNED_CHILD_OUTPUT[check_id])
     for rec in [output.get("artifact_reconciliation")] + [c["artifact_reconciliation"] for c in output.get("cases", ())]:
@@ -255,7 +273,8 @@ def test_an_absent_required_artifact_fails_both_run_checks(check_id, tmp_path, m
     def canned(argv, **kwargs):
         return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(output), stderr="")
 
-    monkeypatch.setattr(checks.subprocess, "run", canned)
+    monkeypatch.setattr(checks, "run_child", canned)
+    monkeypatch.setattr(harness, "run_child", canned)
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert not verdict.passed
     assert "record.solve.0" in verdict.detail

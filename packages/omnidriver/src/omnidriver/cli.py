@@ -4,6 +4,7 @@ import argparse
 import dataclasses
 import json
 import os
+import signal
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -12,7 +13,8 @@ from typing import TYPE_CHECKING, Callable
 from .core.runtime.failure_context import build_failure_context
 from .core.runtime.launch_readiness import is_execution_successful, is_launchable
 from .core.runtime.remediation import build_candidate_remediations
-from .core.runtime.workflow_runner import run_workflow_step, _step_state_by_id
+from .core.runtime.process_control import clear_stop_request, install_signal_handlers
+from .core.runtime.workflow_runner import _step_state_by_id, run_workflow_step, settle_interrupted_steps
 from .core.runtime.workflow_orchestrator import run_workflow
 from .core.runtime.workflow_state import workflow_state_from_json
 from .core.runtime.case_records import (
@@ -195,7 +197,12 @@ def _execute_step(
             payload["workflow_state_path"] = str(state_path)
         print(json.dumps(payload, indent=2))
         return 1
-    print(json.dumps(dict(result.payload), indent=2))
+    payload = dict(result.payload)
+    if result.status != "rejected":
+        payload["artifact_reconciliation"] = _reconciliation_payload(
+            case_root, expected_artifacts, driver_context=driver_context,
+        )
+    print(json.dumps(payload, indent=2))
     return 0 if result.status == "succeeded" else 1
 
 
@@ -229,14 +236,18 @@ def _execute_run(
     """Run a workflow to completion and print the JSON payload; refuses to auto-resume a terminally failed saved state (use action=step)."""
     state_path = output_dir / STATE_FILENAME
     workflow_state = planned_state
+    replayed = False
     if state_path.exists():
         try:
-            workflow_state = workflow_state_from_json(json.loads(state_path.read_text()))
+            workflow_state = settle_interrupted_steps(
+                workflow_state_from_json(json.loads(state_path.read_text())), state_path,
+            )
             from .core.runtime.resume import validate_resume
 
             validate_resume(workflow_state, workflow_dag, case_root=case_root,
                             driver_context=driver_context, env=execution_env,
                             expected_artifacts=tuple(expected_artifacts or ()))
+            replayed = workflow_state.status == "completed"
         except Exception as exc:
             print(json.dumps({
                 "status": "failed",
@@ -291,6 +302,8 @@ def _execute_run(
         "workflow_state_path": str(state_path),
         "workflow_state": workflow_state.to_json(),
     }
+    if replayed:
+        payload["replayed"] = True
     if workflow_state.status == "pending" and workflow_state.current_step_id is None:
         payload["error"] = "workflow_state is pending but has no current_step_id"
     elif workflow_state.status == "pending" and max_total_attempts is not None:
@@ -397,7 +410,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             expected_artifacts=current_inputs.expected_artifacts,
         )
 
-    def apply_study(study: dict) -> tuple[dict, ...]:
+    def apply_study(study: dict, check: Callable[[], None]) -> tuple[dict, ...]:
         from .core.runtime.record_execution import apply_record_study
 
         records = driver_context.stack.call("get_tutorial_records")
@@ -406,7 +419,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             raise ValueError(f"run document {run_doc.name!r} is not a tutorial record of this plugin")
         return apply_record_study(
             record, case_root=inputs.case_root, study=study,
-            driver_context=driver_context, execution_env=execution_env,
+            driver_context=driver_context, execution_env=execution_env, check=check,
         )
 
     return _ExecutionContext(
@@ -520,6 +533,18 @@ def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
     output_existed = context.output_dir.exists()
     with acquire_attempt_lease(context.output_dir):
         if args.fresh and output_existed:
+            if context.case_root.resolve().is_relative_to(context.output_dir.resolve()):
+                print(json.dumps({
+                    "status": "failed",
+                    "entry": context.entry_label,
+                    "action": args.action,
+                    "error": (
+                        f"--fresh would delete the case itself: its output directory "
+                        f"{context.output_dir} holds the case. Plan again "
+                        "(plan --strict --entry) to restage it"
+                    ),
+                }, indent=2))
+                return 1
             fresh_error = ensure_fresh_output_dir(
                 context.output_dir,
                 fresh=True,
@@ -715,7 +740,10 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Path to a RunDocument v3 JSON file. With action=run/step, "
             "executes the document's workflowDag instead of regenerating "
-            "the plan from --entry. Mutually exclusive with --entry/--case."
+            "the plan from --entry. Mutually exclusive with --entry/--case. "
+            "Given neither --plugin nor --repo, the stack is the installed "
+            "plugin (and repository) the plan recorded in the document's "
+            "launch command."
         ),
     )
     parser.add_argument(
@@ -796,7 +824,11 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "action=step with --run-document only: edit the staged case with a "
             "JSON object of 'document:key' patches, the same a study takes, "
-            "then rerun the step."
+            "then rerun the step. The step must be pending or failed with its "
+            "dependencies completed, or nothing is written. An edit the "
+            "stack's rules refuse, or whose replan changes the workflow, is "
+            "rolled back; patches that change nothing do not rerun a step that "
+            "has run (status 'unchanged', exit 1)."
         ),
     )
     parser.add_argument(
@@ -846,16 +878,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--fresh",
         action="store_true",
         help=(
-            "For action=step/run/sweep-run: delete the resolved output "
-            "directory before running, so the workflow executes as if no "
-            "prior run existed. Use after a code/config change to guarantee "
-            "a real rerun instead of silently resuming a stale "
-            "workflow_state.json/sweep_manifest.json as 'completed'. "
-            "Refuses to delete the filesystem root, your home directory, a "
-            "too-shallow path, anything outside OMNIDRIVER_ALLOWED_RUNS_ROOT "
-            "when set, or a directory with no recognizable omnidriver "
-            "artifact. No confirmation prompt -- treat --output-dir as fully "
-            "disposable when passing this flag."
+            "For action=step/run with --run-document, and sweep-run: delete the "
+            "previous output before running, so the workflow executes as if no "
+            "prior run existed. With --run-document it clears the run's output "
+            "directory (refused where that directory holds the case, as it does "
+            "for a record: plan again); with sweep-run it clears --output-dir, "
+            "after the spec has been validated. Not valid with --entry/--case, "
+            "which always restage. Refuses to delete the filesystem root, your "
+            "home directory, a too-shallow path, a symlink, anything outside "
+            "OMNIDRIVER_ALLOWED_RUNS_ROOT when set, or a directory with no "
+            "omnidriver artifact (workflow_state.json, sweep_manifest.json or "
+            "run_document.json) at its top level. No confirmation prompt."
         ),
     )
     parser.add_argument(
@@ -1039,6 +1072,11 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
             parser.error(f"--strict/--run-document/--step/--apply are not valid with action={args.action}")
     if args.action in {"sweep-plan", "sweep-run"} and not args.spec:
         parser.error(f"action={args.action} requires --spec")
+    if args.fresh and (args.entry or args.case):
+        parser.error(
+            "--fresh is not valid with --entry/--case: they always restage the case, replacing the "
+            "previous one; use --fresh with --run-document or sweep-run"
+        )
     if args.fresh and args.action not in {"step", "run", "sweep-run"}:
         parser.error("--fresh is only valid with action=step, action=run, or action=sweep-run")
     if args.max_cases != 200 and args.action not in {"sweep-plan", "sweep-run"}:
@@ -1171,6 +1209,31 @@ def _check(args, driver_context, repository, cases_root: Path, inputs: dict[str,
     return 0
 
 
+def _adopt_run_document_stack(args) -> None:
+    """With neither ``--plugin`` nor ``--repo``, take them from the command the run document was planned with.
+
+    Only an installed plugin id is taken: a document never names Python to
+    import (a ``module:Class`` selector must be passed explicitly).
+    """
+    if not args.run_document or args.plugin or args.repo:
+        return
+    try:
+        command = json.loads(Path(args.run_document).read_text())["launch"]["command"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return
+    if not isinstance(command, list):
+        return
+
+    def after(flag: str) -> str | None:
+        """The word that follows ``flag`` in the recorded command."""
+        index = command.index(flag) + 1 if flag in command else len(command)
+        return command[index] if index < len(command) else None
+
+    plugin = after("--plugin")
+    if isinstance(plugin, str) and ":" not in plugin:
+        args.plugin, args.repo = plugin, after("--repo")
+
+
 def _select_stack(parser: argparse.ArgumentParser, args):
     """The stack and the repository it came from (``--repo`` or a supplied cases root, never a search); ``--plugin`` and the repository must agree."""
     from .core.plugin_interface import load_plugin_context
@@ -1238,9 +1301,12 @@ def main(argv: list[str] | None = None) -> int:
         return build_main(argv[1:])
     parser = build_parser()
     previous = os.environ.get(SCRATCH_ENV_VAR)
+    previous_handlers: dict = {}
     try:
         args = parser.parse_args(argv)
         _validate_args(parser, args)
+        if args.action in {"step", "run", "sweep-run", "check"}:
+            previous_handlers = install_signal_handlers()
         if args.scratch_dir and args.action != "recover":
             # The one supplied scratch root, for the layers that cache a scan there.
             os.environ[SCRATCH_ENV_VAR] = str(Path(args.scratch_dir).expanduser())
@@ -1248,6 +1314,9 @@ def main(argv: list[str] | None = None) -> int:
     except Refusal as exc:
         return print_refusal(exc)
     finally:
+        for number, handler in previous_handlers.items():
+            signal.signal(number, handler)
+        clear_stop_request()
         if previous is None:
             os.environ.pop(SCRATCH_ENV_VAR, None)
         else:
@@ -1261,6 +1330,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
     if args.action == "compare":
         return _compare_quantities(args)
 
+    _adopt_run_document_stack(args)
     driver_context, repository = _select_stack(parser, args)
 
     if args.action == "env":
@@ -1380,11 +1450,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             }, indent=2))
             return 1
         print(json.dumps(report.to_json(), indent=2))
-        readiness = is_launchable(
-            plan_status=report.status,
-            environment_diagnostics=report.environment_diagnostics,
-        )
-        return 0 if readiness.structural_ok else 1
+        return 0 if report.status == "ok" else 1
 
     if args.action in {"step", "run"}:
         if not (args.strict or args.run_document):

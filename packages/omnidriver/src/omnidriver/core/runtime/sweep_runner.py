@@ -26,7 +26,8 @@ from .record_execution import (
 from .run_command import omnidriver_run_command
 from .run_document_exec import RUN_DOCUMENT_FILENAME, _allowed_runs_root
 from .workflow_orchestrator import STATE_FILENAME
-from .workflow_runner import _terminate_process_group, utc_now
+from .process_control import run_child
+from .workflow_runner import utc_now
 from .sweep_manifest import (
     SWEEP_MANIFEST_FILENAME,
     CaseManifestEntry,
@@ -39,34 +40,6 @@ from .sweep_manifest import (
 
 if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
-
-
-def _run_case_process(
-    command: list[str],
-    *,
-    env: dict[str, str],
-    timeout: float | None,
-) -> subprocess.CompletedProcess[str]:
-    """Run one sweep case, owning its POSIX process group on timeout."""
-    if timeout is None:
-        return subprocess.run(command, capture_output=True, text=True, env=env)
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=env,
-        start_new_session=(os.name == "posix"),
-    )
-    try:
-        stdout, stderr = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
-        _terminate_process_group(process)
-        stdout, stderr = process.communicate()
-        raise subprocess.TimeoutExpired(
-            command, exc.timeout, output=stdout, stderr=stderr,
-        ) from exc
-    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
 def _child_reconciliation(stdout: str) -> dict[str, Any] | None:
@@ -204,19 +177,17 @@ def _record_sweep_plan(
 
 
 def _record_sweep_run(
-    record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
+    record: Any, cases_root: Path, sweep_spec: dict[str, Any], resolved_cases: Sequence[Any], *,
     output_dir: Path, case_timeout_s: float | None,
     cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, str | Path] | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     """Plan and run every case of a record sweep fresh and in sequence, writing a manifest; no resume or skip."""
-    _validate_record_sweep_upfront(record, sweep_spec, driver_context=driver_context)
     execution_environment = dict(driver_context.stack.call(
         "get_configured_environment", dict(os.environ), driver_context,
     ))
     output_dir.mkdir(parents=True, exist_ok=True)
-    resolved_cases = expand_sweep(sweep_spec, get_derivation=get_derivation)
     base = sweep_spec.get("base", {})
 
     manifest_path = output_dir / SWEEP_MANIFEST_FILENAME
@@ -261,7 +232,7 @@ def _record_sweep_run(
             report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
             payload = report.to_json()
             if report.status != "ok":
-                plan_error = "strict_plan reported failed status"
+                plan_error = f"strict_plan reported {report.status} status"
             else:
                 run_document = payload["run_document"]
                 workflow_state_path = _workflow_state_path_from_run_document(run_document)
@@ -269,10 +240,11 @@ def _record_sweep_run(
                 run_document_path.write_text(json.dumps(run_document, indent=2))
                 if workflow_state_path.exists():
                     workflow_state_path.unlink()
-                result = _run_case_process(
+                result = run_child(
                     omnidriver_run_command(driver_context, "--run-document", str(run_document_path)),
                     env=execution_environment,
                     timeout=case_timeout_s,
+                    state_path=workflow_state_path,
                 )
                 artifact_reconciliation = _child_reconciliation(result.stdout)
                 if workflow_state_path.exists():
@@ -379,6 +351,11 @@ def _stage_entry_case(
         if driver_context is not None else CaseRuntimeConventions()
     )
     replica_globs = replica_directory_globs(driver_context)
+    if Path(staged_case_root).is_symlink():
+        raise TutorialRecordError(
+            f"the staged case root {staged_case_root} is a symlink; staging replaces it, so it "
+            "must be a real directory (remove the link, or use another --scratch-dir)"
+        )
     source_case_root = Path(source_case_root).resolve()
     staged_case_root = Path(staged_case_root).resolve()
 
@@ -644,9 +621,14 @@ def sweep_run(
     record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
     # Resolved to absolute before staging: commit_record_case requires
     # CaseMutationRequest.case_root to be absolute.
-    output_dir = Path(output_dir).resolve()
+    requested_dir = Path(output_dir)
+    output_dir = requested_dir.resolve()
+    # The spec is validated before --fresh deletes anything.
+    _validate_record_sweep_upfront(record, sweep_spec, driver_context=driver_context)
+    resolved_cases = expand_sweep(sweep_spec, get_derivation=get_derivation)
+    # The path as given: resolving it first would hide a symlink.
     fresh_error = ensure_fresh_output_dir(
-        output_dir, fresh=fresh, allowed_root=_allowed_runs_root(),
+        requested_dir, fresh=fresh, allowed_root=_allowed_runs_root(),
     )
     if fresh_error is not None:
         raise SweepValidationError(fresh_error)
@@ -672,7 +654,7 @@ def sweep_run(
             "to start over, or use a new --output-dir"
         )
     return _record_sweep_run(
-        record, cases_root, sweep_spec, output_dir=output_dir,
+        record, cases_root, sweep_spec, resolved_cases, output_dir=output_dir,
         case_timeout_s=case_timeout_s, cli_study=cli_study,
         inputs=inputs, driver_context=driver_context,
     )

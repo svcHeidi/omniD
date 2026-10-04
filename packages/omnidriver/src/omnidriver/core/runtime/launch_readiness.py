@@ -36,7 +36,8 @@ def is_launchable(
 ) -> LaunchReadiness:
     """Compute launch readiness from a plan's status and environment diagnostics.
 
-    ``plan_status`` is ``StrictPlanReport.status`` ("ok"/"failed"); warn-only
+    ``plan_status`` is ``StrictPlanReport.status`` ("ok", "blocked" when the
+    plan is valid but its environment preflight holds an error, or "failed"); warn-only
     diagnostics never factor into it. Only ``environment_diagnostics`` entries
     with ``level == "error"`` block launch; ``level == "warning"`` entries only
     set ``has_warnings``. In ``simulation_audit``, a stage scored
@@ -44,7 +45,7 @@ def is_launchable(
     ``simulation_audit`` means no coverage information was supplied, and never
     blocks -- offline planning must keep working with the runtime absent.
     """
-    structural_ok = plan_status == "ok"
+    structural_ok = plan_status in {"ok", "blocked"}
     environment_errors = tuple(
         diagnostic for diagnostic in environment_diagnostics if diagnostic.level == "error"
     )

@@ -23,7 +23,7 @@ from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_b
 from omnidriver.core.conformance_study import ConformanceStudy
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from omnidriver.core.plugin_interface import CaseRuntimeConventions
-from omnidriver.core.plugin_profile import CaseFileRule, PluginProfile
+from omnidriver.core.plugin_profile import CaseFileRule, EnvironmentConnection, PluginProfile, SuppliedVariable
 from omnidriver.core.quantities import RawSample
 from omnidriver.core.runtime import mpi
 from omnidriver.core.runtime.models import DataArtifact
@@ -92,10 +92,10 @@ class ToyProvider:
         return self._case_value_comparator
 
 
-def _profile(provider, rules) -> PluginProfile:
+def _profile(provider, rules, environment=None) -> PluginProfile:
     return PluginProfile(
         path=Path(__file__), plugin_id=provider.plugin_id, api_version=provider.plugin_api_version,
-        case_files=tuple(rules), cxx_mapping=None,
+        case_files=tuple(rules), cxx_mapping=None, environment=environment,
         payload={
             "schema_version": 1,
             "plugin": {"id": provider.plugin_id, "api_version": provider.plugin_api_version},
@@ -294,13 +294,22 @@ class DeclaredCasePlugin(ToyProvider):
         return ()
 
 
+#: The one variable ResumeTestPlugin's connection supplies.
+RESUME_SUPPLIED_VARIABLE = "NUMERICAL_MODE"
+#: ... and the file it sources first, which only says where a file is.
+RESUME_LOCATION_VARIABLE = "TOY_RC_LOCATION"
+
+
 class ResumeTestPlugin(DeclaredCasePlugin):
-    """Declares one authored input, ``system/settings``, for the resume tests."""
+    """Declares one authored input, ``system/settings``, and one supplied variable and one sourced file, for the resume tests."""
 
     def get_profile(self) -> PluginProfile:
         return _profile(self, (CaseFileRule(
             path="system/settings", kind="test_configuration", role="test.configuration", required="always",
-        ),))
+        ),), environment=EnvironmentConnection(supplied=(
+            SuppliedVariable(RESUME_SUPPLIED_VARIABLE, False, "changes what the toy computes"),
+            SuppliedVariable(RESUME_LOCATION_VARIABLE, False, "where the toy's rc file is"),
+        ), source=RESUME_LOCATION_VARIABLE))
 
 
 class NeutralEnvironmentPlugin(ToyProvider):
@@ -651,6 +660,36 @@ class RuleCheckingPlugin(ToyStack):
         return (diagnostic("error", "too_many_cells", f"{cells} cells exceed {TOY_CELL_LIMIT}", field="cells"),)
 
 
+class FailsUntilSevenCellsPlugin(RuleCheckingPlugin):
+    """The rule of RuleCheckingPlugin, and a solve step that fails until the case holds seven cells."""
+
+    SOLVER_COMMANDS = frozenset({"touch", "sh"})
+    RECORDS = {"toyTutorial": _toy_record(_solve(("sh", "-c", "grep -q 7 constant/mesh.json && touch solved.marker")))}
+
+
+class SleepingPlugin(ToyStack):
+    """Its one step sleeps for a minute, for tests that end a running step."""
+
+    SOLVER_COMMANDS = frozenset({"sleep"})
+    RECORDS = {"toyTutorial": _toy_record(_solve(("sleep", "60"), produces=()))}
+
+
+class StubbornSleepingPlugin(ToyStack):
+    """Its step ignores SIGTERM, so only SIGKILL ends it."""
+
+    SOLVER_COMMANDS = frozenset({"sh"})
+    RECORDS = {"toyTutorial": _toy_record(_solve(("sh", "-c", "trap '' TERM; sleep 60"), produces=()))}
+
+
+class TwoStepPlugin(ToyStack):
+    """A ``mesh`` step, then the ``solve`` step that depends on it."""
+
+    RECORDS = {"toyTutorial": _toy_record(
+        dataclasses.replace(_solve(("touch", "mesh.marker"), produces=("mesh.marker",)), step_id="mesh"),
+        _solve(("touch", "solved.marker")),
+    )}
+
+
 class AcceptingAnyKeyPlugin(ToyStack):
     """Its key validator accepts a key nobody declared, so a typo in a study reaches the case."""
 
@@ -966,6 +1005,10 @@ WITH_INPUT_PLUGIN = _selector("WithInputPlugin")
 DEFAULT_ARGUMENT_PLUGIN = _selector("DefaultArgumentPlugin")
 RULE_CHECKING_PLUGIN = _selector("RuleCheckingPlugin")
 EXPLAINING_PLUGIN = _selector("ExplainingFailurePlugin")
+FAILS_UNTIL_SEVEN_CELLS_PLUGIN = _selector("FailsUntilSevenCellsPlugin")
+TWO_STEP_PLUGIN = _selector("TwoStepPlugin")
+SLEEPING_PLUGIN = _selector("SleepingPlugin")
+STUBBORN_SLEEPING_PLUGIN = _selector("StubbornSleepingPlugin")
 ACCEPTING_PLUGIN = _selector("AcceptingAnyKeyPlugin")
 BROKEN_RULE_PLUGIN = _selector("AlwaysBrokenCasePlugin")
 PARALLEL_TOY_PLUGIN = _selector("ParallelToyPlugin")

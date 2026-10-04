@@ -13,7 +13,8 @@ from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_b
 from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.core.runtime.attempt_lease import AttemptLeaseError, acquire_case_lease
-from omnidriver.core.runtime.sweep_runner import _run_case_process, _stage_entry_case, sweep_plan, sweep_run
+from omnidriver.core.runtime.process_control import run_child
+from omnidriver.core.runtime.sweep_runner import _stage_entry_case, sweep_plan, sweep_run
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 from omnidriver.core.tutorial_records import (
     AxisContract,
@@ -211,7 +212,7 @@ def test_sweep_case_timeout_kills_term_ignoring_descendant(tmp_path):
     )
 
     with pytest.raises(subprocess.TimeoutExpired):
-        _run_case_process(
+        run_child(
             [sys.executable, "-c", parent_code],
             env=dict(os.environ),
             timeout=1,
@@ -346,6 +347,9 @@ class _RecordSweepWriterPlugin(ToyProvider):
 
     def get_config_value_reader(self):
         return _record_read_current_value
+
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
+        return ()
 
 
 def _toy_record() -> TutorialRecord:
@@ -493,7 +497,7 @@ def test_sweep_run_over_a_record_entry_persists_unchanged_patches_in_the_manifes
         return mock.Mock(returncode=0, stdout="", stderr="")
 
     with mock.patch(
-        "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+        "omnidriver.core.runtime.sweep_runner.run_child", side_effect=fake_subprocess_run,
     ):
         result = sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
 
@@ -549,7 +553,7 @@ def test_sweep_run_over_a_record_entry_commits_and_runs_two_cases(tmp_path):
         "omnidriver.core.runtime.sweep_runner.commit_and_build_record_spec",
         side_effect=tracking_commit,
     ), mock.patch(
-        "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+        "omnidriver.core.runtime.sweep_runner.run_child", side_effect=fake_subprocess_run,
     ):
         result = sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
 
@@ -584,13 +588,13 @@ def test_sweep_run_over_a_record_entry_refuses_to_resume_an_existing_manifest(tm
         return mock.Mock(returncode=0, stdout="", stderr="")
 
     with mock.patch(
-        "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+        "omnidriver.core.runtime.sweep_runner.run_child", side_effect=fake_subprocess_run,
     ):
         sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
 
     with pytest.raises(TutorialRecordError, match="does not resume"):
         with mock.patch(
-            "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+            "omnidriver.core.runtime.sweep_runner.run_child", side_effect=fake_subprocess_run,
         ):
             sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
 
@@ -613,14 +617,14 @@ def test_sweep_run_over_a_record_entry_refuses_a_changed_spec_against_the_same_o
         return mock.Mock(returncode=0, stdout="", stderr="")
 
     with mock.patch(
-        "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+        "omnidriver.core.runtime.sweep_runner.run_child", side_effect=fake_subprocess_run,
     ):
         sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
 
     spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(4,))))
     with pytest.raises(SweepValidationError, match="hash mismatch"):
         with mock.patch(
-            "omnidriver.core.runtime.sweep_runner.subprocess.run", side_effect=fake_subprocess_run,
+            "omnidriver.core.runtime.sweep_runner.run_child", side_effect=fake_subprocess_run,
         ):
             sweep_run(spec_path, output_dir=tmp_path / "out", driver_context=ctx)
 
@@ -647,7 +651,7 @@ def test_sweep_refuses_over_cap_without_staging_any_case(tmp_path):
     ctx = _record_driver_context()
 
     with mock.patch("omnidriver.core.runtime.sweep_runner.commit_and_build_record_spec") as commit, \
-         mock.patch("omnidriver.core.runtime.sweep_runner.subprocess.run") as run:
+         mock.patch("omnidriver.core.runtime.sweep_runner.run_child") as run:
         with pytest.raises(SweepValidationError):
             sweep_plan(spec_path, output_dir=tmp_path / "out", max_cases=2, driver_context=ctx)
         with pytest.raises(SweepValidationError):
@@ -690,7 +694,7 @@ def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
         seen_timeouts.append(kwargs.get("timeout"))
         raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
 
-    with mock.patch("omnidriver.core.runtime.sweep_runner._run_case_process", side_effect=fake_case_process):
+    with mock.patch("omnidriver.core.runtime.sweep_runner.run_child", side_effect=fake_case_process):
         result = sweep_run(
             spec_path, output_dir=output_dir, case_timeout_s=0.01, driver_context=_record_driver_context(),
         )

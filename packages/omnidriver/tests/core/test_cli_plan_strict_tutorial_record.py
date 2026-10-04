@@ -217,3 +217,115 @@ def test_run_strict_entry_runs_a_record_whose_output_names_a_format(tmp_path, ca
     payload = json.loads(capsys.readouterr().out)
     assert exit_code == 0, payload
     assert payload["workflow_state"]["status"] == "completed"
+
+
+def _toy_run_argv(tmp_path: Path, cases_root: Path, *extra: str) -> list[str]:
+    return [
+        "run", "--strict", "--plugin", "plugins.toy:ToyStack", "--entry", "toyTutorial",
+        "--cases-root", str(cases_root), "--scratch-dir", str(tmp_path / "scratch"), *extra,
+    ]
+
+
+@pytest.mark.parametrize("flag", ["--entry", "--case"])
+def test_fresh_is_refused_with_entry_and_case_because_they_always_restage(tmp_path, capsys, flag):
+    value = "toyTutorial" if flag == "--entry" else str(_native_toy_case(tmp_path) / "toyTutorial")
+    with pytest.raises(SystemExit):
+        main(["run", "--strict", "--plugin", "plugins.toy:ToyStack", flag, value, "--fresh",
+              "--scratch-dir", str(tmp_path / "scratch")])
+    assert "always restage" in capsys.readouterr().err
+
+
+def test_a_symlinked_staged_case_root_is_refused_not_followed(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "keep.txt").write_text("keep")
+    records = tmp_path / "scratch" / "records"
+    records.mkdir(parents=True)
+    (records / "toyTutorial").symlink_to(elsewhere)
+
+    assert main(_toy_run_argv(tmp_path, cases_root)) == 1
+
+    assert "symlink" in json.loads(capsys.readouterr().out)["error"]
+    assert (elsewhere / "keep.txt").read_text() == "keep"
+
+
+def test_sweep_run_fresh_never_deletes_a_folder_whose_marker_is_only_one_level_down(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    out = tmp_path / "out"
+    (out / "sub").mkdir(parents=True)
+    (out / "sub" / "workflow_state.json").write_text("{}")
+    (out / "important").mkdir()
+    (out / "important" / "results.csv").write_text("keep")
+    spec = _one_case_sweep(tmp_path, cases_root)
+
+    exit_code = main([
+        "sweep-run", "--plugin", "plugins.toy:ToyStack", "--spec", str(spec),
+        "--output-dir", str(out), "--fresh",
+    ])
+
+    assert exit_code == 1
+    assert "no recognizable omnidriver artifact" in json.loads(capsys.readouterr().out)["error"]
+    assert (out / "important" / "results.csv").read_text() == "keep"
+
+
+def test_sweep_run_fresh_validates_the_spec_before_it_deletes_anything(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "sweep_manifest.json").write_text("{}")
+    spec = _write_spec(tmp_path, {
+        "base": {"entry": "toyTutorial", "cases_root": str(cases_root)},
+        "sweep": {"mode": "zip", "independent": {"no_such_axis": [1, 2]}},
+    })
+
+    exit_code = main([
+        "sweep-run", "--plugin", "plugins.toy:ToyStack", "--spec", str(spec),
+        "--output-dir", str(out), "--fresh",
+    ])
+
+    assert exit_code == 1
+    assert "'no_such_axis'" in json.loads(capsys.readouterr().out)["error"]
+    assert (out / "sweep_manifest.json").exists()
+
+
+def test_a_completed_run_document_is_replayed_and_says_so_while_an_entry_always_starts_over(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    assert main([
+        "plan", "--strict", "--plugin", "plugins.toy:ToyStack", "--entry", "toyTutorial",
+        "--cases-root", str(cases_root), "--scratch-dir", str(tmp_path / "scratch"),
+    ]) == 0
+    capsys.readouterr()
+    document = str(tmp_path / "scratch" / "records" / "toyTutorial" / "run_document.json")
+    replay = ["run", "--plugin", "plugins.toy:ToyStack", "--run-document", document]
+
+    assert main(replay) == 0
+    first = json.loads(capsys.readouterr().out)
+    assert "replayed" not in first and [step["step"] for step in first["steps"]] == ["solve"]
+
+    assert main(replay) == 0
+    second = json.loads(capsys.readouterr().out)
+    assert second["replayed"] is True and second["steps"] == []
+
+    assert main(_toy_run_argv(tmp_path, cases_root)) == 0
+    again = json.loads(capsys.readouterr().out)
+    assert "replayed" not in again and [step["step"] for step in again["steps"]] == ["solve"]
+
+
+def test_sweep_run_fresh_refuses_an_output_dir_that_is_a_symlink(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "sweep_manifest.json").write_text("{}")
+    (real / "important.txt").write_text("keep")
+    link = tmp_path / "link"
+    link.symlink_to(real)
+
+    exit_code = main([
+        "sweep-run", "--plugin", "plugins.toy:ToyStack", "--spec", str(_one_case_sweep(tmp_path, cases_root)),
+        "--output-dir", str(link), "--fresh",
+    ])
+
+    assert exit_code == 1
+    assert "symlink" in json.loads(capsys.readouterr().out)["error"]
+    assert (real / "important.txt").read_text() == "keep"

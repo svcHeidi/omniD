@@ -36,9 +36,10 @@ def _fixture(tmp_path: Path):
     assert state is not None
     events: list[str] = []
 
-    def apply_study(study):
+    def apply_study(study, check):
         assert case_lease_is_held(case_root) and attempt_lease_is_held(output_dir)
         events.append("apply")
+        check()
         return ({"document": "d", "key_path": ["k"], "value": study["d:k"], "status": "changed"},)
 
     def replan():
@@ -105,7 +106,7 @@ def test_a_step_with_no_edit_touches_nothing(tmp_path):
     assert not (context.output_dir / "remediation_history.jsonl").exists()
 
 
-def test_a_changed_plan_refuses_to_dispatch_and_says_the_edit_stays(tmp_path):
+def test_a_changed_plan_refuses_to_dispatch_and_says_the_case_is_as_it_was(tmp_path):
     context, events, state = _fixture(tmp_path)
     changed = _dag("changed")
     context = replace(
@@ -116,13 +117,14 @@ def test_a_changed_plan_refuses_to_dispatch_and_says_the_edit_stays(tmp_path):
 
     assert result.status == "rejected"
     assert "changed the workflow plan" in result.payload["error"]
-    assert _audit(context)[0]["resulting_status"] == "replan_error"
+    assert "as it was" in result.payload["error"]
+    assert not (context.output_dir / "remediation_history.jsonl").exists()
 
 
 def test_a_refused_edit_dispatches_nothing_and_audits_nothing(tmp_path):
     context, events, state = _fixture(tmp_path)
 
-    def refuse(study):
+    def refuse(study, check):
         raise CaseTransactionError("commit failed; rolled back")
 
     result = _execute(
@@ -172,3 +174,91 @@ def test_unowned_execution_never_edits(tmp_path, held):
             )
 
     assert events == []
+
+
+def _failed_run_with_settings(tmp_path):
+    import sys
+
+    from omnidriver.core.plugin_interface import driver_context
+    from omnidriver.core.runtime.workflow_runner import run_workflow_step
+    from plugins.toy import ResumeTestPlugin
+
+    case_root = tmp_path / "case"
+    (case_root / "system").mkdir(parents=True)
+    settings = case_root / "system" / "settings"
+    settings.write_text("value 1;\n")
+    output_dir = tmp_path / "output"
+    dag = _dag(sys.executable)
+    dag["steps"][0]["args"] = ["-c", "raise SystemExit(1)"]
+    stack = driver_context(ResumeTestPlugin(), source="test:resume")
+    first = run_workflow_step(
+        dag, initial_workflow_state(dag), "run", case_root=case_root, log_dir=output_dir / "logs",
+        state_path=output_dir / "workflow_state.json", env={}, driver_context=stack,
+    )
+
+    def edit(value: int, replanned: dict) -> StepExecutionContext:
+        def apply_study(study, check):
+            before = settings.read_text()
+            settings.write_text(f"value {value};\n")
+            try:
+                check()
+            except Exception:
+                settings.write_text(before)
+                raise
+            return ({"status": "changed"},)
+
+        return StepExecutionContext(
+            entry_label="neutral", workflow_dag=dag, planned_state=first.state, case_root=case_root,
+            output_dir=output_dir, expected_artifacts=(), execution_env={}, driver_context=stack,
+            apply_study=apply_study,
+            replan_after_mutation=lambda: ReplannedExecution(replanned, initial_workflow_state(replanned), ()),
+        )
+
+    return dag, settings, edit
+
+
+def test_a_refused_replan_leaves_the_case_and_its_saved_evidence_as_they_were(tmp_path):
+    dag, settings, edit = _failed_run_with_settings(tmp_path)
+
+    refused = _execute(edit(2, _dag("changed")), run_step=lambda *a, **k: pytest.fail("dispatch must not run"))
+    assert refused.status == "rejected" and "as it was" in refused.payload["error"]
+    assert settings.read_text() == "value 1;\n"
+
+    again = _execute(edit(3, dag))
+    assert again.status == "failed" and "input evidence changed" not in str(again.payload)
+
+
+def test_the_saved_evidence_follows_an_edit_that_passed_even_when_the_run_then_crashes(tmp_path):
+    dag, settings, edit = _failed_run_with_settings(tmp_path)
+
+    def crash(*args, **kwargs):
+        raise RuntimeError("executor disappeared")
+
+    assert _execute(edit(2, dag), run_step=crash).payload["error"] == "executor disappeared"
+    assert settings.read_text() == "value 2;\n"
+
+    assert "input evidence changed" not in str(_execute(edit(3, dag)).payload)
+
+
+def test_a_patch_that_changes_nothing_still_runs_a_step_that_never_ran(tmp_path):
+    context, events, state = _fixture(tmp_path)
+    context = replace(context, apply_study=lambda study, check: ({"status": "unchanged"},))
+
+    result = _execute(context, run_step=_runner(state, events, successful=True))
+
+    assert (result.status, events) == ("succeeded", ["dispatch"])
+    assert result.payload["applied_patches"] == [{"status": "unchanged"}]
+
+
+def test_a_patch_that_changes_nothing_does_not_rerun_a_failed_step_and_is_not_a_success(tmp_path):
+    context, events, state = _fixture(tmp_path)
+    failed = replace(state.steps[0], status="failed", attempt=1, exit_code=2)
+    state = replace(state, status="failed", current_step_id="run", failed_step_id="run", steps=(failed,))
+    context = replace(
+        context, planned_state=state, apply_study=lambda study, check: ({"status": "unchanged"},),
+    )
+
+    result = _execute(context, run_step=lambda *a, **k: pytest.fail("dispatch must not run"))
+
+    assert result.status == "failed" and result.payload["status"] == "unchanged"
+    assert "not rerun" in result.payload["message"]

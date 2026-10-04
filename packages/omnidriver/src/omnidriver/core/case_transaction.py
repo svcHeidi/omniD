@@ -9,7 +9,7 @@ import base64
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from .case_write import (
     CaseWritePlan,
@@ -317,11 +317,14 @@ def commit_case_write(
     driver_context: Any,
     transaction_id: str | None = None,
     case_lease_held: bool = False,
+    verify: Callable[[], None] | None = None,
 ) -> CaseWriteRecord:
     """Commit a reviewed plan, or replay a completed one by id.
 
     A failed commit is rolled back; if the rollback itself fails the journal
-    is kept and the error names every path left unrestored.
+    is kept and the error names every path left unrestored. ``verify`` runs
+    once every file is written and before the commit is final: what it
+    raises rolls the commit back and propagates unchanged.
 
     The case lease is host-local and not reentrant, so a caller that already
     holds it (``--apply`` holds it for the whole step) passes
@@ -409,6 +412,12 @@ def commit_case_write(
                 f"commit of {case_root} failed; rolled back: {exc}"
             ) from exc
 
+        if verify is not None:
+            try:
+                verify()
+            except Exception:
+                _rollback(case_root, journal)
+                raise
         _remove_journal(case_root)
         record = CaseWriteRecord(
             transaction_id=tx_id,

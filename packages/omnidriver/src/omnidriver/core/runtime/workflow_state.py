@@ -24,6 +24,9 @@ class WorkflowStepState:
     #: Where this attempt ran (``host_facts.host_facts``), recorded when it
     #: starts; absent for a step that never ran.
     host: dict[str, Any] | None = None
+    #: The step's own process (and process group) while it is ``running``;
+    #: what a later resume asks whether is still alive.
+    pid: int | None = None
 
     def to_json(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -32,6 +35,8 @@ class WorkflowStepState:
         payload["diagnostics"] = list(self.diagnostics)
         if self.host is None:
             del payload["host"]
+        if self.pid is None:
+            del payload["pid"]
         return payload
 
 
@@ -51,6 +56,7 @@ def workflow_step_state_from_json(data: dict[str, Any]) -> WorkflowStepState:
         produced_artifacts=tuple(str(item) for item in data.get("produced_artifacts", ())),
         diagnostics=tuple(dict(item) for item in data.get("diagnostics", ())),
         host=data.get("host"),
+        pid=data.get("pid"),
     )
 
 

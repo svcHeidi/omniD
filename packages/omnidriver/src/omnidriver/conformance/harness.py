@@ -7,7 +7,10 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from omnidriver.core.runtime.process_control import run_child
+
 SWEEP_TIMEOUT_S = 1800.0
+_SWEEP_GRACE_S = 15.0
 
 
 def sweep_run(
@@ -27,7 +30,8 @@ def sweep_run(
         argv += ["--case-timeout-s", str(case_timeout_s)]
     for name, path in (inputs or {}).items():
         argv += ["--input", f"{name}={path}"]
-    proc = subprocess.run(argv, capture_output=True, text=True, env=None if env is None else dict(env), timeout=timeout_s)
+    # A sweep ends its running case and that case's step before it exits, which takes longer than a single process.
+    proc = run_child(argv, env=env, timeout=timeout_s, grace=_SWEEP_GRACE_S)
     try:
         return proc, json.loads(proc.stdout)
     except ValueError:
