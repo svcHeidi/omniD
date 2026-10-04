@@ -49,3 +49,28 @@ def test_every_listed_key_the_case_holds_is_accepted_by_the_validator_with_its_k
         assert record_key_validator(entry["document"], key_path, value) == (entry["value_kind"], True), entry
         checked.append(entry["key"])
     assert "singleCellSolverCoeffs.tissue" in checked and "myocardiumSolver" in checked
+
+
+def test_describe_lists_only_the_keys_the_cases_own_solver_and_blocks_allow():
+    plugin = CardiacFoamPlugin()
+    listed = plugin.get_record_key_catalog(CASE)
+    narrowed = plugin.select_applicable_record_keys(listed, CASE)
+    kept = {(e["document"], e["key"]) for e in narrowed}
+    assert len(narrowed) < len(listed)
+    # The case holds no bath block, so the keys the catalogue gates on one are not offered.
+    assert not [key for _document, key in kept if ".bathPotentialDomain." in key]
+    assert ("constant/electroProperties", "singleCellSolverCoeffs.ecgDomains.<name>.ecgSolver") in {
+        (e["document"], e["key"]) for e in listed
+    } - kept
+    assert ("constant/electroProperties", "singleCellSolverCoeffs.tissue") in kept
+    assert ("constant/electroProperties", "singleCellSolverCoeffs.singleCellStimulus.stim_amplitude") in kept
+    # Everything that is not an electroProperties entry passes through.
+    assert [e for e in listed if e["document"] != "constant/electroProperties"] == [
+        e for e in narrowed if e["document"] != "constant/electroProperties"
+    ]
+
+
+def test_a_case_with_no_electro_properties_is_listed_whole(tmp_path):
+    plugin = CardiacFoamPlugin()
+    keys = ({"document": "system/controlDict", "key": "<any>", "validated": False},)
+    assert plugin.select_applicable_record_keys(keys, tmp_path) == keys

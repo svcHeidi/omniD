@@ -415,3 +415,25 @@ def test_cli_refuses_input_with_no_equals_sign(capsys):
     assert "must be NAME=PATH" in refusal(
         capsys, ["describe", "--plugin", "plugins.toy:ToyStack", "--entry", "toyTutorial", "--input", "anatomy-only-a-dir"],
     )
+
+
+def test_record_surface_lists_only_the_keys_a_provider_leaves_applicable_and_counts_the_rest(tmp_path):
+    from omnidriver.core.runtime.record_surface import record_surface
+
+    class _Narrowing(ToyProvider):
+        def get_record_key_catalog(self, case_root):
+            return ({"document": "d", "key": "kept", "value_kind": "word"}, {"document": "d", "key": "dropped", "value_kind": "word"})
+
+        def select_applicable_record_keys(self, keys, case_root):
+            return tuple(item for item in keys if item["key"] != "dropped")
+
+    native = tmp_path / "cases" / "humanSlabToy"
+    (native / "system").mkdir(parents=True)
+    context = driver_context(_Narrowing(), source="test:narrowing")
+    surface = record_surface(_anatomy_record(), native_case_root=native, driver_context=context)
+    assert [item["key"] for item in surface["keys"]] == ["kept"]
+    assert surface["keys_omitted"]["count"] == 1 and "omnidriver catalog" in surface["keys_omitted"]["why"]
+    plain = record_surface(
+        _anatomy_record(), native_case_root=native, driver_context=driver_context(ToyProvider(), source="test:toy"),
+    )
+    assert "keys_omitted" not in plain

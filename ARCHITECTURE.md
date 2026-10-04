@@ -93,7 +93,7 @@ stack answers when none does. Core reaches every member through
 | `catalog` | the `map` rule over a `DictionaryCatalog`'s documents, rebuilt into a catalog | `get_dictionary_catalog` |
 | `sequence` | concatenate every implementer's result, in stack order | `validate_run_semantics`, `get_record_key_catalog` |
 | `single` | the most specific non-`None` answer | `get_config_value_reader`, `get_parallel_steps` |
-| `chain` | thread the first argument through every implementer | `resolve_supplied_variables`, `get_configured_environment` |
+| `chain` | thread the first argument through every implementer | `resolve_supplied_variables`, `get_configured_environment`, `select_applicable_record_keys` |
 | `profile` | every provider's profile: case files concatenated, the rest from the most specific | `get_profile` |
 
 A member nobody implements answers its shape's empty value (`frozenset()`,

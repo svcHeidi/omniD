@@ -95,6 +95,7 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     # records
     "get_tutorial_records": ("map", None),
     "get_record_key_catalog": ("sequence", None),
+    "select_applicable_record_keys": ("chain", None),
     "get_agent_guidance": ("sequence", None),
     "get_record_key_validator": ("single", _RECORD),
     "get_case_value_comparator": ("single", _RECORD),
