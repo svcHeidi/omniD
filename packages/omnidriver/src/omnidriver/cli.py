@@ -869,18 +869,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--fresh",
         action="store_true",
         help=(
-            "For action=step/run/sweep-run: delete the previous output before "
-            "running, so the workflow executes as if no prior run existed. "
-            "With --entry/--case it clears the staged case "
-            "(<scratch>/records/<name>) before staging it again; with "
-            "--run-document it clears the run's output directory (refused "
-            "where that directory holds the case: restage with --entry); "
-            "with sweep-run it clears --output-dir, after the spec has been "
-            "validated. Refuses to delete the filesystem root, your home "
-            "directory, a too-shallow path, anything outside "
+            "For action=step/run with --run-document, and sweep-run: delete the "
+            "previous output before running, so the workflow executes as if no "
+            "prior run existed. With --run-document it clears the run's output "
+            "directory (refused where that directory holds the case, as it does "
+            "for a record: plan again); with sweep-run it clears --output-dir, "
+            "after the spec has been validated. Not valid with --entry/--case, "
+            "which always restage. Refuses to delete the filesystem root, your "
+            "home directory, a too-shallow path, a symlink, anything outside "
             "OMNIDRIVER_ALLOWED_RUNS_ROOT when set, or a directory with no "
-            "omnidriver artifact (workflow_state.json, sweep_manifest.json "
-            "or run_document.json) at its top level. No confirmation prompt."
+            "omnidriver artifact (workflow_state.json, sweep_manifest.json or "
+            "run_document.json) at its top level. No confirmation prompt."
         ),
     )
     parser.add_argument(
@@ -1194,13 +1193,14 @@ def _adopt_run_document_stack(args) -> None:
     if not isinstance(command, list):
         return
 
-    def recorded(flag: str) -> str | None:
-        position = command.index(flag) + 1 if flag in command else len(command)
-        return command[position] if position < len(command) and isinstance(command[position], str) else None
+    def after(flag: str) -> str | None:
+        """The word that follows ``flag`` in the recorded command."""
+        index = command.index(flag) + 1 if flag in command else len(command)
+        return command[index] if index < len(command) else None
 
-    plugin, repo = recorded("--plugin"), recorded("--repo")
-    if plugin is not None and ":" not in plugin:
-        args.plugin, args.repo = plugin, repo
+    plugin = after("--plugin")
+    if isinstance(plugin, str) and ":" not in plugin:
+        args.plugin, args.repo = plugin, after("--repo")
 
 
 def _select_stack(parser: argparse.ArgumentParser, args):
@@ -1405,11 +1405,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             }, indent=2))
             return 1
         print(json.dumps(report.to_json(), indent=2))
-        readiness = is_launchable(
-            plan_status=report.status,
-            environment_diagnostics=report.environment_diagnostics,
-        )
-        return 0 if readiness.launchable else 1
+        return 0 if report.status == "ok" else 1
 
     if args.action in {"step", "run"}:
         if not (args.strict or args.run_document):

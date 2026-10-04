@@ -40,7 +40,8 @@ from .harness import sweep_run, sweep_spec
 from .target import CheckVerdict, ConformanceTarget
 
 _PLAN_DIAGNOSTIC_GROUPS = (
-    "workflow_diagnostics", "artifact_diagnostics", "plugin_diagnostics", "configuration_diagnostics",
+    "workflow_diagnostics", "artifact_diagnostics", "environment_diagnostics", "plugin_diagnostics",
+    "configuration_diagnostics",
 )
 
 def _verdict(check_id: str, passed: bool, detail: str) -> CheckVerdict:
