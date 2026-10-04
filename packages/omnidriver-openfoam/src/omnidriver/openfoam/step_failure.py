@@ -1,11 +1,14 @@
 """What OpenFOAM's own fatal message says about a case: the key a solver
-could not find and the dictionary it looked in, or else the message itself."""
+could not find and the dictionary it looked in, or else the message itself.
+
+Only a fatal OpenFOAM exited on counts: a warning, or a fatal printed inside
+a warning, is followed by more output and no exit banner."""
 
 from __future__ import annotations
 
 import os
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
@@ -17,7 +20,13 @@ _MISSING = re.compile(
     r"""\s+in\s+dictionary\s+"(?P<dictionary>[^"]+)"""
 )
 
-_FATAL = re.compile(r"--> FOAM FATAL (?:IO )?ERROR[^\n]*\n(?P<message>.*?)(?:\n\s*FOAM (?:exiting|aborting)|\Z)", re.DOTALL)
+# A message runs to the exit banner without crossing another "-->" line; a parallel run prefixes each line with its rank.
+_RANK = r"(?:\[\d+\]\s*)?"
+_FATAL = re.compile(
+    rf"^{_RANK}--> FOAM FATAL (?:IO )?ERROR[^\n]*\n(?P<message>(?:(?!^{_RANK}-->).)*?)\n\s*{_RANK}FOAM (?:parallel run )?(?:exiting|aborting)",
+    re.DOTALL | re.MULTILINE,
+)
+_RANK_PREFIX = re.compile(r"^\[\d+\]\s?", re.MULTILINE)
 _FATAL_CHARACTERS = 600
 
 REBUILD_HINT = (
@@ -43,11 +52,11 @@ def _document_and_scope(dictionary: str, case_root: Path) -> tuple[str, list[str
         return str(path), scope
 
 
-def missing_entry_diagnostics(log_text: str, case_root: Path, driver_context: Any) -> tuple[StrictDiagnostic, ...]:
-    """The key and dictionary of the first missing-entry fatal in ``log_text``
-    and, when a provider's C++ source is supplied and reads no such key, that
+def _missing_entry_diagnostics(message: str, case_root: Path, driver_context: Any) -> tuple[StrictDiagnostic, ...]:
+    """The key and dictionary a fatal's ``message`` names and, for a document a
+    provider's catalogue owns, whose supplied C++ source reads no such key, that
     the solver was built from other source."""
-    match = _MISSING.search(log_text)
+    match = _MISSING.search(message)
     if match is None:
         return ()
     key = match.group("entry") or match.group("keyword")
@@ -56,7 +65,8 @@ def missing_entry_diagnostics(log_text: str, case_root: Path, driver_context: An
     message = f"the solver stopped: {key} is missing from {where}; set it there."
     mapping = driver_context.stack.call("get_profile").cxx_mapping
     source = mapping.source_root(os.environ) if mapping is not None else None
-    if source is not None and source.is_dir():
+    owned = PurePosixPath(document).name in driver_context.stack.call("get_owned_documents")
+    if owned and source is not None and source.is_dir():
         scan = cached_scan(source, cache_root=scan_cache_root())
         if not any(read.key == key for read in scan.reads):
             message += f" {key} is read nowhere in the scanned source ({source}): {REBUILD_HINT}."
@@ -64,13 +74,14 @@ def missing_entry_diagnostics(log_text: str, case_root: Path, driver_context: An
 
 
 def fatal_error_diagnostics(log_text: str, case_root: Path, driver_context: Any) -> tuple[StrictDiagnostic, ...]:
-    """What the first OpenFOAM fatal message in ``log_text`` says: the missing
+    """What the first fatal OpenFOAM exited on in ``log_text`` says: the missing
     entry when it is one, else the message itself."""
-    found = missing_entry_diagnostics(log_text, case_root, driver_context)
-    if found:
-        return found
     match = _FATAL.search(log_text)
     if match is None:
         return ()
-    message = " ".join(match.group("message").split())[:_FATAL_CHARACTERS]
+    message = _RANK_PREFIX.sub("", match.group("message"))
+    found = _missing_entry_diagnostics(message, case_root, driver_context)
+    if found:
+        return found
+    message = " ".join(message.split())[:_FATAL_CHARACTERS]
     return (diagnostic("error", "solver_fatal_error", f"the solver stopped with an OpenFOAM fatal error: {message}"),)

@@ -162,7 +162,7 @@ class OpenFOAMEnvironmentPlugin:
 
     def get_step_log_files(self, cwd):
         """The ``log.<application>`` files ``runApplication`` and ``runParallel`` write in the case."""
-        return tuple(sorted(Path(cwd).glob("log.*")))
+        return tuple(Path(cwd).glob("log.*"))
 
     def inspect_effective_configuration(self, *, case_root, execution_env=None):
         from .effective_dictionary import inspect_effective_foam_configuration

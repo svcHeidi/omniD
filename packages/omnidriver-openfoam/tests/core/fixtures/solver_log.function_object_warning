@@ -1,0 +1,65 @@
+/*---------------------------------------------------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2412                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+Build  : _8dbc61e11c-20241220 OPENFOAM=2412 version=v2412
+Arch   : "LSB;label=32;scalar=64"
+Exec   : cardiacFoam
+Date   : Oct 05 2026
+Time   : 00:31:42
+Host   : macbook
+PID    : 34699
+I/O    : uncollated
+Case   : /private/tmp/claude-501/-Users-simaocastro-omnidriver/5ee35d66-3b4c-4f50-88e1-042d1d1e5fa0/scratchpad/fixes/review-oneReality/scr-case-odF-oneReality-singleCellWarn/records/singleCellWarn
+nProcs : 1
+trapFpe: Floating point exception trapping enabled (FOAM_SIGFPE).
+fileModificationChecking : Monitoring run-time modified files using timeStampMaster (fileModificationSkew 5, maxFileModificationPolls 20)
+allowSystemOperations : Allowing user-supplied system call operations
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+Create time
+
+Selecting physicsModel electroModel
+Exporting fields: 2(Vm cai)
+Export Vm written as VmIonic
+Selecting ODE solver RKF45
+--> FOAM Warning : 
+Entry 'probeLocations' not found in dictionary "/private/tmp/claude-501/-Users-simaocastro-omnidriver/5ee35d66-3b4c-4f50-88e1-042d1d1e5fa0/scratchpad/fixes/review-oneReality/scr-case-odF-oneReality-singleCellWarn/records/singleCellWarn/system/controlDict/functions/probesWarn"
+
+
+file: system/controlDict/functions/probesWarn at line 57 to 59.
+
+    From bool Foam::dictionary::readEntry(const word &, T &, enum keyType::option, IOobjectOption::readOption) const [T = Foam::Field<Foam::Vector<double>>]
+    in file /Users/simaocastro/OpenFOAM-v2412/src/OpenFOAM/lnInclude/dictionaryTemplates.C at line 327.
+--> loading function object 'probesWarn'
+
+Time = 1e-06
+
+Selecting ODE solver RKF45
+ExecutionTime = 0.01 s  ClockTime = 0 s
+
+Time = 2e-06
+
+ExecutionTime = 0.01 s  ClockTime = 0 s
+
+Time = 3e-06
+
+ExecutionTime = 0.01 s  ClockTime = 0 s
+
+Time = 4e-06
+
+ExecutionTime = 0.01 s  ClockTime = 0 s
+
+Time = 5e-06
+
+ExecutionTime = 0.01 s  ClockTime = 0 s
+
+Time = 6e-06
+Format: [Time STATES ALGEBRAIC RATES]
+Active tension results written to: "/private/tmp/claude-501/-Users-simaocastro-omnidriver/5ee35d66-3b4c-4f50-88e1-042d1d1e5fa0/scratchpad/fixes/review-oneReality/scr-case-odF-oneReality-singleCellWarn/records/singleCellWarn/postProcessing/TWorld_endocardialCells_S1_1000_Ta.txt"
+
+End
+

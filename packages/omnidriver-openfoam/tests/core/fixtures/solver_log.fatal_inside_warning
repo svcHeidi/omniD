@@ -1,0 +1,95 @@
+/*---------------------------------------------------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2412                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+Build  : _8dbc61e11c-20241220 OPENFOAM=2412 version=v2412
+Arch   : "LSB;label=32;scalar=64"
+Exec   : postProcess -func mag(U)
+Date   : Oct 05 2026
+Time   : 00:28:08
+Host   : macbook
+PID    : 28397
+I/O    : uncollated
+Case   : /private/tmp/claude-501/-Users-simaocastro-omnidriver/5ee35d66-3b4c-4f50-88e1-042d1d1e5fa0/scratchpad/fixes/review-oneReality/pp/cavity
+nProcs : 1
+trapFpe: Floating point exception trapping enabled (FOAM_SIGFPE).
+fileModificationChecking : Monitoring run-time modified files using timeStampMaster (fileModificationSkew 5, maxFileModificationPolls 20)
+allowSystemOperations : Allowing user-supplied system call operations
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+Create time
+
+Create mesh for time = 0
+
+Time = 0
+--> FOAM Warning : 
+    From bool Foam::IOobject::readHeader(dictionary &, Istream &)
+    in file db/IOobject/IOobjectReadHeader.C at line 118
+    Reading "0/notes" at line 1
+    First token could not be read or is not 'FoamFile'
+
+Check header is of the form:
+
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2412                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    arch        "LSB;label=32;scalar=64";
+    class       IOobject;
+    location    "0";
+    object      notes;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+
+Reading fields:
+--> FOAM Warning : 
+    From bool Foam::IOobject::readHeader(dictionary &, Istream &)
+    in file db/IOobject/IOobjectReadHeader.C at line 118
+    Reading "0/notes" at line 1
+    First token could not be read or is not 'FoamFile'
+
+Check header is of the form:
+
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2412                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    arch        "LSB;label=32;scalar=64";
+    class       IOobject;
+    location    "0";
+    object      notes;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+    volVectorField: U--> FOAM Warning :
+    Reading "0/U" at line 42
+    Imbalanced brackets
+--> FOAM Warning : 
+--> FOAM FATAL IO ERROR: (openfoam-2412)
+ill defined primitiveEntry starting at keyword 'internalField' on line 19 and ending at line 42
+
+file: 0/U at line 42.
+
+    From void Foam::primitiveEntry::readEntry(const dictionary &, Istream &)
+    in file db/dictionary/primitiveEntry/primitiveEntryIO.C at line 247.
+
+End
+
