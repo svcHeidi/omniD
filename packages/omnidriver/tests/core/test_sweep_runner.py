@@ -416,6 +416,20 @@ def test_sweep_run_over_a_record_entry_refuses_a_missing_member_upfront_before_s
     assert not (tmp_path / "out").exists()
 
 
+def test_a_relative_cases_root_is_read_against_the_spec_file_not_the_working_directory(tmp_path, monkeypatch):
+    _native_toy_case(tmp_path)
+    spec = _record_sweep_spec(cases_root=Path("native"))
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(spec))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_record_driver_context())
+
+    assert result["case_count"] == 2 and all(case["status"] == "ok" for case in result["cases"])
+
+
 def test_sweep_plan_over_a_record_entry_previews_every_case_without_running(tmp_path):
     cases_root = _native_toy_case(tmp_path)
     spec_path = tmp_path / "sweep.json"

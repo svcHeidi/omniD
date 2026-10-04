@@ -89,9 +89,10 @@ _RECORD_NON_STUDY_BASE_KEYS: frozenset[str] = frozenset({"entry", "cases_root"})
 
 
 def _sweep_record(
-    sweep_spec: dict[str, Any], *, driver_context: "DriverContext",
+    sweep_spec: dict[str, Any], *, spec_path: str | Path, driver_context: "DriverContext",
 ) -> tuple[Any, Path]:
-    """The ``(record, cases_root)`` named by ``base``; a record has no ambient cases root, so both are required."""
+    """The ``(record, cases_root)`` named by ``base``; a record has no ambient cases root, so both are required.
+    A relative ``cases_root`` is read against the folder of the spec file, not the working directory."""
     base = sweep_spec.get("base", {})
     entry = base.get("entry")
     if entry is None:
@@ -106,7 +107,7 @@ def _sweep_record(
             "'base' must supply 'cases_root' naming where its native "
             "case lives (there is no ambient cases root to discover)"
         )
-    return record, Path(cases_root_value)
+    return record, Path(spec_path).resolve().parent / cases_root_value
 
 
 def _record_case_study_by_source(
@@ -595,7 +596,7 @@ def sweep_plan(
         # answer. Same shape, zero cases, one explicit reason.
         return {"case_count": 0, "cases": [], "spec_error": str(exc)}
     check_case_count_cap(sweep_spec, max_cases=max_cases)
-    record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
+    record, cases_root = _sweep_record(sweep_spec, spec_path=spec_path, driver_context=driver_context)
     # Resolved to absolute before staging: a relative --output-dir otherwise
     # reaches commit_record_case unresolved.
     return _record_sweep_plan(
@@ -629,7 +630,7 @@ def sweep_run(
     """
     sweep_spec = _load_spec(spec_path)
     check_case_count_cap(sweep_spec, max_cases=max_cases)
-    record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
+    record, cases_root = _sweep_record(sweep_spec, spec_path=spec_path, driver_context=driver_context)
     # Resolved to absolute before staging: commit_record_case requires
     # CaseMutationRequest.case_root to be absolute.
     output_dir = Path(output_dir).resolve()
