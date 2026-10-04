@@ -85,12 +85,15 @@ class OpenFOAMEnvironmentPlugin:
         )
 
     def resolve_supplied_variables(self, environ):
-        """``OPENFOAM_BASHRC`` as a run resolves it when it is unset
-        (``openfoam_environment.openfoam_bashrc``)."""
-        from .openfoam_environment import openfoam_bashrc
+        """``OPENFOAM_BASHRC``, when unset, as a run resolves it, and from where
+        (``openfoam_environment.resolve_bashrc``)."""
+        from .openfoam_environment import resolve_bashrc
 
-        bashrc = None if environ.get("OPENFOAM_BASHRC") else openfoam_bashrc(base_env=environ)
-        return dict(environ) if bashrc is None else {**environ, "OPENFOAM_BASHRC": str(bashrc)}
+        resolved = None if environ.get("OPENFOAM_BASHRC") else resolve_bashrc(base_env=environ)
+        if resolved is None:
+            return {}
+        bashrc, source = resolved
+        return {"OPENFOAM_BASHRC": {"value": str(bashrc), "resolved_from": source}}
 
     def get_loaded_environment(self, *, environment_source=None, driver_context=None):
         """``environment_source`` is, for OpenFOAM, a bashrc to source."""

@@ -56,26 +56,39 @@ def configured_openfoam_bashrc(env: Mapping[str, str]) -> str | None:
     return str(value) if value else None
 
 
-def openfoam_bashrc(
+def resolve_bashrc(
     *,
     bashrc_path: str | Path | None = None,
     base_env: Mapping[str, str] | None = None,
-) -> Path | None:
-    """The bashrc to source: ``bashrc_path`` (``--environment-source``), else
-    ``OPENFOAM_BASHRC``, else the runtime file's ``openfoam.bashrc``, else the
+) -> tuple[Path, str] | None:
+    """The bashrc to source and where it came from: ``bashrc_path``
+    (``--environment-source``; ``"flag"``), else ``OPENFOAM_BASHRC``, else the
+    runtime file's ``openfoam.bashrc`` (``OMNIDRIVER_RUNTIME_CONFIG``), else the
     ``etc/bashrc`` of the install a sourced shell already names through
     ``WM_PROJECT_DIR`` (macOS strips ``DYLD_*`` when bash starts, so a step
     needs that bashrc sourced again). Nothing is searched for; a supplied path
     that is not a file is the caller's to refuse."""
     if bashrc_path:
-        return Path(bashrc_path).expanduser()
+        return Path(bashrc_path).expanduser(), "flag"
     env = os.environ if base_env is None else base_env
-    named = env.get("OPENFOAM_BASHRC") or configured_openfoam_bashrc(env)
-    if named:
-        return Path(named).expanduser()
+    if env.get("OPENFOAM_BASHRC"):
+        return Path(env["OPENFOAM_BASHRC"]).expanduser(), "OPENFOAM_BASHRC"
+    configured = configured_openfoam_bashrc(env)
+    if configured:
+        return Path(configured).expanduser(), RUNTIME_CONFIG_ENV
     install = env.get("WM_PROJECT_DIR")
     sourced = Path(install).expanduser() / "etc" / "bashrc" if install else None
-    return sourced if sourced is not None and sourced.is_file() else None
+    return (sourced, "WM_PROJECT_DIR") if sourced is not None and sourced.is_file() else None
+
+
+def openfoam_bashrc(
+    *,
+    bashrc_path: str | Path | None = None,
+    base_env: Mapping[str, str] | None = None,
+) -> Path | None:
+    """The bashrc to source (:func:`resolve_bashrc`), without where it came from."""
+    resolved = resolve_bashrc(bashrc_path=bashrc_path, base_env=base_env)
+    return None if resolved is None else resolved[0]
 
 
 _BASHRC_SOURCE_TIMEOUT_S = 20.0

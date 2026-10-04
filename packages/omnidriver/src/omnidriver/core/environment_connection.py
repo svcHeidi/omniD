@@ -120,14 +120,15 @@ def _diagnostic(level: str, code: str, message: str, field: str = "") -> dict[st
 def environment_report(driver_context: "DriverContext", environ: Mapping[str, str] | None = None) -> dict[str, Any]:
     from .provider_stack import provider_profile
 
-    environ = dict(driver_context.stack.call(
-        "resolve_supplied_variables", dict(os.environ if environ is None else environ),
-    ))
+    environ = dict(os.environ if environ is None else environ)
+    resolved = dict(driver_context.stack.call("resolve_supplied_variables", dict(environ)))
+    environ.update({name: found["value"] for name, found in resolved.items()})
     connection, declared_by = stack_connection(driver_context)
     variables = [
         {
             "name": variable.name, "required": variable.required, "set": bool(environ.get(variable.name)),
             "value": environ.get(variable.name), "why": variable.why, "declared_by": declared_by[variable.name],
+            **({"resolved_from": resolved[variable.name]["resolved_from"]} if variable.name in resolved else {}),
         }
         for variable in connection.supplied
     ]

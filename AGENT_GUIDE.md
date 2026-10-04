@@ -1046,7 +1046,7 @@ These are real limitations; the agent must not assume them:
   in the file `OMNIDRIVER_RUNTIME_CONFIG` names, else the `etc/bashrc` of the install
   a sourced shell names through `WM_PROJECT_DIR`; a plan that needs OpenFOAM and has
   none refuses with `missing_openfoam_env`. `omnidriver env` resolves an unset
-  `OPENFOAM_BASHRC` by the same order, minus `--environment-source`, and reports the file it found.
+  `OPENFOAM_BASHRC` by the same order, minus `--environment-source`, and says where it found the file in that variable's `resolved_from` (`OMNIDRIVER_RUNTIME_CONFIG` or `WM_PROJECT_DIR`).
 
 - **Active-tension models beyond NashPanfilov and GoktepeKuhl** are not in `active_tension_catalog.py`. Future C++ models must be registered there before artifact prediction will cover their state variables.
 

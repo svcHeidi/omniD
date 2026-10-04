@@ -77,7 +77,9 @@ def _context(connection, *, refuse_the_launcher=False, resolved=None):
         return ()
 
     answers = {
-        "resolve_supplied_variables": lambda environ: {**environ, **(resolved or {})},
+        "resolve_supplied_variables": lambda environ: {
+            name: {"value": value, "resolved_from": "toy config"} for name, value in (resolved or {}).items()
+        },
         "get_solver_commands": lambda: frozenset({"toySolver"}),
         "get_auxiliary_commands": lambda: frozenset(),
         "get_environment_commands": lambda: frozenset(),
@@ -133,7 +135,9 @@ def test_a_variable_the_stack_resolves_elsewhere_is_reported_as_resolved_and_not
     context, _calls = _context(_connection(), resolved={"TOY_RC": str(rc)})
     report = environment_report(context, {"PATH": os.environ["PATH"]})
     assert report["status"] == "ok", report
-    assert {item["name"]: item["value"] for item in report["variables"]}["TOY_RC"] == str(rc)
+    toy_rc = {item["name"]: item for item in report["variables"]}["TOY_RC"]
+    assert (toy_rc["value"], toy_rc["resolved_from"]) == (str(rc), "toy config")
+    assert "resolved_from" not in {item["name"]: item for item in report["variables"]}["TOY_UNSET"]
 
 
 def test_two_providers_may_not_both_name_a_file_to_source():

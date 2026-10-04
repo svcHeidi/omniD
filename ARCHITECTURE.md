@@ -89,11 +89,11 @@ stack answers when none does. Core reaches every member through
 | shape | semantics | example member(s) |
 |---|---|---|
 | `set` | union of every implementer's set | `get_solver_commands`, `get_environment_commands` |
-| `map` | merge in stack order; a duplicate key is an error unless the more specific entry carries `overrides: <provider id>` naming whose entry it replaces | `get_named_catalogs`, `get_tutorial_records` |
+| `map` | merge in stack order; a duplicate key is an error unless the more specific entry carries `overrides: <provider id>` naming whose entry it replaces | `get_named_catalogs`, `get_tutorial_records`, `resolve_supplied_variables` |
 | `catalog` | the `map` rule over a `DictionaryCatalog`'s documents, rebuilt into a catalog | `get_dictionary_catalog` |
 | `sequence` | concatenate every implementer's result, in stack order | `validate_run_semantics`, `get_record_key_catalog` |
 | `single` | the most specific non-`None` answer | `get_config_value_reader`, `get_parallel_steps` |
-| `chain` | thread the first argument through every implementer | `resolve_supplied_variables`, `get_configured_environment`, `select_applicable_record_keys` |
+| `chain` | thread the first argument through every implementer | `get_configured_environment`, `select_applicable_record_keys` |
 | `profile` | every provider's profile: case files concatenated, the rest from the most specific | `get_profile` |
 
 A member nobody implements answers its shape's empty value (`frozenset()`,
