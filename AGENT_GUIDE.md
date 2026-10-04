@@ -151,25 +151,28 @@ repository of its launch command) when you pass neither `--plugin` nor
 `completed` state is replayed without invoking the solver (the output says
 `"replayed": true` and has `"steps": []`), and a `failed` one exits non-zero
 until `step --run-document ... --step <id>` reruns the failed step
-(`attempt` increments). A resume is refused, naming each variable that
-changed, when the case inputs, the workflow, the stack's declared environment
-variables (`omnidriver env` lists them), `PATH` or the declared MPI launcher
-differ from the saved evidence; any other environment variable is ignored. A
-step left `running` by a process that was killed is failed as
-`workflow_step_interrupted` when the run resumes (refused while its recorded
-pid is alive) and keeps its logs; SIGTERM and SIGINT to the CLI, and a sweep
-`--case-timeout-s`, end the running step's whole process group.
+(`attempt` increments). A resume is refused, naming what changed, when the
+case inputs (including each workflow command's resolved path and digest), the
+workflow, the stack's declared environment variables (`omnidriver env` lists
+them) or the declared MPI launcher differ from the saved evidence. `PATH`
+itself, a variable that only locates a file (the sourced file, `*_TREE`,
+`*_TUTORIALS`) and every other variable are ignored. A step left `running`
+by a process that was killed is failed as `workflow_step_interrupted` when the
+run resumes (refused while any process of its group is alive) and keeps its
+logs. SIGTERM and SIGINT to `run`, `step`, `sweep-run` or `check`, and a sweep
+or conformance timeout, end the running step's whole process group; a repeated
+signal kills it at once.
 
-**`--fresh` is the explicit start-over.** With `--entry`/`--case` it clears
-`<scratch>/records/<name>` before staging it again; with `--run-document` it
+**`--fresh` is the explicit start-over for a run document or a sweep.** It is
+refused with `--entry`/`--case`, which always restage. With `--run-document` it
 clears the output directory (refused where that directory is the case, as it is
-for a record: restage with `--entry ... --fresh`); with `sweep-run` it clears
-`--output-dir` once the spec has validated. It refuses a directory that does
-not hold an omnidriver artifact (`workflow_state.json`, `sweep_manifest.json` or
-`run_document.json`) at its top level, the filesystem root, your home directory
-and a path outside `OMNIDRIVER_ALLOWED_RUNS_ROOT` when set, but asks nothing:
-treat what you point it at as disposable. A before/after comparison on one
-staged case MUST pass `--fresh` with `--entry`, or plan again.
+for a record: plan again); with `sweep-run` it clears `--output-dir` once the
+spec has validated. It refuses a directory that does not hold an omnidriver
+artifact (`workflow_state.json`, `sweep_manifest.json` or `run_document.json`)
+at its top level, a symlink, the filesystem root, your home directory and a path
+outside `OMNIDRIVER_ALLOWED_RUNS_ROOT` when set, but asks nothing: treat what
+you point it at as disposable. A before/after comparison on one record starts
+from `plan --strict --entry` or `run --strict --entry`, which restage.
 
 Programmatic planning is the same contract:
 
@@ -526,9 +529,11 @@ Each patch goes through the record's own key validator and typed comparison,
 so a key the catalogue lacks is accepted exactly when the C++ reads it, a
 patch that changes nothing is reported `unchanged` and writes nothing, and the
 whole set commits in one journaled `commit_case_write` that rolls back its own
-failure and an edit after which the stack's rules refuse the case. When every
-patch is `unchanged` the step is not rerun and no attempt is spent: the output's
-`status` is `unchanged`. A name that is not a `document:key` (an axis or reserved name)
+failure, an edit after which the stack's rules refuse the case and one whose
+replan changes the workflow. When every patch is `unchanged` a step that has
+run is not rerun and no attempt is spent: the output's `status` is `unchanged`
+and the exit code is non-zero, the step still being failed. A step that never
+ran is run. A name that is not a `document:key` (an axis or reserved name)
 changes the plan, so it is refused: plan again with it. The step then reruns
 (`attempt++`), the JSON carries `applied_patches` and `artifact_reconciliation`, and one record per attempt is
 appended to `remediation_history.jsonl` under the output directory. If the
