@@ -25,7 +25,7 @@ from .core.case_transaction import CaseTransactionError, pending_transaction, re
 from .core.environment_connection import load_environment
 from .core.plugin_discovery import discover_plugins
 from .core.runtime.sweep_runner import sweep_plan, sweep_run
-from omnidriver.core.introspection import describe_entry, describe_stack
+from omnidriver.core.introspection import describe_entry, describe_stack, named_catalog
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.provider_identity import stack_identity_mismatch
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR, default_sweep_output_dir, resolve_scratch_root
@@ -899,6 +899,18 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--named",
+        metavar="CATALOG",
+        help=(
+            "For action=catalog: print one of the stack's named catalogs in full (`describe` lists each "
+            "catalog's items by name); no --entry needed."
+        ),
+    )
+    parser.add_argument(
+        "--item",
+        help="For action=catalog with --named: print only the entry of this name from each of the catalog's tables.",
+    )
+    parser.add_argument(
         "--uncatalogued",
         action="store_true",
         help=(
@@ -964,8 +976,12 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
     for flag_name, message in _FLAG_ERRORS_BY_ACTION.get(args.action, ()):
         if getattr(args, flag_name):
             parser.error(message)
-    if (args.document or args.key or args.uncatalogued or args.unread) and args.action != "catalog":
-        parser.error("--document/--key/--uncatalogued/--unread are only valid with action=catalog")
+    if (args.document or args.key or args.uncatalogued or args.unread or args.named or args.item) and args.action != "catalog":
+        parser.error("--document/--key/--uncatalogued/--unread/--named/--item are only valid with action=catalog")
+    if args.item and not args.named:
+        parser.error("--item names an entry of the catalog --named selects")
+    if args.named and (args.entry or args.case or args.document or args.key or args.uncatalogued or args.unread):
+        parser.error("--named prints a catalog of the whole stack; it takes no --entry/--case/--document/--key/--uncatalogued/--unread")
     if (args.record or args.checks or args.benchmarks or args.regression) and args.action != "check":
         parser.error("--record/--checks/--benchmarks/--regression are only valid with action=check")
     if args.action == "check":
@@ -1070,7 +1086,7 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("action=scan takes only --plugin or --repo, and --scratch-dir: it rescans the stack's C++ source")
     if args.action == "describe" and not args.entry and not args.case and (args.parallel is not None or args.inputs):
         parser.error("--parallel/--input preview a record: pass --entry or --case, or omit them to list the stack")
-    if not args.run_document and not args.entry and not args.case and not (args.uncatalogued or args.unread) and args.action not in {
+    if not args.run_document and not args.entry and not args.case and not (args.uncatalogued or args.unread or args.named) and args.action not in {
         "recover", "sweep-plan", "sweep-run", "compare", "env", "scan", "check", "describe",
     }:
         parser.error("--entry or --case is required (or use --run-document with action=run/step)")
@@ -1265,6 +1281,14 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
 
     if args.action == "scan" or args.uncatalogued or args.unread:
         return _scan_or_uncatalogued(args, driver_context)
+
+    if args.named:
+        try:
+            print(json.dumps(named_catalog(driver_context, args.named, args.item), indent=2))
+        except TutorialRecordError as exc:
+            print(json.dumps({"status": "failed", "action": "catalog", "error": str(exc)}, indent=2))
+            return 1
+        return 0
 
     # The CLI's own study source, beside a sweep's `base`.
     cli_study = {PARALLEL_STUDY_NAME: args.parallel} if args.parallel is not None else {}

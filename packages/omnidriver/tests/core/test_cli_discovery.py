@@ -118,3 +118,31 @@ def test_a_failed_sweep_says_so_at_the_top_level(capsys, tmp_path):
     with mock.patch("omnidriver.cli.sweep_run", return_value={"case_count": 1, "failed_count": 1}):
         code, payload = _run(capsys, "sweep-run", "--plugin", PLUGIN, "--spec", "s.json", "--output-dir", str(tmp_path / "o"))
     assert code == 1 and payload["status"] == "failed"
+
+
+# -- named catalogs are listed by name; the detail is one command away ------------
+
+NAMED = "plugins.toy:NamedCatalogPlugin"
+
+
+def test_describe_lists_a_catalogs_named_items_by_name_only(tmp_path, capsys):
+    write_toy_native_case(tmp_path)
+    code, payload = _run(capsys, "describe", "--plugin", NAMED, "--entry", "toyTutorial", "--cases-root", str(tmp_path))
+    assert code == 0
+    assert payload["plugin_catalogs"] == {"models": {
+        "schema_version": "1.0", "models": ["alpha", "beta"], "rules": [{"valid": True}],
+    }}
+
+
+def test_catalog_named_prints_the_catalog_in_full_or_one_item(capsys):
+    code, payload = _run(capsys, "catalog", "--plugin", NAMED, "--named", "models")
+    assert code == 0 and payload["content"]["models"]["alpha"] == {"states": ["u"], "notes": "n"}
+    code, payload = _run(capsys, "catalog", "--plugin", NAMED, "--named", "models", "--item", "beta")
+    assert code == 0 and payload["content"] == {"models": {"states": ["v"]}}
+
+
+def test_a_named_catalog_or_item_that_is_not_there_is_refused_listing_what_is(capsys):
+    assert "['models']" in refusal(capsys, ["catalog", "--plugin", NAMED, "--named", "nosuch"])
+    assert "no item 'gamma'" in refusal(capsys, ["catalog", "--plugin", NAMED, "--named", "models", "--item", "gamma"])
+    assert "--named" in refusal(capsys, ["catalog", "--plugin", NAMED, "--item", "alpha"])
+    assert "takes no --entry" in refusal(capsys, ["catalog", "--plugin", NAMED, "--named", "models", "--entry", "x"])
