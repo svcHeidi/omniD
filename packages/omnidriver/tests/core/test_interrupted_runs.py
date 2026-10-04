@@ -28,6 +28,11 @@ from plugins.toy import SLEEPING_PLUGIN, STUBBORN_SLEEPING_PLUGIN, write_toy_nat
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="process groups")
 
 
+def _default_sigint() -> None:
+    """A shell starts a background job with SIGINT ignored, and an ignored signal stays ignored."""
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
 def _alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
@@ -149,7 +154,7 @@ def test_a_signal_to_the_cli_ends_the_running_step_and_records_it_cancelled(tmp_
     run = subprocess.Popen(
         [sys.executable, "-m", "omnidriver", "run", "--plugin", SLEEPING_PLUGIN,
          "--run-document", str(case / "run_document.json")],
-        stdout=subprocess.PIPE, text=True,
+        stdout=subprocess.PIPE, text=True, preexec_fn=_default_sigint,
     )
     step_pid = None
     try:
