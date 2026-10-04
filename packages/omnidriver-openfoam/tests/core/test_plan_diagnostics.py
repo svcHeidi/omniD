@@ -36,18 +36,29 @@ class _Provider:
         return self._profile
 
 
-def _context(mapping, *, report=None):
+def _context(mapping, *, report=None, owned=()):
     scans = []
 
     def scan(root, *, allowlist_path, catalogue, cache_root=None, force=False):
         scans.append(root)
         return SimpleNamespace(to_json=lambda: report)
 
-    provider = _Provider(SimpleNamespace(cxx_mapping=mapping, case_files=(), requires=()))
+    rules = tuple(
+        CaseFileRule(path=f"system/{name}", kind="configuration", role="neutral.configuration", required="always")
+        for name in owned
+    )
+    provider = _Provider(SimpleNamespace(cxx_mapping=mapping, case_files=rules, requires=()))
     provider.get_dict_key_scanner = lambda: scan
+    provider.get_owned_documents = lambda: frozenset(owned)
     return SimpleNamespace(
         stack=ProviderStack((provider,)), identity=SimpleNamespace(resolutions={"get_profile": "toy"}),
     ), scans
+
+
+def _case(tmp_path, *documents):
+    (tmp_path / "case" / "system").mkdir(parents=True)
+    for name in documents:
+        (tmp_path / "case" / "system" / name).write_text("")
 
 
 def _mapping(tmp_path: Path) -> CxxMapping:
@@ -82,14 +93,17 @@ def test_what_the_cxx_disagrees_with_never_fails_the_plan(tmp_path):
     (tmp_path / "tree" / "src").mkdir(parents=True)
     report = {
         "disagreements": ["a.c: catalogue value_kind 'word'; the C++ reads scalar (x.C:3)"],
-        "unread": [{"driver_path": "$S.a.b", "note": "catalogued; the supplied C++ no longer reads it"}],
+        "unread": [{
+            "document": "toyDict", "driver_path": "$S.a.b", "note": "catalogued; the supplied C++ no longer reads it",
+        }],
         "uncatalogued": [{
             "kind": "key", "key": "c", "path": "c", "required": True, "method": "get", "type": "word", "default": None,
             "source": "x.C:3", "function": "f", "entry": {"driver_path": None},
         }],
         "unresolved": [{"key": "d"}],
     }
-    context, scans = _context(_mapping(tmp_path), report=report)
+    _case(tmp_path, "toyDict")
+    context, scans = _context(_mapping(tmp_path), report=report, owned=("toyDict",))
     diagnostics = _diagnose(context, tmp_path, {"TOY_NATIVE_TREE": str(tmp_path / "tree")})
     assert scans == [(tmp_path / "tree" / "src").resolve()]
     assert [(d.level, d.code) for d in diagnostics] == [
@@ -98,6 +112,31 @@ def test_what_the_cxx_disagrees_with_never_fails_the_plan(tmp_path):
     ]
     assert "no longer reads it" in diagnostics[1].message and "has no effect" in diagnostics[1].message
     assert "'c' as get<word> with no default, so it is required, at x.C:3 (f)" in diagnostics[2].message
+
+
+def test_notes_about_a_dictionary_the_case_does_not_hold_are_left_to_the_catalog_command(tmp_path):
+    (tmp_path / "tree" / "src").mkdir(parents=True)
+    read = {"kind": "key", "key": "c", "path": "c", "required": False, "method": "get", "type": "word",
+            "default": None, "source": "x.C:3", "function": "f", "entry": {"driver_path": None}}
+    report = {
+        "disagreements": [],
+        "unread": [
+            {"document": "heldDict", "driver_path": "$S.kept", "note": "catalogued; the supplied C++ no longer reads it"},
+            {"document": "otherDict", "driver_path": "$S.dropped", "note": "catalogued; the supplied C++ no longer reads it"},
+        ],
+        "uncatalogued": [
+            {**read, "key": "inHeld", "path": "inHeld", "documents": ["heldDict"]},
+            {**read, "key": "inOther", "path": "inOther", "documents": ["otherDict"]},
+            {**read, "key": "unplaced", "path": "unplaced"},
+        ],
+        "unresolved": [],
+    }
+    _case(tmp_path, "heldDict")
+    context, _scans = _context(_mapping(tmp_path), report=report, owned=("heldDict", "otherDict"))
+    messages = [d.message for d in _diagnose(context, tmp_path, {"TOY_NATIVE_TREE": str(tmp_path / "tree")})]
+    assert any("$S.kept" in message for message in messages) and not any("$S.dropped" in message for message in messages)
+    assert any("'inHeld'" in message for message in messages) and any("'unplaced'" in message for message in messages)
+    assert not any("'inOther'" in message for message in messages)
 
 
 def test_a_stack_without_a_cxx_mapping_adds_no_catalogue_diagnostics(tmp_path):

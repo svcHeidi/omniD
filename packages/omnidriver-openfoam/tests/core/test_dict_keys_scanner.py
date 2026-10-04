@@ -572,7 +572,7 @@ def test_each_catalogue_claim_the_cxx_refutes_is_reported_with_both_sides_and_fa
     assert [item.split(":")[0] for item in report["disagreements"]] == ["$PURKINJE_SLAB.multiplier"]
     assert "catalogue value_kind 'word'; the C++ reads scalar" in report["disagreements"][0]
     (unread,) = report["unread"]
-    assert unread["driver_path"] == "$PURKINJE_SLAB.depth"
+    assert unread["driver_path"] == "$PURKINJE_SLAB.depth" and unread["document"] == "setPurkinjeSlabDict"
     assert unread["note"] == "catalogued; the supplied C++ no longer reads it"
     report = _report(tmp_path, (_entry("$PURKINJE_SLAB.thickness", required=True, source_refs=cited),),
                      **{"setPurkinjeSlab__setPurkinjeSlab.C": SET_PURKINJE_SLAB})
@@ -771,6 +771,9 @@ def test_a_key_is_compared_only_with_the_catalogue_of_the_document_its_dictionar
     })
     report = catalog_report(root, allowlist_path=allowlist, catalogue=catalogue).to_json()
     assert sorted(note["key"] for note in report["uncatalogued"]) == ["deltaT", "enabled", "maxBeats"]
+    assert {note["key"]: note.get("documents") for note in report["uncatalogued"]} == {
+        "deltaT": ["prePacingProperties"], "enabled": ["prePacingProperties"], "maxBeats": ["prePacingProperties"],
+    }
     assert [item["driver_path"] for item in report["unread"]] == ["deltaT"]
 
 
@@ -781,4 +784,5 @@ def test_a_read_through_a_dictionary_the_scan_cannot_place_may_be_of_any_documen
     catalogue = DictionaryCatalog({"controlDict": (_entry("deltaT"),)})
     report = catalog_report(root, allowlist_path=allowlist, catalogue=catalogue).to_json()
     assert sorted(note["key"] for note in report["uncatalogued"]) == ["enabled", "maxBeats", "minBeats", "tolerance"]
+    assert all("documents" not in note for note in report["uncatalogued"])
     assert report["unread"] == []
