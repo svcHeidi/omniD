@@ -39,9 +39,40 @@ def test_a_region_block_is_judged_like_the_root(tmp_path):
     assert not any("maxBeats" in m for m in messages)
 
 
-def test_a_valid_pre_pacing_file_breaks_nothing(tmp_path):
-    case = _case(tmp_path, pre_pacing="tolerance 1e-4;\nsingleCellIonicModel TNNPcompactBatched;\nsingleCellStimulus { stim_start 0; }")
+# idealizedHeart/electroHeart/constant/prePacingProperties, its entries.
+ELECTRO_HEART = """tolerance   1e-4;   // max relative state change between successive beats
+minBeats    10;
+maxBeats    3000;
+
+singleCellStimulus
+{
+    stim_start      20;     // ms
+    stim_duration   1;      // ms
+    stim_amplitude  0.4;    // BuenoOrovio stimulus units
+    stim_period_S1  1000;   // ms: pacing cycle length
+    stim_period_S2  0;
+    nstim2          0;
+}
+"""
+
+
+def test_a_native_pre_pacing_file_breaks_nothing(tmp_path):
+    case = _case(tmp_path, pre_pacing=ELECTRO_HEART + "singleCellIonicModel TNNPcompactBatched;")
     assert _messages(case, "prePacingProperties") == set()
+
+
+def test_a_pacing_protocol_missing_one_of_its_four_keys_is_refused_at_the_root_and_in_a_region(tmp_path):
+    case = _case(tmp_path, pre_pacing=(
+        "singleCellStimulus { stim_start 20; stim_duration 1; stim_amplitude 0.4; }\n"
+        "regions { epicardialCells { singleCellStimulus { stim_start 20; stim_period_S1 1000; } } }"
+    ))
+    assert _messages(case, "prePacingProperties") == {
+        "singleCellStimulus.stim_period_S1 is required when $singleCellStimulus_present=True.",
+        "regions.epicardialCells.singleCellStimulus.stim_duration is required when "
+        "regions.<region_name>.$singleCellStimulus_present=True.",
+        "regions.epicardialCells.singleCellStimulus.stim_amplitude is required when "
+        "regions.<region_name>.$singleCellStimulus_present=True.",
+    }
 
 
 def test_a_solver_that_never_reads_pre_pacing_is_not_judged_by_it(tmp_path):

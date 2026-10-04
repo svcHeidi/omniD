@@ -13,7 +13,8 @@ enforces; none is new. The last section is about the mesh.
 - **Three documents are catalogued**: `constant/electroProperties`,
   `constant/physicsProperties` and `constant/prePacingProperties` (its keys at
   the root or under `regions.<region_name>`, which the file's presence turns
-  on). A key in any of them must be in the catalogue, or
+  on; its `singleCellStimulus` takes electroProperties' protocol keys, each
+  listed under it, or a map of them). A key in any of them must be in the catalogue, or
   read by the supplied C++ source at exactly that path: then it is
   `uncatalogued`, accepted (and added if the case lacks it), and checked
   against the type the C++ reads it as (`omnidriver catalog --uncatalogued`

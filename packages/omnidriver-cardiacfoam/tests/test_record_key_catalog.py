@@ -66,5 +66,5 @@ def test_a_pre_pacing_file_the_case_holds_is_listed_by_the_keys_a_study_may_set(
     shutil.copytree(CASE, case)
     (case / "constant" / "prePacingProperties").write_text("FoamFile { version 2.0; format ascii; class dictionary; object x; }\n")
     keys = {e["key"] for e in CardiacFoamPlugin().get_record_key_catalog(case) if e["document"] == "constant/prePacingProperties"}
-    assert {"tolerance", "maxBeats", "regions.<region_name>.maxBeats", "singleCellStimulus"} <= keys
+    assert {"tolerance", "maxBeats", "regions.<region_name>.maxBeats", "singleCellStimulus.stim_start", "regions.<region_name>.singleCellStimulus.stim_start"} <= keys
     assert not [key for key in keys if "$" in key]

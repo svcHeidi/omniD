@@ -54,6 +54,8 @@ def infer_virtual_presence(ctx: dict[str, Any]) -> None:
             if existing_key.startswith(prefix):
                 ctx[virtual_key] = True
                 break
+    for existing_key in [key for key in ctx if key.startswith("regions.") and ".singleCellStimulus." in key]:
+        ctx[existing_key.split(".singleCellStimulus.")[0] + ".$singleCellStimulus_present"] = True
     for existing_key in [key for key in ctx if key.startswith(_ECG_DOMAIN_PREFIX) and _PERSONALIZED_TEMPLATES_SUFFIX in key]:
         ctx[existing_key.split(_PERSONALIZED_TEMPLATES_SUFFIX)[0] + ".$personalizedTemplates_present"] = True
 
@@ -650,8 +652,10 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDi
         except (OSError, ValueError, KeyError) as exc:
             found.append(diagnostic("error", "case_unreadable", f"{pre_pacing} cannot be read: {exc}", source=relative))
         else:
+            pacing = {"myocardiumSolver": str(solver), **leaves}
+            infer_virtual_presence(pacing)
             found += rule_diagnostics(
-                catalogue.entries_for("prePacingProperties"), {"myocardiumSolver": str(solver), **leaves},
+                catalogue.entries_for("prePacingProperties"), pacing,
                 document=relative, mapping=mapping, catalogue=catalogue,
             )
     return tuple(

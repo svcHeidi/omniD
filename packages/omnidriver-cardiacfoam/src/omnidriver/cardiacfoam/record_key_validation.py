@@ -89,6 +89,11 @@ def _pre_pacing_match(key_path: "tuple[str, ...]"):
     return (entry, {}) if entry is not None else match_dynamic_entry(templated, _PRE_PACING_ENTRIES_BY_PATH.values())
 
 
+def _pre_pacing_declares_members(key_path: "tuple[str, ...]") -> bool:
+    """A ``singleCellStimulus`` block, at the root or in a region, is the map of its catalogued keys."""
+    return key_path[-1:] == ("singleCellStimulus",) and (len(key_path) == 1 or key_path[:1] == ("regions",) and len(key_path) == 3)
+
+
 def _control_match(key_path: "tuple[str, ...]"):
     entry = _CONTROL_ENTRIES_BY_PATH.get(".".join(key_path))
     return None if entry is None else (entry, {})
@@ -123,6 +128,7 @@ record_key_validator = make_validator(
             entries=_PRE_PACING_ENTRIES_BY_PATH.values,
             match=_pre_pacing_match,
             scan=lambda key_path: (_PRE_PACING_TOKEN, *key_path),
+            members=_pre_pacing_declares_members,
         ),
         CONTROL_DOCUMENT: CataloguedDocument(
             label="controlDict",

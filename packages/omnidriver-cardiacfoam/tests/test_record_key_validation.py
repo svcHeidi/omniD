@@ -185,7 +185,13 @@ def test_pre_pacing_keys_are_validated_at_the_root_and_in_a_region_block():
     document = "constant/prePacingProperties"
     assert record_key_validator(document, ("maxBeats",), 5) == ("integer", True)
     assert record_key_validator(document, ("regions", "epicardialCells", "tolerance"), 1e-3) == ("scalar", True)
+    assert record_key_validator(document, ("singleCellStimulus", "stim_start"), 20) == ("scalar", True)
     assert record_key_validator(document, ("singleCellStimulus",), {"stim_start": 0}) == ("mapping", True)
+    assert record_key_validator(document, ("regions", "epicardialCells", "singleCellStimulus"), {"nstim2": 0}) == ("mapping", True)
+    with pytest.raises(ValueError, match="singleCellStimulus.stim_start does not fit"):
+        record_key_validator(document, ("singleCellStimulus",), {"stim_start": "soon"})
+    with pytest.raises(KeyError, match="singleCellStimulus.stim_startt"):
+        record_key_validator(document, ("singleCellStimulus",), {"stim_startt": 0})
     with pytest.raises(ValueError, match="must be an integer"):
         record_key_validator(document, ("regions", "epicardialCells", "maxBeats"), "many")
     with pytest.raises(ValueError, match="not a valid word|whitespace"):

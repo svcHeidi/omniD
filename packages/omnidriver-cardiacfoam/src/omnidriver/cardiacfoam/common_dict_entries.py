@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Final
 
+from omnidriver.core.contracts.catalogue_paths import slot_key
 from omnidriver.core.contracts.dictionary import DictEntry
 
-from .dict_entries_catalog import IONIC_MODEL_MENU
+from .dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS, IONIC_MODEL_MENU
 
 
 PHYSICS_PROPERTY_ENTRIES: Final[tuple[DictEntry, ...]] = (
@@ -253,16 +255,28 @@ def _pre_pacing_entries(scope: str) -> tuple[DictEntry, ...]:
             ),
             source_refs=(*_PRE_PACING_SOURCE, *prepacing),
         ),
-        entry(
-            "singleCellStimulus", value_kind="mapping",
-            description=(
-                "Pacing protocol of the single cell, in place of the one in electroProperties: the same "
-                "keys, stim_start, stim_period_S1, stim_duration and stim_amplitude (ms), and optionally "
-                "stim_period_S2 and nstim2. nstim1 is set to maxBeats whatever it says."
+    )
+
+
+def _pre_pacing_stimulus_entries(scope: str) -> tuple[DictEntry, ...]:
+    """The pacing protocol, which ``myocardiumPrePacing`` hands to the same ``stimulusIO::loadStimulusProtocol`` as
+    electroProperties' ``singleCellStimulus``: that block's entries, re-rooted under ``scope`` and applying to the solvers
+    that read the file, with the four protocol keys required together once any key of the block is set."""
+    presence = slot_key(f"{scope}$singleCellStimulus_present")
+    bindings = {"<region_name>": None} if scope != _PRE_PACING_TOKEN else {}
+    prefix = "$ELECTRO_MODEL_COEFFS.singleCellStimulus."
+    return tuple(
+        replace(
+            entry, driver_path=f"{scope}singleCellStimulus.{entry.driver_path.removeprefix(prefix)}",
+            applicable_when=_PRE_PACING_SOLVERS, allowed_bindings=bindings, typical_value="", constraints=(),
+            required=False, required_when={presence: True} if entry.required_when else {},
+            source_refs=(*_PRE_PACING_SOURCE, *entry.source_refs),
+            notes=(
+                "Set to maxBeats whatever it says, so every beat is paced."
+                if entry.driver_path.endswith(".nstim1") else entry.notes
             ),
-            source_refs=_PRE_PACING_SOURCE,
-            constraints=("All four of stim_start, stim_period_S1, stim_duration and stim_amplitude, once any is set.",),
-        ),
+        )
+        for entry in ELECTRO_PROPERTY_ENTRY_GROUPS["single_cell_stimulus"]
     )
 
 
@@ -272,5 +286,6 @@ def _pre_pacing_entries(scope: str) -> tuple[DictEntry, ...]:
 #: Monodomain and bidomain build the myocardium domain that reads it;
 #: singleCellSolver and the eikonal solver do not.
 PRE_PACING_PROPERTY_ENTRIES: Final[tuple[DictEntry, ...]] = (
-    *_pre_pacing_entries(_PRE_PACING_TOKEN), *_pre_pacing_entries(_PRE_PACING_REGION),
+    *_pre_pacing_entries(_PRE_PACING_TOKEN), *_pre_pacing_stimulus_entries(_PRE_PACING_TOKEN),
+    *_pre_pacing_entries(_PRE_PACING_REGION), *_pre_pacing_stimulus_entries(_PRE_PACING_REGION),
 )
