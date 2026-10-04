@@ -485,6 +485,7 @@ def apply_record_study(
     study: Mapping[str, Any],
     driver_context: "DriverContext",
     execution_env: Any | None = None,
+    check: Callable[[], None] | None = None,
 ) -> tuple[dict[str, Any], ...]:
     """Edit an already staged case with ``document:key`` patches, the same a
     study takes, through the record's own validator, comparison and
@@ -493,8 +494,8 @@ def apply_record_study(
     Refuses a name that is not a ``document:key``: an axis or reserved name
     changes the plan, which needs a new plan rather than an edit. An edit
     after which the case breaks a rule is rolled back, so a refusal leaves the
-    case as it was. Returns every patch, serialized, as ``changed`` or
-    ``unchanged``.
+    case as it was, and so is one after which ``check`` raises. Returns every
+    patch, serialized, as ``changed`` or ``unchanged``.
     """
     plan_changing = sorted(name for name in study if ":" not in name)
     if plan_changing:
@@ -512,11 +513,16 @@ def apply_record_study(
             record, case_root, driver_context, then="; the case is as it was before the edit",
         )
 
+    def verify() -> None:
+        refuse_a_broken_case()
+        if check is not None:
+            check()
+
     if to_write:
         _commit_patches(
             record, staged_case_root=case_root, to_write=to_write,
             driver_context=driver_context, execution_env=execution_env,
-            requested_by="step_apply", case_lease_held=True, verify=refuse_a_broken_case,
+            requested_by="step_apply", case_lease_held=True, verify=verify,
         )
     else:
         refuse_a_broken_case()

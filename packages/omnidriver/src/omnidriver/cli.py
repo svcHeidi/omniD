@@ -415,7 +415,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             expected_artifacts=current_inputs.expected_artifacts,
         )
 
-    def apply_study(study: dict) -> tuple[dict, ...]:
+    def apply_study(study: dict, check: Callable[[], None]) -> tuple[dict, ...]:
         from .core.runtime.record_execution import apply_record_study
 
         records = driver_context.stack.call("get_tutorial_records")
@@ -424,7 +424,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             raise ValueError(f"run document {run_doc.name!r} is not a tutorial record of this plugin")
         return apply_record_study(
             record, case_root=inputs.case_root, study=study,
-            driver_context=driver_context, execution_env=execution_env,
+            driver_context=driver_context, execution_env=execution_env, check=check,
         )
 
     return _ExecutionContext(
@@ -824,8 +824,9 @@ def build_parser() -> argparse.ArgumentParser:
             "JSON object of 'document:key' patches, the same a study takes, "
             "then rerun the step. The step must be pending or failed with its "
             "dependencies completed, or nothing is written. An edit the "
-            "stack's rules refuse is rolled back; patches that change nothing "
-            "do not rerun the step (status 'unchanged')."
+            "stack's rules refuse, or whose replan changes the workflow, is "
+            "rolled back; patches that change nothing do not rerun a step that "
+            "has run (status 'unchanged', exit 1)."
         ),
     )
     parser.add_argument(

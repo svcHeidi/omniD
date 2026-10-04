@@ -62,9 +62,10 @@ def test_apply_replan_and_dispatch_share_case_and_output_ownership(
         assert case_lease_is_held(case_root)
         assert attempt_lease_is_held(output_dir)
 
-    def apply_study(study) -> tuple:
+    def apply_study(study, check) -> tuple:
         assert_owned()
         events.append("apply")
+        check()
         return ({"document": "constant/mesh.json", "status": "changed", **study},)
 
     def replan() -> cli._ReplannedExecution:
@@ -129,7 +130,7 @@ def test_changed_replanned_workflow_is_refused_before_dispatch(
         case_root=case_root,
         output_dir=output_dir,
         expected_artifacts=(),
-        apply_study=lambda study: ({"status": "changed"},),
+        apply_study=lambda study, check: (check(), ({"status": "changed"},))[1],
         replan_after_mutation=lambda: cli._ReplannedExecution(
             changed_dag, changed_state, (),
         ),
@@ -138,8 +139,7 @@ def test_changed_replanned_workflow_is_refused_before_dispatch(
     assert cli._dispatch_context(_args(apply_path), context) == 1
     payload = json.loads(capsys.readouterr().out)
     assert "changed the workflow plan" in payload["error"]
-    audit = json.loads((output_dir / "remediation_history.jsonl").read_text())
-    assert audit["resulting_status"] == "replan_error"
+    assert not (output_dir / "remediation_history.jsonl").exists()
 
 
 def test_a_plan_with_no_record_case_refuses_apply(capsys, tmp_path: Path) -> None:

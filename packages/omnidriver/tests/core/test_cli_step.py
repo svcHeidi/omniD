@@ -84,16 +84,27 @@ def test_apply_edits_the_staged_case_then_reruns_the_step(case):
     assert record["applied_patches"] == payload["applied_patches"]
 
 
-def test_a_patch_that_changes_nothing_says_so_and_neither_reruns_the_step_nor_spends_an_attempt(case):
+def test_a_patch_that_changes_nothing_does_not_rerun_a_failed_step_and_exits_non_zero(tmp_path):
+    case = _Case(tmp_path, FAILS_UNTIL_SEVEN_CELLS_PLUGIN)
+    assert case.step()[0] == 1
+    logs = sorted(p.name for p in (case.root / "workflow_logs").iterdir())
+
     code, payload = case.apply({"constant/mesh.json:cells": 1})
 
-    assert code == 0 and payload["status"] == "unchanged"
+    assert code == 1 and payload["status"] == "unchanged"
     assert "not rerun" in payload["message"]
     assert [p["status"] for p in payload["applied_patches"]] == ["unchanged"]
-    assert not (case.root / ".omnidriver" / "case-transactions").exists()
-    assert not (case.root / "solved.marker").exists()
-    assert not (case.root / "workflow_state.json").exists()
+    assert sorted(p.name for p in (case.root / "workflow_logs").iterdir()) == logs
     assert not (case.root / "remediation_history.jsonl").exists()
+
+
+def test_a_patch_that_changes_nothing_still_runs_a_step_that_never_ran(case):
+    code, payload = case.apply({"constant/mesh.json:cells": 1})
+
+    assert code == 0 and payload["status"] == "ok"
+    assert [p["status"] for p in payload["applied_patches"]] == ["unchanged"]
+    assert not (case.root / ".omnidriver" / "case-transactions").exists()
+    assert (case.root / "solved.marker").is_file()
 
 
 def test_a_step_reports_the_artifacts_it_left_on_disk(case):

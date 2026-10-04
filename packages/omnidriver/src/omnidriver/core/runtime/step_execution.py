@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, Literal, Mapping
 
 from .attempt_lease import attempt_lease_is_held, case_lease_is_held
-from .execution_context import StepExecutionContext
+from .execution_context import ReplannedExecution, StepExecutionContext
 from .failure_context import build_failure_context
 from .launch_readiness import is_execution_successful
 from .remediation import build_candidate_remediations
@@ -42,9 +42,9 @@ def execute_step_owned(
     A step that cannot run is refused before the case is touched. The edit
     commits through the case writer, which journals and rolls back its own
     failure, and which the stack's rules can refuse the same way, leaving the
-    case as it was. Patches that change nothing neither rerun the step nor
-    spend an attempt (status ``unchanged``). A plan whose workflow changed
-    refuses to run and leaves the committed edit in the case.
+    case as it was, as does a replan whose workflow changed. Patches that
+    change nothing neither rerun a step that has run nor spend an attempt
+    (status ``unchanged``, and the result is a failure: the step still is).
     """
     case_root = Path(context.case_root)
     output_dir = Path(context.output_dir)
@@ -71,12 +71,28 @@ def execute_step_owned(
     applied: tuple[dict[str, Any], ...] = ()
     if study is not None:
         check_step_runnable(workflow_dag, workflow_state, step_id)
+        replanned: list[ReplannedExecution] = []
+
+        def check_the_plan() -> None:
+            """Runs inside the edit's transaction: a plan that changed rolls the edit back."""
+            candidate = context.replan_after_mutation()
+            if workflow_digest(candidate.workflow_dag) != workflow_digest(workflow_dag):
+                raise ValueError(
+                    "the patches changed the workflow plan; plan again with them instead of "
+                    "rerunning one step. The case is as it was before the edit"
+                )
+            replanned.append(candidate)
+
         try:
             if context.apply_study is None or context.replan_after_mutation is None:
                 raise ValueError("this plan has no tutorial record whose case can be edited")
-            applied = context.apply_study(study)
-            if all(patch["status"] == "unchanged" for patch in applied):
-                return StepResult("succeeded", {
+            applied = context.apply_study(study, check_the_plan)
+            step_state = _step_state_by_id(workflow_state, step_id)
+            if all(patch["status"] == "unchanged" for patch in applied) and (
+                step_state.attempt > 0 or step_state.status != "pending"
+            ):
+                # Nothing changed, so another run would end as the last did.
+                return StepResult("failed", {
                     "status": "unchanged",
                     "entry": context.entry_label,
                     "step": step_id,
@@ -84,36 +100,24 @@ def execute_step_owned(
                     "applied_patches": list(applied),
                     "workflow_state": workflow_state.to_json(),
                 })
-            if state_path.exists() and context.driver_context is not None:
-                # The edit is deliberate, so the saved evidence follows it: a
-                # later edit must not be refused for this one.
+            if replanned:
+                workflow_dag = replanned[0].workflow_dag
+                expected_artifacts = replanned[0].expected_artifacts
+            if state_path.exists() and context.driver_context is not None and replanned:
+                # The edit is deliberate and passed its checks, so the saved
+                # evidence follows it: a later edit must not be refused for this one.
                 workflow_state = replace(workflow_state, resume_snapshot=checkpoint_snapshot(
                     case_root, workflow_dag, context.driver_context, context.execution_env,
                 ))
                 atomic_write_json(state_path, workflow_state.to_json())
-            replanned = context.replan_after_mutation()
-            if workflow_digest(replanned.workflow_dag) != workflow_digest(workflow_dag):
-                raise ValueError(
-                    "the patches changed the workflow plan; plan again with them "
-                    "instead of rerunning one step"
-                )
-            workflow_dag = replanned.workflow_dag
-            expected_artifacts = replanned.expected_artifacts
-            if not state_path.exists():
-                workflow_state = replanned.planned_state
+            if not state_path.exists() and replanned:
+                workflow_state = replanned[0].planned_state
         except (OSError, ValueError, CaseTransactionError) as exc:
-            if applied:
-                append_remediation_record(
-                    output_dir, step_id=step_id,
-                    attempt=_step_state_by_id(workflow_state, step_id).attempt,
-                    applied_patches=list(applied), resulting_status="replan_error",
-                )
             return StepResult("rejected", {
                 "status": "failed",
                 "entry": context.entry_label,
                 "step": step_id,
                 "error": f"candidate rejected: {exc}",
-                **({"applied_patches": list(applied)} if applied else {}),
             })
 
     try:
