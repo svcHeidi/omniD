@@ -103,42 +103,48 @@ other than the scanned source is named in the run result.
 
 ## 4. cardiacCore: exactly where it stands
 
-The owner's checkout (`~/cardiacCoreStandalone`, branch `main`) is at
-`f0fc231`: 11 commits behind `origin/main` and 0 ahead.
+`origin/main` is at `4d2b22a`. The owner's checkout (`~/cardiacCoreStandalone`)
+is still on `f0fc231`. It has no tracked changes, so `git pull --ff-only` is
+clean.
 
-- **`git pull --ff-only` is refused today.** The incoming commits change one
-  line of `docs/superpowers/specs/2026-09-23-septal-midline-purkinje-seeds-RESULTS.md`
-  (the moved script's path, `scripts/` → `applications/scripts/`), and the
-  owner has 51 uncommitted added lines in the same file. Commit those edits
-  first; the pull should then merge cleanly, since the changes are on
-  different lines.
-- **An uncommitted C++ change in `src/setCardiacConductivity/setCardiacConductivity.C`.**
-  It adds a fibre-only basis: `sheet` and `normal` become optional pointers,
-  giving a transversely isotropic tensor with one conductivity across the
-  fibre.
-  - Nothing incoming touches that file.
-  - Once committed, a rescan reports `sheet` as no longer required.
-  - The record `humanSlab` and the idealized-heart cases still ship `sheet`,
-    which stays valid.
-  - The installed utilities in `/Volumes/OpenFOAM-v2412` were rebuilt on
-    2026-09-28 at 20:22, after omniD's rebuild that day, so they likely come
-    from this local change.
-- **Untracked local work, with no path collisions:**
-  - `agent/`;
-  - `cases/idealizedBivEllipsoid*`, with a pre-cobiveco backup;
-  - `tutorials/idealizedBivEllipsoid/`;
-  - `docs/purkinje-growth-activation-roadmap.md`.
+- **The owner's fibre-only conductivity** (`setCardiacConductivity`) is on
+  `main`, authored by the owner (`bf3b9c4`):
+  - with a `sheetField`, the output is byte-identical to before;
+  - without one, it writes `dt·I + (df − dt)·f⊗f`, checked at every cell of
+    the idealized heart (`cases/idealizedHeart/regression/fibreOnlyConductivityTest.sh`);
+  - the installed utility in `/Volumes/OpenFOAM-v2412` is built from this
+    change.
+- **Results are not in the repository.** cardiacCore holds the methods. The
+  validation results on local anatomies live in the owner's git-ignored
+  `local/` folder, which holds `results/`, `notes/` and `reference_assets/`.
+- **Purkinje tools, current and legacy:**
 
-  `cases/idealizedBivEllipsoidPig/README.md` still names `scripts/`, which
-  moved to `applications/scripts/` on `main`.
-- **On `main` now:**
+  | tool | status | basis |
+  |---|---|---|
+  | `applications/scripts/place_purkinje_seeds.py` | current | used by the 2026-09-23 septal-midline seed results |
+  | `applications/scripts/check_purkinje_activation.py` | current | the owner's original tool, verbatim, used by the same results |
+  | `applications/scripts/legacy/purkinje_coverage.py` | legacy | the June 2026 seed-deduction coverage check, superseded. The owner has not confirmed its correctness. Keep it unchanged and separate |
+
+- **Also on `main`:**
   - `omnidriver.toml`;
   - `applications/scripts/` (the former `scripts/`, plus omniD's former
-    `operations/`, as command-line scripts with tests);
+    `operations/`);
   - the three idealized-heart cases with regression tests;
-  - the ring-closure check, which reads the case's coordinate convention.
-    Its base is 1 by default, from `computeAhaFrame`, and ring spacing is
-    measured against each chamber's own range.
+  - the ring-closure check. It reads the case's coordinate convention; the
+    base is 1 by default, from `computeAhaFrame`, and spacing is measured
+    against each chamber's own range.
+- **The catalogue matches the C++:** the four records plan with no
+  diagnostics. The coordinate-convention and Purkinje-tree keys the C++
+  reads without a default are catalogued as required. A
+  `coordinatesConventionDict` must therefore carry every block, as all
+  native cases do.
+- **Untracked local work, left as it is:**
+  - `cases/idealizedBivEllipsoid*`;
+  - `tutorials/idealizedBivEllipsoid/`;
+  - `local/`.
+
+  `cases/idealizedBivEllipsoidPig/README.md` still names `scripts/`, which
+  is now `applications/scripts/`.
 - **Not on `main`:** the scar work stays on the `scar` branch.
 
 ## 5. Next
