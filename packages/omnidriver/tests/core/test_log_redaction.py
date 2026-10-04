@@ -34,7 +34,7 @@ def test_a_plugin_declared_pattern_redacts_the_real_workflow_runner_s_kept_log(t
 
     target = toy_conformance_target(tmp_path, plugin=LOG_REDACTION_PLUGIN)
     verdict = run_check("C6", target)
-    assert verdict.passed, verdict.detail
+    assert verdict.status == "passed", verdict.detail
 
     logs = list(target.scratch_root.rglob("workflow_logs/*.log"))
     assert logs, "C6 wrote no step logs"

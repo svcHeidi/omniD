@@ -1,6 +1,7 @@
 """C1-C14. Each check is self-contained: it builds its own context, stages its own copy, and returns a verdict.
 
-No check skips; a check that cannot run is a failure saying why."""
+A check that cannot run is a failure saying why. A check that verifies nothing for the target (no patch to
+compare, no output format, no declared quantity) is ``not_applicable`` and says what it would have needed."""
 from __future__ import annotations
 
 import dataclasses
@@ -22,6 +23,7 @@ from omnidriver.core.quantities import (
     Quantity, ReadRequest, ReaderDeclarationError, check_reader, convert, experiment_comparisons, read_quantities,
 )
 from omnidriver.core.runtime import mpi
+from omnidriver.core.runtime.artifacts import DRIVER_PRODUCED_BY
 from omnidriver.core.runtime.models import data_artifact_from_json
 from omnidriver.core.runtime.process_control import run_child
 from omnidriver.core.runtime.case_records import build_sweep_context
@@ -41,7 +43,11 @@ from .target import CheckVerdict, ConformanceTarget
 
 
 def _verdict(check_id: str, passed: bool, detail: str) -> CheckVerdict:
-    return CheckVerdict(check_id=check_id, passed=passed, detail=detail)
+    return CheckVerdict(check_id=check_id, status="passed" if passed else "failed", detail=detail)
+
+
+def _not_applicable(check_id: str, detail: str) -> CheckVerdict:
+    return CheckVerdict(check_id=check_id, status="not_applicable", detail=detail)
 
 
 def _output_tail(proc: subprocess.CompletedProcess) -> str:
@@ -101,7 +107,9 @@ def check_load(target: ConformanceTarget) -> CheckVerdict:
 
 
 def check_describe_noop(target: ConformanceTarget) -> CheckVerdict:
-    """C2: with no study values, describe proposes no change to the native case."""
+    """C2: with no study values, describe proposes no change to the native case.
+
+    A record that proposes no patch at all has nothing to compare with the native case: not applicable."""
     ctx = _context(target)
     payload = describe_entry(
         target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=ctx,
@@ -112,7 +120,9 @@ def check_describe_noop(target: ConformanceTarget) -> CheckVerdict:
     changed = [p for p in preview["patches"] if p["status"] != "unchanged"]
     if changed:
         return _verdict("C2", False, f"describe proposes {len(changed)} change(s) to the untouched native case: {changed}")
-    return _verdict("C2", True, "no changes proposed")
+    if not preview["patches"]:
+        return _not_applicable("C2", "the record proposes no patches, so there is nothing to compare with the native case")
+    return _verdict("C2", True, f"{len(preview['patches'])} patch(es) proposed, all unchanged from the native case")
 
 
 def _quotes(message: str, name: str) -> bool:
@@ -552,8 +562,12 @@ def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
 def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:
     """C12: every record output that declares a format has a reader for it,
     through the reader contract, with a valid declaration. A record whose
-    outputs declare no format passes and says so: not every record is
+    outputs declare no format is not applicable: not every record is
     compared.
+
+    The formats are the ones the record's own steps declare on their produced
+    paths. A format only a plugin predicts for the plan's artifacts is named in
+    the not-applicable detail, and no record asked for it to be read.
 
     This checks the reader's *declaration* only (``check_reader``) -- it
     never calls ``read``, so a reader whose ``read`` always raises still
@@ -563,7 +577,20 @@ def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:
     formats = sorted({step.produced_format(path) for step in record.workflow_steps for path in step.produces}
                      - {PLAIN_FILE_FORMAT})
     if not formats:
-        return _verdict("C12", True, "no output declares a format, so there is nothing to read")
+        detail = "no workflow step of the record declares a format on a produced path, so no reader is expected"
+        try:
+            predicted = [
+                a for a in _plan(target, ctx).expected_artifacts
+                if a.format != PLAIN_FILE_FORMAT and a.produced_by != DRIVER_PRODUCED_BY
+            ]
+        except TutorialRecordError:
+            predicted = []
+        if predicted:
+            detail += (
+                f"; the plan predicts {len(predicted)} artifact(s) in formats {sorted({a.format for a in predicted})} "
+                f"(for example {predicted[0].artifact_id!r}), which the plugin declares and the record does not ask to be read"
+            )
+        return _not_applicable("C12", detail)
     problems = []
     for artifact_format in formats:
         reader = ctx.stack.call("get_artifact_value_reader", artifact_format)
@@ -636,12 +663,12 @@ def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
     the parallel run says it asked for those ranks, and the solver's own
     output shows it ran on them (``QuantityTarget.rank_evidence``).
 
-    A target that declares no quantity passes and says so."""
+    A target that declares no quantity is not applicable."""
     ctx = _context(target)
     _record(ctx, target.record)
     declared = target.quantity
     if declared is None:
-        return _verdict("C13", True, "the target declares no quantity, so there is nothing to compare")
+        return _not_applicable("C13", "the target declares no quantity, so there is nothing to compare")
     serial = _run_for_quantities(target, ctx, declared.study, "serial")
     if isinstance(serial, str):
         return _verdict("C13", False, serial)
@@ -677,13 +704,14 @@ def check_quantity_across_sweep(target: ConformanceTarget) -> CheckVerdict:
     target's sweep axis, end to end as an agent would: ``sweep-run``,
     ``compare`` on the target's reference, the report attached to each case.
     The comparison must read both sides of at least one pair; whether the two
-    resolutions agree is physics, not conformance.
+    resolutions agree is physics, not conformance: this checks the mechanism,
+    never that the values agree.
 
-    A target that declares no quantity passes and says so."""
+    A target that declares no quantity is not applicable."""
     _record(_context(target), target.record)
     declared = target.quantity
     if declared is None:
-        return _verdict("C14", True, "the target declares no quantity, so there is nothing to compare")
+        return _not_applicable("C14", "the target declares no quantity, so there is nothing to compare")
     work = target.scratch_root / "conformance" / "C14"
     if work.exists():
         shutil.rmtree(work)
@@ -750,7 +778,11 @@ def check_quantity_across_sweep(target: ConformanceTarget) -> CheckVerdict:
         problems.append(f"the report is not attached to both cases as run_verified: {[c.comparison.association_status for c in experiment.cases]}")
     elif {c.comparison.status for c in experiment.cases} != {report["status"]}:
         problems.append("a case carries a comparison status other than the report's")
-    return _verdict("C14", not problems, "; ".join(problems) or f"{len(metrics)} pair(s) compared, report {report['status']}")
+    return _verdict(
+        "C14", not problems,
+        "; ".join(problems) or f"{len(metrics)} pair(s) compared, report {report['status']}: this checks that the sweep, "
+        "compare and attachment work, not that the two resolutions agree",
+    )
 
 
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
@@ -794,7 +826,7 @@ def _guarded(verdict: CheckVerdict, changed: list[str], cases_root: Path) -> Che
         return verdict
     shown = changed[:20] + ([f"... {len(changed) - 20} more"] if len(changed) > 20 else [])
     guard = f"the native tree {cases_root} changed during the check: {shown}"
-    if verdict.passed:
+    if verdict.status != "failed":
         return _verdict(verdict.check_id, False, guard)
     return _verdict(verdict.check_id, False, f"{verdict.detail}; {guard}")
 

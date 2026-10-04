@@ -40,6 +40,8 @@ class ConformanceTarget(ConformanceStudy):
 
 @dataclass(frozen=True)
 class CheckVerdict:
+    """``status`` is ``passed``, ``failed``, or ``not_applicable``: the check verified nothing for this target (counted apart)."""
+
     check_id: str
-    passed: bool
+    status: str
     detail: str

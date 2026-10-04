@@ -385,6 +385,15 @@ class UndeclaredOutputPlugin(ToyStack):
     RECORDS = {"toyTutorial": _toy_record(_solve(("sh", "-c", "touch solved.marker undeclared.out")))}
 
 
+class PredictedFormatPlugin(ToyStack):
+    """Its plan predicts the file the solve step touches in a format of its own, which no step of the record declares."""
+
+    def predict_data_artifacts(self, case_root, spec):
+        return (DataArtifact(
+            artifact_id="toy_trace", path_pattern="solved.marker", format="toy_trace_format", produced_by="solve",
+        ),)
+
+
 #: What each route of DefaultRoutePlugin's record writes; C6 finds the
 #: default route's marker only if the default route is the one that ran.
 DEFAULT_ROUTE_MARKER = "native-route.marker"
@@ -999,6 +1008,7 @@ REFUSING_RENDERER_PLUGIN = _selector("RefusingRendererPlugin")
 REFUSING_RESOLVER_PLUGIN = _selector("RefusingResolverPlugin")
 REFUSING_READER_PLUGIN = _selector("RefusingReaderPlugin")
 UNDECLARED_OUTPUT_PLUGIN = _selector("UndeclaredOutputPlugin")
+PREDICTED_FORMAT_PLUGIN = _selector("PredictedFormatPlugin")
 OVER_GENERATED_CONVENTIONS_PLUGIN = _selector("OverGeneratedConventionsPlugin")
 DEFAULT_ROUTE_PLUGIN = _selector("DefaultRoutePlugin")
 WITH_INPUT_PLUGIN = _selector("WithInputPlugin")

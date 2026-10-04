@@ -71,4 +71,4 @@ def test_the_guides_minimal_plugin_loads_describes_and_plans(tmp_path, monkeypat
         plugin=selector, record="demo", cases_root=cases, scratch_root=tmp_path / "scratch", base_study={},
         patch=("x.json:a", 1), untouched=("x.json", ()), sweep_name="a", sweep_values=(1,), unknown_name="b",
     )
-    assert check_load(target).passed
+    assert check_load(target).status == "passed"
