@@ -18,12 +18,17 @@ def test_allows_deletion_of_directory_with_top_level_marker(tmp_path):
     assert check_fresh_deletion_allowed(target, allowed_root=None) is None
 
 
-def test_allows_deletion_when_marker_is_one_level_down(tmp_path):
+def test_refuses_a_directory_whose_marker_is_only_one_level_down(tmp_path):
     target = tmp_path / "a" / "b" / "c"
-    case_dir = target / "TNNP"
-    case_dir.mkdir(parents=True)
-    (case_dir / "run_document.json").write_text("{}")
-    assert check_fresh_deletion_allowed(target, allowed_root=None) is None
+    (target / "sub").mkdir(parents=True)
+    (target / "sub" / "workflow_state.json").write_text("{}")
+    (target / "important").mkdir()
+    (target / "important" / "results.csv").write_text("keep")
+    error = check_fresh_deletion_allowed(target, allowed_root=None)
+    assert error is not None
+    assert "top level" in error
+    assert ensure_fresh_output_dir(target, fresh=True, allowed_root=None) == error
+    assert (target / "important" / "results.csv").exists()
 
 
 def test_refuses_directory_with_no_omnidriver_marker(tmp_path):

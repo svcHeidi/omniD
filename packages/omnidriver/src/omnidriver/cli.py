@@ -440,6 +440,7 @@ def _context_from_entry(
     scratch_dir: str | None = None,
     cli_study: dict | None = None,
     inputs: dict | None = None,
+    fresh: bool = False,
 ) -> tuple[_ExecutionContext | None, int]:
     label = getattr(selected_entry, "name", selected_entry)
 
@@ -452,6 +453,7 @@ def _context_from_entry(
             scratch_root=scratch_dir,
             cli_study=cli_study,
             inputs=inputs,
+            fresh=fresh,
             driver_context=driver_context,
         )
 
@@ -517,7 +519,21 @@ def _dispatch_context(args, context: _ExecutionContext) -> int:
 def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
     output_existed = context.output_dir.exists()
     with acquire_attempt_lease(context.output_dir):
-        if args.fresh and output_existed:
+        # An entry's case is re-staged by every run, so its --fresh was
+        # applied before staging; only a run document's output is cleared here.
+        if args.fresh and output_existed and context.source_path is not None:
+            if context.case_root.resolve().is_relative_to(context.output_dir.resolve()):
+                print(json.dumps({
+                    "status": "failed",
+                    "entry": context.entry_label,
+                    "action": args.action,
+                    "error": (
+                        f"--fresh would delete the case itself: its output directory "
+                        f"{context.output_dir} holds the case. Plan again, or run with "
+                        "--entry and --fresh, to restage it"
+                    ),
+                }, indent=2))
+                return 1
             fresh_error = ensure_fresh_output_dir(
                 context.output_dir,
                 fresh=True,
@@ -837,16 +853,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--fresh",
         action="store_true",
         help=(
-            "For action=step/run/sweep-run: delete the resolved output "
-            "directory before running, so the workflow executes as if no "
-            "prior run existed. Use after a code/config change to guarantee "
-            "a real rerun instead of silently resuming a stale "
-            "workflow_state.json/sweep_manifest.json as 'completed'. "
-            "Refuses to delete the filesystem root, your home directory, a "
-            "too-shallow path, anything outside OMNIDRIVER_ALLOWED_RUNS_ROOT "
-            "when set, or a directory with no recognizable omnidriver "
-            "artifact. No confirmation prompt -- treat --output-dir as fully "
-            "disposable when passing this flag."
+            "For action=step/run/sweep-run: delete the previous output before "
+            "running, so the workflow executes as if no prior run existed. "
+            "With --entry/--case it clears the staged case "
+            "(<scratch>/records/<name>) before staging it again; with "
+            "--run-document it clears the run's output directory (refused "
+            "where that directory holds the case: restage with --entry); "
+            "with sweep-run it clears --output-dir, after the spec has been "
+            "validated. Refuses to delete the filesystem root, your home "
+            "directory, a too-shallow path, anything outside "
+            "OMNIDRIVER_ALLOWED_RUNS_ROOT when set, or a directory with no "
+            "omnidriver artifact (workflow_state.json, sweep_manifest.json "
+            "or run_document.json) at its top level. No confirmation prompt."
         ),
     )
     parser.add_argument(
@@ -1357,6 +1375,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             scratch_dir=args.scratch_dir,
             cli_study=cli_study,
             inputs=cli_inputs,
+            fresh=args.fresh,
         )
         if context is None:
             return failure_code

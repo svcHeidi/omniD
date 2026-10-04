@@ -217,3 +217,77 @@ def test_run_strict_entry_runs_a_record_whose_output_names_a_format(tmp_path, ca
     payload = json.loads(capsys.readouterr().out)
     assert exit_code == 0, payload
     assert payload["workflow_state"]["status"] == "completed"
+
+
+def _toy_run_argv(tmp_path: Path, cases_root: Path, *extra: str) -> list[str]:
+    return [
+        "run", "--strict", "--plugin", "plugins.toy:ToyStack", "--entry", "toyTutorial",
+        "--cases-root", str(cases_root), "--scratch-dir", str(tmp_path / "scratch"), *extra,
+    ]
+
+
+def test_run_entry_fresh_clears_the_old_case_before_staging_so_the_run_still_has_its_case(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    assert main(_toy_run_argv(tmp_path, cases_root)) == 0
+    capsys.readouterr()
+    staged = tmp_path / "scratch" / "records" / "toyTutorial"
+    (staged / "left-over.txt").write_text("from the first run")
+
+    assert main(_toy_run_argv(tmp_path, cases_root, "--fresh")) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["status"] == "ok"
+    assert (staged / "constant" / "mesh.json").is_file()
+    assert not (staged / "left-over.txt").exists()
+
+
+def test_run_entry_fresh_refuses_a_scratch_folder_that_holds_no_omnidriver_artifact(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    staged = tmp_path / "scratch" / "records" / "toyTutorial"
+    staged.mkdir(parents=True)
+    (staged / "notes.txt").write_text("not ours")
+
+    assert main(_toy_run_argv(tmp_path, cases_root, "--fresh")) == 1
+    payload = json.loads(capsys.readouterr().out)
+
+    assert "no recognizable omnidriver artifact" in payload["error"]
+    assert (staged / "notes.txt").read_text() == "not ours"
+
+
+def test_sweep_run_fresh_never_deletes_a_folder_whose_marker_is_only_one_level_down(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    out = tmp_path / "out"
+    (out / "sub").mkdir(parents=True)
+    (out / "sub" / "workflow_state.json").write_text("{}")
+    (out / "important").mkdir()
+    (out / "important" / "results.csv").write_text("keep")
+    spec = _one_case_sweep(tmp_path, cases_root)
+
+    exit_code = main([
+        "sweep-run", "--plugin", "plugins.toy:ToyStack", "--spec", str(spec),
+        "--output-dir", str(out), "--fresh",
+    ])
+
+    assert exit_code == 1
+    assert "no recognizable omnidriver artifact" in json.loads(capsys.readouterr().out)["error"]
+    assert (out / "important" / "results.csv").read_text() == "keep"
+
+
+def test_sweep_run_fresh_validates_the_spec_before_it_deletes_anything(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "sweep_manifest.json").write_text("{}")
+    spec = _write_spec(tmp_path, {
+        "base": {"entry": "toyTutorial", "cases_root": str(cases_root)},
+        "sweep": {"mode": "zip", "independent": {"no_such_axis": [1, 2]}},
+    })
+
+    exit_code = main([
+        "sweep-run", "--plugin", "plugins.toy:ToyStack", "--spec", str(spec),
+        "--output-dir", str(out), "--fresh",
+    ])
+
+    assert exit_code == 1
+    assert "'no_such_axis'" in json.loads(capsys.readouterr().out)["error"]
+    assert (out / "sweep_manifest.json").exists()

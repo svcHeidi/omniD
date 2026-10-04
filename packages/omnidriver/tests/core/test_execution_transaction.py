@@ -220,6 +220,7 @@ def test_fresh_refuses_live_output_owner_before_deleting_contents(
         case_root=case_root,
         output_dir=output_dir,
         expected_artifacts=(),
+        source_path="run_document.json",
     )
     args = _args(tmp_path / "unused.json")
     args.fresh = True

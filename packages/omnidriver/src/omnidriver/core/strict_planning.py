@@ -17,7 +17,9 @@ from .runtime.models import DataArtifact
 from .runtime.record_execution import commit_and_build_record_spec
 from .runtime.run_command import omnidriver_run_command
 from .runtime.run_document_adapter import build_run_document
-from .runtime.run_document_exec import RUN_DOCUMENT_FILENAME
+from .runtime.attempt_lease import AttemptLeaseError, acquire_case_staging_lease
+from .runtime.fresh import ensure_fresh_output_dir
+from .runtime.run_document_exec import RUN_DOCUMENT_FILENAME, _allowed_runs_root
 from .runtime.run_model import RunDocument
 from .runtime.strict_audit import _build_simulation_audit
 from .runtime.workflow import (
@@ -202,6 +204,7 @@ def strict_plan(
     scratch_root: str | Path | None = None,
     cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, str | Path] | None = None,
+    fresh: bool = False,
     driver_context: "DriverContext",
 ) -> StrictPlanReport:
     """Plan (and commit) one tutorial-record case: ``plan --strict``,
@@ -225,6 +228,9 @@ def strict_plan(
     commits the case as a side effect and persists its ``RunDocument`` to
     ``<output_dir>/run_document.json``, the path ``launch`` advertises as
     ``run --run-document <path>``, so that command is immediately runnable.
+    ``fresh`` deletes the previously staged case first (``--fresh``), before
+    anything is staged; it refuses a folder that holds no omnidriver artifact
+    or whose case a live run owns.
     """
     record = lookup_record(entry, driver_context=driver_context)
     incoming_overrides = dict(overrides or {})
@@ -243,6 +249,16 @@ def strict_plan(
     }
     resolved_scratch_root = resolve_scratch_root(scratch_root, cases_root=cases_root)
     staged_case_root = resolved_scratch_root / "records" / record.name
+    if fresh:
+        try:
+            with acquire_case_staging_lease(staged_case_root):
+                fresh_error = ensure_fresh_output_dir(
+                    staged_case_root, fresh=True, allowed_root=_allowed_runs_root(),
+                )
+        except AttemptLeaseError as exc:
+            raise TutorialRecordError(f"--fresh: {exc}") from exc
+        if fresh_error is not None:
+            raise TutorialRecordError(fresh_error)
     try:
         _commit_result, spec = commit_and_build_record_spec(
             record,
