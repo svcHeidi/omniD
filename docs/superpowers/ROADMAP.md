@@ -31,7 +31,7 @@ is about 28,300 non-blank lines and tests about 28,800, down from 48,200 and
 
   | change | report |
   |---|---|
-  | a key the C++ reads that the catalogue lacks | `uncatalogued` note |
+  | a key, or an enum value the C++ compares against, that the catalogue lacks | `uncatalogued` note |
   | a catalogued key the C++ no longer reads | `unread` note |
   | a catalogue claim the C++ contradicts | `disagreement` warning |
 
@@ -64,7 +64,7 @@ is about 28,300 non-blank lines and tests about 28,800, down from 48,200 and
 |---|---|
 | `origin/main` (PR #49 spring-supported slab, PR #50 single-cell pre-pacing) | **merged** into `omnid/tutorials-are-pointers` (`cfd3aeb`). Its 5 pre-pacing keys are catalogued under the `prePacingProperties` document |
 | `origin/feat/insulated-wall-boundary` | pre-resolved in **`omnid/insulated-wall`** (`872d4f8`): our branch with this one merged in. Merging it directly conflicts in 11 files: 10 tutorial READMEs and `restitutionCurves_s1s2Protocol/setup/postProcessing_restCurves.py`. We rewrote those READMEs and ported that script; the branch edited the old versions |
-| `origin/feat/heart-in-bath` (on top of insulated-wall) | pre-resolved in **`omnid/heart-in-bath`** (`dadb2fe`). Its `bathBidomain/insulatedWall` uses `interfaceConductivityInterpolation conormalHarmonic`, a value chosen by an `if` chain the scan cannot read yet, so it is refused (§5) |
+| `origin/feat/heart-in-bath` (on top of insulated-wall) | pre-resolved in **`omnid/heart-in-bath`** (`dadb2fe`). Its `bathBidomain/insulatedWall` uses `interfaceConductivityInterpolation conormalHarmonic`, a value chosen by an `if` chain. The scan reads the literals the chain compares as the menu, so the case plans `ok` and `conormalHarmonic` is an `uncatalogued` note |
 | `origin/codex/regression-and-restart-fixes` | merges cleanly |
 
 What the owner's feature branches add, as omnidriver will see it:
@@ -143,19 +143,18 @@ The owner's checkout (`~/cardiacCoreStandalone`, branch `main`) is at
 
 ## 5. Next
 
-1. **Menus from `if` chains.** For a word key the C++ compares against literals (`== "conormalHarmonic"`), the scan reads those literals as the menu. A value the C++ accepts and the catalogue lacks is then an `uncatalogued` note, not a refusal.
-2. **Electrophysiology testing and training** with the records, `check` and
+1. **Electrophysiology testing and training** with the records, `check` and
    the catalogues. Then **electromechanics**: the owner builds its record,
    and omniD supports it through `WorkflowStep` features as needed.
-3. **The electrode unit seam.** cardiacFOAM reads electrode positions in
+2. **The electrode unit seam.** cardiacFOAM reads electrode positions in
    metres. cardiacCore's `applications/scripts/electrode_positions.py` takes a
    caller-declared unit and converts nothing, so a millimetre case gives a
    pseudo-ECG a factor of 1000 off. This belongs with SI and units: a
    `native_unit` on axes, with sweeps in SI.
-4. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
+3. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the
    solver changed.
-5. **Later:**
+4. **Later:**
    - one run using cardiacCore and cardiacFOAM steps
      (`specs/2026-09-18-cross-adapter-workflow-design.md`);
    - more TOML records;
