@@ -67,3 +67,16 @@ def test_a_purkinje_block_without_a_solver_runs_the_default_one_and_needs_its_io
 ) -> None:
     context = {"myocardiumSolver": "monodomainSolver", f"{PURKINJE}.chi": 1.0, **selector}
     assert (f"{PURKINJE}.ionicModel" in _missing(context)) is needs_ionic_model
+
+
+@pytest.mark.parametrize(("ionic", "needs_solver"), [("Stewart", True), ("StewartcompactBatched", False)])
+def test_a_purkinje_solver_is_required_only_where_the_ionic_model_builds_an_ode_solver(ionic: str, needs_solver: bool) -> None:
+    context = {"myocardiumSolver": "monodomainSolver", f"{PURKINJE}.ionicModel": ionic}
+    assert (f"{PURKINJE}.solver" in _missing(context)) is needs_solver
+
+
+@pytest.mark.parametrize(("ionic", "needs_solver"), [("BuenoOrovio", True), ("BuenoOroviocompactBatched", False)])
+def test_a_personalized_template_solver_is_required_only_where_the_ionic_model_builds_an_ode_solver(ionic: str, needs_solver: bool) -> None:
+    prefix = "ecgDomains.ecg.personalizedTemplates.ionicModelConfig"
+    context = {"myocardiumSolver": "monodomainSolver", "ecgDomains.ecg.ecgSolver": "eikonalECG", f"{prefix}.ionicModel": ionic}
+    assert (f"{prefix}.solver" in _missing(context)) is needs_solver

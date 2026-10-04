@@ -124,7 +124,7 @@
       "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.pvjCouplingScheme": "selects explicit vs split implicit source assembly by a plain word in reactionDiffusionPvjCoupler.C",
       "myocardiumSolver": "a UNION of the electroModel table, the myocardiumSolver table and the eikonalMyocardiumDomain factory: no single base to check against",
       "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.conductionSystemDomain": "a single accepted value (purkinjeGraphModel), registered in no table",
-      "$ELECTRO_MODEL_COEFFS.batchedIntegrator": "selects the ODE integrator for compactBatched GPU models (euler / rushLarsen / rushLarsenHeun): an internal solver-algorithm enum with no runtime table",
+      "$ELECTRO_MODEL_COEFFS.batchedIntegrator": "selects the ODE integrator for compactBatched GPU models (euler / rushLarsen, the two values batchedIonicModel.H accepts and otherwise fails on): an internal solver-algorithm enum with no runtime table",
       "$PRE_PACING.batchedIntegrator": "euler/rushLarsen, the single cell's batchedIntegrator: a plain word batchedIonicModel.H compares against two literals",
       "$PRE_PACING.regions.<region_name>.batchedIntegrator": "euler/rushLarsen, the single cell's batchedIntegrator: a plain word batchedIonicModel.H compares against two literals",
       "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode": "namedRegions/cellZoneRegions, a plain word parsed by ionicHeterogeneity.C",
