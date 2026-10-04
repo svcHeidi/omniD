@@ -291,3 +291,26 @@ def test_sweep_run_fresh_validates_the_spec_before_it_deletes_anything(tmp_path,
     assert exit_code == 1
     assert "'no_such_axis'" in json.loads(capsys.readouterr().out)["error"]
     assert (out / "sweep_manifest.json").exists()
+
+
+def test_a_completed_run_document_is_replayed_and_says_so_while_an_entry_always_starts_over(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    assert main([
+        "plan", "--strict", "--plugin", "plugins.toy:ToyStack", "--entry", "toyTutorial",
+        "--cases-root", str(cases_root), "--scratch-dir", str(tmp_path / "scratch"),
+    ]) == 0
+    capsys.readouterr()
+    document = str(tmp_path / "scratch" / "records" / "toyTutorial" / "run_document.json")
+    replay = ["run", "--plugin", "plugins.toy:ToyStack", "--run-document", document]
+
+    assert main(replay) == 0
+    first = json.loads(capsys.readouterr().out)
+    assert "replayed" not in first and [step["step"] for step in first["steps"]] == ["solve"]
+
+    assert main(replay) == 0
+    second = json.loads(capsys.readouterr().out)
+    assert second["replayed"] is True and second["steps"] == []
+
+    assert main(_toy_run_argv(tmp_path, cases_root)) == 0
+    again = json.loads(capsys.readouterr().out)
+    assert "replayed" not in again and [step["step"] for step in again["steps"]] == ["solve"]

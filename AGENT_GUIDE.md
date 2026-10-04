@@ -20,7 +20,7 @@ is tested against the code; verify any other module path before relying on it.
 | Synthesize a fresh `electroProperties` / `physicsProperties` | `build_electro_properties(...)`, `build_physics_properties(...)` | `omnidriver.cardiacfoam.case_builder` |
 | Build a runnable case from the catalogue when there is no native case | `omnidriver build --plugin cardiacfoam --out <dir>` (see "Build a case from the catalogue") | `omnidriver.cardiacfoam.case_builder` |
 | Locate predicted outputs | `strict_plan(...)`'s `expected_artifacts` field (also in `omnidriver plan --strict` JSON) | `omnidriver.core.strict_planning` |
-| Verify outputs vs predictions | `artifact_reconciliation` in `run --strict`/`step --strict` JSON output | `omnidriver.core.runtime.reconciler` |
+| Verify outputs vs predictions | `artifact_reconciliation` in `run`/`step` JSON output | `omnidriver.core.runtime.reconciler` |
 | Plan/run a study over a record | `omnidriver sweep-plan/sweep-run --spec sweep.json --output-dir <dir>` | `omnidriver.core.runtime.sweep_runner` |
 
 ## Selecting the stack
@@ -114,32 +114,62 @@ axes, `parallel`) goes in a sweep spec. `describe --entry <record>` takes no
 study values; `sweep-plan` previews one.
 
 `plan --strict` stages the case, writes `run_document.json` under
-`launch.output_dir` and prints JSON: `status` (`ok` or `failed`), `entry`,
+`launch.output_dir` and prints JSON: `status` (`ok`; `blocked` when the plan is
+valid but its `environment_diagnostics` hold an error, as when the solver's shell
+is not sourced; or `failed`), `entry`,
 `resolved_entry`, `readiness_score` over the `simulation_audit` stages,
 `workflow_diagnostics`, `artifact_diagnostics`, `environment_diagnostics`,
 `plugin_diagnostics`, `workflow_dag`, `workflow_state`, `expected_artifacts`,
 `launch`, `run_document` and `capability_manifest`. `plugin_diagnostics` is
 the stack's own check (`get_plan_diagnostics`): errors fail the plan, warnings
-and notes never do. For cardiacFOAM and cardiacCore it compares the catalogue
+and notes never do. `plan --strict` exits 0 only for `ok`. For cardiacFOAM and cardiacCore it compares the catalogue
 with the scanned C++ (see "The C++ scan") and reports `unknown_sampled_field`
 (see "Function objects") and `uncatalogued_case_dict_key` warnings; a key the
 scan reads is reported once, as the `uncatalogued` note.
 
 `run --strict` executes the steps until completion or failure and writes
 `workflow_state.json` under the output directory and
-`workflow_logs/<step>.attempt<N>.{stdout,stderr}.log`. It resumes from an
-existing `workflow_state.json`; a `failed` state exits non-zero without
-retrying. `step --strict --step <id>` is the explicit manual rerun.
-`--max-total-attempts <N>` caps step executions across the run (unbounded by
-default).
+`workflow_logs/<step>.attempt<N>.{stdout,stderr}.log`. `--max-total-attempts <N>`
+caps step executions across the run (unbounded by default).
 
-**A `completed` `workflow_state.json` is replayed silently.** A leftover case
-directory makes `run --strict`/`step --strict` report success and exit 0
-without invoking the solver. A before/after comparison MUST pass `--fresh`,
-which deletes the resolved output directory first. It refuses a directory
-that does not look like omnidriver's own output, the filesystem root, your
-home directory and a path outside `OMNIDRIVER_ALLOWED_RUNS_ROOT` when set, but
-asks nothing: treat what you point it at as disposable.
+**`--entry` always starts over; `plan`, then `run`/`step --run-document`, is
+the stateful path.** Every `plan`, `run --strict --entry` and
+`step --strict --entry` stages the record's case again, replacing
+`<scratch>/records/<name>` whole: a second `run --strict --entry` runs every
+step again, and `step --strict --entry --step solve` after `--step mesh` finds
+`mesh` pending again. To keep state, plan once and work on the staged case:
+
+```bash
+omnidriver plan --strict --repo <repo> --scratch-dir <scratch> --entry <record>
+omnidriver run  --run-document <scratch>/records/<record>/run_document.json    # resumes
+omnidriver step --run-document <scratch>/records/<record>/run_document.json --step <id>
+```
+
+`--run-document` takes the stack the plan recorded (the installed plugin and
+repository of its launch command) when you pass neither `--plugin` nor
+`--repo`. `run --run-document` resumes an existing `workflow_state.json`: a
+`completed` state is replayed without invoking the solver (the output says
+`"replayed": true` and has `"steps": []`), and a `failed` one exits non-zero
+until `step --run-document ... --step <id>` reruns the failed step
+(`attempt` increments). A resume is refused, naming each variable that
+changed, when the case inputs, the workflow, the stack's declared environment
+variables (`omnidriver env` lists them), `PATH` or the declared MPI launcher
+differ from the saved evidence; any other environment variable is ignored. A
+step left `running` by a process that was killed is failed as
+`workflow_step_interrupted` when the run resumes (refused while its recorded
+pid is alive) and keeps its logs; SIGTERM and SIGINT to the CLI, and a sweep
+`--case-timeout-s`, end the running step's whole process group.
+
+**`--fresh` is the explicit start-over.** With `--entry`/`--case` it clears
+`<scratch>/records/<name>` before staging it again; with `--run-document` it
+clears the output directory (refused where that directory is the case, as it is
+for a record: restage with `--entry ... --fresh`); with `sweep-run` it clears
+`--output-dir` once the spec has validated. It refuses a directory that does
+not hold an omnidriver artifact (`workflow_state.json`, `sweep_manifest.json` or
+`run_document.json`) at its top level, the filesystem root, your home directory
+and a path outside `OMNIDRIVER_ALLOWED_RUNS_ROOT` when set, but asks nothing:
+treat what you point it at as disposable. A before/after comparison on one
+staged case MUST pass `--fresh` with `--entry`, or plan again.
 
 Programmatic planning is the same contract:
 
@@ -313,9 +343,10 @@ already matched the case) and its full `plan`.
 `omnidriver run --run-document <output_dir>/<case_id>/run_document.json`, and
 records them in `sweep_manifest.json`. A sweep does not resume across
 invocations: an `--output-dir` that already holds a manifest is refused by
-name, and `--fresh` deletes the whole `--output-dir` and starts over.
+name, and `--fresh` clears the `--output-dir` (it must hold a
+`sweep_manifest.json`; the spec is validated first) and starts over.
 `--case-timeout-s <seconds>` marks a case that exceeds it failed (a
-`timeout_error` in its summary) and the sweep continues; `--max-cases`
+`timeout_error` in its summary), ends its running step too, and the sweep continues; `--max-cases`
 (default 200) caps the expanded case count, checked before any case is
 staged. Keep a failed output directory when diagnosing; cleanup is an
 explicit, disposable-output action.
@@ -463,7 +494,7 @@ carries a top-level `failure_context` object for the failed step:
 The driver surfaces raw tails and status only. It does **not** judge convergence
 or pick a fix — interpretation and remediation are the agent's job. The loop is:
 read `failure_context` → edit the case dict (e.g. via `build_electro_properties`
-or `mutators.py`) → `step --strict --step <id>` reruns the failed step (the
+or `mutators.py`) → `step --run-document <doc> --step <id>` reruns the failed step (the
 `attempt` counter increments).
 
 To shorten that loop, `failure_context` also carries a
@@ -480,21 +511,26 @@ models.
 
 To apply a chosen fix mechanically, write the same `document:key` patches a
 study takes, as one JSON object, and run it against the staged case the plan
-wrote (`--apply` needs `--run-document`, because `--entry` re-stages the case):
+wrote (`--apply` needs `--run-document`, because `--entry` re-stages the case).
+The step must be `pending` or `failed` with its dependencies completed, or the
+command is refused before anything is written, so run the earlier steps first:
 
 ```
-omnidriver plan --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry <record>
+omnidriver plan --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry singleCell
+omnidriver step --run-document <scratch>/records/singleCell/run_document.json --step mesh
 echo '{"constant/electroProperties:singleCellSolverCoeffs.tissue": "epicardialCells"}' > patches.json
-omnidriver step --run-document <scratch>/records/<record>/run_document.json --step <id> --apply patches.json
+omnidriver step --run-document <scratch>/records/singleCell/run_document.json --step solve --apply patches.json
 ```
 
 Each patch goes through the record's own key validator and typed comparison,
 so a key the catalogue lacks is accepted exactly when the C++ reads it, a
 patch that changes nothing is reported `unchanged` and writes nothing, and the
 whole set commits in one journaled `commit_case_write` that rolls back its own
-failure. A name that is not a `document:key` (an axis or reserved name)
+failure and an edit after which the stack's rules refuse the case. When every
+patch is `unchanged` the step is not rerun and no attempt is spent: the output's
+`status` is `unchanged`. A name that is not a `document:key` (an axis or reserved name)
 changes the plan, so it is refused: plan again with it. The step then reruns
-(`attempt++`), the JSON carries `applied_patches`, and one record per attempt is
+(`attempt++`), the JSON carries `applied_patches` and `artifact_reconciliation`, and one record per attempt is
 appended to `remediation_history.jsonl` under the output directory. If the
 process dies mid-edit, the next `step`/`run` refuses until
 `omnidriver recover --case-root <case>` restores the before-images.
@@ -995,7 +1031,7 @@ These are real limitations; the agent must not assume them:
   kept resumable, so a crash during backoff resumes into another retry. It does
   **not** read logs to reclassify failures or mutate configuration between
   attempts (that is deferred). A *terminal*-failed saved state is still refused by
-  `run --strict`; use `step --strict` to rerun it manually.
+  `run`; use `step --run-document` to rerun it manually.
 
 - **Environment preflight** is command-aware but not exhaustive. Strict planning
   derives the executables your plan will run from its `workflow_dag` steps and

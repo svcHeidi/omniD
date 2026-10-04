@@ -241,6 +241,7 @@ def _execute_run(
     """Run a workflow to completion and print the JSON payload; refuses to auto-resume a terminally failed saved state (use action=step)."""
     state_path = output_dir / STATE_FILENAME
     workflow_state = planned_state
+    replayed = False
     if state_path.exists():
         try:
             workflow_state = settle_interrupted_steps(
@@ -251,6 +252,7 @@ def _execute_run(
             validate_resume(workflow_state, workflow_dag, case_root=case_root,
                             driver_context=driver_context, env=execution_env,
                             expected_artifacts=tuple(expected_artifacts or ()))
+            replayed = workflow_state.status == "completed"
         except Exception as exc:
             print(json.dumps({
                 "status": "failed",
@@ -305,6 +307,8 @@ def _execute_run(
         "workflow_state_path": str(state_path),
         "workflow_state": workflow_state.to_json(),
     }
+    if replayed:
+        payload["replayed"] = True
     if workflow_state.status == "pending" and workflow_state.current_step_id is None:
         payload["error"] = "workflow_state is pending but has no current_step_id"
     elif workflow_state.status == "pending" and max_total_attempts is not None:
