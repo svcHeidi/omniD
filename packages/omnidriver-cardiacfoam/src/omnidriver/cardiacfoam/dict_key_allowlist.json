@@ -45,6 +45,10 @@
         "base": "ionicModel",
         "mode": "strict"
       },
+      "singleCellIonicModel": {
+        "base": "ionicModel",
+        "mode": "strict"
+      },
       "$ELECTRO_MODEL_COEFFS.electrophysicsAdvanceScheme": {
         "base": "electrophysicsAdvanceScheme",
         "mode": "strict"

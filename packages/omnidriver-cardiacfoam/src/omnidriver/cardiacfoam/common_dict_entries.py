@@ -1,10 +1,12 @@
-"""cardiacFoam-owned physicsProperties and controlDict catalog entries."""
+"""cardiacFoam-owned physicsProperties, controlDict and prePacingProperties catalog entries."""
 
 from __future__ import annotations
 
 from typing import Final
 
 from omnidriver.core.contracts.dictionary import DictEntry
+
+from .dict_entries_catalog import IONIC_MODEL_MENU
 
 
 PHYSICS_PROPERTY_ENTRIES: Final[tuple[DictEntry, ...]] = (
@@ -150,5 +152,84 @@ CONTROL_DICT_ENTRIES: Final[tuple[DictEntry, ...]] = (
         value_kind="integer",
         required=True,
         typical_value="0",
+    ),
+)
+
+
+_PRE_PACING_SOURCE = ("src/genericWriter/prePacingIO.H",)
+_PRE_PACING_SOLVERS = {"myocardiumSolver": ("monodomainSolver", "bidomainSolver", "singleCellSolver")}
+
+#: The opt-in ``constant/prePacingProperties``: its absence disables pre-pacing,
+#: and ``regions.<name>`` overrides each key below for one tissue region. Every
+#: solver but the eikonal builds the myocardium domain that reads it.
+PRE_PACING_PROPERTY_ENTRIES: Final[tuple[DictEntry, ...]] = (
+    DictEntry(
+        driver_path="tolerance",
+        phases=frozenset({"solver"}),
+        description=(
+            "Largest relative change of any ionic state variable between successive beats "
+            "below which a pre-paced cell counts as converged. Pre-pacing stops after two "
+            "consecutive converged beats."
+        ),
+        source_refs=(*_PRE_PACING_SOURCE, "src/ionicModels/ionicModel/ionicModel.C"),
+        value_kind="scalar",
+        typical_value="1e-4",
+        applicable_when=_PRE_PACING_SOLVERS,
+    ),
+    DictEntry(
+        driver_path="minBeats",
+        phases=frozenset({"solver"}),
+        description="Fewest beats to pace before the convergence test may stop pre-pacing.",
+        source_refs=(*_PRE_PACING_SOURCE, "src/ionicModels/ionicModel/ionicModel.C"),
+        value_kind="integer",
+        typical_value="10",
+        applicable_when=_PRE_PACING_SOLVERS,
+    ),
+    DictEntry(
+        driver_path="maxBeats",
+        phases=frozenset({"solver"}),
+        description=(
+            "Most beats to pace; a cell that has not converged by then is a fatal error. "
+            "It also sets the number of pulses of the pacing protocol (its nstim1)."
+        ),
+        source_refs=(*_PRE_PACING_SOURCE, "src/ionicModels/ionicModel/ionicModel.C", "src/electroModels/electroDomains/myocardiumDomain/myocardiumPrePacing.C"),
+        value_kind="integer",
+        typical_value="3000",
+        applicable_when=_PRE_PACING_SOLVERS,
+    ),
+    DictEntry(
+        driver_path="beatComparisonInterval",
+        phases=frozenset({"solver"}),
+        description=(
+            "Time between ionic-state comparisons when the pacing protocol has no S1 period "
+            "(stim_period_S1 unset or zero), for a self-beating model; with a S1 period the "
+            "comparison is once per S1 cycle."
+        ),
+        source_refs=(*_PRE_PACING_SOURCE, "src/ionicModels/ionicModel/ionicModel.C", "src/electroModels/electroDomains/myocardiumDomain/myocardiumPrePacing.C"),
+        notes=(
+            "Pre-pacing is refused when no pacing protocol exists: either a singleCellStimulus "
+            "(in this file, else the electroProperties one) or this key must be present."
+        ),
+        value_kind="scalar",
+        unit="ms",
+        typical_value="200",
+        applicable_when=_PRE_PACING_SOLVERS,
+    ),
+    DictEntry(
+        driver_path="singleCellIonicModel",
+        phases=frozenset({"physics"}),
+        description=(
+            "Ionic model that paces the single cell, in place of the tissue's own ionicModel; "
+            "typically the batched twin of a model that is slow to pace. Left unset, the cell "
+            "uses the tissue's model."
+        ),
+        source_refs=(*_PRE_PACING_SOURCE, "src/electroModels/electroDomains/myocardiumDomain/myocardiumPrePacing.C"),
+        constraints=(
+            "Its state variables must match the tissue model's, in name and order, or "
+            "pre-pacing is refused: the converged state seeds the tissue.",
+        ),
+        value_kind="enum",
+        enum_values=IONIC_MODEL_MENU,
+        applicable_when=_PRE_PACING_SOLVERS,
     ),
 )

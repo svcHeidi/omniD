@@ -18,6 +18,10 @@ ODE_SOLVER_MODELS: tuple[str, ...] = tuple(
     name for name in IONIC_MODEL_CATALOG if name not in BATCHED_MODELS
 )
 
+#: The names the ``ionicModel`` runtime-selection table registers: the menu of
+#: ``ionicModel`` and of ``singleCellIonicModel`` in ``prePacingProperties``.
+IONIC_MODEL_MENU: Final[tuple[str, ...]] = ('AlievPanfilov', 'BuenoOrovio', 'Courtemanche', 'Fabbri', 'Gaur', 'Grandi', 'PerisYague', 'Stewart', 'TNNP', 'ToRORd_dynCl', 'Trovato', 'TWorld', 'bathBidomainFDAManufactured', 'bidomainFDAManufactured', 'monodomainFDAManufactured', 'AlievPanfilovcompactBatched', 'BuenoOroviocompactBatched', 'CourtemanchecompactBatched', 'FabbricompactBatched', 'GaurcompactBatched', 'GrandicompactBatched', 'PerisYaguecompactBatched', 'StewartcompactBatched', 'TNNPcompactBatched', 'ToRORd_dynClcompactBatched', 'TrovatocompactBatched', 'TWorldcompactBatched')
+
 ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
     "top_level": build_group(
         defaults={},
@@ -72,7 +76,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             description='Ionic cell model selector.',
             source_refs=('src/ionicModels/ionicModel/ionicModel.C',),
             value_kind='enum',
-            enum_values=('AlievPanfilov', 'BuenoOrovio', 'Courtemanche', 'Fabbri', 'Gaur', 'Grandi', 'PerisYague', 'Stewart', 'TNNP', 'ToRORd_dynCl', 'Trovato', 'TWorld', 'bathBidomainFDAManufactured', 'bidomainFDAManufactured', 'monodomainFDAManufactured', 'AlievPanfilovcompactBatched', 'BuenoOroviocompactBatched', 'CourtemanchecompactBatched', 'FabbricompactBatched', 'GaurcompactBatched', 'GrandicompactBatched', 'PerisYaguecompactBatched', 'StewartcompactBatched', 'TNNPcompactBatched', 'ToRORd_dynClcompactBatched', 'TrovatocompactBatched', 'TWorldcompactBatched'),
+            enum_values=IONIC_MODEL_MENU,
             required_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver", "singleCellSolver")},
             constraints=('Not applicable when myocardiumSolver=eikonalSolver.',),
             forbidden_when={"myocardiumSolver": "eikonalSolver"},

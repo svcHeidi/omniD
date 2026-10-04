@@ -10,6 +10,7 @@ from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_G
 from omnidriver.cardiacfoam.common_dict_entries import (
     CONTROL_DICT_ENTRIES,
     PHYSICS_PROPERTY_ENTRIES,
+    PRE_PACING_PROPERTY_ENTRIES,
 )
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
@@ -69,6 +70,7 @@ class CardiacFoamPlugin:
         """The same entries :meth:`get_dictionary_catalog` holds, flat."""
         entries: list[DictEntry] = list(PHYSICS_PROPERTY_ENTRIES)
         entries.extend(CONTROL_DICT_ENTRIES)
+        entries.extend(PRE_PACING_PROPERTY_ENTRIES)
         for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
             entries.extend(group)
         return tuple(entries)
@@ -83,6 +85,7 @@ class CardiacFoamPlugin:
             "electroProperties": tuple(electro_entries),
             "physicsProperties": PHYSICS_PROPERTY_ENTRIES,
             "controlDict": CONTROL_DICT_ENTRIES,
+            "prePacingProperties": PRE_PACING_PROPERTY_ENTRIES,
         })
 
     def resolve_case_models(self, case_root: Path) -> dict:

@@ -37,9 +37,12 @@ def test_cardiac_profile_source_root_is_supplied_never_guessed(tmp_path: Path) -
 def test_cardiac_catalog_partitions_entries_by_document() -> None:
     catalog = CardiacFoamPlugin().get_dictionary_catalog()
 
-    assert {"electroProperties", "physicsProperties", "controlDict"} <= set(catalog.documents)
+    assert {"electroProperties", "physicsProperties", "controlDict", "prePacingProperties"} <= set(catalog.documents)
     assert {entry.driver_path for entry in catalog.entries_for("physicsProperties")} == {"type"}
     assert {entry.driver_path for entry in catalog.entries_for("controlDict")} >= {"deltaT", "endTime"}
+    assert {entry.driver_path for entry in catalog.entries_for("prePacingProperties")} == {
+        "tolerance", "minBeats", "maxBeats", "beatComparisonInterval", "singleCellIonicModel",
+    }
 
 
 def test_cardiac_runtime_requires_a_discoverable_solver(tmp_path: Path) -> None:
