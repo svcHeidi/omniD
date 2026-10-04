@@ -12,6 +12,7 @@ import pytest
 from omnidriver.cli import main
 from cli_refusal import refusal
 from omnidriver.core.environment_connection import environment_report, render_prefix, stack_connection
+from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.plugin_profile import EnvironmentConnection, SuppliedVariable, load_plugin_profile
 from omnidriver.core.runtime.host_facts import host_facts
 
@@ -66,14 +67,17 @@ class _Provider:
         return self._profile
 
 
-def _context(connection):
+def _context(connection, *, refuse_the_launcher=False, resolved=None):
     preflight_calls = []
 
     def diagnostics(dag, *, env, driver_context):
         preflight_calls.append((dag, env))
+        if refuse_the_launcher and any(step["command"] == "mpirun" for step in dag["steps"]):
+            return (diagnostic("error", "toy_launcher_mismatch", "wrong MPI"),)
         return ()
 
     answers = {
+        "resolve_supplied_variables": lambda environ: {**environ, **(resolved or {})},
         "get_solver_commands": lambda: frozenset({"toySolver"}),
         "get_auxiliary_commands": lambda: frozenset(),
         "get_environment_commands": lambda: frozenset(),
@@ -103,11 +107,33 @@ def test_the_preflight_runs_on_the_environment_the_prefix_produces(tmp_path):
         "PATH": os.environ["PATH"], "TOY_RC": str(rc), "TOY_MPI_BIN": str(tmp_path / "bin"),
     })
     assert report["status"] == "ok", report
-    (dag, env), = calls
+    (dag, env), (parallel_dag, _parallel_env) = calls
     assert env["TOY_SOURCED"] == "yes"
     assert env["PATH"].split(":")[0] == str(tmp_path / "bin")
-    assert [step["command"] for step in dag["steps"]] == ["toySolver", "mpirun"]
-    assert dag["steps"][1]["args"] == ["-np", "2", "toySolver"]
+    assert [step["command"] for step in dag["steps"]] == ["toySolver"]
+    assert [step["command"] for step in parallel_dag["steps"]] == ["mpirun"]
+    assert parallel_dag["steps"][0]["args"] == ["-np", "2", "toySolver"]
+    assert report["parallel"] == {"ranks": 2, "status": "ok", "diagnostics": []}
+
+
+def test_a_launcher_that_cannot_start_two_ranks_fails_the_parallel_item_not_a_serial_users_environment(tmp_path):
+    rc = tmp_path / "rc.sh"
+    rc.write_text("export TOY_SOURCED=yes\n")
+    context, _calls = _context(_connection(), refuse_the_launcher=True)
+    report = environment_report(context, {"PATH": os.environ["PATH"], "TOY_RC": str(rc)})
+    assert report["status"] == "ok", report
+    assert report["parallel"]["status"] == "failed"
+    assert [item["code"] for item in report["parallel"]["diagnostics"]] == ["toy_launcher_mismatch"]
+    assert report["preflight"] == []
+
+
+def test_a_variable_the_stack_resolves_elsewhere_is_reported_as_resolved_and_not_refused(tmp_path):
+    rc = tmp_path / "rc.sh"
+    rc.write_text("export TOY_SOURCED=yes\n")
+    context, _calls = _context(_connection(), resolved={"TOY_RC": str(rc)})
+    report = environment_report(context, {"PATH": os.environ["PATH"]})
+    assert report["status"] == "ok", report
+    assert {item["name"]: item["value"] for item in report["variables"]}["TOY_RC"] == str(rc)
 
 
 def test_two_providers_may_not_both_name_a_file_to_source():

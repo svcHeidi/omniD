@@ -80,6 +80,7 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     "inspect_effective_configuration": ("sequence", None),
     # environment
     "get_environment_diagnostics": ("sequence", _no_environment_validation),
+    "resolve_supplied_variables": ("chain", None),
     "get_loaded_environment": ("single", lambda: dict(os.environ)),
     "get_configured_environment": ("chain", None),
     "get_case_runtime_conventions": ("single", _no_conventions),

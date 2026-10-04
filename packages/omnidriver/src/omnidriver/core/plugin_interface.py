@@ -179,6 +179,12 @@ class SolverPlugin(Protocol):
         """Preflight of the environment a plan will run in.
         ``environment_source`` is the operator's opaque ``--environment-source``."""
 
+    def resolve_supplied_variables(self, environ: dict[str, str]) -> dict[str, str]:
+        """``environ`` with each variable this provider declares that it
+        resolves from somewhere other than the process environment filled in, by
+        the order its run and plan commands use; ``omnidriver env`` reports
+        through it."""
+
     def get_loaded_environment(self, *, environment_source: str | None, driver_context: Any) -> dict[str, str]:
         """The execution environment built from scratch, e.g. by sourcing
         ``environment_source``."""

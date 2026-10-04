@@ -120,7 +120,9 @@ def _diagnostic(level: str, code: str, message: str, field: str = "") -> dict[st
 def environment_report(driver_context: "DriverContext", environ: Mapping[str, str] | None = None) -> dict[str, Any]:
     from .provider_stack import provider_profile
 
-    environ = dict(os.environ if environ is None else environ)
+    environ = dict(driver_context.stack.call(
+        "resolve_supplied_variables", dict(os.environ if environ is None else environ),
+    ))
     connection, declared_by = stack_connection(driver_context)
     variables = [
         {
@@ -169,16 +171,24 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
         command: shutil.which(command, path=applied.get("PATH"))
         for command in (*solvers, *others)
     }
-    steps = [{"id": command, "command": command, "args": []} for command in solvers]
+    def preflight(steps: list[dict[str, Any]]) -> list[dict[str, str]]:
+        found = stack.call(
+            "get_environment_diagnostics", {"steps": steps}, env=applied, driver_context=driver_context,
+        )
+        return [asdict(item) if not isinstance(item, dict) else dict(item) for item in found]
+
+    diagnostics += preflight([{"id": command, "command": command, "args": []} for command in solvers])
+    report["status"] = "failed" if any(item["level"] == "error" for item in diagnostics) else "ok"
     if connection.mpi_launcher is not None:
         report["launcher"] = mpi.identity(connection.mpi_launcher, applied)
-        steps += [
+        # Reported beside the status, never in it: a serial-only user needs no working launcher.
+        parallel = preflight([
             mpi.wrap({"id": f"{command}.parallel", "command": command}, _PROBE_RANKS, connection.mpi_launcher)
             for command in solvers
-        ]
-    preflight = stack.call(
-        "get_environment_diagnostics", {"steps": steps}, env=applied, driver_context=driver_context,
-    )
-    diagnostics += [asdict(item) if not isinstance(item, dict) else dict(item) for item in preflight]
-    report["status"] = "failed" if any(item["level"] == "error" for item in diagnostics) else "ok"
+        ])
+        report["parallel"] = {
+            "ranks": _PROBE_RANKS,
+            "status": "failed" if any(item["level"] == "error" for item in parallel) else "ok",
+            "diagnostics": parallel,
+        }
     return report

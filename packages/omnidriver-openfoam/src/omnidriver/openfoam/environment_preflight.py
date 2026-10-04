@@ -224,10 +224,7 @@ def _environment_diagnostics(
     checked_env = env
     loaded_environment = None
     if checked_env is None:
-        loaded_environment = load_openfoam_environment(
-            bashrc_path=bashrc_path,
-            driver_context=driver_context,
-        )
+        loaded_environment = load_openfoam_environment(bashrc_path=bashrc_path)
         checked_env = loaded_environment.env
 
     if loaded_environment is not None and loaded_environment.error:

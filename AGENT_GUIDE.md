@@ -716,7 +716,9 @@ Each plugin's manifest declares its environment: the variables you supply
 (each with why it is needed and whether it is required), the file to source,
 the directories to put first on `PATH`, and its MPI launcher. The OpenFOAM
 layer declares one shell for cardiacFOAM and cardiacCore. `env` reads only
-what is set; it never searches the disk. It prints JSON with:
+what is set; it never searches the disk, except that OpenFOAM's
+`OPENFOAM_BASHRC`, when unset, is resolved in the order `plan` and `run` use
+(see "Environment preflight" below). It prints JSON with:
 - each variable, set or unset, with its value;
 - `shell_prefix`, the bash commands in the one safe order: source first, then
   every export (macOS strips `DYLD_*` when bash starts), then `PATH`;
@@ -724,11 +726,14 @@ what is set; it never searches the disk. It prints JSON with:
   version;
 - every authorized command's path, or `null`;
 - `preflight`: the stack's own preflight on that environment, over its solver
-  command and a 2-rank solve.
+  command;
+- `parallel`: the same preflight over a 2-rank solve, reported on its own
+  (`ranks`, `status`, `diagnostics`). It never changes `status`: a serial-only
+  user needs no working launcher.
 
 Run commands behind the prefix: `bash -c '<shell_prefix> omnidriver run ...'`.
 It exits 1, with the refusal named, when a required variable is unset or the
-check fails. Each solver's shell puts only its own MPI first, and a launcher
+serial check fails. Each solver's shell puts only its own MPI first, and a launcher
 from the other MPI is refused (`openfoam_mpi_launcher_mismatch`,
 `opencarp_mpi_launcher_mismatch`). Every step a run executes records where
 it ran in `workflow_state.json`, under `steps[].host`: host name, OS, CPU,
@@ -1007,7 +1012,8 @@ These are real limitations; the agent must not assume them:
   searched for: `--environment-source`, else `OPENFOAM_BASHRC`, else `openfoam.bashrc`
   in the file `OMNIDRIVER_RUNTIME_CONFIG` names, else the `etc/bashrc` of the install
   a sourced shell names through `WM_PROJECT_DIR`; a plan that needs OpenFOAM and has
-  none refuses with `missing_openfoam_env`.
+  none refuses with `missing_openfoam_env`. `omnidriver env` resolves an unset
+  `OPENFOAM_BASHRC` by the same order, minus `--environment-source`, and reports the file it found.
 
 - **Active-tension models beyond NashPanfilov and GoktepeKuhl** are not in `active_tension_catalog.py`. Future C++ models must be registered there before artifact prediction will cover their state variables.
 

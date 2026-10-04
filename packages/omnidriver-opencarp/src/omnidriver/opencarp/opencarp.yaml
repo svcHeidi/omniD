@@ -19,9 +19,6 @@ environment:
     - name: HYDRA_IFACE
       required: false
       why: only on a host whose name does not resolve. MPICH's hydra launcher then needs a network interface, e.g. lo0 (I3)
-    - name: OMNIDRIVER_OPENCARP_TUTORIALS
-      required: false
-      why: the openCARP tutorials tree (plan, run and check take it as --cases-root)
   path_prepend:
     - OPENCARP_MPI_BIN
   mpi_launcher: mpirun

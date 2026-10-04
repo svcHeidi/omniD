@@ -467,3 +467,19 @@ def test_the_bashrc_is_never_searched_for(tmp_path):
 def test_a_supplied_bashrc_that_does_not_exist_is_refused_by_name(tmp_path):
     loaded = load_openfoam_environment(base_env={"OPENFOAM_BASHRC": str(tmp_path / "absent")})
     assert loaded.error == f"OpenFOAM bashrc not found: {tmp_path / 'absent'}"
+
+
+def test_env_reports_the_bashrc_a_run_would_source(tmp_path):
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+    from omnidriver.openfoam.openfoam_environment import openfoam_bashrc
+
+    install = tmp_path / "install"
+    (install / "etc").mkdir(parents=True)
+    (install / "etc" / "bashrc").write_text("")
+    plugin = OpenFOAMEnvironmentPlugin()
+    sourced_shell = {"WM_PROJECT_DIR": str(install)}
+
+    assert plugin.resolve_supplied_variables(sourced_shell)["OPENFOAM_BASHRC"] == str(install / "etc" / "bashrc")
+    assert plugin.resolve_supplied_variables(sourced_shell)["OPENFOAM_BASHRC"] == str(openfoam_bashrc(base_env=sourced_shell))
+    assert plugin.resolve_supplied_variables({"OPENFOAM_BASHRC": "/named", **sourced_shell})["OPENFOAM_BASHRC"] == "/named"
+    assert "OPENFOAM_BASHRC" not in plugin.resolve_supplied_variables({})
