@@ -10,7 +10,6 @@ import dataclasses
 import pytest
 
 from omnidriver.conformance import CHECKS, run_check
-from omnidriver.core.runtime.sweep_runner import _child_reconciliation
 from plugins.toy import (
     ACCEPTING_PLUGIN, BROKEN_RULE_PLUGIN,
     DEFAULT_ARGUMENT_MARKER, DEFAULT_ARGUMENT_PLUGIN, DEFAULT_ROUTE_MARKER, DEFAULT_ROUTE_PLUGIN, DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NAMED_KEY_PLUGIN,
@@ -83,12 +82,6 @@ def test_c8_bites_a_record_that_declares_no_inputs(tmp_path):
     verdict = run_check("C8", toy_conformance_target(tmp_path, plugin=NO_CONSUMES_PLUGIN))
     assert not verdict.passed
     assert "consumes" in verdict.detail
-
-
-def test_child_reconciliation_reads_the_run_payload():
-    assert _child_reconciliation('{"artifact_reconciliation": {"missing_count": 0}}') == {"missing_count": 0}
-    assert _child_reconciliation("not json") is None
-    assert _child_reconciliation('{"status": "ok"}') is None
 
 
 def test_toy_passes_c4(tmp_path):
@@ -579,3 +572,36 @@ def test_c3_bites_a_validator_that_accepts_a_key_nobody_declared(tmp_path):
 def test_c5_bites_a_stack_whose_rule_refuses_the_native_case(tmp_path):
     verdict = run_check("C5", toy_conformance_target(tmp_path, plugin=BROKEN_RULE_PLUGIN))
     assert not verdict.passed and "this toy's rule refuses every case" in verdict.detail
+
+
+def test_a_refusal_printed_on_stdout_is_quoted_when_stderr_is_empty():
+    from types import SimpleNamespace
+
+    from omnidriver.conformance.checks import _output_tail
+
+    refusal = '{"status": "failed", "error": "Execution environment preflight failed."}'
+    assert "preflight failed" in _output_tail(SimpleNamespace(stdout=refusal, stderr=""))
+    assert _output_tail(SimpleNamespace(stdout=refusal, stderr="Traceback")) == "Traceback"
+
+
+def test_a_failed_step_diagnostic_in_the_workflow_state_is_quoted(tmp_path):
+    import json
+
+    from omnidriver.conformance.checks import _with_recorded_failure
+
+    state = tmp_path / "workflow_state.json"
+    state.write_text(json.dumps({"steps": [
+        {"step_id": "mesh", "status": "completed", "diagnostics": []},
+        {"step_id": "solve", "status": "failed", "diagnostics": [
+            {"level": "error", "code": "solver_entry_missing", "message": "sealedHeartBoundary is required"},
+            {"level": "warning", "code": "noise", "message": "ignored"},
+        ]},
+    ]}))
+
+    problems = _with_recorded_failure(["missing artifacts ['record.solve.0']"], state, "the workflow state")
+
+    assert problems[0] == "missing artifacts ['record.solve.0']"
+    assert problems[1] == (
+        "the workflow state recorded: step 'solve': solver_entry_missing: sealedHeartBoundary is required"
+    )
+    assert _with_recorded_failure([], tmp_path / "absent.json", "the workflow state") == []
