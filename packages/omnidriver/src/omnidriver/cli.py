@@ -23,6 +23,7 @@ from .core.runtime.case_records import (
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
 from .core.case_transaction import CaseTransactionError, pending_transaction, recover_case_transaction
 from .core.environment_connection import load_environment
+from .core.refusal import Refusal, RefusingParser, print_refusal
 from .core.plugin_discovery import discover_plugins
 from .core.runtime.sweep_runner import sweep_plan, sweep_run
 from omnidriver.core.introspection import describe_entry, describe_stack, named_catalog
@@ -625,15 +626,6 @@ def _compare_quantities(args) -> int:
     return 0
 
 
-class _Refusal(Exception):
-    """A command the caller got wrong, printed as the one refusal shape: ``{"status": "failed", "error": ...}``, exit 1."""
-
-
-class _RefusingParser(argparse.ArgumentParser):
-    def error(self, message: str):
-        raise _Refusal(message)
-
-
 def resolve_cases_root(explicit: str | Path | None = None) -> Path:
     """Where the cases are, resolved at the public edge only: ``--cases-root``,
     else OMNIDRIVER_CASES_ROOT. A cases root has no ambient truth, so with
@@ -641,7 +633,7 @@ def resolve_cases_root(explicit: str | Path | None = None) -> Path:
     """
     supplied = explicit if explicit is not None else os.environ.get("OMNIDRIVER_CASES_ROOT") or None
     if supplied is None:
-        raise _Refusal(
+        raise Refusal(
             "no cases root was supplied: pass --cases-root <dir> or --repo <dir> "
             "(or set OMNIDRIVER_CASES_ROOT)"
         )
@@ -650,7 +642,7 @@ def resolve_cases_root(explicit: str | Path | None = None) -> Path:
 
 def _existing_cases_root(root: Path) -> Path:
     if not root.is_dir():
-        raise _Refusal(f"the cases root {root} is not a directory")
+        raise Refusal(f"the cases root {root} is not a directory")
     return root
 
 
@@ -663,7 +655,7 @@ def _parallel_value(text: str) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = _RefusingParser(
+    parser = RefusingParser(
         description=(
             "Simulation experiment automation driver. `omnidriver build --help` builds a case "
             "from a solver's catalogue when there is no native case."
@@ -1253,9 +1245,8 @@ def main(argv: list[str] | None = None) -> int:
             # The one supplied scratch root, for the layers that cache a scan there.
             os.environ[SCRATCH_ENV_VAR] = str(Path(args.scratch_dir).expanduser())
         return _dispatch(parser, args)
-    except _Refusal as exc:
-        print(json.dumps({"status": "failed", "error": str(exc)}, indent=2))
-        return 1
+    except Refusal as exc:
+        return print_refusal(exc)
     finally:
         if previous is None:
             os.environ.pop(SCRATCH_ENV_VAR, None)
