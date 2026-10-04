@@ -1,5 +1,5 @@
 """What OpenFOAM's own fatal message says about a case: the key a solver
-could not find, and the dictionary it looked in."""
+could not find and the dictionary it looked in, or else the message itself."""
 
 from __future__ import annotations
 
@@ -16,6 +16,9 @@ _MISSING = re.compile(
     r"""(?:Entry\s+'(?P<entry>[^']+)'\s+not\s+found|keyword\s+(?P<keyword>\S+)\s+is\s+undefined)"""
     r"""\s+in\s+dictionary\s+"(?P<dictionary>[^"]+)"""
 )
+
+_FATAL = re.compile(r"--> FOAM FATAL (?:IO )?ERROR[^\n]*\n(?P<message>.*?)(?:\n\s*FOAM (?:exiting|aborting)|\Z)", re.DOTALL)
+_FATAL_CHARACTERS = 600
 
 REBUILD_HINT = (
     "the solver binary reads keys the scanned source does not; it was built from "
@@ -58,3 +61,16 @@ def missing_entry_diagnostics(log_text: str, case_root: Path, driver_context: An
         if not any(read.key == key for read in scan.reads):
             message += f" {key} is read nowhere in the scanned source ({source}): {REBUILD_HINT}."
     return (diagnostic("error", "solver_entry_missing", message, source=document, field=key),)
+
+
+def fatal_error_diagnostics(log_text: str, case_root: Path, driver_context: Any) -> tuple[StrictDiagnostic, ...]:
+    """What the first OpenFOAM fatal message in ``log_text`` says: the missing
+    entry when it is one, else the message itself."""
+    found = missing_entry_diagnostics(log_text, case_root, driver_context)
+    if found:
+        return found
+    match = _FATAL.search(log_text)
+    if match is None:
+        return ()
+    message = " ".join(match.group("message").split())[:_FATAL_CHARACTERS]
+    return (diagnostic("error", "solver_fatal_error", f"the solver stopped with an OpenFOAM fatal error: {message}"),)

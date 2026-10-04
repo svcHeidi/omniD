@@ -494,7 +494,11 @@ carries a top-level `failure_context` object for the failed step:
 - `step_id`, `attempt`, `exit_code` — identity of the failed attempt. Note
   `exit_code` may be `0` even on failure (e.g. `missing_artifacts`): the
   contract is **status-driven**, never exit-code-driven.
-- `diagnostics` — the diagnostic codes the runner emitted.
+- `diagnostics` — the diagnostic codes the runner emitted. A step that exits
+  `0` is also read in the solver's own logs: an OpenFOAM stack reads each
+  `log.<application>` the step wrote and reports a `FOAM FATAL` message as
+  `solver_entry_missing` (a missing key, with its dictionary) or
+  `solver_fatal_error` (the message), where `runApplication` hid the exit code.
 - `stdout_log` / `stderr_log` — paths, for a full read.
 - `stdout_tail` / `stderr_tail` — the last `--tail-lines` lines (default 200) of
   each log, bounded to 64 KiB.
@@ -1161,7 +1165,7 @@ Implement what your solver has; omit the rest. Do not write stubs.
 | join a stack | — | `get_profile` (case files, C++ mapping, environment connection, `requires`) |
 | `describe`, `catalog` | — | `get_tutorial_records`, `get_record_key_catalog`, `get_agent_guidance`, `get_named_catalogs`, `get_dict_entries`, `get_dictionary_catalog`, `get_owned_documents`, `get_dict_key_scanner` |
 | strict plan | — (no `get_environment_diagnostics` is an `environment_capability_unavailable` error in the plan) | the command members, `predict_data_artifacts`, `get_plan_diagnostics`, `inspect_effective_configuration`, `get_case_runtime_conventions` |
-| run a record case | `get_record_key_validator`, `get_case_value_comparator`, `get_config_value_reader` | `validate_run_semantics`, `get_loaded_environment`, `get_configured_environment`, `explain_step_failure`, `get_log_redaction_patterns`, the provenance members |
+| run a record case | `get_record_key_validator`, `get_case_value_comparator`, `get_config_value_reader` | `validate_run_semantics`, `get_loaded_environment`, `get_configured_environment`, `explain_step_failure`, `get_step_log_files`, `get_log_redaction_patterns`, the provenance members |
 | write a case (a study patch) | `resolve_case_mutation` + `get_supported_mutation_modes`, `render_case_files` + `get_rendered_formats` (each pair from one provider) | — |
 | run in parallel | `get_parallel_steps` | `get_solve_step_commands` |
 | compare a quantity | — | `get_artifact_value_reader` (no reader: the quantity is `not_evaluated`) |

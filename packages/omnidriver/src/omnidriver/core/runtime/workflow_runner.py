@@ -413,6 +413,7 @@ def run_workflow_step(
 
     exit_code: int | None = None
     diagnostics: tuple[dict[str, Any], ...] = ()
+    started = time.time()
     try:
         with stdout_log.open("w") as stdout_handle, stderr_log.open("w") as stderr_handle:
             with spawning():
@@ -483,10 +484,16 @@ def run_workflow_step(
             "field": step_id,
         },)
 
-    if exit_code not in (0, None) and not diagnostics and driver_context is not None:
-        diagnostics = _explained_by_the_logs(
-            step_id, (stdout_log, stderr_log), Path(case_root), driver_context,
+    if exit_code is not None and not diagnostics and driver_context is not None:
+        solver_logs = tuple(
+            log for log in driver_context.stack.call("get_step_log_files", resolved_cwd)
+            if log.is_file() and log.stat().st_mtime >= started
         )
+        captured = (stdout_log, stderr_log) if exit_code != 0 else ()
+        if captured or solver_logs:
+            diagnostics = _explained_by_the_logs(
+                step_id, (*captured, *solver_logs), Path(case_root), driver_context,
+            )
 
     status = "completed" if exit_code == 0 and not diagnostics else "failed"
     produced_artifacts = tuple(str(item) for item in step.get("produces", ())) if status == "completed" else ()

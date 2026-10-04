@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
@@ -14,7 +15,8 @@ from omnidriver.cli import main
 from cli_refusal import refusal
 from omnidriver.core import case_transaction
 from plugins.toy import (
-    EXPLAINING_PLUGIN, FAILS_UNTIL_SEVEN_CELLS_PLUGIN, RULE_CHECKING_PLUGIN, TWO_STEP_PLUGIN, write_toy_native_case,
+    EXPLAINING_PLUGIN, FAILS_UNTIL_SEVEN_CELLS_PLUGIN, RULE_CHECKING_PLUGIN, SOLVER_LOG_EXPLAINING_PLUGIN,
+    STALE_SOLVER_LOG_PLUGIN, TWO_STEP_PLUGIN, write_toy_native_case,
 )
 
 PLUGIN = "plugins.toy:ToyStack"
@@ -228,6 +230,22 @@ def test_a_failed_step_carries_what_the_stack_reads_in_its_log(tmp_path):
     )
     (state,) = (s for s in payload["workflow_state"]["steps"] if s["step_id"] == "solve")
     assert state["diagnostics"] == [explained]
+
+
+def test_a_step_that_exits_zero_is_failed_by_what_the_solver_wrote_in_its_own_log(tmp_path):
+    case = _Case(tmp_path, SOLVER_LOG_EXPLAINING_PLUGIN)
+    code, payload = case.step()
+    assert code == 1 and payload["status"] == "failed"
+    (explained,) = payload["failure_context"]["diagnostics"]
+    assert (explained["code"], explained["field"]) == ("widget_missing", "widget")
+
+
+def test_a_solver_log_the_step_did_not_write_explains_nothing(tmp_path):
+    case = _Case(tmp_path, STALE_SOLVER_LOG_PLUGIN)
+    (case.root / "solver.log").write_text("cannot find widget\n")
+    os.utime(case.root / "solver.log", (1, 1))
+    code, payload = case.step()
+    assert code == 0 and payload["status"] == "ok", payload
 
 
 def test_a_run_document_names_the_stack_it_was_planned_for(case, monkeypatch):

@@ -5,7 +5,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from omnidriver.core.plugin_profile import CxxMapping
-from omnidriver.openfoam.step_failure import REBUILD_HINT, missing_entry_diagnostics
+from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+from omnidriver.openfoam.step_failure import REBUILD_HINT, fatal_error_diagnostics, missing_entry_diagnostics
 
 # cardiacFoam (built from a branch that reads sealedHeartBoundary) on a case whose electroProperties
 # lacks the key: the end of the step's stderr.
@@ -109,3 +110,39 @@ def test_a_keyword_undefined_fatal_is_read_the_same_way(tmp_path):
 
 def test_a_log_with_no_missing_entry_says_nothing(tmp_path):
     assert missing_entry_diagnostics("Floating point exception\n", _case(tmp_path), _context(None)) == ()
+
+
+NO_FILE = '''
+--> FOAM FATAL ERROR: (openfoam-2412)
+cannot find file "/case/constant/polyMesh/points"
+
+    From virtual Foam::autoPtr<Foam::ISstream> Foam::fileOperations::uncollatedFileOperation::readStream()
+    in file global/fileOperations/uncollatedFileOperation/uncollatedFileOperation.C at line 541.
+
+FOAM exiting
+'''
+
+
+def test_a_fatal_that_is_no_missing_entry_is_carried_whole_and_collapsed_to_one_line(tmp_path):
+    (found,) = fatal_error_diagnostics("starting\n" + NO_FILE, _case(tmp_path), _context(None))
+    assert found.code == "solver_fatal_error"
+    assert 'cannot find file "/case/constant/polyMesh/points"' in found.message
+    assert "\n" not in found.message and "FOAM exiting" not in found.message
+
+
+def test_a_missing_entry_fatal_keeps_its_own_explanation(tmp_path):
+    (found,) = fatal_error_diagnostics(RELATIVE, _case(tmp_path), _context(None))
+    assert found.code == "solver_entry_missing"
+
+
+def test_a_log_with_no_fatal_says_nothing_at_all(tmp_path):
+    assert fatal_error_diagnostics("Courant Number mean: 0.1\nEnd\n", _case(tmp_path), _context(None)) == ()
+
+
+def test_the_solver_logs_of_a_step_are_the_log_files_in_its_directory(tmp_path):
+    (tmp_path / "log.cardiacFoam").write_text("")
+    (tmp_path / "log.blockMesh").write_text("")
+    (tmp_path / "Allrun").write_text("")
+    assert OpenFOAMEnvironmentPlugin().get_step_log_files(tmp_path) == (
+        tmp_path / "log.blockMesh", tmp_path / "log.cardiacFoam",
+    )

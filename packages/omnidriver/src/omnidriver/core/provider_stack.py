@@ -77,6 +77,7 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     "predict_data_artifacts": ("sequence", None),
     "get_plan_diagnostics": ("sequence", None),
     "explain_step_failure": ("sequence", None),
+    "get_step_log_files": ("sequence", None),
     "inspect_effective_configuration": ("sequence", None),
     # environment
     "get_environment_diagnostics": ("sequence", _no_environment_validation),

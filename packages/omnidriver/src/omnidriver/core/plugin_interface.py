@@ -167,6 +167,11 @@ class SolverPlugin(Protocol):
     def explain_step_failure(self, log_text: str, case_root: Path, *, driver_context: Any) -> tuple["StrictDiagnostic", ...]:
         """What a failed step's log tail says that its exit code does not."""
 
+    def get_step_log_files(self, cwd: Path) -> tuple[Path, ...]:
+        """The logs the solver wrote itself in a step's working directory ``cwd``.
+        When the step's own output explains nothing, ``explain_step_failure``
+        reads those written during the step, whatever its exit code said."""
+
     def inspect_effective_configuration(
         self, *, case_root: Path, execution_env: dict[str, str] | None = None,
     ) -> tuple[dict[str, Any], ...]:

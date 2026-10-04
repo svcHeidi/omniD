@@ -156,9 +156,13 @@ class OpenFOAMEnvironmentPlugin:
         )
 
     def explain_step_failure(self, log_text, case_root, *, driver_context):
-        from .step_failure import missing_entry_diagnostics
+        from .step_failure import fatal_error_diagnostics
 
-        return missing_entry_diagnostics(log_text, case_root, driver_context)
+        return fatal_error_diagnostics(log_text, case_root, driver_context)
+
+    def get_step_log_files(self, cwd):
+        """The ``log.<application>`` files ``runApplication`` and ``runParallel`` write in the case."""
+        return tuple(sorted(Path(cwd).glob("log.*")))
 
     def inspect_effective_configuration(self, *, case_root, execution_env=None):
         from .effective_dictionary import inspect_effective_foam_configuration

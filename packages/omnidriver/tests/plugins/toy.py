@@ -464,6 +464,23 @@ class ExplainingFailurePlugin(ToyStack):
         return (diagnostic("error", "widget_missing", f"widget is missing from {case_root.name}", field="widget"),)
 
 
+class SolverLogExplainingPlugin(ExplainingFailurePlugin):
+    """Its solve step exits 0 although the solver says in its own log what it could not find."""
+
+    RECORDS = {"toyTutorial": _toy_record(
+        _solve(("sh", "-c", "echo 'cannot find widget' > solver.log; touch solved.marker")),
+    )}
+
+    def get_step_log_files(self, cwd):
+        return tuple(sorted(Path(cwd).glob("solver.log")))
+
+
+class StaleSolverLogPlugin(SolverLogExplainingPlugin):
+    """Its solve step exits 0 and writes no log of its own."""
+
+    RECORDS = {"toyTutorial": _toy_record(_solve(("touch", "solved.marker")))}
+
+
 def _catalogue_matches(env):
     return True, "3 models match"
 
@@ -1005,6 +1022,8 @@ WITH_INPUT_PLUGIN = _selector("WithInputPlugin")
 DEFAULT_ARGUMENT_PLUGIN = _selector("DefaultArgumentPlugin")
 RULE_CHECKING_PLUGIN = _selector("RuleCheckingPlugin")
 EXPLAINING_PLUGIN = _selector("ExplainingFailurePlugin")
+SOLVER_LOG_EXPLAINING_PLUGIN = _selector("SolverLogExplainingPlugin")
+STALE_SOLVER_LOG_PLUGIN = _selector("StaleSolverLogPlugin")
 FAILS_UNTIL_SEVEN_CELLS_PLUGIN = _selector("FailsUntilSevenCellsPlugin")
 TWO_STEP_PLUGIN = _selector("TwoStepPlugin")
 SLEEPING_PLUGIN = _selector("SleepingPlugin")
