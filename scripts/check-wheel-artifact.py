@@ -41,9 +41,9 @@ def main() -> int:
         capture_output=True, text=True,
     )
     print(f"describe with no plugin     : exit {result.returncode}")
-    if result.returncode != 2 or "no plugin was selected" not in result.stderr:
+    if result.returncode != 1 or "no plugin was selected" not in result.stdout:
         failures.append(
-            f"`describe` with no plugin exited {result.returncode}, not the named refusal: {result.stderr[:300]}"
+            f"`describe` with no plugin exited {result.returncode}, not the named refusal: {result.stdout[:300]}"
         )
 
     # 3. The CLI is reachable in a core-only install.

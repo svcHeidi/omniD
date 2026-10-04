@@ -8,6 +8,7 @@ from unittest import mock
 import pytest
 
 from omnidriver.cli import main
+from omnidriver.core.plugin_discovery import discover_plugins
 from omnidriver.core.repository import REPOSITORY_FILE
 from plugins.toy import write_toy_native_case
 
@@ -36,7 +37,7 @@ def test_describe_with_no_entry_lists_the_records_the_scripts_and_the_installed_
     assert record["name"] == "toyTutorial" and record["native_case_relpath"] == "toyTutorial"
     assert set(record) == {"name", "native_case_relpath", "axes", "inputs", "serial_only"}
     assert payload["scripts"] == []
-    assert payload["installed_plugins"] == sorted(payload["installed_plugins"]) and payload["installed_plugins"]
+    assert payload["installed_plugins"] == sorted(discover_plugins())
     assert payload["plugin"]
 
 
