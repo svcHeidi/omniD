@@ -171,6 +171,7 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
         command: shutil.which(command, path=applied.get("PATH"))
         for command in (*solvers, *others)
     }
+
     def preflight(steps: list[dict[str, Any]]) -> list[dict[str, str]]:
         found = stack.call(
             "get_environment_diagnostics", {"steps": steps}, env=applied, driver_context=driver_context,
@@ -182,10 +183,11 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
     if connection.mpi_launcher is not None:
         report["launcher"] = mpi.identity(connection.mpi_launcher, applied)
         # Reported beside the status, never in it: a serial-only user needs no working launcher.
-        parallel = preflight([
+        # What the serial preflight already said is not said again.
+        parallel = [item for item in preflight([
             mpi.wrap({"id": f"{command}.parallel", "command": command}, _PROBE_RANKS, connection.mpi_launcher)
             for command in solvers
-        ])
+        ]) if item not in diagnostics]
         report["parallel"] = {
             "ranks": _PROBE_RANKS,
             "status": "failed" if any(item["level"] == "error" for item in parallel) else "ok",
