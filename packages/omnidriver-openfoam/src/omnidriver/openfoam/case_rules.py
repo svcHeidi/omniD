@@ -285,6 +285,7 @@ def rule_diagnostics(
     }
     defaults = _defaults(entries)
     found: list[StrictDiagnostic] = []
+    unmet_groups: set[frozenset[str]] = set()
 
     def violated(field: str, message: str) -> None:
         found.append(diagnostic("error", "catalog_rule", message, source=document, field=field))
@@ -315,6 +316,12 @@ def rule_diagnostics(
                 violated(concrete, f"{concrete} is forbidden when {_format(forbidden)}.")
             if not instance.applies(entry):
                 continue
+            if entry.required_one_of:
+                members = (entry.driver_path, *entry.required_one_of)
+                group = frozenset(instance.resolve(member) for member in members)
+                if group not in unmet_groups and not any(instance.is_set(member) for member in members):
+                    unmet_groups.add(group)
+                    violated(concrete, f"one of {', '.join(sorted(group))} is required.")
             if instance.requires(entry) and not set_here and entry.driver_path not in unread:
                 condition = f" when {_format(entry.required_when)}" if entry.required_when else ""
                 violated(concrete, f"{concrete} is required{condition}.")

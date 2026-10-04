@@ -295,6 +295,44 @@ class TestValidatorIntegration(unittest.TestCase):
             )
         self.assertIn("mutually exclusive", str(ctx.exception).lower())
 
+    _MONODOMAIN = {"myocardiumSolver": "monodomainSolver", "ionicModel": "TNNP", "tissue": "epicardialCells"}
+    _STIMULUS = "$ELECTRO_MODEL_COEFFS.externalStimulus."
+
+    def test_build_refuses_a_stimulus_box_with_no_max_corner(self) -> None:
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
+        with self.assertRaises(ValueError) as ctx:
+            build_electro_properties(
+                selectors=self._MONODOMAIN, overrides={self._STIMULUS + "stimulusLocationMin": "(0 0 0)"},
+            )
+        self.assertIn(
+            "one of externalStimulus.stimulusLocationMax, externalStimulus.stimulusLocationMaxList is required",
+            str(ctx.exception),
+        )
+
+    def test_build_refuses_a_single_min_corner_with_a_max_list(self) -> None:
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
+        with self.assertRaises(ValueError) as ctx:
+            build_electro_properties(
+                selectors=self._MONODOMAIN,
+                overrides={
+                    self._STIMULUS + "stimulusLocationMin": "(0 0 0)",
+                    self._STIMULUS + "stimulusLocationMaxList": "((1 1 1))",
+                },
+            )
+        self.assertIn("stimulusLocationMaxList requires externalStimulus.stimulusLocationMinList", str(ctx.exception))
+
+    def test_build_writes_a_stimulus_box_with_both_corners_and_no_block_without_one(self) -> None:
+        from omnidriver.cardiacfoam.case_builder import build_electro_properties
+        text = build_electro_properties(
+            selectors=self._MONODOMAIN,
+            overrides={
+                self._STIMULUS + "stimulusLocationMin": "(0 0 0)", self._STIMULUS + "stimulusLocationMax": "(1 1 1)",
+            },
+        )
+        self.assertIn("stimulusLocationMax (1 1 1);", text)
+        self.assertIn("stimulusIntensity", text)
+        self.assertNotIn("externalStimulus", build_electro_properties(selectors=self._MONODOMAIN))
+
     def test_build_raises_on_forbidden_when_violation(self) -> None:
         from omnidriver.cardiacfoam.case_builder import build_electro_properties
         with self.assertRaises(ValueError) as ctx:

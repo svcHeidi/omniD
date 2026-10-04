@@ -168,6 +168,10 @@ class DictEntry:
     # "if my slot is set, that sibling's slot must be set too". Declare it
     # on every member of the group to make the relation symmetric.
     co_required_with: tuple[str, ...] = ()
+    # The siblings that, with this entry, form a group of which at least one
+    # slot must be set whenever this entry applies ("a box needs its max
+    # corner, as one value or as a list"). Declare it on every member.
+    required_one_of: tuple[str, ...] = ()
     # A dynamic path's declared domain per placeholder, e.g.
     # ``{"<ventKey>": ("lv", "rv")}``. An explicit ``None`` states "open by
     # decision", distinct from a placeholder left out; naming some but not all

@@ -65,6 +65,7 @@ def listed_entry(document: str, key: str, entry: Any) -> dict[str, Any]:
         "forbidden_when": _listed_relation(entry.forbidden_when),
         "mutually_exclusive_with": list(entry.mutually_exclusive_with),
         "co_required_with": list(entry.co_required_with),
+        "required_one_of": list(entry.required_one_of),
         "default": entry.default,
         "allowed_bindings": {name: None if domain is None else list(domain) for name, domain in entry.allowed_bindings.items()},
         "constraints": list(entry.constraints),

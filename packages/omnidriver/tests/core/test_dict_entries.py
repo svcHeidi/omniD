@@ -38,6 +38,11 @@ class TestDictEntryStructuredConstraints(unittest.TestCase):
         entry = self._build_entry()
         self.assertEqual(entry.co_required_with, ())
 
+    def test_required_one_of_defaults_empty_and_accepts_path_tuple(self) -> None:
+        self.assertEqual(self._build_entry().required_one_of, ())
+        entry = self._build_entry(required_one_of=("stimulusLocationMaxList",))
+        self.assertEqual(entry.required_one_of, ("stimulusLocationMaxList",))
+
     def test_applicable_when_accepts_value_predicate(self) -> None:
         entry = self._build_entry(
             applicable_when={"myocardiumSolver": "monodomainSolver"},

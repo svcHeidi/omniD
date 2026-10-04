@@ -4,7 +4,6 @@ from typing import Callable, Iterable
 
 from omnidriver.core.runtime.models import DataArtifact, TutorialSpec
 from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
-from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 from omnidriver.cardiacfoam.detection import (
     detect_ionic_model_name,
     detect_myocardium_solver_name,
@@ -17,38 +16,25 @@ from omnidriver.cardiacfoam.detection import (
 
 SolverHandler = Callable[[Path, TutorialSpec, "str | None"], tuple[DataArtifact, ...]]
 
+# The solver writes an ionic or active-tension variable only when the case's
+# ``outputVariables`` lists it; with no list it exports none.
 def _exported_ionic_variables(case_root: Path, ionic_model: str | None) -> tuple[str, ...]:
     properties = case_root / "constant" / "electroProperties"
+    declared = detect_ionic_export_list(properties) if properties.exists() else None
     entry = IONIC_MODEL_CATALOG.get(ionic_model) if ionic_model is not None else None
-    if properties.exists():
-        declared = detect_ionic_export_list(properties)
-        if declared is not None:
-            if entry is None:
-                return ()
-            # The solver filters the requested list before allocating
-            # AUTO_WRITE fields (ionicModelIO::exportedFieldNamesRef). A raw
-            # dictionary token is therefore not output evidence. Predict only
-            # canonical names the selected model can actually export.
-            accepted = {"Vm", *entry.states, *entry.algebraic}
-            return tuple(name for name in declared if name in accepted)
-    if entry is None:
+    if declared is None or entry is None:
         return ()
-    return entry.recommended_exports
+    # The solver filters the requested list before allocating AUTO_WRITE
+    # fields (ionicModelIO::exportedFieldNamesRef), so a raw dictionary token
+    # is not output evidence: predict only names the selected model can export.
+    accepted = {"Vm", *entry.states, *entry.algebraic}
+    return tuple(name for name in declared if name in accepted)
 
 def _exported_active_tension_variables(case_root: Path) -> tuple[str, ...]:
     properties = case_root / "constant" / "electroProperties"
-    if not properties.exists():
+    if not properties.exists() or detect_active_tension_model_name(properties) is None:
         return ()
-    at_model = detect_active_tension_model_name(properties)
-    if at_model is None:
-        return ()
-    declared = detect_active_tension_export_list(properties)
-    if declared is not None:
-        return declared
-    entry = ACTIVE_TENSION_MODEL_CATALOG.get(at_model)
-    if entry is None:
-        return ("Ta",)
-    return entry.recommended_exports
+    return detect_active_tension_export_list(properties) or ()
 
 def _instance_indexed_field_artifact(*, solver: str, field_name: str, description: str) -> DataArtifact:
     artifact_id = f"{solver}_{field_name.lower()}_series"

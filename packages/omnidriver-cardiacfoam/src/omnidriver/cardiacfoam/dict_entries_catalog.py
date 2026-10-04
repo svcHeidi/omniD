@@ -543,7 +543,9 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='vector3',
             constraints=('Mutually exclusive with stimulusLocationMinList.',),
             mutually_exclusive_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMinList',),
+            applicable_when={"$externalStimulus_present": True},
             forbidden_when={"myocardiumSolver": "eikonalSolver"},
+            required_one_of=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMinList',),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMax',
@@ -553,7 +555,9 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='vector3',
             constraints=('Mutually exclusive with stimulusLocationMaxList.',),
             mutually_exclusive_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMaxList',),
+            applicable_when={"$externalStimulus_present": True},
             forbidden_when={"myocardiumSolver": "eikonalSolver"},
+            required_one_of=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMaxList',),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMinList',
@@ -563,7 +567,10 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='vector3_list',
             constraints=('Mutually exclusive with stimulusLocationMin.',),
             mutually_exclusive_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMin',),
+            applicable_when={"$externalStimulus_present": True},
             forbidden_when={"myocardiumSolver": "eikonalSolver"},
+            required_one_of=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMin',),
+            co_required_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMaxList',),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMaxList',
@@ -573,7 +580,10 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='vector3_list',
             constraints=('Mutually exclusive with stimulusLocationMax.',),
             mutually_exclusive_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMax',),
+            applicable_when={"$externalStimulus_present": True},
             forbidden_when={"myocardiumSolver": "eikonalSolver"},
+            required_one_of=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMax',),
+            co_required_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMinList',),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusStartTime',
@@ -583,6 +593,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='scalar',
             constraints=('Mutually exclusive with stimulusStartTimeList.',),
             mutually_exclusive_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusStartTimeList',),
+            applicable_when={"$externalStimulus_present": True},
             forbidden_when={"myocardiumSolver": "eikonalSolver"},
         ),
         DictEntry(
@@ -593,6 +604,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='scalar_list',
             constraints=('Mutually exclusive with stimulusStartTime.',),
             mutually_exclusive_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusStartTime',),
+            applicable_when={"$externalStimulus_present": True},
             forbidden_when={"myocardiumSolver": "eikonalSolver"},
         ),
         DictEntry(
@@ -606,7 +618,9 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             unit='s',
             typical_value='0.002',
             mutually_exclusive_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusDurationList',),
+            applicable_when={"$externalStimulus_present": True},
             forbidden_when={"myocardiumSolver": "eikonalSolver"},
+            required_one_of=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusDurationList',),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusDurationList',
@@ -616,7 +630,9 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='scalar_list',
             constraints=('Mutually exclusive with stimulusDuration.',),
             mutually_exclusive_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusDuration',),
+            applicable_when={"$externalStimulus_present": True},
             forbidden_when={"myocardiumSolver": "eikonalSolver"},
+            required_one_of=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusDuration',),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusIntensity',
@@ -629,7 +645,9 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             unit='A/m³',
             typical_value='50000',
             mutually_exclusive_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusIntensityList',),
+            applicable_when={"$externalStimulus_present": True},
             forbidden_when={"myocardiumSolver": "eikonalSolver"},
+            required_one_of=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusIntensityList',),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusIntensityList',
@@ -639,7 +657,9 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='scalar_list',
             constraints=('Mutually exclusive with stimulusIntensity.',),
             mutually_exclusive_with=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusIntensity',),
+            applicable_when={"$externalStimulus_present": True},
             forbidden_when={"myocardiumSolver": "eikonalSolver"},
+            required_one_of=('$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusIntensity',),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.verificationModel.type',

@@ -506,12 +506,9 @@ class TestEmptyExportListIsKnownEmpty(unittest.TestCase):
         empty = self._case_root(self._electro_properties(ionic_export=""))
         self.assertEqual(_exported_ionic_variables(empty, "AlievPanfilov"), ())
 
-    def test_predictor_still_falls_back_when_export_block_absent(self) -> None:
+    def test_predictor_exports_nothing_when_export_block_absent(self) -> None:
         from omnidriver.cardiacfoam.artifacts_predictor import (
             _exported_ionic_variables,
-        )
-        from omnidriver.cardiacfoam.ionic_model_catalog import (
-            IONIC_MODEL_CATALOG,
         )
 
         case_root = self._case_root(
@@ -520,10 +517,7 @@ class TestEmptyExportListIsKnownEmpty(unittest.TestCase):
             "    ionicModel AlievPanfilov;\n"
             "}\n"
         )
-        self.assertEqual(
-            _exported_ionic_variables(case_root, "AlievPanfilov"),
-            IONIC_MODEL_CATALOG["AlievPanfilov"].recommended_exports,
-        )
+        self.assertEqual(_exported_ionic_variables(case_root, "AlievPanfilov"), ())
 
     def test_predictor_export_filter_matches_every_ionic_catalog_entry(self) -> None:
         """The catalog, not a tutorial result, defines exportable field names."""

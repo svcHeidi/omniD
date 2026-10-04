@@ -51,6 +51,28 @@ def test_exclusion_and_co_requirement_are_judged_from_the_key_that_declares_them
     assert _violations(entries, {"low": 1, "high": 2}) == set()
 
 
+def test_one_of_a_group_is_required_and_reported_once_while_the_group_applies():
+    entries = [
+        _entry("$S.box.max", required_one_of=("$S.box.maxList",), applicable_when={"box.$present": True}),
+        _entry("$S.box.maxList", required_one_of=("$S.box.max",), applicable_when={"box.$present": True}),
+    ]
+    present = {"box.$present": True, "box.min": 1}
+    assert _violations(entries, present) == {("box.max", "one of box.max, box.maxList is required.")}
+    assert _violations(entries, {**present, "box.maxList": [1]}) == set()
+    assert _violations(entries, {**present, "box.max": 1}) == set()
+    assert _violations(entries, {"box.min": 1}) == set()
+
+
+def test_one_of_a_group_is_judged_in_each_instance_of_a_block():
+    entries = [
+        _entry("$S.nets.<name>.edges", required_one_of=("$S.nets.<name>.edgeList",)),
+        _entry("$S.nets.<name>.edgeList", required_one_of=("$S.nets.<name>.edges",)),
+        _entry("$S.nets.<name>.kind"),
+    ]
+    context = {"nets.a.kind": "x", "nets.b.kind": "y", "nets.b.edges": 1}
+    assert _violations(entries, context) == {("nets.a.edges", "one of nets.a.edgeList, nets.a.edges is required.")}
+
+
 def test_a_switch_is_compared_by_meaning_not_spelling():
     entries = [_entry("$S.scale", required=True, applicable_when={"enabled": "true"})]
     assert _violations(entries, {"enabled": True}) == {("scale", "scale is required.")}
@@ -105,7 +127,8 @@ def test_a_listing_shows_the_relations_a_case_is_judged_by_and_omits_what_an_ent
     listing = listed_entry("system/dict", "depth", entry)
     assert listing["required"] is True and listing["required_when"] == {"mode": ["deep", "abyssal"]}
     assert (listing["mutually_exclusive_with"], listing["notes"], listing["examples"]) == (["$S.height"], "metres", ["3"])
-    assert not {"forbidden_when", "co_required_with", "allowed_bindings", "constraints"} & set(listing)
+    assert not {"forbidden_when", "co_required_with", "required_one_of", "allowed_bindings", "constraints"} & set(listing)
+    assert listed_entry("system/dict", "max", _entry("$S.max", required_one_of=("$S.maxList",)))["required_one_of"] == ["$S.maxList"]
 
 
 def test_an_absent_selector_is_read_as_the_default_the_catalogue_states():

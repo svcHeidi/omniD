@@ -780,7 +780,7 @@ and the native case all count.
 
 - **Catalogue relations** (cardiacFOAM's `electroProperties` and `prePacingProperties`, each cardiacCore
   utility dictionary) — `applicable_when` / `required_when` / `forbidden_when` /
-  `mutually_exclusive_with` / `co_required_with`, once per instance of a
+  `mutually_exclusive_with` / `co_required_with` / `required_one_of`, once per instance of a
   `<name>` block. A predicate on a selector the case omits reads the
   selector's catalogued `default` where it has one. An enum value outside its menu is refused: the names the
   supplied C++'s selection table registers when the source is supplied, the
@@ -925,7 +925,8 @@ is no native case to run. It writes a case from the dict-entry catalogue into
 omnidriver build --plugin cardiacfoam --out <dir> \
   --select myocardiumSolver=monodomainSolver --select ionicModel=TNNP \
   --select tissue=epicardialCells --option dx=0.0004 --option endTime=0.2 \
-  --set '$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMin=(0 0 0)'
+  --set '$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMin=(0 0 0)' \
+  --set '$ELECTRO_MODEL_COEFFS.externalStimulus.stimulusLocationMax=(0.002 0.002 0.002)'
 omnidriver run --strict --plugin cardiacfoam --case <dir> --scratch-dir <scratch>
 ```
 
@@ -940,6 +941,8 @@ omnidriver run --strict --plugin cardiacfoam --case <dir> --scratch-dir <scratch
   lists what the C++ reads and the catalogue lacks. A build with no source
   supplied reports `plugin_cxx_source_not_supplied`: the required keys the
   C++ adds were not checked.
+  A stimulus box needs both corners, each as one value or as a `...List`
+  (`required_one_of`): `build` refuses a block that names neither by name.
 - `--option`: `dx` (metres, isotropic cell size), `deltaT`, `endTime`.
   `--overwrite` replaces the dictionaries of an existing case; without it a case that already holds `electroProperties` is refused, and one that holds only `system/` files keeps its `controlDict`, `fvSchemes` and `fvSolution`.
 

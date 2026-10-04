@@ -1102,3 +1102,32 @@ def test_a_block_the_case_holds_turns_on_the_rules_gated_on_its_presence():
     infer_virtual_presence(with_presence)
     gated = {item.field for item in rule_diagnostics(entries, with_presence, document="doc")} - without
     assert gated and all(field.startswith("singleCellStimulus.") for field in gated)
+
+
+def _external_stimulus_case(tmp_path, stimulus):
+    constant = tmp_path / "constant"
+    constant.mkdir()
+    header = "FoamFile { version 2.0; format ascii; class dictionary; object x; }\n"
+    (constant / "electroProperties").write_text(
+        header + "myocardiumSolver monodomainSolver;\n"
+        "monodomainSolverCoeffs { ionicModel TNNP; externalStimulus { " + stimulus + " } }\n"
+    )
+    from omnidriver.cardiacfoam.validation import case_diagnostics
+
+    return {item.message for item in case_diagnostics(tmp_path) if item.level == "error"}
+
+
+def test_an_external_stimulus_needs_each_corner_as_one_value_or_a_list(tmp_path):
+    errors = _external_stimulus_case(
+        tmp_path, "stimulusLocationMin (0 0 0); stimulusDuration 0.002; stimulusIntensity 50000;"
+    )
+    assert "one of externalStimulus.stimulusLocationMax, externalStimulus.stimulusLocationMaxList is required." in errors
+    assert not any("stimulusDuration" in message or "stimulusIntensity" in message for message in errors)
+
+
+def test_an_external_stimulus_with_both_corners_breaks_no_rule(tmp_path):
+    errors = _external_stimulus_case(
+        tmp_path,
+        "stimulusLocationMin (0 0 0); stimulusLocationMax (1 1 1); stimulusDuration 0.002; stimulusIntensity 50000;",
+    )
+    assert not any("stimulus" in message for message in errors)

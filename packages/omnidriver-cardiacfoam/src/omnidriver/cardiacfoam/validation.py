@@ -39,6 +39,7 @@ _VIRTUAL_PRESENCE_TRIGGERS: tuple[tuple[str, str], ...] = (
     # inventing stim_amplitude/nstim1 defaults and quietly pacing a case
     # that asked for none.
     ("singleCellStimulus.", "$singleCellStimulus_present"),
+    ("externalStimulus.", "$externalStimulus_present"),
 )
 
 

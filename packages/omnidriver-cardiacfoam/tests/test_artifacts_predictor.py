@@ -45,10 +45,15 @@ def _write_single_cell_electro_properties(
     *,
     ionic_model: str = "AlievPanfilov",
     tissue: str = "myocyte",
+    export_list: tuple[str, ...] | None = None,
 ) -> None:
     """Synthesize the minimum-viable single-cell electroProperties."""
     constant = case_root / "constant"
     constant.mkdir(parents=True, exist_ok=True)
+    exported = (
+        "" if export_list is None
+        else f"    outputVariables {{ ionic {{ export ({' '.join(export_list)}); }} }}\n"
+    )
     (constant / "electroProperties").write_text(
         "myocardiumSolver singleCellSolver;\n"
         "singleCellSolverCoeffs\n"
@@ -56,18 +61,19 @@ def _write_single_cell_electro_properties(
         f"    ionicModel    {ionic_model};\n"
         f"    tissue        {tissue};\n"
         "    solutionAlgorithm explicit;\n"
-        "}\n"
+        + exported
+        + "}\n"
     )
 
 
 class TestPredictorSingleCell(unittest.TestCase):
-    def test_emits_artifact_with_variables_from_catalog(self) -> None:
-        """AlievPanfilov advertises states ('u', 'recovery_r') in the ionic model catalog — the predictor must source variables from there rather than redefining them locally."""
+    def test_emits_artifact_with_the_variables_the_case_exports(self) -> None:
+        """The case's export list names the variables; the ionic model catalog says which of them the model can export."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
             _write_single_cell_electro_properties(
-                case_root, ionic_model="AlievPanfilov"
+                case_root, ionic_model="AlievPanfilov", export_list=("u", "recovery_r")
             )
             spec = _make_spec(case_root)
 
@@ -89,8 +95,8 @@ class TestPredictorSingleCell(unittest.TestCase):
             case_b = Path(temp_b) / "case"
             case_a.mkdir()
             case_b.mkdir()
-            _write_single_cell_electro_properties(case_a, ionic_model="TNNP")
-            _write_single_cell_electro_properties(case_b, ionic_model="AlievPanfilov")
+            _write_single_cell_electro_properties(case_a, ionic_model="TNNP", export_list=("V", "Ca_i"))
+            _write_single_cell_electro_properties(case_b, ionic_model="AlievPanfilov", export_list=("u", "Ca_i"))
 
             artifacts_tnnp = predict_data_artifacts(case_a, _make_spec(case_a))
             artifacts_ap = predict_data_artifacts(case_b, _make_spec(case_b))
@@ -103,9 +109,9 @@ class TestPredictorSingleCell(unittest.TestCase):
                 "predictor returned identical variables for two different "
                 "ionic models — catalog consultation is broken",
             )
-            # TNNP.recommended_exports references a calcium variable;
-            # AlievPanfilov has no calcium.
-            self.assertIn("calcium_Cai", trace_tnnp.variables)
+            # The same request names a calcium state TNNP has and AlievPanfilov lacks.
+            self.assertIn("Ca_i", trace_tnnp.variables)
+            self.assertNotIn("Ca_i", trace_ap.variables)
 
 
     def test_unknown_ionic_model_returns_only_vm_and_empty_trace(self) -> None:
@@ -217,14 +223,14 @@ class TestPredictorMonodomain(unittest.TestCase):
             case_root = Path(temp) / "case"
             case_root.mkdir()
             _write_pde_electro_properties(
-                case_root, solver="monodomainSolver", ionic_model="TNNP"
+                case_root, solver="monodomainSolver", ionic_model="TNNP", export_list=("V", "Ca_i")
             )
             spec = _make_spec(case_root)
 
             artifacts = predict_data_artifacts(case_root, spec)
             ids = {a.artifact_id for a in artifacts}
             self.assertIn("monodomain_vm_series", ids)
-            self.assertIn("monodomain_calcium_cai_series", ids)
+            self.assertIn("monodomain_ca_i_series", ids)
             for a in artifacts:
                 self.assertTrue(a.instance_indexed, f"{a.artifact_id} not time-indexed")
                 self.assertEqual(a.produced_by, "monodomainSolver")
@@ -252,7 +258,7 @@ class TestPredictorBidomain(unittest.TestCase):
             case_root = Path(temp) / "case"
             case_root.mkdir()
             _write_pde_electro_properties(
-                case_root, solver="bidomainSolver", ionic_model="TNNP"
+                case_root, solver="bidomainSolver", ionic_model="TNNP", export_list=("V", "Ca_i")
             )
             spec = _make_spec(case_root)
             artifacts = predict_data_artifacts(case_root, spec)
@@ -260,7 +266,7 @@ class TestPredictorBidomain(unittest.TestCase):
             self.assertIn("bidomain_vm_series", ids)
             self.assertIn("bidomain_phie_series", ids)
             self.assertIn("bidomain_phii_series", ids)
-            self.assertIn("bidomain_calcium_cai_series", ids)
+            self.assertIn("bidomain_ca_i_series", ids)
             for a in artifacts:
                 self.assertEqual(a.produced_by, "bidomainSolver")
                 self.assertTrue(a.path_pattern.startswith("{instance}/"))
@@ -349,18 +355,24 @@ class TestPredictorExportListFiltering(unittest.TestCase):
             # A token the model cannot export is no output evidence (ionicModelIO::exportedFieldNamesRef).
             self.assertEqual(trace.variables, ("Vm", "u"))
 
-    def test_missing_export_list_falls_back_to_recommended_exports(self) -> None:
-        """AlievPanfilov.recommended_exports = ('u', 'recovery_r') in ionic_model_catalog.py."""
+    def test_a_case_that_requests_no_export_predicts_no_ionic_variable(self) -> None:
+        """The catalogue recommends exports for AlievPanfilov; the solver writes none unless the case lists them."""
         with tempfile.TemporaryDirectory() as temp:
             case_root = Path(temp) / "case"
             case_root.mkdir()
-            _write_single_cell_electro_properties(
-                case_root, ionic_model="AlievPanfilov"
+            _write_single_cell_electro_properties(case_root, ionic_model="AlievPanfilov")
+            trace = next(
+                a for a in predict_data_artifacts(case_root, _make_spec(case_root)) if a.artifact_id == "single_cell_trace"
             )
-            spec = _make_spec(case_root)
-            artifacts = predict_data_artifacts(case_root, spec)
-            trace = next(a for a in artifacts if a.artifact_id == "single_cell_trace")
-            self.assertEqual(trace.variables, ("u", "recovery_r"))
+            self.assertEqual(trace.variables, ())
+
+    def test_a_monodomain_case_that_requests_no_export_predicts_only_vm(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            case_root = Path(temp) / "case"
+            case_root.mkdir()
+            _write_pde_electro_properties(case_root, solver="monodomainSolver", ionic_model="TNNP")
+            ids = {a.artifact_id for a in predict_data_artifacts(case_root, _make_spec(case_root))}
+            self.assertEqual(ids, {"monodomain_vm_series"})
 
     def test_explicitly_empty_export_list_predicts_zero_ionic_exports(self) -> None:
         """``outputVariables.ionic.export ( );`` is a real, deliberate declaration -- the solver will write no ionic fields at all."""
@@ -772,6 +784,21 @@ class TestPredictorActiveTension(unittest.TestCase):
             self.assertEqual(len(at_artifacts), 0)
             trace = next(a for a in artifacts if a.artifact_id == "single_cell_trace")
             self.assertIn("Ta", trace.variables)
+
+    def test_an_active_tension_model_with_no_export_list_predicts_no_active_tension_series(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            ep = tmp / "constant" / "electroProperties"
+            ep.parent.mkdir(parents=True, exist_ok=True)
+            ep.write_text(
+                "myocardiumSolver bidomainSolver;\n"
+                "bidomainSolverCoeffs\n{\n"
+                "    ionicModel TNNP;\n"
+                "    activeTensionModel NashPanfilov;\n"
+                "}\n"
+            )
+            ids = [a.artifact_id for a in predict_data_artifacts(tmp, _make_spec(tmp))]
+            self.assertFalse(any("active_tension" in i for i in ids))
 
     def test_at_artifact_format_is_openfoam_time_dirs(self) -> None:
         with tempfile.TemporaryDirectory() as d:
