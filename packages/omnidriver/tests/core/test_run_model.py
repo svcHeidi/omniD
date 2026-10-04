@@ -153,7 +153,7 @@ def test_schema_accepts_serialized_workflow_identity_and_resume_evidence(schema)
                 "composition_rule_version": "1",
                 "capability_digest": "b" * 64,
                 "resolutions": {"command_authorization": "org.example.test"},
-                "environment": {"variables": {"PATH": "c" * 64, "TOY_RC": None}},
+                "environment": {"variables": {"NUMERICAL_MODE": "c" * 64, "HYDRA_IFACE": None}},
             },
             "aggregate_digest": "sha256:" + "d" * 64,
             "is_complete": True,

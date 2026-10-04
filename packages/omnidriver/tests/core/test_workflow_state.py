@@ -69,7 +69,7 @@ def test_workflow_state_round_trips_resume_evidence() -> None:
                 "api_version": "1",
                 "source": "test",
                 "capability_digest": "sha256:" + "b" * 64,
-                "environment_digest": "c" * 64,
+                "environment": {"variables": {}},
             },
             "aggregate_digest": "sha256:" + "d" * 64,
             "is_complete": True,

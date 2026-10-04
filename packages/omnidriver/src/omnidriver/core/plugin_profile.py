@@ -49,6 +49,10 @@ class SuppliedVariable:
     name: str
     required: bool
     why: str
+    #: True for a variable that only says where a file or tree is, so a resume
+    #: need not find it unchanged: what the stack reads from there is itself
+    #: fingerprinted.
+    locates: bool = False
 
 
 @dataclass(frozen=True)
@@ -182,12 +186,14 @@ def _environment_connection(profile_path: Path, raw: Any) -> EnvironmentConnecti
             or not isinstance(item.get("name"), str) or not item["name"]
             or not isinstance(item.get("required"), bool)
             or not isinstance(item.get("why"), str) or not item["why"]
+            or not isinstance(item.get("locates", False), bool)
         ):
             raise _mapping_error(
                 profile_path,
-                f"environment.supplied[{index}] needs a name, a boolean 'required' and a 'why'",
+                f"environment.supplied[{index}] needs a name, a boolean 'required', a 'why' "
+                "and, optionally, a boolean 'locates'",
             )
-        supplied.append(SuppliedVariable(item["name"], item["required"], item["why"]))
+        supplied.append(SuppliedVariable(item["name"], item["required"], item["why"], item.get("locates", False)))
     names = {item.name for item in supplied}
     source = raw.get("source")
     path_prepend = tuple(raw.get("path_prepend", ()) or ())

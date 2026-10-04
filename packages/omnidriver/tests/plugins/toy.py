@@ -296,16 +296,19 @@ class DeclaredCasePlugin(ToyProvider):
 
 #: The one variable ResumeTestPlugin's connection supplies.
 RESUME_SUPPLIED_VARIABLE = "NUMERICAL_MODE"
+#: ... and the one that only says where a file is.
+RESUME_LOCATION_VARIABLE = "TOY_RC_LOCATION"
 
 
 class ResumeTestPlugin(DeclaredCasePlugin):
-    """Declares one authored input, ``system/settings``, and one supplied variable, for the resume tests."""
+    """Declares one authored input, ``system/settings``, and one supplied variable and one location variable, for the resume tests."""
 
     def get_profile(self) -> PluginProfile:
         return _profile(self, (CaseFileRule(
             path="system/settings", kind="test_configuration", role="test.configuration", required="always",
         ),), environment=EnvironmentConnection(supplied=(
             SuppliedVariable(RESUME_SUPPLIED_VARIABLE, False, "changes what the toy computes"),
+            SuppliedVariable(RESUME_LOCATION_VARIABLE, False, "where the toy's rc file is", locates=True),
         )))
 
 

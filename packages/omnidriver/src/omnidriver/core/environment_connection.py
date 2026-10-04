@@ -53,6 +53,7 @@ def stack_connection(driver_context: "DriverContext") -> tuple[EnvironmentConnec
                 mapping.source_root_variable, False,
                 f"the native tree; its {mapping.source_root_relative} is the C++ source the "
                 "key scanner reads in every strict plan (cxx_mapping.source_root)",
+                True,
             )
             declared_by[mapping.source_root_variable] = profile.plugin_id
     return EnvironmentConnection(

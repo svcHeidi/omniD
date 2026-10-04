@@ -25,16 +25,22 @@ def _digest(value: str) -> str:
 
 
 def _environment_identity(environment: Mapping[str, str], driver_context: DriverContext) -> dict:
-    """What a replay must find unchanged: the variables the stack's connection supplies, ``PATH`` and the declared launcher.
+    """What a replay must find unchanged in the environment: the stack's supplied variables that are not mere locations, and the declared launcher.
 
-    Anything else in the environment (``PWD``, ``TERM_*``, a shell's own
-    variables) says nothing about what the solver does. Values are stored as
-    digests, so a refusal can name a variable without a secret being saved.
+    The commands a run uses are identified by their resolved paths and digests
+    in the case inputs, so ``PATH`` itself, a sourced file's location and the
+    other variables that only locate something are left out. Values are
+    stored as digests, so a refusal can name a variable without a secret
+    being saved.
     """
     from ..environment_connection import stack_connection
 
     connection, _ = stack_connection(driver_context)
-    names = sorted({*(variable.name for variable in connection.supplied), "PATH"})
+    located = {connection.source, *connection.path_prepend}
+    names = sorted(
+        variable.name for variable in connection.supplied
+        if not variable.locates and variable.name not in located
+    )
     identity: dict = {
         "variables": {name: _digest(environment[name]) if name in environment else None for name in names},
     }
