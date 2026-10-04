@@ -171,7 +171,7 @@ is not a count of concepts. Delete on evidence from every package and script.
 
 - `ARCHITECTURE.md` — the layer map, the package-independence rules and what
   core may name.
-- `docs/superpowers/ROADMAP.md` — what is open. `docs/superpowers/specs/` and
+- `docs/superpowers/ROADMAP.md` — **start here for the current state**: the clean state of all three repositories (omniD, native cardiacFOAM, native cardiacCore), exactly how the owner's native branches relate to ours, and what is next. `docs/superpowers/specs/` and
   `plans/` are the design reasoning and the executed record; the newest plan,
   `plans/2026-10-01-pass2-convergence.md`, holds the owner's decisions.
 - `docs/solver-learning/` — evidence about each solver, one probe at a time.
