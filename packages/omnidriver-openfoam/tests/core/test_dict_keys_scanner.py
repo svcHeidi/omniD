@@ -813,6 +813,72 @@ LandNiedererBatched::LandNiedererBatched
 }
 '''
 
+# OpenFOAM-v2412 src/TurbulenceModels/compressible/EddyDiffusivity/EddyDiffusivity.C: correctNut, whose
+# dimensioned constructor reads from the dictionary a member call returns.
+EDDY_DIFFUSIVITY = r'''template<class BasicTurbulenceModel>
+void Foam::EddyDiffusivity<BasicTurbulenceModel>::correctNut()
+{
+    // Read Prt if provided
+    Prt_ = dimensionedScalar("Prt", dimless, 1.0, this->coeffDict());
+    alphat_ = this->rho_*this->nut()/Prt_;
+    alphat_.correctBoundaryConditions();
+}
+'''
+
+# OpenFOAM-v2412 src/fvOptions/corrections/limitTurbulenceViscosity/limitTurbulenceViscosity.C: nu, whose
+# dimensioned constructor reads from the dictionary a pointer holds.
+LIMIT_TURBULENCE_VISCOSITY = r'''Foam::tmp<Foam::volScalarField> Foam::fv::limitTurbulenceViscosity::nu() const
+{
+    const auto* turbPtr =
+        mesh_.cfindObject<turbulenceModel>(turbulenceModel::propertiesName);
+    if (turbPtr)
+    {
+        return turbPtr->nu();
+    }
+
+    const auto* thermoPtr =
+        mesh_.cfindObject<fluidThermo>(fluidThermo::dictName);
+    if (thermoPtr)
+    {
+        return thermoPtr->nu();
+    }
+
+    const auto* laminarPtr =
+        mesh_.cfindObject<transportModel>("transportProperties");
+    if (laminarPtr)
+    {
+        return laminarPtr->nu();
+    }
+
+    const auto* dictPtr = mesh_.cfindObject<dictionary>("transportProperties");
+    if (dictPtr)
+    {
+        return volScalarField::New
+        (
+            "nu",
+            IOobject::NO_REGISTER,
+            mesh_,
+            dimensionedScalar("nu", dimViscosity, *dictPtr)
+        );
+    }
+
+    FatalErrorInFunction
+        << "No valid model for laminar viscosity"
+        << exit(FatalError);
+
+    return nullptr;
+}
+'''
+
+# A pattern, not OpenFOAM source: a dimensioned constructor reading from a dictionary the mesh registry
+# holds, and from a sub-dictionary named by an expression.
+DICTIONARY_PATTERNS = '''void pattern(const fvMesh& mesh_, const dictionary& dict_)
+{
+    const dimensionedScalar a("a", dimless, mesh_.lookupObject<IOdictionary>("transportProperties"));
+    const dimensionedScalar b("b", dimless, dict_.subDict(word("sub")));
+}
+'''
+
 def _tree(tmp_path: Path, **files: str) -> Path:
     root = tmp_path / "src"
     for name, text in files.items():
@@ -1104,6 +1170,16 @@ def test_a_dimensioned_constructor_of_constants_is_no_read_and_one_of_a_dictiona
 def test_a_dimensioned_constructor_around_a_read_is_that_one_read(tmp_path):
     scan = scan_source(_tree(tmp_path, **{"setCardiacConductivity.C": WRITE_CONDUCTIVITY}))
     assert [(read.key, read.method, read.type) for read in scan.reads] == [("df", "get", "scalar")]
+
+
+def test_a_dimensioned_constructor_reading_a_dictionary_the_scan_cannot_place_is_an_unresolved_read(tmp_path):
+    for name, text, key in (
+        ("EddyDiffusivity.C", EDDY_DIFFUSIVITY, "Prt"), ("limitTurbulenceViscosity.C", LIMIT_TURBULENCE_VISCOSITY, "nu"),
+    ):
+        read = _read(scan_source(_tree(tmp_path / key, **{name: text})), key, "dimensioned")
+        assert (read.type, read.scope, read.root) == ("dimensionedScalar", None, None)
+    scan = scan_source(_tree(tmp_path / "patterns", **{"patterns.C": DICTIONARY_PATTERNS}))
+    assert sorted(read.key for read in scan.reads if read.method == "dimensioned") == ["a", "b"]
 
 
 def test_a_key_the_function_does_not_compare_has_no_menu(tmp_path):
