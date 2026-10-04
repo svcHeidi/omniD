@@ -68,7 +68,7 @@ def record_surface(
         "keys": [dict(entry) for entry in keys],
         **({"keys_omitted": {
             "count": len(listed) - len(keys),
-            "why": "their applicable_when does not hold in this case's own settings; `omnidriver catalog` lists every key",
+            "why": "their applicable_when rules out this case's own solver; `omnidriver catalog` lists every key",
         }} if len(keys) < len(listed) else {}),
         "guidance": [dict(item) for item in stack.call("get_agent_guidance")],
         "case_documentation": documentation,

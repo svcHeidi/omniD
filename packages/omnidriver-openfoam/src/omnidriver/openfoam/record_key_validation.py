@@ -252,3 +252,28 @@ def open_system_documents(case_root: Path, *, exclude: Iterable[str] = ()) -> "t
         for path in sorted((case_root / "system").rglob("*"))
         if path.is_file() and path.relative_to(case_root).as_posix() not in skipped
     )
+
+
+def narrow_to_selectors(
+    keys: "tuple[dict[str, Any], ...]", case_root: Path, *,
+    selectors: Mapping[str, tuple[str, ...]], entries: Mapping[str, Mapping[str, Any]],
+) -> "tuple[dict[str, Any], ...]":
+    """``keys`` less the entries of a catalogued document that the case's own selector settings rule out.
+
+    ``selectors`` names, per document, the keys a record fixes (cardiacFOAM's ``myocardiumSolver``); ``entries``
+    gives each document's ``DictEntry`` by ``driver_path``. Only a relation on a selector key is judged
+    (:func:`case_rules.applicable_given`): a key a study can make apply, by setting any other key, stays listed."""
+    from foamlib import FoamFile
+
+    from .case_rules import applicable_given
+
+    dropped: set[tuple[str, str]] = set()
+    for document, names in selectors.items():
+        path = Path(case_root) / document
+        if not path.is_file():
+            continue
+        parsed = FoamFile(path)
+        chosen = {name: str(parsed[name]) for name in names if name in parsed}
+        keep = {entry.driver_path for entry in applicable_given(entries[document].values(), chosen)}
+        dropped |= {(document, driver_path) for driver_path in entries[document] if driver_path not in keep}
+    return tuple(item for item in keys if (item["document"], item.get("driver_path")) not in dropped)

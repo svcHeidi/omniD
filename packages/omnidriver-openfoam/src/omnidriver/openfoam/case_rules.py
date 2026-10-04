@@ -138,6 +138,17 @@ def applicable_entries(entries: Iterable[Any], context: Mapping[str, Any]) -> li
     return [entry for entry in entries if instance.applies(entry)]
 
 
+def applicable_given(entries: Iterable[Any], selectors: Mapping[str, Any]) -> list[Any]:
+    """The entries ``selectors`` alone do not rule out: only an ``applicable_when`` or ``forbidden_when``
+    predicate on a selector key is judged, and any other is left to the case's settings."""
+    instance = _Instance(selectors, {})
+    return [
+        entry for entry in entries
+        if all(instance.holds(key, value) for key, value in entry.applicable_when.items() if key in selectors)
+        and not any(instance.holds(key, value) for key, value in entry.forbidden_when.items() if key in selectors)
+    ]
+
+
 def forbidden_in(entries: Iterable[Any], context: Mapping[str, Any]) -> list[tuple[Any, dict[str, Any]]]:
     """Each entry ``context`` sets that its own ``forbidden_when`` forbids,
     with the predicates that hold."""

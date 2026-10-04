@@ -9,7 +9,7 @@ from typing import Any
 
 from omnidriver.core.runtime.record_surface import key_pattern
 from omnidriver.openfoam.record_key_validation import (
-    CataloguedDocument, listed_entry, make_validator, open_system_documents,
+    CataloguedDocument, listed_entry, make_validator, narrow_to_selectors, open_system_documents,
 )
 
 from .catalogs.inputs import CATALOG
@@ -65,4 +65,19 @@ def record_key_catalog(case_root: Path) -> "tuple[dict[str, Any], ...]":
             for key, entry in by_key.items()
         ),
         *open_system_documents(case_root, exclude=_ENTRIES_BY_DOCUMENT),
+    )
+
+
+#: cardiacCore's records fix no selector their keys depend on.
+RECORD_SELECTORS: "dict[str, tuple[str, ...]]" = {}
+
+
+def applicable_record_keys(keys: "tuple[dict[str, Any], ...]", case_root: Path) -> "tuple[dict[str, Any], ...]":
+    """``keys`` less those the case's selectors rule out (none are named)."""
+    return narrow_to_selectors(
+        keys, case_root, selectors=RECORD_SELECTORS,
+        entries={
+            document: {entry.driver_path: entry for entry in by_key.values()}
+            for document, by_key in _ENTRIES_BY_DOCUMENT.items()
+        },
     )

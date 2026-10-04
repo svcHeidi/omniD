@@ -51,20 +51,22 @@ def test_every_listed_key_the_case_holds_is_accepted_by_the_validator_with_its_k
     assert "singleCellSolverCoeffs.tissue" in checked and "myocardiumSolver" in checked
 
 
-def test_describe_lists_only_the_keys_the_cases_own_solver_and_blocks_allow():
+def test_describe_lists_only_the_keys_the_cases_own_solver_allows():
     plugin = CardiacFoamPlugin()
     listed = plugin.get_record_key_catalog(CASE)
     narrowed = plugin.select_applicable_record_keys(listed, CASE)
     kept = {(e["document"], e["key"]) for e in narrowed}
-    assert len(narrowed) < len(listed)
-    # The case holds no bath block, so the keys the catalogue gates on one are not offered.
-    assert not [key for _document, key in kept if ".bathPotentialDomain." in key]
-    assert ("constant/electroProperties", "singleCellSolverCoeffs.ecgDomains.<name>.ecgSolver") in {
-        (e["document"], e["key"]) for e in listed
-    } - kept
+    gone = {(e["document"], e["key"]) for e in listed} - kept
+    assert gone, "a single-cell case rules out the keys of the other solvers"
+    # What a study can make apply by setting another key (here the ionic model) stays listed.
     assert ("constant/electroProperties", "singleCellSolverCoeffs.tissue") in kept
-    assert ("constant/electroProperties", "singleCellSolverCoeffs.singleCellStimulus.stim_amplitude") in kept
-    # Everything that is not an electroProperties entry passes through.
+    by_key = {(e["document"], e["key"]): e for e in listed}
+    for item in (by_key[key] for key in gone):
+        assert (
+            "singleCellSolver" not in item.get("applicable_when", {}).get("myocardiumSolver", ["singleCellSolver"])
+            or item.get("forbidden_when", {}).get("myocardiumSolver")
+        ), item["key"]
+    assert any(e.get("applicable_when", {}).get("ionicModel") for e in narrowed)
     assert [e for e in listed if e["document"] != "constant/electroProperties"] == [
         e for e in narrowed if e["document"] != "constant/electroProperties"
     ]

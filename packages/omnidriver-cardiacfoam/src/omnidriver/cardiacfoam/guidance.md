@@ -2,7 +2,7 @@
 
 Study keys are `<document>:<dotted.key>`, e.g.
 `constant/electroProperties:singleCellSolverCoeffs.tissue`. `describe` lists
-the keys a record's case accepts that its own solver and settings allow, in
+the keys a record's case accepts that its own solver allows, in
 `record_surface.keys` (`omnidriver catalog --entry <record>` lists every one). A study goes in a
 sweep spec (`sweep-plan`/`sweep-run --spec`, whose `base` names `entry` and
 `cases_root`; a one-case study is a one-value axis). A single `plan`/`run`

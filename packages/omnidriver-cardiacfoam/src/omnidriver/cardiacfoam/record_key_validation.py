@@ -9,7 +9,7 @@ from typing import Any
 
 from omnidriver.openfoam.case_rules import match_dynamic_entry
 from omnidriver.openfoam.record_key_validation import (
-    CataloguedDocument, listed_entry, make_validator, open_system_documents,
+    CataloguedDocument, listed_entry, make_validator, narrow_to_selectors, open_system_documents,
 )
 
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
@@ -140,21 +140,12 @@ def record_key_catalog(case_root: Path) -> tuple[dict[str, Any], ...]:
     return (*entries, *open_system_documents(case_root))
 
 
+#: What a cardiacFOAM record fixes about its case: the solver, which decides which keys exist at all.
+RECORD_SELECTORS = {ELECTRO_DOCUMENT: ("myocardiumSolver",)}
+
+
 def applicable_record_keys(keys: "tuple[dict[str, Any], ...]", case_root: Path) -> "tuple[dict[str, Any], ...]":
-    """``keys`` less the electroProperties entries whose ``applicable_when`` or
-    ``forbidden_when`` rules out the case's own solver and settings: the
-    relations ``case_rules`` judges the case by, over the same context."""
-    from foamlib import FoamFile
-
-    from omnidriver.openfoam.case_rules import applicable_entries, flatten
-
-    from .validation import infer_virtual_presence
-
-    electro = Path(case_root) / ELECTRO_DOCUMENT
-    if not electro.is_file():
-        return tuple(keys)
-    solver = detect_myocardium_solver_name(electro)
-    context = {"myocardiumSolver": solver, **flatten(FoamFile(electro)[f"{solver}Coeffs"])}
-    infer_virtual_presence(context)
-    applicable = {entry.driver_path for entry in applicable_entries(_ELECTRO_ENTRIES_BY_PATH.values(), context)}
-    return tuple(item for item in keys if item["document"] != ELECTRO_DOCUMENT or item["driver_path"] in applicable)
+    """``keys`` less those the case's own ``myocardiumSolver`` rules out."""
+    return narrow_to_selectors(
+        keys, case_root, selectors=RECORD_SELECTORS, entries={ELECTRO_DOCUMENT: _ELECTRO_ENTRIES_BY_PATH},
+    )

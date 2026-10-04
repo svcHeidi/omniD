@@ -778,8 +778,9 @@ on stdout with exit 1 (`--help` is argparse's own text).
    `installed_plugins`, the ids `--plugin` takes. An unknown `--plugin` is
    refused with the same list.
 2. **What may I set in this record?** `describe --entry <record>`:
-   `record_surface.keys` lists the keys the case's own solver and settings
-   allow (`applicable_when` holds in it), and `keys_omitted` counts the rest.
+   `record_surface.keys` lists the keys the record's own solver allows (a
+   relation on the solver selector holds), and `keys_omitted` counts the rest;
+   a key another setting makes apply stays listed.
    `omnidriver catalog --entry <record>` lists every key, narrowed with
    `--document` or `--key`. Each entry carries `driver_path`, `value_kind`,
    `menu`, `unit`, `typical_value` and its relations (`applicable_when`,

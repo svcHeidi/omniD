@@ -176,7 +176,7 @@ class CardiacFoamPlugin:
         return record_key_catalog(case_root)
 
     def select_applicable_record_keys(self, keys, case_root) -> tuple:
-        """``keys`` less those the case's solver and settings rule out
+        """``keys`` less those the case's solver rules out
         (``record_key_validation.applicable_record_keys``)."""
         from omnidriver.cardiacfoam.record_key_validation import applicable_record_keys
 

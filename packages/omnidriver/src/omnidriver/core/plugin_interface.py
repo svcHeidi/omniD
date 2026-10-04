@@ -237,7 +237,7 @@ class SolverPlugin(Protocol):
         self, keys: tuple[Mapping[str, Any], ...], case_root: Path,
     ) -> tuple[Mapping[str, Any], ...]:
         """``keys`` (a ``get_record_key_catalog`` answer) less the ones this
-        case's own selections rule out by their ``applicable_when``. ``describe``
+        case's own selector (its solver) rules out by their ``applicable_when``. ``describe``
         lists the narrowed keys; ``catalog`` lists them all."""
 
     def get_agent_guidance(self) -> tuple[Mapping[str, str], ...]:
