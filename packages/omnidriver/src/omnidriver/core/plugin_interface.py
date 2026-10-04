@@ -125,10 +125,10 @@ class SolverPlugin(Protocol):
         (a few keys of ``controlDict``) is left out."""
 
     def get_dict_key_scanner(self):
-        """A ``(source_root, *, allowlist_path, entries, cache_root, force) ->
-        report`` callable comparing the catalogue with the solver's C++; the
-        report's ``to_json()`` has ``disagreements``, ``unread``,
-        ``uncatalogued``, ``unresolved`` and ``selector_values``."""
+        """A ``(source_root, *, allowlist_path, catalogue, cache_root, force) ->
+        report`` callable comparing the catalogue, document by document, with
+        the solver's C++; the report's ``to_json()`` has ``disagreements``,
+        ``unread``, ``uncatalogued``, ``unresolved`` and ``selector_values``."""
 
     # -- commands -------------------------------------------------------------
     def get_solver_commands(self) -> frozenset[str]:

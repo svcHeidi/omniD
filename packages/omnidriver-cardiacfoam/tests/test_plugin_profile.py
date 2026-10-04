@@ -40,8 +40,9 @@ def test_cardiac_catalog_partitions_entries_by_document() -> None:
     assert {"electroProperties", "physicsProperties", "controlDict", "prePacingProperties"} <= set(catalog.documents)
     assert {entry.driver_path for entry in catalog.entries_for("physicsProperties")} == {"type"}
     assert {entry.driver_path for entry in catalog.entries_for("controlDict")} >= {"deltaT", "endTime"}
-    assert {entry.driver_path for entry in catalog.entries_for("prePacingProperties")} == {
-        "tolerance", "minBeats", "maxBeats", "beatComparisonInterval", "singleCellIonicModel",
+    assert {entry.driver_path for entry in catalog.entries_for("prePacingProperties")} >= {
+        "$PRE_PACING.tolerance", "$PRE_PACING.minBeats", "$PRE_PACING.maxBeats", "$PRE_PACING.beatComparisonInterval",
+        "$PRE_PACING.singleCellIonicModel",
     }
 
 

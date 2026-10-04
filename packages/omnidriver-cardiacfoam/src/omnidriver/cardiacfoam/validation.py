@@ -607,13 +607,17 @@ def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]
 
 def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDiagnostic", ...]:
     """Every rule the resolved case at ``case_root`` violates: the catalogue's
-    relations, the keys the supplied C++ (``mapping``) requires, and
-    cardiacFOAM's cross-field rules. A case with no ``electroProperties``
-    violates none."""
+    relations over its ``electroProperties`` and ``prePacingProperties``, the
+    keys the supplied C++ (``mapping``) requires, and cardiacFOAM's cross-field
+    rules. A case with no ``electroProperties`` violates none.
+    ``physicsProperties``' one key is judged by ``physics_layout``, and
+    ``controlDict`` is not judged: the catalogue requires its entries by
+    convention, which OpenFOAM's ``Foam::Time`` does not share."""
     from foamlib import FoamFile
 
-    from omnidriver.openfoam.case_rules import flatten, rule_diagnostics
+    from omnidriver.openfoam.case_rules import flatten, read_leaves, rule_diagnostics
 
+    from .cardiacfoam_plugin import CardiacFoamPlugin
     from .record_key_validation import _ELECTRO_ENTRIES_BY_PATH
     from .physics_layout import region_document
 
@@ -631,12 +635,26 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDi
             f"{electro_path} names no myocardiumSolver whose <solver>Coeffs block it holds: {exc!r}",
             source=str(electro_path), field="myocardiumSolver",
         ),)
+    catalogue = CardiacFoamPlugin.get_dictionary_catalog()
     document = electro_path.relative_to(case_root).as_posix()
     entries = tuple(_ELECTRO_ENTRIES_BY_PATH.values())
     rule_context = dict(context)
     infer_virtual_presence(rule_context)
+    found = rule_diagnostics(entries, rule_context, document=document, mapping=mapping, catalogue=catalogue)
+    pre_pacing = region_document(case_root, "electro", "prePacingProperties")
+    if pre_pacing is not None:
+        relative = pre_pacing.relative_to(case_root).as_posix()
+        try:
+            leaves = read_leaves(pre_pacing)
+        except (OSError, ValueError, KeyError) as exc:
+            found.append(diagnostic("error", "case_unreadable", f"{pre_pacing} cannot be read: {exc}", source=relative))
+        else:
+            found += rule_diagnostics(
+                catalogue.entries_for("prePacingProperties"), {"myocardiumSolver": str(solver), **leaves},
+                document=relative, mapping=mapping, catalogue=catalogue,
+            )
     return tuple(
-        rule_diagnostics(entries, rule_context, document=document, mapping=mapping)
+        found
         + cross_field_diagnostics(context)
         + _evaluate_pvj_resistance_requirement(case_root, context, electro_path)
     )

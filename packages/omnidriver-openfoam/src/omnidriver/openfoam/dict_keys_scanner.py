@@ -12,7 +12,7 @@ import re
 import tempfile
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Iterable, Iterator, Mapping
 
 from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, catalogued_paths, slot_key
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR
@@ -67,6 +67,8 @@ _DECLARATION = re.compile(
     r"(?P<type>(?:Foam::)?[A-Za-z_]\w*(?:\s*<[^;{}()]*>)?(?:::[A-Za-z_]\w*)*)\s*[&*]{0,2}\s*"
     r"(?P<name>[A-Za-z_]\w*)\s*(?=[;=({,)\[])"
 )
+#: ``IOobject name("document", ...)``: a document's identity, kept in a variable for the ``IOdictionary`` built from it.
+_IO_OBJECT_DECL = re.compile(r'\bIOobject\s+(?P<name>[A-Za-z_]\w*)\s*\(\s*"(?P<document>[^"]+)"')
 _FOR_ALL = re.compile(r"\bforAll(?:Const)?Iters?\s*\(\s*(?:\w+\s*,\s*)?(?P<expr>[^,()]+(?:\([^()]*\))?)\s*,\s*(?P<iter>\w+)\s*\)")
 _CLASS_HEAD = re.compile(r"\b(?:class|struct)\s+(?P<name>[A-Za-z_]\w*)\s*(?:final\s*)?(?::(?P<bases>[^{]*))?$")
 _TEMPLATE_PREFIX = re.compile(r"^\s*template\s*<")
@@ -641,6 +643,7 @@ class _Environment:
                     self.others.add(declared.group("name"))
         self.entries: dict[str, _Scope | None] = {}
         region = structure[function.start:function.end]
+        self.io_objects = {m.group("name"): m.group("document") for m in _IO_OBJECT_DECL.finditer(self.text[function.start:function.end])}
         events = [(m.start(), "dict", m) for m in _DICT_DECL.finditer(region)]
         events += [(m.start(), "entry", m) for m in _ENTRY_DECL.finditer(region)]
         events += [(m.start(), "forall", m) for m in _FOR_ALL.finditer(region)]
@@ -670,7 +673,8 @@ class _Environment:
                 )
             elif match.group("type") == "IOdictionary":
                 document = re.match(r'\s*IOobject\s*\(\s*"([^"]+)"', expression)
-                self.names[name] = _Scope(f"document:{document.group(1)}", ()) if document else None
+                named = document.group(1) if document else self.io_objects.get(expression.strip())
+                self.names[name] = _Scope(f"document:{named}", ()) if named else None
             else:
                 self.names[name] = self.resolve(expression)
 
@@ -1239,13 +1243,33 @@ def locate(scan: Scan, entries: Iterable, *, document: str) -> dict[str, frozens
         placed.update({root: frozenset(places) for root, places in found.items()})
 
 
-def _placements(scan: Scan, entries: tuple, documents: Iterable[str]) -> dict[str, set[tuple[str, ...]]]:
-    """Where each root sits in any of ``documents``, as :func:`locate` places it."""
-    placed: dict[str, set[tuple[str, ...]]] = {}
+@dataclass(frozen=True)
+class DocumentScan:
+    """The scan narrowed to the reads of one document, and where
+    :func:`locate` places each of that document's roots in it."""
+
+    scan: Scan
+    placed: dict[str, frozenset[tuple[str, ...]]]
+
+
+def document_scans(scan: Scan, documents: Mapping[str, Iterable]) -> dict[str, DocumentScan]:
+    """:class:`DocumentScan` of each of ``documents`` (name -> the entries that
+    catalogue its keys). A read is in a document when its receiver is that
+    document's own root or a root :func:`locate` places in it, and in every
+    document when its receiver is placed in none; a read known to be of
+    another dictionary is in none of them, so a key is never matched to a
+    catalogued key of a different dictionary by its name."""
+    placed = {name: locate(scan, entries, document=name) for name, entries in documents.items()}
+    homed = set().union(*placed.values())
+    found = {}
     for name in documents:
-        for root, places in locate(scan, entries, document=name).items():
-            placed.setdefault(root, set()).update(places)
-    return placed
+        reads = tuple(
+            read for read in scan.reads
+            if read.root in placed[name] or read.root == f"document:{name}"
+            or (read.root not in homed and not (read.root or "").startswith("document:"))
+        )
+        found[name] = DocumentScan(replace(scan, reads=reads), placed[name])
+    return found
 
 
 def reads_at(scan: Scan, placed: dict[str, frozenset[tuple[str, ...]]], trail: tuple[str, ...]) -> bool:
@@ -1357,7 +1381,8 @@ def _guards(scan: Scan) -> set[tuple]:
 def cxx_value_kind(scan: Scan, entry) -> str | None:
     """The ``value_kind`` the C++ reads ``entry`` as when its anchored, typed
     reads agree with each other and not with the catalogue; else ``None``. A
-    value is checked against this kind: the C++ is what rejects a bad one."""
+    value is checked against this kind: the C++ is what rejects a bad one.
+    ``scan`` is the entry's document's (:func:`document_scans`)."""
     path = tuple(slot_key(entry.driver_path).split("."))
     typed = [
         read for read in scan.reads
@@ -1382,10 +1407,12 @@ def _entry_arguments(read: DictRead, required: bool, driver_path: str | None) ->
 
 
 def catalog_report(
-    source_root: Path, *, allowlist_path: Path, entries: Iterable,
+    source_root: Path, *, allowlist_path: Path, catalogue,
     cache_root: Path | None = None, force: bool = False,
 ) -> CatalogReport:
-    """Compare the catalogue ``entries`` with the scan of ``source_root``.
+    """Compare ``catalogue`` (a ``DictionaryCatalog``) with the scan of
+    ``source_root``, document by document: a read is compared only with the
+    entries of the document it reads (:func:`document_scans`).
 
     ``allowlist_path`` is the plugin's reviewed file: ``unseen_reads``
     (why -> catalogued paths whose read the scan cannot see: read outside
@@ -1401,69 +1428,78 @@ def catalog_report(
     reviewed = json.loads(Path(allowlist_path).read_text())
     caller_guarded = {path for paths in reviewed.get("caller_guarded", {}).values() for path in paths}
     unseen = {path: why for why, paths in reviewed.get("unseen_reads", {}).items() for path in paths}
-    entries = tuple(entries)
-    catalogue = [(entry, tuple(path.split("."))) for entry, path in zip(entries, catalogued_paths(entries))]
-    containers = [path[:i] for _entry, path in catalogue for i in range(1, len(path))]
+    entries = tuple(catalogue.entries)
     guarded = _guards(scan)
 
     disagreements: list[str] = []
-    gone = unread_entries(scan, entries, reviewed)
-    unread = [
-        {
-            "driver_path": entry.driver_path, "value_kind": entry.value_kind, "required": entry.required,
-            "description": entry.description, "source_refs": list(entry.source_refs),
-            "note": "catalogued; the supplied C++ no longer reads it",
-        }
-        for entry in gone
-    ]
-    for entry, path in catalogue:
-        if _is_placeholder(path[-1]) or entry.driver_path in unseen or entry in gone:
-            continue
-        reads = [
-            read for read in scan.reads
-            if read.value_read and read.key == path[-1]
-            and _path_matches(read.scope + (read.key,), path) and _anchored(read, path, entry)
+    unread: list[dict] = []
+    menus: dict[str, ComparedMenu] = {}
+    found = document_scans(scan, catalogue.documents)
+    listings: dict[str, list[tuple]] = {}
+    containers: dict[str, list[tuple]] = {}
+    for document, document_entries in catalogue.documents.items():
+        view = found[document].scan
+        listings[document] = listing = [
+            (entry, tuple(path.split("."))) for entry, path in zip(document_entries, catalogued_paths(document_entries))
         ]
-        typed = [read for read in reads if read.type in _KINDS_BY_TYPE]
-        if typed and not any(entry.value_kind in _KINDS_BY_TYPE[read.type] for read in typed):
-            disagreements.append(
-                f"{entry.driver_path}: catalogue value_kind {entry.value_kind!r}; the C++ reads "
-                + ", ".join(sorted({f"{read.type} ({read.file}:{read.line})" for read in typed}))
-            )
-        if entry.required and reads and all(read.default is not None for read in reads):
-            disagreements.append(
-                f"{entry.driver_path}: catalogue says required; the C++ gives it a default ("
-                + ", ".join(sorted({f"{read.default} at {read.file}:{read.line}" for read in reads})) + ")"
-            )
-        if (
-            not entry.required and not entry.required_when and reads and entry.driver_path not in caller_guarded
-            and all(
-                _unconditional(read, guarded) for read in reads
-            )
-        ):
-            disagreements.append(
-                f"{entry.driver_path}: catalogue says optional; the C++ reads it with no default ("
-                + ", ".join(sorted({f"{read.file}:{read.line}" for read in reads})) + ")"
-            )
+        containers[document] = [path[:i] for _entry, path in listing for i in range(1, len(path))]
+        gone = unread_entries(view, document_entries, reviewed)
+        unread += [
+            {
+                "driver_path": entry.driver_path, "value_kind": entry.value_kind, "required": entry.required,
+                "description": entry.description, "source_refs": list(entry.source_refs),
+                "note": "catalogued; the supplied C++ no longer reads it",
+            }
+            for entry in gone
+        ]
+        for entry, path in listing:
+            if _is_placeholder(path[-1]) or entry.driver_path in unseen or entry in gone:
+                continue
+            reads = [
+                read for read in view.reads
+                if read.value_read and read.key == path[-1]
+                and _path_matches(read.scope + (read.key,), path) and _anchored(read, path, entry)
+            ]
+            typed = [read for read in reads if read.type in _KINDS_BY_TYPE]
+            if typed and not any(entry.value_kind in _KINDS_BY_TYPE[read.type] for read in typed):
+                disagreements.append(
+                    f"{entry.driver_path}: catalogue value_kind {entry.value_kind!r}; the C++ reads "
+                    + ", ".join(sorted({f"{read.type} ({read.file}:{read.line})" for read in typed}))
+                )
+            if entry.required and reads and all(read.default is not None for read in reads):
+                disagreements.append(
+                    f"{entry.driver_path}: catalogue says required; the C++ gives it a default ("
+                    + ", ".join(sorted({f"{read.default} at {read.file}:{read.line}" for read in reads})) + ")"
+                )
+            if (
+                not entry.required and not entry.required_when and reads and entry.driver_path not in caller_guarded
+                and all(_unconditional(read, guarded) for read in reads)
+            ):
+                disagreements.append(
+                    f"{entry.driver_path}: catalogue says optional; the C++ reads it with no default ("
+                    + ", ".join(sorted({f"{read.file}:{read.line}" for read in reads})) + ")"
+                )
+        menus.update(compared_menus(found[document], document_entries, reviewed))
     disagreements += [
         f"unseen_reads names {path}, which the catalogue does not list"
         for path in sorted(set(unseen) - {entry.driver_path for entry in entries})
     ]
 
-    documents = sorted({read.root.split(":", 1)[1] for read in scan.reads if (read.root or "").startswith("document:")})
-    placed = _placements(scan, entries, documents or [""])
     uncatalogued: list[dict] = []
     seen: set[tuple] = set()
+    homed = {document: frozenset(found[document].scan.reads) for document in found}
     for read in scan.reads:
         if read.key is None or read.scope is None or read.method in _PROBES:
             continue
         read_path = read.scope + (read.key,)
-        listed = [path for _entry, path in catalogue] + (containers if read.subdict else [])
+        homes = [document for document in found if read in homed[document]]
+        listed = [path for document in homes for _entry, path in listings[document]]
+        listed += [path for document in homes for path in containers[document]] if read.subdict else []
         if any(_path_matches(read_path, path) for path in listed) or (read.root, read_path, read.method) in seen:
             continue
         seen.add((read.root, read_path, read.method))
         required = _unconditional(read, guarded)
-        places = placed.get(read.root, ())
+        places = {place for document in homes for place in found[document].placed.get(read.root, ())}
         driver_path = ".".join(next(iter(places)) + read_path) if len(places) == 1 else None
         uncatalogued.append({
             "kind": "dictionary" if read.subdict else "key",
@@ -1477,7 +1513,6 @@ def catalog_report(
     selection = runtime_selection_report(
         scan.registrations, entries=entries, mapping=reviewed.get("runtime_selection", {}),
     ) if "runtime_selection" in reviewed else {"disagreements": [], "uncatalogued": [], "selector_values": {}}
-    menus = compared_menus(scan, entries, reviewed, documents=documents, placed=placed)
     for path, menu in sorted(menus.items()):
         listed = next(entry.enum_values for entry in entries if entry.driver_path == path)
         uncatalogued += [
@@ -1533,16 +1568,16 @@ class ComparedMenu:
 
 
 def compared_menus(
-    scan: Scan, entries: Iterable, reviewed: dict, *, documents: Iterable[str],
-    placed: dict[str, set[tuple[str, ...]]] | None = None,
+    found: DocumentScan, entries: Iterable, reviewed: dict,
 ) -> dict[str, ComparedMenu]:
     """The menu the C++ implies for each catalogue enum that no selection
-    table backs, by the enum's ``driver_path``: the literals its reads compare
-    the value against (``DictRead.compared``). A read counts for an entry when
-    it is anchored to it (``_anchored``) or its root is placed where the entry
-    sits in one of ``documents`` (``placed`` when the caller has them)."""
+    table backs, by the enum's ``driver_path``: the literals the reads of one
+    document (``found``, from :func:`document_scans`) compare the value
+    against (``DictRead.compared``). A read counts for an entry when it is
+    anchored to it (``_anchored``) or its root is placed where the entry
+    sits."""
     entries = tuple(entries)
-    placed = _placements(scan, entries, documents) if placed is None else placed
+    scan, placed = found.scan, found.placed
     by_path = reviewed.get("runtime_selection", {}).get("by_path", {})
     menus: dict[str, ComparedMenu] = {}
     for entry in entries:
@@ -1567,7 +1602,7 @@ def compared_menus(
     return menus
 
 
-def _placed_at(read: DictRead, full: tuple[str, ...], placed: dict[str, set[tuple[str, ...]]]) -> bool:
+def _placed_at(read: DictRead, full: tuple[str, ...], placed: dict[str, frozenset[tuple[str, ...]]]) -> bool:
     route = read.scope + (read.key,)
     return any(
         len(place) + len(route) == len(full) and all(_segment_matches(*pair) for pair in zip(place + route, full))

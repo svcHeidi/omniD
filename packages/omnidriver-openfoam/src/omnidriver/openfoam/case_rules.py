@@ -162,10 +162,11 @@ def match_dynamic_entry(key: str, entries: Iterable[Any]) -> tuple[Any, dict[str
     return None
 
 
-def _scan_facts(mapping: Any, entries: tuple[Any, ...], document: str):
-    """What the supplied C++ adds to the catalogue's rules; nothing when the source is not supplied."""
+def _scan_facts(mapping: Any, entries: tuple[Any, ...], document: str, catalogue: Any):
+    """What the supplied C++ adds to the catalogue's rules; nothing when the source is not supplied.
+    ``catalogue`` is the plugin's, so that a read is told from one of another document."""
     from .dict_keys_scanner import (
-        built_when, compared_menus, registered_menus, required_reads, supplied_scan, unread_entries,
+        built_when, compared_menus, document_scans, registered_menus, required_reads, supplied_scan, unread_entries,
     )
 
     scan = supplied_scan(mapping)
@@ -173,13 +174,15 @@ def _scan_facts(mapping: Any, entries: tuple[Any, ...], document: str):
         return {}, {}, {}, {}, set()
     reviewed = json.loads(Path(mapping.allowlist_path).read_text())
     name = document.rsplit("/", 1)[-1]
-    compared = compared_menus(scan, entries, reviewed, documents=[name])
+    documents = {**(catalogue.documents if catalogue is not None else {}), name: entries}
+    found = document_scans(scan, documents)[name]
+    compared = compared_menus(found, entries, reviewed)
     return (
         required_reads(scan, entries, document=name),
         registered_menus(reviewed, scan, entries),
         {path: menu.values for path, menu in compared.items()},
         built_when(reviewed, scan),
-        {entry.driver_path for entry in unread_entries(scan, entries, reviewed)},
+        {entry.driver_path for entry in unread_entries(found.scan, entries, reviewed)},
     )
 
 
@@ -262,15 +265,18 @@ def _scan_requirement(
 
 def rule_diagnostics(
     entries: Iterable[Any], context: Mapping[str, Any], *, document: str, mapping: Any = None,
+    catalogue: Any = None,
 ) -> list[StrictDiagnostic]:
     """Every catalogue relation ``context`` (a dictionary's leaves, keyed by
     dotted path below the catalogue's scope token) violates, each enum value
     outside its menu and, when the plugin's ``mapping`` supplies its C++
     source, each key that C++ requires and ``context`` lacks. A menu is the names
     the C++ registers for the enum when its source is supplied and maps it to a
-    selection table; otherwise the catalogue's, with the literals the C++ compares the value against."""
+    selection table; otherwise the catalogue's, with the literals the C++ compares the value against.
+    ``catalogue``, the plugin's ``DictionaryCatalog``, tells a read of this
+    document from one of another."""
     entries = tuple(entries)
-    requirements, registered, compared, built, unread = _scan_facts(mapping, entries, document)
+    requirements, registered, compared, built, unread = _scan_facts(mapping, entries, document, catalogue)
     templates = {
         key[: match.end()]
         for entry in entries if entry.dynamic_path

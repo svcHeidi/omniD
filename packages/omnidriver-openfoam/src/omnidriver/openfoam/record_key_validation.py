@@ -13,7 +13,7 @@ from typing import Any, Iterable
 from omnidriver.core.contracts.dictionary import validate_value_shape
 from omnidriver.core.runtime.record_surface import ANY_KEY
 
-from .dict_keys_scanner import cxx_value_kind, supplied_scan
+from .dict_keys_scanner import cxx_value_kind, document_scans, supplied_scan
 
 from .mutators import check_dictionary_word_is_safe
 
@@ -186,6 +186,8 @@ def make_validator(
     # a key the catalogue lacks passes only when the plugin's C++ reads it there
     # (``scanned_key``). Any other ``system/`` document is written as asked,
     # ``validated=False``, tagged by an inferred shape; anything else is refused.
+    views: dict[str, Any] = {}
+
     def validate(document: str, key_path: "tuple[str, ...]", value: Any) -> "tuple[str, bool]":
         dotted = ".".join(key_path)
         catalogued = documents.get(document)
@@ -210,7 +212,13 @@ def make_validator(
             for placeholder, bound_value in binding.items():
                 check_binding(entry, placeholder, bound_value)
             scan = supplied_scan(mapping())
-            kind = (scan is not None and cxx_value_kind(scan, entry)) or entry.value_kind
+            if scan is not None and scan.digest not in views:
+                views[scan.digest] = document_scans(scan, {
+                    name.rsplit("/", 1)[-1]: listed.entries() for name, listed in documents.items()
+                })
+            kind = (
+                scan is not None and cxx_value_kind(views[scan.digest][document.rsplit("/", 1)[-1]].scan, entry)
+            ) or entry.value_kind
             reasons = validate_value_shape(kind, value)
             if reasons:
                 raise ValueError(

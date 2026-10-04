@@ -7,9 +7,11 @@
   },
   "unseen_reads": {
     "read by upstream OpenFOAM's Foam::Time from system/controlDict, not by cardiacFOAM's source": [
+      "deltaT",
       "endTime",
       "purgeWrite",
       "startFrom",
+      "startTime",
       "stopAt",
       "writeControl",
       "writeFormat",
@@ -45,7 +47,11 @@
         "base": "ionicModel",
         "mode": "strict"
       },
-      "singleCellIonicModel": {
+      "$PRE_PACING.singleCellIonicModel": {
+        "base": "ionicModel",
+        "mode": "strict"
+      },
+      "$PRE_PACING.regions.<region_name>.singleCellIonicModel": {
         "base": "ionicModel",
         "mode": "strict"
       },
@@ -119,6 +125,8 @@
       "myocardiumSolver": "a UNION of the electroModel table, the myocardiumSolver table and the eikonalMyocardiumDomain factory: no single base to check against",
       "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.conductionSystemDomain": "a single accepted value (purkinjeGraphModel), registered in no table",
       "$ELECTRO_MODEL_COEFFS.batchedIntegrator": "selects the ODE integrator for compactBatched GPU models (euler / rushLarsen / rushLarsenHeun): an internal solver-algorithm enum with no runtime table",
+      "$PRE_PACING.batchedIntegrator": "euler/rushLarsen, the single cell's batchedIntegrator: a plain word batchedIonicModel.H compares against two literals",
+      "$PRE_PACING.regions.<region_name>.batchedIntegrator": "euler/rushLarsen, the single cell's batchedIntegrator: a plain word batchedIonicModel.H compares against two literals",
       "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.mode": "namedRegions/cellZoneRegions, a plain word parsed by ionicHeterogeneity.C",
       "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.transitionMode": "blend/hard, a plain word parsed by ionicHeterogeneity.C",
       "$ELECTRO_MODEL_COEFFS.ionicHeterogeneity.smoothing": "smoothstep, a plain word parsed by ionicHeterogeneity.C",

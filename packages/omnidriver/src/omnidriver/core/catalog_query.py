@@ -52,7 +52,7 @@ def cxx_evidence(
         return evidence
     report = scanner(
         root, allowlist_path=mapping.allowlist_path,
-        entries=driver_context.stack.call("get_dict_entries"),
+        catalogue=driver_context.stack.call("get_dictionary_catalog"),
         cache_root=cache_root, force=force,
     ).to_json()
     evidence["scanned"] = True

@@ -39,7 +39,7 @@ class _Provider:
 def _context(mapping, *, report=None):
     scans = []
 
-    def scan(root, *, allowlist_path, entries, cache_root=None, force=False):
+    def scan(root, *, allowlist_path, catalogue, cache_root=None, force=False):
         scans.append(root)
         return SimpleNamespace(to_json=lambda: report)
 

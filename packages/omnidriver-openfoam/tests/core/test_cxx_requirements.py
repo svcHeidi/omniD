@@ -241,7 +241,7 @@ def test_only_a_read_without_a_default_that_nothing_tests_first_is_required():
 
 def _facts(monkeypatch, reads, *, built=None):
     path = ("$S", "sealedHeartBoundary")
-    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: ({path: reads}, {}, {}, built or {}, set()))
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document, catalogue: ({path: reads}, {}, {}, built or {}, set()))
     return lambda context: rule_diagnostics((), context, document="constant/electroProperties", mapping=object())
 
 
@@ -273,7 +273,7 @@ def test_a_class_no_table_registers_is_judged_only_when_the_plugin_says_the_case
 
 def test_each_instance_of_a_block_the_case_holds_must_set_the_key(monkeypatch):
     path = ("$S", "domains", "<name>", "depth")
-    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: (
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document, catalogue: (
         {path: [_read("depth", selected_as=(("kind", "deep"),))]}, {}, {}, {}, set(),
     ))
     context = {"domains.a.kind": "deep", "domains.a.depth": 3, "domains.b.kind": "deep"}
@@ -335,7 +335,7 @@ def test_a_read_that_runs_only_under_a_branch_is_noted_never_judged_an_error(mon
 
 def test_a_block_builds_a_class_from_its_own_values_not_from_a_sibling_blocks(monkeypatch):
     path = ("$S", "ecgDomains", "<name>", "nBeats")
-    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: (
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document, catalogue: (
         {path: [_read("nBeats", selected_as=(("ecgSolver", "eikonalECG"),))]}, {}, {}, {}, set(),
     ))
     judge = lambda context: [i.field for i in rule_diagnostics((), context, document="doc", mapping=object())]
@@ -348,7 +348,7 @@ def test_a_block_builds_a_class_from_its_own_values_not_from_a_sibling_blocks(mo
 
 def test_a_required_read_of_the_document_itself_in_a_utilitys_main_is_enforced_whatever_the_case_selects(monkeypatch):
     path = ("fiberField",)
-    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: (
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document, catalogue: (
         {path: [_read("fiberField", function="main", root="document:setCardiacConductivityDict")]}, {}, {}, {}, set(),
     ))
     (found,) = rule_diagnostics((), {}, document="system/setCardiacConductivityDict", mapping=object())
@@ -360,7 +360,7 @@ def test_a_required_read_of_the_document_itself_in_a_utilitys_main_is_enforced_w
 def test_a_model_the_cxx_registers_is_accepted_and_one_it_no_longer_registers_is_refused(monkeypatch):
     entry = _entry("$S.ionicModel", value_kind="enum", enum_values=("TNNP", "Retired"))
     registered = {"$S.ionicModel": {"TNNP", "BrandNewModel"}}
-    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: ({}, registered, {}, {}, set()))
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document, catalogue: ({}, registered, {}, {}, set()))
 
     def judge(value):
         return [i.message for i in rule_diagnostics((entry,), {"ionicModel": value}, document="doc", mapping=object())]
@@ -369,7 +369,7 @@ def test_a_model_the_cxx_registers_is_accepted_and_one_it_no_longer_registers_is
     (refused,) = judge("Retired")
     assert "'Retired'" in refused and "the supplied C++ registers" in refused and "BrandNewModel" in refused
 
-    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: ({}, {}, {}, {}, set()))
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document, catalogue: ({}, {}, {}, {}, set()))
     assert judge("Retired") == []
     (listed,) = judge("BrandNewModel")
     assert "the catalogue lists" in listed
@@ -378,7 +378,7 @@ def test_a_model_the_cxx_registers_is_accepted_and_one_it_no_longer_registers_is
 def test_a_value_the_cxx_compares_is_accepted_beside_the_catalogues_menu(monkeypatch):
     entry = _entry("$S.scheme", value_kind="enum", enum_values=("unweightedHarmonic", "distanceWeightedHarmonic"))
     compared = {"$S.scheme": frozenset({"conormalHarmonic", "unweightedHarmonic"})}
-    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document: ({}, {}, compared, {}, set()))
+    monkeypatch.setattr(case_rules, "_scan_facts", lambda mapping, entries, document, catalogue: ({}, {}, compared, {}, set()))
 
     def judge(value):
         return [i.message for i in rule_diagnostics((entry,), {"scheme": value}, document="doc", mapping=object())]

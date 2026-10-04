@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from omnidriver.core.contracts.dictionary import DictEntry
+from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.openfoam.dict_keys_scanner import cached_scan, catalog_report, scan_source, source_digest
 from omnidriver.openfoam.record_key_validation import scanned_key
 
@@ -517,15 +518,28 @@ def test_an_unreadable_or_altered_cache_is_rescanned(tmp_path):
     assert not list(cache_file.parent.glob("*.tmp"))
 
 
+# cardiacFOAM src/genericWriter/prePacingIO.H: readEntries, the dictionary
+# passed to it being the case's prePacingProperties.
+PRE_PACING_READ_ENTRIES = '''inline void readEntries(const dictionary& dict, PrePacingConfig& cfg)
+{
+    cfg.enabled = dict.lookupOrDefault<bool>("enabled", cfg.enabled);
+    cfg.tolerance = dict.lookupOrDefault<scalar>("tolerance", cfg.tolerance);
+    cfg.minBeats = dict.lookupOrDefault<label>("minBeats", cfg.minBeats);
+    cfg.maxBeats = dict.lookupOrDefault<label>("maxBeats", cfg.maxBeats);
+    cfg.deltaT = dict.lookupOrDefault<scalar>("deltaT", cfg.deltaT);
+}
+'''
+
+
 def _entry(path: str, kind: str = "scalar", **fields) -> DictEntry:
     return DictEntry(driver_path=path, description="", value_kind=kind, **fields)
 
 
-def _report(tmp_path, entries, reviewed=None, **files):
+def _report(tmp_path, entries, reviewed=None, document="setPurkinjeSlabDict", **files):
     root = _tree(tmp_path, **(files or {"setPurkinjeSlab.C": SET_PURKINJE_SLAB}))
     allowlist = tmp_path / "reviewed.json"
     allowlist.write_text(json.dumps(reviewed or {}))
-    return catalog_report(root, allowlist_path=allowlist, entries=entries).to_json()
+    return catalog_report(root, allowlist_path=allowlist, catalogue=DictionaryCatalog({document: tuple(entries)})).to_json()
 
 
 def test_a_read_the_catalogue_lacks_is_uncatalogued_with_what_an_entry_needs(tmp_path):
@@ -568,7 +582,7 @@ def test_each_catalogue_claim_the_cxx_refutes_is_reported_with_both_sides_and_fa
 def test_a_catalogue_that_calls_optional_a_key_the_cxx_requires_is_reported(tmp_path):
     cited = ("src/generatePurkinjeTree.C",)
     entries = (_entry("$PURKINJE_TREE.<ventKey>.seed", "vector3", source_refs=cited),)
-    report = _report(tmp_path, entries, **{"generatePurkinjeTree.C": READ_VENT_PARAMS})
+    report = _report(tmp_path, entries, document="generatePurkinjeTreeDict", **{"generatePurkinjeTree.C": READ_VENT_PARAMS})
     assert report["disagreements"] == [
         "$PURKINJE_TREE.<ventKey>.seed: catalogue says optional; the C++ reads it with no default (generatePurkinjeTree.C:15)",
     ]
@@ -742,3 +756,29 @@ def test_a_read_is_placed_by_a_sibling_key_when_the_entry_cites_no_file(tmp_path
     )
     report = _report(tmp_path, entries, **{"extracellularPotentialDomain.C": EXTRACELLULAR_CONSTRUCTOR})
     assert [item["value"] for item in report["uncatalogued"] if item["kind"] == "compared_value"] == ["conormalHarmonic"]
+
+
+def test_a_key_is_compared_only_with_the_catalogue_of_the_document_its_dictionary_is_in(tmp_path):
+    cited = ("src/prePacingIO.H",)
+    root = _tree(tmp_path, **{"prePacingIO.H": PRE_PACING_READ_ENTRIES})
+    allowlist = tmp_path / "reviewed.json"
+    allowlist.write_text("{}")
+    catalogue = DictionaryCatalog({
+        "prePacingProperties": (
+            _entry("tolerance", source_refs=cited), _entry("minBeats", "integer", source_refs=cited),
+        ),
+        "controlDict": (_entry("deltaT"),),
+    })
+    report = catalog_report(root, allowlist_path=allowlist, catalogue=catalogue).to_json()
+    assert sorted(note["key"] for note in report["uncatalogued"]) == ["deltaT", "enabled", "maxBeats"]
+    assert [item["driver_path"] for item in report["unread"]] == ["deltaT"]
+
+
+def test_a_read_through_a_dictionary_the_scan_cannot_place_may_be_of_any_document(tmp_path):
+    root = _tree(tmp_path, **{"prePacingIO.H": PRE_PACING_READ_ENTRIES})
+    allowlist = tmp_path / "reviewed.json"
+    allowlist.write_text("{}")
+    catalogue = DictionaryCatalog({"controlDict": (_entry("deltaT"),)})
+    report = catalog_report(root, allowlist_path=allowlist, catalogue=catalogue).to_json()
+    assert sorted(note["key"] for note in report["uncatalogued"]) == ["enabled", "maxBeats", "minBeats", "tolerance"]
+    assert report["unread"] == []

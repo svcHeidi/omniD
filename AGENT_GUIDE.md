@@ -778,7 +778,7 @@ resolved case breaks N rule(s): <field>: <message>`), with the rule's own
 message. The rules read the resolved case's files, so a direct key, an axis
 and the native case all count.
 
-- **Catalogue relations** (cardiacFOAM's `electroProperties`, each cardiacCore
+- **Catalogue relations** (cardiacFOAM's `electroProperties` and `prePacingProperties`, each cardiacCore
   utility dictionary) — `applicable_when` / `required_when` / `forbidden_when` /
   `mutually_exclusive_with` / `co_required_with`, once per instance of a
   `<name>` block. A predicate on a selector the case omits reads the

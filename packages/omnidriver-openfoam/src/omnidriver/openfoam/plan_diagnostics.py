@@ -136,7 +136,7 @@ def _report(driver_context: Any, mapping: Any, source_root: Path | None, scratch
     return scanner(
         source_root,
         allowlist_path=mapping.allowlist_path,
-        entries=driver_context.stack.call("get_dict_entries"),
+        catalogue=driver_context.stack.call("get_dictionary_catalog"),
         cache_root=scratch_root,
     ).to_json()
 
