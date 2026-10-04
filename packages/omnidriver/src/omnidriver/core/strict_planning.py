@@ -371,6 +371,7 @@ def _strict_plan_for_spec(
     capability_manifest = _jsonable(raw_capability_manifest)
     all_diagnostics = plan_diagnostics + env_diagnostics
     failed = has_error(plan_diagnostics)
+    blocked = has_error(env_diagnostics)
     run_document.status = "failed" if failed else "planned"
     run_document.validation = {
         "status": "failed" if failed else "ok",
@@ -385,7 +386,7 @@ def _strict_plan_for_spec(
     if unresolved_dictionaries:
         run_document.intent["unresolved_configuration_dictionaries"] = unresolved_dictionaries
     return StrictPlanReport(
-        status="failed" if failed else "ok",
+        status="failed" if failed else "blocked" if blocked else "ok",
         entry=entry,
         resolved_entry={
             "entry_name": spec.metadata.get("entry_name", entry),

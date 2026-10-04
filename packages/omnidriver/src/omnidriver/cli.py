@@ -1393,7 +1393,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             plan_status=report.status,
             environment_diagnostics=report.environment_diagnostics,
         )
-        return 0 if readiness.structural_ok else 1
+        return 0 if readiness.launchable else 1
 
     if args.action in {"step", "run"}:
         if not (args.strict or args.run_document):

@@ -247,7 +247,7 @@ def _record_sweep_run(
             report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
             payload = report.to_json()
             if report.status != "ok":
-                plan_error = "strict_plan reported failed status"
+                plan_error = f"strict_plan reported {report.status} status"
             else:
                 run_document = payload["run_document"]
                 workflow_state_path = _workflow_state_path_from_run_document(run_document)

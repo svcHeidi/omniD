@@ -347,6 +347,9 @@ class _RecordSweepWriterPlugin(ToyProvider):
     def get_config_value_reader(self):
         return _record_read_current_value
 
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
+        return ()
+
 
 def _toy_record() -> TutorialRecord:
     return TutorialRecord(
