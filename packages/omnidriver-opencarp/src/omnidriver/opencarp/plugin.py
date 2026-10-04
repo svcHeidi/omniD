@@ -113,7 +113,7 @@ class OpenCARPPlugin:
 
     # -- rules
     def validate_run_semantics(self, case_root):
-        return case_diagnostics(case_root)
+        return tuple(item for item in case_diagnostics(case_root) if item.level == "error")
 
     def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
         del workflow_dag, env, scratch_root, driver_context

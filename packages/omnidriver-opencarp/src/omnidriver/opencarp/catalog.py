@@ -16,6 +16,12 @@ VALUE_KIND_BY_TYPE = {
     "String": "string", "RFile": "string", "WFile": "string",
 }
 _INDEX = re.compile(r"\[\d+\]")
+_NUMBER = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
+
+
+def number_of(text: str | None) -> float | None:
+    """The value of a number spelled as +Help or a .par spells it (``5.``, ``.5``, ``+1``, ``1e-3``), else ``None``."""
+    return float(text) if text is not None and _NUMBER.fullmatch(text.strip()) else None
 
 
 @dataclass(frozen=True)

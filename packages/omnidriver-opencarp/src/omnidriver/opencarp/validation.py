@@ -10,11 +10,10 @@ from typing import Any, Callable, Mapping
 from omnidriver.core.contracts.dictionary import validate_value_shape
 from omnidriver.core.tutorial_records import TutorialRecord, TutorialRecordError
 
-from .catalog import load_catalog, template_name
+from .catalog import load_catalog, number_of, template_name
 from .par_format import ParFormatError, parse_par, unquote
 from .records import TUTORIAL_RECORDS
 
-_LITERAL_NUMBER = re.compile(r"^-?\d+(\.\d*)?([eE][+-]?\d+)?$")
 _TOP_INDEX = re.compile(r"^(?P<array>[A-Za-z_]\w*)\[(?P<index>\d+)\]")
 
 
@@ -112,8 +111,8 @@ def _catalog_check(document: str, key: str, value: Any) -> tuple[str, bool]:
         if spelled not in spec.menu:
             raise TutorialRecordError(f"{document}:{key} = {value!r} is not one of {list(spec.menu)}")
     for bound, label, outside in ((spec.minimum, "minimum", lambda v, b: v < b), (spec.maximum, "maximum", lambda v, b: v > b)):
-        if bound is not None and _LITERAL_NUMBER.match(bound) and spec.value_kind in ("integer", "scalar"):
-            if outside(float(value), float(bound)):
+        if number_of(bound) is not None and spec.value_kind in ("integer", "scalar"):
+            if outside(float(value), number_of(bound)):
                 raise TutorialRecordError(f"{document}:{key} = {value!r} is beyond its {label} {bound}")
     return spec.value_kind, True
 
