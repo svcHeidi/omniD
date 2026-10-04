@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from omnidriver.cli import main
+from cli_refusal import refusal
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.strict_planning import strict_plan
 from omnidriver.core.tutorial_records import TutorialRecordError, case_folder_record, lookup_record
@@ -101,9 +102,8 @@ def test_the_cli_runs_a_case_folder_through_the_declared_entrypoint(tmp_path, ca
     ["sweep-plan", "--case", "dir", "--spec", "sweep.json"],
     ["plan", "--strict"],
 ])
-def test_case_is_exclusive_of_entry_and_cases_root_and_one_of_them_is_required(argv):
-    with pytest.raises(SystemExit):
-        main([*argv, "--plugin", _DECLARED])
+def test_case_is_exclusive_of_entry_and_cases_root_and_one_of_them_is_required(argv, capsys):
+    refusal(capsys, [*argv, "--plugin", _DECLARED])
 
 
 def test_the_cli_refuses_an_unknown_entry_as_json(tmp_path, capsys):

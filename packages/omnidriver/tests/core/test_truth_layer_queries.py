@@ -7,6 +7,10 @@ from pathlib import Path
 import pytest
 
 from omnidriver.cli import main
+from omnidriver.core import catalog_query
+from omnidriver.core.tutorial_records import TutorialRecordError
+
+from cli_refusal import refusal
 from omnidriver.core.plugin_profile import load_plugin_profile
 
 _TOY = "plugins.toy:ToyStack"
@@ -63,32 +67,38 @@ def test_catalog_refuses_an_entry_that_is_not_a_record_as_json(tmp_path, capsys)
     assert exit_code == 1 and payload["status"] == "failed"
 
 
-def test_document_and_key_belong_to_catalog_only(tmp_path):
-    with pytest.raises(SystemExit):
-        main(["describe", "--plugin", _TOY, "--entry", "toyTutorial", "--key", "cells"])
+def test_document_and_key_belong_to_catalog_only(tmp_path, capsys):
+    assert "only valid with action=catalog" in refusal(
+        capsys, ["describe", "--plugin", _TOY, "--entry", "toyTutorial", "--key", "cells"],
+    )
 
 
-def test_catalog_uncatalogued_and_scan_answer_for_the_whole_stack(tmp_path, capsys):
-    assert main(["catalog", "--plugin", _TOY, "--uncatalogued"]) == 0
-    payload = json.loads(capsys.readouterr().out)
-    assert (payload["cxx_source"], payload["uncatalogued"]) == (None, [])
+def test_catalog_uncatalogued_and_scan_refuse_a_stack_with_no_cxx_by_name(tmp_path, capsys):
+    assert "declares no C++ source" in refusal(capsys, ["catalog", "--plugin", _TOY, "--uncatalogued"])
     assert main(["scan", "--plugin", _TOY, "--scratch-dir", str(tmp_path)]) == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["error"] == "the stack declares no C++ source"
 
 
 def test_uncatalogued_takes_no_entry_and_scan_needs_a_scratch_root(tmp_path, capsys, monkeypatch):
-    with pytest.raises(SystemExit):
-        main(["catalog", "--plugin", _TOY, "--uncatalogued", "--entry", "toyTutorial"])
+    assert "take no --entry" in refusal(capsys, ["catalog", "--plugin", _TOY, "--uncatalogued", "--entry", "toyTutorial"])
     monkeypatch.delenv("OMNIDRIVER_SCRATCH_DIR", raising=False)
     assert main(["scan", "--plugin", _TOY]) == 1
     assert "scratch root" in json.loads(capsys.readouterr().out)["error"]
 
 
-def test_catalog_unread_answers_for_the_whole_stack_and_excludes_uncatalogued(tmp_path, capsys):
-    assert main(["catalog", "--plugin", _TOY, "--unread"]) == 0
-    payload = json.loads(capsys.readouterr().out)
-    assert (payload["cxx_source"], payload["unread"]) == (None, [])
-    assert "uncatalogued" not in payload and "no longer reads" in payload["how"]
-    with pytest.raises(SystemExit):
-        main(["catalog", "--plugin", _TOY, "--unread", "--uncatalogued"])
+def test_catalog_unread_refuses_a_stack_with_no_cxx_and_is_exclusive_of_uncatalogued(tmp_path, capsys):
+    assert "declares no C++ source" in refusal(capsys, ["catalog", "--plugin", _TOY, "--unread"])
+    assert "pass one" in refusal(capsys, ["catalog", "--plugin", _TOY, "--unread", "--uncatalogued"])
+
+
+@pytest.mark.parametrize("unread", [False, True])
+def test_a_scan_that_was_not_run_is_refused_by_name_never_an_empty_list(monkeypatch, unread):
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    monkeypatch.setattr(catalog_query, "cxx_evidence", lambda *a, **k: {
+        "variable": "TOY_NATIVE_TREE", "relative": "../src", "root": None,
+        "scanned": False, "reason": "source root not supplied",
+    })
+    with pytest.raises(TutorialRecordError, match="nothing was scanned.*source root not supplied.*TOY_NATIVE_TREE"):
+        catalog_query.scan_query(load_plugin_context(_TOY), cache_root=None, unread=unread)

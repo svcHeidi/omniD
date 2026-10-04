@@ -6,6 +6,7 @@ import json
 import pytest
 
 from omnidriver.cli import main
+from cli_refusal import refusal
 from plugins.toy import PROBING_PLUGIN, TOY_PLUGIN, write_toy_native_case
 
 
@@ -63,8 +64,9 @@ def test_check_needs_a_scratch_root_and_takes_no_entry(tmp_path, capsys, monkeyp
     monkeypatch.delenv("OMNIDRIVER_SCRATCH_DIR", raising=False)
     assert main(["check", "--plugin", TOY_PLUGIN, "--cases-root", str(tmp_path)]) == 1
     assert "scratch" in json.loads(capsys.readouterr().out)["error"].lower()
-    with pytest.raises(SystemExit):
-        main(["check", "--plugin", TOY_PLUGIN, "--scratch-dir", str(tmp_path / "s"), "--entry", "toyTutorial"])
+    assert "takes --plugin or --repo" in refusal(
+        capsys, ["check", "--plugin", TOY_PLUGIN, "--scratch-dir", str(tmp_path / "s"), "--entry", "toyTutorial"],
+    )
 
 
 def test_a_probe_of_the_record_reports_beside_the_checks_and_a_drifted_one_fails_the_record(tmp_path, capsys):

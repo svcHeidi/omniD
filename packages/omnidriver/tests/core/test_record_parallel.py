@@ -20,6 +20,7 @@ from omnidriver.core.tutorial_records import (
     PARALLEL_STUDY_NAME, AxisContract, AxisResult, TutorialRecord, TutorialRecordError, WorkflowStep,
 )
 
+from cli_refusal import refusal
 from plugins.toy import PARALLEL_TOY_PLUGIN
 
 TESTS_ROOT = Path(__file__).resolve().parents[1]
@@ -346,9 +347,7 @@ def test_describe_previews_the_cli_request(tmp_path, capsys, monkeypatch):
     ["recover", "--case-root", "c", "--output-dir", "o", "--parallel"],
 ])
 def test_the_flag_is_refused_where_nothing_is_planned(argv, capsys):
-    with pytest.raises(SystemExit):
-        main(argv)
-    assert "--parallel" in capsys.readouterr().err
+    assert "--parallel" in refusal(capsys, argv)
 
 
 def test_a_sweep_compares_serial_against_parallel_and_both_run(tmp_path, monkeypatch):

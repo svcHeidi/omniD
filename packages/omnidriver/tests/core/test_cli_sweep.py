@@ -97,8 +97,7 @@ class TestCliSweepActions(unittest.TestCase):
 
     def test_fresh_rejected_for_describe_action(self):
         with mock.patch("builtins.print"):
-            with self.assertRaises(SystemExit):
-                main(["describe", "--entry", "singleCell", "--fresh"])
+            assert main(["describe", "--entry", "singleCell", "--fresh"]) == 1
 
     def test_sweep_plan_exits_nonzero_when_a_case_failed(self):
         with mock.patch(
@@ -117,13 +116,11 @@ class TestCliSweepActions(unittest.TestCase):
 
     def test_sweep_plan_rejects_entry_flag(self):
         with mock.patch("builtins.print"):
-            with self.assertRaises(SystemExit):
-                main(["sweep-plan", "--plugin", _PLUGIN, "--spec", "sweep.json", "--output-dir", "/tmp/out", "--entry", "singleCell"])
+            assert main(["sweep-plan", "--plugin", _PLUGIN, "--spec", "sweep.json", "--output-dir", "/tmp/out", "--entry", "singleCell"]) == 1
 
     def test_non_sweep_action_rejects_spec_flag(self):
         with mock.patch("builtins.print"):
-            with self.assertRaises(SystemExit):
-                main(["plan", "--strict", "--entry", "singleCell", "--spec", "sweep.json"])
+            assert main(["plan", "--strict", "--entry", "singleCell", "--spec", "sweep.json"]) == 1
 
 
 if __name__ == "__main__":

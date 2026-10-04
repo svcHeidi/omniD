@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from omnidriver.cli import main
+from cli_refusal import refusal
 from omnidriver.core.environment_connection import environment_report, render_prefix, stack_connection
 from omnidriver.core.plugin_profile import EnvironmentConnection, SuppliedVariable, load_plugin_profile
 from omnidriver.core.runtime.host_facts import host_facts
@@ -117,9 +118,8 @@ def test_two_providers_may_not_both_name_a_file_to_source():
         stack_connection(context)
 
 
-def test_env_takes_only_a_plugin():
-    with pytest.raises(SystemExit):
-        main(["env", "--plugin", _TOY, "--entry", "toyTutorial"])
+def test_env_takes_only_a_plugin(capsys):
+    assert "action=env takes only" in refusal(capsys, ["env", "--plugin", _TOY, "--entry", "toyTutorial"])
 
 
 def test_a_launcher_step_records_the_launcher_and_its_ranks(tmp_path):

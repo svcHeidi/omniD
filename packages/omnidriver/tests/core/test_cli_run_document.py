@@ -14,6 +14,7 @@ from conftest import skip_without_repo
 pytestmark = [skip_without_repo]
 
 from omnidriver.cli import main
+from cli_refusal import refusal
 
 PLUGIN = "plugins.toy:E2EFolderPlugin"
 SCRIPT = "run-test-case"
@@ -143,28 +144,16 @@ def test_run_document_rejects_unknown_command() -> None:
         assert "unknown_workflow_command" in codes
 
 
-def test_run_document_and_entry_are_mutually_exclusive() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        doc_path = Path(temp_dir) / "run.json"
-        doc_path.write_text("{}")
-        try:
-            main(["run", "--run-document", str(doc_path), "--entry", "toyTutorial"])
-        except SystemExit as exc:
-            assert exc.code == 2  # argparse parser.error
-            return
-        raise AssertionError("expected SystemExit from mutually-exclusive args")
+def test_run_document_and_entry_are_mutually_exclusive(tmp_path, capsys) -> None:
+    doc_path = tmp_path / "run.json"
+    doc_path.write_text("{}")
+    assert "mutually exclusive" in refusal(capsys, ["run", "--run-document", str(doc_path), "--entry", "toyTutorial"])
 
 
-def test_run_document_only_valid_for_run_and_step() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        doc_path = Path(temp_dir) / "run.json"
-        doc_path.write_text("{}")
-        try:
-            main(["describe", "--run-document", str(doc_path)])
-        except SystemExit as exc:
-            assert exc.code == 2
-            return
-        raise AssertionError("expected SystemExit for --run-document with describe")
+def test_run_document_only_valid_for_run_and_step(tmp_path, capsys) -> None:
+    doc_path = tmp_path / "run.json"
+    doc_path.write_text("{}")
+    assert "only valid with action=run or action=step" in refusal(capsys, ["describe", "--run-document", str(doc_path)])
 
 
 def test_run_document_respects_allowed_runs_root(tmp_path) -> None:

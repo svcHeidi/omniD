@@ -410,8 +410,8 @@ def test_cli_parses_repeated_input_flags():
 
 
 def test_cli_refuses_input_with_no_equals_sign(capsys):
-    from omnidriver.cli import main
+    from cli_refusal import refusal
 
-    with pytest.raises(SystemExit):
-        main(["describe", "--entry", "humanSlab", "--input", "anatomy-only-a-dir"])
-    assert "NAME=PATH" in capsys.readouterr().err
+    assert "must be NAME=PATH" in refusal(
+        capsys, ["describe", "--plugin", "plugins.toy:ToyStack", "--entry", "toyTutorial", "--input", "anatomy-only-a-dir"],
+    )

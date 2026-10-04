@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from omnidriver.cli import main
+from cli_refusal import refusal
 from omnidriver.core import case_transaction
 from plugins.toy import EXPLAINING_PLUGIN, RULE_CHECKING_PLUGIN, write_toy_native_case
 
@@ -108,9 +109,9 @@ def test_an_axis_name_is_refused_because_it_changes_the_plan(case):
 
 
 def test_apply_needs_a_staged_case_so_it_refuses_entry(tmp_path, capsys):
-    with pytest.raises(SystemExit):
-        main(["step", "--plugin", PLUGIN, "--entry", "toyTutorial", "--step", "solve", "--apply", "p.json"])
-    assert "--run-document" in capsys.readouterr().err
+    assert "--run-document" in refusal(
+        capsys, ["step", "--plugin", PLUGIN, "--entry", "toyTutorial", "--step", "solve", "--apply", "p.json"],
+    )
 
 
 def test_an_interrupted_edit_blocks_the_case_until_recover_restores_it(case, monkeypatch):

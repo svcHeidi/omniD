@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 from omnidriver.cli import main
+
+from cli_refusal import refusal
 from omnidriver.core.repository import (
     REPOSITORY_FILE,
     RepositoryError,
@@ -120,9 +122,7 @@ def test_plugin_and_repository_that_select_the_same_stack_agree(tmp_path, capsys
 
 def test_plugin_and_repository_that_select_different_stacks_are_refused_by_name(tmp_path, capsys):
     repo = _toy_repo(tmp_path)
-    with pytest.raises(SystemExit):
-        main(["describe", "--entry", "toyTutorial", "--repo", str(repo), "--plugin", OTHER_PLUGIN])
-    error = capsys.readouterr().err
+    error = refusal(capsys, ["describe", "--entry", "toyTutorial", "--repo", str(repo), "--plugin", OTHER_PLUGIN])
     assert OTHER_PLUGIN in error and str(repo.resolve() / REPOSITORY_FILE) in error
     assert "capability_digest" in error
 
@@ -134,30 +134,24 @@ def test_plugin_and_repository_that_select_different_stacks_are_refused_by_name(
 def test_with_no_plugin_and_no_repository_a_plugin_is_required_by_name(tmp_path, capsys, monkeypatch, argv):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("OMNIDRIVER_CASES_ROOT", raising=False)
-    with pytest.raises(SystemExit):
-        main(argv)
-    assert "no plugin was selected" in capsys.readouterr().err
+    assert "no plugin was selected" in refusal(capsys, argv)
 
 
 def test_the_working_directory_is_never_searched_for_a_repository(tmp_path, capsys, monkeypatch):
     repo = _toy_repo(tmp_path)
     monkeypatch.chdir(repo / "tutorials")
     monkeypatch.delenv("OMNIDRIVER_CASES_ROOT", raising=False)
-    with pytest.raises(SystemExit):
-        main(["describe", "--entry", "toyTutorial"])
-    assert "no plugin was selected" in capsys.readouterr().err
+    assert "no plugin was selected" in refusal(capsys, ["describe", "--entry", "toyTutorial"])
 
 
 def test_repo_and_cases_root_are_exclusive(tmp_path, capsys):
     repo = _toy_repo(tmp_path)
-    with pytest.raises(SystemExit):
-        main(["describe", "--entry", "toyTutorial", "--repo", str(repo), "--cases-root", str(repo / "tutorials")])
-    assert "--repo supplies the cases root" in capsys.readouterr().err
+    assert "--repo supplies the cases root" in refusal(
+        capsys, ["describe", "--entry", "toyTutorial", "--repo", str(repo), "--cases-root", str(repo / "tutorials")],
+    )
 
 
 def test_a_broken_repository_file_is_refused_not_ignored(tmp_path, capsys):
     repo = _toy_repo(tmp_path)
     (repo / REPOSITORY_FILE).write_text('plugin = "x"\n')
-    with pytest.raises(SystemExit):
-        main(["describe", "--entry", "toyTutorial", "--repo", str(repo), "--plugin", PLUGIN])
-    assert "must set exactly" in capsys.readouterr().err
+    assert "must set exactly" in refusal(capsys, ["describe", "--entry", "toyTutorial", "--repo", str(repo), "--plugin", PLUGIN])

@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from .plugin_interface import DriverContext
 
 from .capability_manifest import capability_manifest
+from .plugin_discovery import discover_plugins
 from .scripts import list_scripts
 from .tutorial_records import TutorialRecord, TutorialRecordError, lookup_record
 
@@ -37,6 +38,28 @@ def _plugin_catalogs(driver_context: "DriverContext") -> dict[str, Any]:
     return _serialize(
         dict(driver_context.stack.call("get_named_catalogs"))
     )
+
+
+def describe_stack(driver_context: "DriverContext") -> dict[str, Any]:
+    """What the selected stack offers, for a caller that has not chosen a record:
+    its records (with their axes, inputs and whether a run may be parallel), the
+    repository's scripts, and the plugin ids installed here (what ``--plugin`` takes)."""
+    records = driver_context.stack.call("get_tutorial_records")
+    return {
+        "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
+        "records": [
+            {
+                "name": name,
+                "native_case_relpath": record.native_case_relpath,
+                "axes": sorted(record.axis_names()),
+                "inputs": sorted(input_.name for input_ in record.inputs),
+                "serial_only": record.serial_only,
+            }
+            for name, record in sorted(records.items())
+        ],
+        "scripts": list_scripts(driver_context),
+        "installed_plugins": sorted(discover_plugins()),
+    }
 
 
 def describe_entry(

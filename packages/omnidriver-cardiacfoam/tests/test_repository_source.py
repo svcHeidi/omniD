@@ -32,6 +32,13 @@ def _env(capsys, *argv):
     return {item["name"]: item for item in json.loads(capsys.readouterr().out)["variables"]}
 
 
+def _refusal(capsys, argv):
+    assert main(argv) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "failed"
+    return payload["error"]
+
+
 def test_the_repository_supplies_the_variable_the_profile_declares(tmp_path, capsys):
     repo = _repo(tmp_path / "repo")
     variables = _env(capsys, "--repo", str(repo))
@@ -41,18 +48,14 @@ def test_the_repository_supplies_the_variable_the_profile_declares(tmp_path, cap
 
 def test_a_source_that_is_not_where_the_profile_finds_it_is_refused(tmp_path, capsys):
     repo = _repo(tmp_path / "repo", source="elsewhere")
-    with pytest.raises(SystemExit):
-        main(["env", "--repo", str(repo)])
-    error = capsys.readouterr().err
+    error = _refusal(capsys, ["env", "--repo", str(repo)])
     assert "declares source" in error and "beside the tutorials folder" in error
 
 
 def test_a_variable_that_disagrees_with_the_repository_is_refused(tmp_path, capsys, monkeypatch):
     repo = _repo(tmp_path / "repo")
     monkeypatch.setenv(VARIABLE, str(tmp_path / "other"))
-    with pytest.raises(SystemExit):
-        main(["env", "--repo", str(repo)])
-    assert f"{VARIABLE}=" in capsys.readouterr().err
+    assert f"{VARIABLE}=" in _refusal(capsys, ["env", "--repo", str(repo)])
 
 
 def test_the_variable_may_state_what_the_repository_declares(tmp_path, capsys, monkeypatch):

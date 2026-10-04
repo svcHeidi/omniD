@@ -23,8 +23,9 @@ from .core.runtime.case_records import (
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
 from .core.case_transaction import CaseTransactionError, pending_transaction, recover_case_transaction
 from .core.environment_connection import load_environment
+from .core.plugin_discovery import discover_plugins
 from .core.runtime.sweep_runner import sweep_plan, sweep_run
-from omnidriver.core.introspection import describe_entry
+from omnidriver.core.introspection import describe_entry, describe_stack
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.provider_identity import stack_identity_mismatch
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR, default_sweep_output_dir, resolve_scratch_root
@@ -624,17 +625,33 @@ def _compare_quantities(args) -> int:
     return 0
 
 
+class _Refusal(Exception):
+    """A command the caller got wrong, printed as the one refusal shape: ``{"status": "failed", "error": ...}``, exit 1."""
+
+
+class _RefusingParser(argparse.ArgumentParser):
+    def error(self, message: str):
+        raise _Refusal(message)
+
+
 def resolve_cases_root(explicit: str | Path | None = None) -> Path:
-    """Where to look for cases, resolved at the public edge only:
-    explicit, then OMNIDRIVER_CASES_ROOT, then the current working directory.
-    Core itself resolves nothing.
+    """Where the cases are, resolved at the public edge only: ``--cases-root``,
+    else OMNIDRIVER_CASES_ROOT. A cases root has no ambient truth, so with
+    neither the command is refused by name, and so is a folder that is not there.
     """
-    if explicit is not None:
-        return Path(explicit).expanduser()
-    from_env = os.environ.get("OMNIDRIVER_CASES_ROOT")
-    if from_env:
-        return Path(from_env).expanduser()
-    return Path.cwd()
+    supplied = explicit if explicit is not None else os.environ.get("OMNIDRIVER_CASES_ROOT") or None
+    if supplied is None:
+        raise _Refusal(
+            "no cases root was supplied: pass --cases-root <dir> or --repo <dir> "
+            "(or set OMNIDRIVER_CASES_ROOT)"
+        )
+    return _existing_cases_root(Path(supplied).expanduser())
+
+
+def _existing_cases_root(root: Path) -> Path:
+    if not root.is_dir():
+        raise _Refusal(f"the cases root {root} is not a directory")
+    return root
 
 
 def _parallel_value(text: str) -> int:
@@ -646,7 +663,7 @@ def _parallel_value(text: str) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _RefusingParser(
         description=(
             "Simulation experiment automation driver. `omnidriver build --help` builds a case "
             "from a solver's catalogue when there is no native case."
@@ -688,7 +705,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=False,
         help=(
             "The tutorial record to describe, plan or run: a name the selected "
-            "stack registers (`describe` lists them)."
+            "stack registers (`describe` with no --entry lists them)."
         ),
     )
     parser.add_argument(
@@ -793,8 +810,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cases-root",
         help=(
-            "Path to the tutorials folder. Defaults to $OMNIDRIVER_CASES_ROOT, "
-            "then the current working directory."
+            "Path to the tutorials folder. Defaults to $OMNIDRIVER_CASES_ROOT; "
+            "with neither, and no --repo, a command that needs one is refused."
         ),
     )
     parser.add_argument(
@@ -1051,8 +1068,10 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         args.parallel is not None, args.inputs,
     )):
         parser.error("action=scan takes only --plugin or --repo, and --scratch-dir: it rescans the stack's C++ source")
+    if args.action == "describe" and not args.entry and not args.case and (args.parallel is not None or args.inputs):
+        parser.error("--parallel/--input preview a record: pass --entry or --case, or omit them to list the stack")
     if not args.run_document and not args.entry and not args.case and not (args.uncatalogued or args.unread) and args.action not in {
-        "recover", "sweep-plan", "sweep-run", "compare", "env", "scan", "check",
+        "recover", "sweep-plan", "sweep-run", "compare", "env", "scan", "check", "describe",
     }:
         parser.error("--entry or --case is required (or use --run-document with action=run/step)")
 
@@ -1100,7 +1119,11 @@ def _scan_or_uncatalogued(args, driver_context) -> int:
             return 1
         cache_root = None
     if args.action == "catalog":
-        print(json.dumps(scan_query(driver_context, cache_root=cache_root, unread=args.unread), indent=2))
+        try:
+            print(json.dumps(scan_query(driver_context, cache_root=cache_root, unread=args.unread), indent=2))
+        except TutorialRecordError as exc:
+            print(json.dumps({"status": "failed", "action": "catalog", "error": str(exc)}, indent=2))
+            return 1
         return 0
     cxx = cxx_evidence(driver_context, os.environ, cache_root=cache_root, force=True)
     summary: dict = {
@@ -1166,7 +1189,8 @@ def _select_stack(parser: argparse.ArgumentParser, args):
         context = load_plugin_context(selector)
         declared = load_plugin_context(repository.plugin) if repository is not None and args.plugin else None
     except Exception as exc:
-        parser.error(f"Failed to load plugin {selector!r}: {exc}")
+        installed = "" if ":" in selector else f"; installed plugins: {sorted(discover_plugins())}"
+        parser.error(f"Failed to load plugin {selector!r}: {exc}{installed}")
     if declared is not None:
         mismatch = stack_identity_mismatch(declared.identity.to_json(), context.identity.to_json())
         if mismatch:
@@ -1205,14 +1229,17 @@ def main(argv: list[str] | None = None) -> int:
 
         return build_main(argv[1:])
     parser = build_parser()
-    args = parser.parse_args(argv)
-    _validate_args(parser, args)
     previous = os.environ.get(SCRATCH_ENV_VAR)
-    if args.scratch_dir and args.action != "recover":
-        # The one supplied scratch root, for the layers that cache a scan there.
-        os.environ[SCRATCH_ENV_VAR] = str(Path(args.scratch_dir).expanduser())
     try:
+        args = parser.parse_args(argv)
+        _validate_args(parser, args)
+        if args.scratch_dir and args.action != "recover":
+            # The one supplied scratch root, for the layers that cache a scan there.
+            os.environ[SCRATCH_ENV_VAR] = str(Path(args.scratch_dir).expanduser())
         return _dispatch(parser, args)
+    except _Refusal as exc:
+        print(json.dumps({"status": "failed", "error": str(exc)}, indent=2))
+        return 1
     finally:
         if previous is None:
             os.environ.pop(SCRATCH_ENV_VAR, None)
@@ -1252,21 +1279,21 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
         cli_inputs[name] = path
 
     selected_entry = args.entry
+    cases_root = None
     if args.case:
         try:
-            selected_entry, case_cases_root = case_folder_record(args.case, driver_context=driver_context)
+            selected_entry, cases_root = case_folder_record(args.case, driver_context=driver_context)
         except TutorialRecordError as exc:
             print(json.dumps({"status": "failed", "action": args.action, "error": str(exc)}, indent=2))
             return 1
-        cases_root = case_cases_root
-    elif repository is not None:
-        cases_root = repository.tutorials
-    else:
-        # Unconditional: the chain always applies, so an unset --cases-root
-        # means OMNIDRIVER_CASES_ROOT or the working directory, never a
-        # location core invented.
-        cases_root = resolve_cases_root(args.cases_root)
-    overrides = {"cases_root": str(cases_root)}
+    elif args.action not in {"sweep-plan", "sweep-run"} and not args.run_document and (
+        selected_entry is not None or args.action == "check"
+    ):
+        cases_root = (
+            _existing_cases_root(repository.tutorials) if repository is not None
+            else resolve_cases_root(args.cases_root)
+        )
+    overrides = {} if cases_root is None else {"cases_root": str(cases_root)}
     entry_label = getattr(selected_entry, "name", selected_entry)
 
     if args.action == "check":
@@ -1292,6 +1319,9 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
         return 0
 
     if args.action == "describe":
+        if selected_entry is None:
+            print(json.dumps(describe_stack(driver_context), indent=2))
+            return 0
         # A record refusal is JSON here, as in `plan --strict`.
         try:
             description = describe_entry(
@@ -1377,13 +1407,11 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             )
         except (SweepValidationError, TutorialRecordError) as exc:
             return _sweep_refusal(args, exc)
-        print(json.dumps(result, indent=2))
         # A spec that could not be read yields zero cases, so "no case
         # failed" would otherwise read as success.
-        if result.get("spec_error"):
-            return 1
-        any_failed = any(case["status"] != "ok" for case in result["cases"])
-        return 1 if any_failed else 0
+        failed = bool(result.get("spec_error")) or any(case["status"] != "ok" for case in result["cases"])
+        print(json.dumps({"status": "failed" if failed else "ok", **result}, indent=2))
+        return 1 if failed else 0
 
     if args.action == "sweep-run":
         output_dir = _sweep_output_dir(args)
@@ -1402,7 +1430,8 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             )
         except (SweepValidationError, TutorialRecordError) as exc:
             return _sweep_refusal(args, exc)
-        print(json.dumps(result, indent=2))
-        return 1 if result["failed_count"] > 0 else 0
+        failed = result["failed_count"] > 0
+        print(json.dumps({"status": "failed" if failed else "ok", **result}, indent=2))
+        return 1 if failed else 0
 
     raise AssertionError(f"unreachable: unhandled action {args.action!r}")
