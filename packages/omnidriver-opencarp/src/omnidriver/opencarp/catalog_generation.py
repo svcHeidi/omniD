@@ -9,7 +9,7 @@ import subprocess
 from typing import Any, Mapping
 
 _LIST_LINE = re.compile(r"^\s+'?-(?P<name>[^' ]+)'?\s+(?P<type>.+?)\s*$")
-_FIELD = re.compile(r"^\t(type|default|min|max):\s*(.*)$")
+_FIELD = re.compile(r"^\t(type|default|min|max|units):\s*(.*)$")
 _TYPED = re.compile(r"^\((\w+)\)\((.*)\)$")
 _BLOCK = re.compile(r"^\t(menu|Depends on|Changes the allocation of|Changes the default value of): \{$")
 _MENU_ITEM = re.compile(r"^\t\t\((\w+)\)\((.*?)\)\t(.*)$")
@@ -80,8 +80,8 @@ def parse_help_detail(concrete: str, text: str) -> dict[str, Any]:
     allocates = tuple(i.strip() for i in blocks.get("Changes the allocation of", []) if i.strip() and "[" not in i)
     return {
         "default": _typed(fields.get("default")), "minimum": _typed(fields.get("min")),
-        "maximum": _typed(fields.get("max")), "menu": list(menu), "allocates": list(allocates),
-        "description": " ".join(description),
+        "maximum": _typed(fields.get("max")), "units": fields.get("units"), "menu": list(menu),
+        "allocates": list(allocates), "description": " ".join(description),
     }
 
 
@@ -107,7 +107,7 @@ def build_catalog(binary: str = "openCARP", env: Mapping[str, str] | None = None
             # A whole-array shorthand has no detail block under any spelling;
             # only its elements do. It is kept so the validator can name it
             # and ask for elements.
-            detail = {"default": None, "minimum": None, "maximum": None,
+            detail = {"default": None, "minimum": None, "maximum": None, "units": None,
                       "menu": [], "allocates": [], "description": ""}
         else:
             concrete = name.replace("[Int]", "[0]")

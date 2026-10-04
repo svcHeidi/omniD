@@ -8,6 +8,7 @@ from pathlib import Path
 from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
 from omnidriver.core.plugin_profile import load_plugin_profile
 
+from .case_rules import case_diagnostics
 from .catalog import load_catalog, template_name
 from .environment import AUXILIARY_COMMANDS, REDACTION_PATTERNS, SOLVER_COMMANDS, opencarp_environment_diagnostics
 from .lat_reader import LAT_FORMAT, LatPerNodeReader
@@ -110,6 +111,14 @@ class OpenCARPPlugin:
             ))
         return tuple(rendered)
 
+    # -- rules
+    def validate_run_semantics(self, case_root):
+        return case_diagnostics(case_root)
+
+    def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
+        del workflow_dag, env, scratch_root, driver_context
+        return tuple(item for item in case_diagnostics(case_root) if item.level != "error")
+
     # -- commands and environment
     def get_solver_commands(self):
         return SOLVER_COMMANDS
@@ -153,7 +162,7 @@ class OpenCARPPlugin:
                     continue
                 entries.append({
                     "document": document, "key": spec.name, "value_kind": spec.value_kind,
-                    "default": spec.default, "description": spec.description,
+                    "default": spec.default, "description": spec.description, "unit": spec.units,
                     "minimum": spec.minimum, "maximum": spec.maximum, "menu": list(spec.menu),
                     "source_refs": [source_ref],
                 })

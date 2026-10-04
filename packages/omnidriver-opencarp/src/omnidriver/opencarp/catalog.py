@@ -26,6 +26,8 @@ class ParameterSpec:
     default: str | None
     minimum: str | None
     maximum: str | None
+    #: As +Help prints it ("ms", "microseconds"); none for a parameter with no units.
+    units: str | None
     menu: tuple[str, ...]
     allocates: tuple[str, ...]
     description: str
@@ -48,7 +50,7 @@ def load_catalog() -> Catalog:
         entry["name"]: ParameterSpec(
             name=entry["name"], opencarp_type=entry["type"],
             value_kind=VALUE_KIND_BY_TYPE.get(entry["type"]),
-            default=entry["default"], minimum=entry["minimum"], maximum=entry["maximum"],
+            default=entry["default"], minimum=entry["minimum"], maximum=entry["maximum"], units=entry["units"],
             menu=tuple(entry["menu"]), allocates=tuple(entry["allocates"]),
             description=entry["description"],
         )

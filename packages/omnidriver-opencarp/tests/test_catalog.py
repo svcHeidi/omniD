@@ -41,3 +41,41 @@ def test_the_record_declares_how_omnidriver_check_exercises_it():
 
     quantity = TUTORIAL_RECORDS["niedererNVersion"].conformance.quantity
     assert quantity.artifact_format and quantity.at is None and quantity.pairs is None
+
+
+# openCARP v18.1 `+Help dt`, verbatim.
+HELP_DT = """
+dt:
+	Defines the time step size to solve the numeric equations for.
+Check the first chapters of the openCARP manual for a comprehensive explanation on how to choose 'dt'. 
+
+	type:	Double
+	default:(Double)(5.)
+	min:	(Double)(0.)
+	units:	microseconds
+	Changes the default value of: {
+		tsav
+	}
+
+"""
+
+
+def test_a_parameters_units_are_read_from_its_help():
+    from omnidriver.opencarp.catalog_generation import parse_help_detail
+
+    detail = parse_help_detail("dt", HELP_DT)
+    assert (detail["units"], detail["default"], detail["minimum"], detail["maximum"]) == ("microseconds", "5.", "0.", None)
+
+
+def test_the_committed_catalog_carries_the_binarys_units():
+    p = load_catalog().parameters
+    assert (p["dt"].units, p["tend"].units, p["spacedt"].units) == ("microseconds", "ms", "ms")
+    assert p["num_stim"].units is None
+
+
+def test_the_record_key_catalog_lists_each_parameters_unit(tmp_path):
+    from omnidriver.opencarp.plugin import OpenCARPPlugin
+
+    (tmp_path / "nversion.par").write_text("")
+    listed = {entry["key"]: entry for entry in OpenCARPPlugin().get_record_key_catalog(tmp_path)}
+    assert (listed["dt"]["unit"], listed["tend"]["unit"], listed["num_stim"]["unit"]) == ("microseconds", "ms", None)

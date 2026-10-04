@@ -12,7 +12,8 @@
    "menu": [],
    "minimum": null,
    "name": "output_setup",
-   "type": "Flag"
+   "type": "Flag",
+   "units": null
   },
   {
    "allocates": [],
@@ -22,7 +23,8 @@
    "menu": [],
    "minimum": null,
    "name": "phys_region[Int].ID[Int]",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -32,7 +34,8 @@
    "menu": [],
    "minimum": null,
    "name": "phys_region[Int].ID",
-   "type": "{ phys_region[PrMelem1].num_IDs x Int }"
+   "type": "{ phys_region[PrMelem1].num_IDs x Int }",
+   "units": null
   },
   {
    "allocates": [],
@@ -42,7 +45,8 @@
    "menu": [],
    "minimum": null,
    "name": "phys_region[Int].num_IDs",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -52,7 +56,8 @@
    "menu": [],
    "minimum": null,
    "name": "phys_region[Int].name",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -67,7 +72,8 @@
    ],
    "minimum": null,
    "name": "phys_region[Int].ptype",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [
@@ -79,7 +85,8 @@
    "menu": [],
    "minimum": "0",
    "name": "num_phys_regions",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -89,7 +96,8 @@
    "menu": [],
    "minimum": null,
    "name": "recovery_thresh",
-   "type": "Float"
+   "type": "Float",
+   "units": "mV"
   },
   {
    "allocates": [],
@@ -99,7 +107,8 @@
    "menu": [],
    "minimum": null,
    "name": "actthresh",
-   "type": "Float"
+   "type": "Float",
+   "units": "mV"
   },
   {
    "allocates": [],
@@ -109,7 +118,8 @@
    "menu": [],
    "minimum": null,
    "name": "compute_APD",
-   "type": "Flag"
+   "type": "Flag",
+   "units": null
   },
   {
    "allocates": [],
@@ -119,7 +129,8 @@
    "menu": [],
    "minimum": null,
    "name": "sentinel_ID",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -129,7 +140,8 @@
    "menu": [],
    "minimum": null,
    "name": "t_sentinel_start",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -139,7 +151,8 @@
    "menu": [],
    "minimum": null,
    "name": "t_sentinel",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -149,7 +162,8 @@
    "menu": [],
    "minimum": null,
    "name": "lats[Int].ID",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -162,7 +176,8 @@
    ],
    "minimum": null,
    "name": "lats[Int].measurand",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -172,7 +187,8 @@
    "menu": [],
    "minimum": "0",
    "name": "lats[Int].all",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -185,7 +201,8 @@
    ],
    "minimum": null,
    "name": "lats[Int].mode",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -195,7 +212,8 @@
    "menu": [],
    "minimum": null,
    "name": "lats[Int].threshold",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -208,7 +226,8 @@
    ],
    "minimum": null,
    "name": "lats[Int].method",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -218,7 +237,8 @@
    "menu": [],
    "minimum": null,
    "name": "prepacing_stimstr",
-   "type": "Float"
+   "type": "Float",
+   "units": "uA/uF"
   },
   {
    "allocates": [],
@@ -228,7 +248,8 @@
    "menu": [],
    "minimum": null,
    "name": "prepacing_stimdur",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -238,7 +259,8 @@
    "menu": [],
    "minimum": null,
    "name": "prepacing_bcl",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -248,7 +270,8 @@
    "menu": [],
    "minimum": null,
    "name": "prepacing_beats",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -258,7 +281,8 @@
    "menu": [],
    "minimum": null,
    "name": "prepacing_lats",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [
@@ -270,7 +294,8 @@
    "menu": [],
    "minimum": "0",
    "name": "num_LATs",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -280,7 +305,8 @@
    "menu": [],
    "minimum": null,
    "name": "LAT_ID[Int]",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -290,7 +316,8 @@
    "menu": [],
    "minimum": null,
    "name": "LAT_ID",
-   "type": "{ 4 x String }"
+   "type": "{ 4 x String }",
+   "units": null
   },
   {
    "allocates": [],
@@ -300,7 +327,8 @@
    "menu": [],
    "minimum": "1000",
    "name": "state_dump_buffer",
-   "type": "Long"
+   "type": "Long",
+   "units": null
   },
   {
    "allocates": [],
@@ -310,7 +338,8 @@
    "menu": [],
    "minimum": null,
    "name": "shrimp_pipe",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -320,7 +349,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "queue_time",
-   "type": "Float"
+   "type": "Float",
+   "units": "hours"
   },
   {
    "allocates": [],
@@ -330,7 +360,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "chkpt_stop",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -340,7 +371,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "chkpt_intv",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -350,7 +382,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "chkpt_start",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -360,7 +393,8 @@
    "menu": [],
    "minimum": null,
    "name": "start_statef",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -370,7 +404,8 @@
    "menu": [],
    "minimum": null,
    "name": "write_statef",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -380,7 +415,8 @@
    "menu": [],
    "minimum": null,
    "name": "tsav_ext[Int]",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -390,7 +426,8 @@
    "menu": [],
    "minimum": null,
    "name": "tsav_ext",
-   "type": "{ num_tsav x WFile }"
+   "type": "{ num_tsav x WFile }",
+   "units": null
   },
   {
    "allocates": [],
@@ -400,7 +437,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "tsav[Int]",
-   "type": "Double"
+   "type": "Double",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -410,7 +448,8 @@
    "menu": [],
    "minimum": null,
    "name": "tsav",
-   "type": "{ num_tsav x Double }"
+   "type": "{ num_tsav x Double }",
+   "units": null
   },
   {
    "allocates": [
@@ -423,7 +462,8 @@
    "menu": [],
    "minimum": "0",
    "name": "num_tsav",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -433,7 +473,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "cell_length",
-   "type": "Float"
+   "type": "Float",
+   "units": "um"
   },
   {
    "allocates": [],
@@ -443,7 +484,8 @@
    "menu": [],
    "minimum": "0",
    "name": "dump_data",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -456,7 +498,8 @@
    ],
    "minimum": null,
    "name": "display_meminfo",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -466,7 +509,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "spacetol",
-   "type": "Float"
+   "type": "Float",
+   "units": "um"
   },
   {
    "allocates": [],
@@ -476,7 +520,8 @@
    "menu": [],
    "minimum": "dt/1000.",
    "name": "timedt",
-   "type": "Double"
+   "type": "Double",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -486,7 +531,8 @@
    "menu": [],
    "minimum": "dt/1000.",
    "name": "spacedt",
-   "type": "Double"
+   "type": "Double",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -496,7 +542,8 @@
    "menu": [],
    "minimum": null,
    "name": "dataout_e_vtx",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -511,7 +558,8 @@
    ],
    "minimum": null,
    "name": "dataout_e",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -521,7 +569,8 @@
    "menu": [],
    "minimum": null,
    "name": "dataout_i_vtx",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -536,7 +585,8 @@
    ],
    "minimum": null,
    "name": "dataout_i",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -546,7 +596,8 @@
    "menu": [],
    "minimum": null,
    "name": "gridout_p",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -556,7 +607,8 @@
    "menu": [],
    "minimum": "0",
    "name": "gridout_e",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -566,7 +618,8 @@
    "menu": [],
    "minimum": "0",
    "name": "gridout_i",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -576,7 +629,8 @@
    "menu": [],
    "minimum": null,
    "name": "phieifile",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -586,7 +640,8 @@
    "menu": [],
    "minimum": null,
    "name": "phiefile",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -596,7 +651,8 @@
    "menu": [],
    "minimum": null,
    "name": "vofile",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -606,7 +662,8 @@
    "menu": [],
    "minimum": null,
    "name": "dump_basename",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -616,7 +673,8 @@
    "menu": [],
    "minimum": null,
    "name": "dump2MatLab",
-   "type": "Flag"
+   "type": "Flag",
+   "units": null
   },
   {
    "allocates": [],
@@ -626,7 +684,8 @@
    "menu": [],
    "minimum": "0",
    "name": "output_level",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -636,7 +695,8 @@
    "menu": [],
    "minimum": null,
    "name": "buildinfo",
-   "type": "Flag"
+   "type": "Flag",
+   "units": null
   },
   {
    "allocates": [],
@@ -646,7 +706,8 @@
    "menu": [],
    "minimum": null,
    "name": "num_io_nodes",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -656,7 +717,8 @@
    "menu": [],
    "minimum": "dt/1000.",
    "name": "tend",
-   "type": "Double"
+   "type": "Double",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -666,7 +728,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "dt",
-   "type": "Double"
+   "type": "Double",
+   "units": "microseconds"
   },
   {
    "allocates": [],
@@ -676,7 +739,8 @@
    "menu": [],
    "minimum": null,
    "name": "simID",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -686,7 +750,8 @@
    "menu": [],
    "minimum": "0",
    "name": "stim[Int].crct.total_current",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -696,7 +761,8 @@
    "menu": [],
    "minimum": "-1",
    "name": "stim[Int].crct.balance",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -715,7 +781,8 @@
    ],
    "minimum": null,
    "name": "stim[Int].crct.type",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -725,7 +792,8 @@
    "menu": [],
    "minimum": "0",
    "name": "stim[Int].elec.dump_vtx_file",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -741,7 +809,8 @@
    ],
    "minimum": null,
    "name": "stim[Int].elec.geom_type",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -751,7 +820,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].elec.radius",
-   "type": "Float"
+   "type": "Float",
+   "units": "micrometers"
   },
   {
    "allocates": [],
@@ -761,7 +831,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].elec.p1[Int]",
-   "type": "Float"
+   "type": "Float",
+   "units": "micrometers"
   },
   {
    "allocates": [],
@@ -771,7 +842,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].elec.p1",
-   "type": "{ 3 x Float }"
+   "type": "{ 3 x Float }",
+   "units": null
   },
   {
    "allocates": [],
@@ -781,7 +853,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].elec.p0[Int]",
-   "type": "Float"
+   "type": "Float",
+   "units": "micrometers"
   },
   {
    "allocates": [],
@@ -791,7 +864,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].elec.p0",
-   "type": "{ 3 x Float }"
+   "type": "{ 3 x Float }",
+   "units": null
   },
   {
    "allocates": [],
@@ -804,7 +878,8 @@
    ],
    "minimum": null,
    "name": "stim[Int].elec.vtx_fcn",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -814,7 +889,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].elec.vtx_file",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -828,7 +904,8 @@
    ],
    "minimum": null,
    "name": "stim[Int].elec.domain",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -838,7 +915,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].elec.geomID",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -848,7 +926,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].ptcl.stimlist",
-   "type": "String"
+   "type": "String",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -858,7 +937,8 @@
    "menu": [],
    "minimum": "stim[PrMelem1].ptcl.duration",
    "name": "stim[Int].ptcl.bcl",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -868,7 +948,8 @@
    "menu": [],
    "minimum": "0",
    "name": "stim[Int].ptcl.npls",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -878,7 +959,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stim[Int].ptcl.duration",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -888,7 +970,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stim[Int].ptcl.start",
-   "type": "Double"
+   "type": "Double",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -898,7 +981,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].ptcl.name",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -908,7 +992,8 @@
    "menu": [],
    "minimum": "0.00001",
    "name": "stim[Int].pulse.freq",
-   "type": "Float"
+   "type": "Float",
+   "units": "mHz"
   },
   {
    "allocates": [],
@@ -918,7 +1003,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stim[Int].pulse.phase",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -928,7 +1014,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stim[Int].pulse.trig",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -938,7 +1025,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].pulse.bias",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -948,7 +1036,8 @@
    "menu": [],
    "minimum": "0.1",
    "name": "stim[Int].pulse.tau_plateau",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -958,7 +1047,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stim[Int].pulse.tau_edge",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -968,7 +1058,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stim[Int].pulse.s2",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -978,7 +1069,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stim[Int].pulse.d1",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -988,7 +1080,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].pulse.strength",
-   "type": "Float"
+   "type": "Float",
+   "units": "uA/cm^2(2D current), uA/cm^3(3D current), or mV"
   },
   {
    "allocates": [],
@@ -998,7 +1091,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].pulse.file",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -1012,7 +1106,8 @@
    ],
    "minimum": null,
    "name": "stim[Int].pulse.shape",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1022,7 +1117,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].pulse.name",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -1032,7 +1128,8 @@
    "menu": [],
    "minimum": null,
    "name": "stim[Int].name",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -1042,7 +1139,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].vtx_fcn",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1052,7 +1150,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].data_file",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -1062,7 +1161,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].pulse_file",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -1072,7 +1172,8 @@
    "menu": [],
    "minimum": "0",
    "name": "stimulus[Int].total_current",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1082,7 +1183,8 @@
    "menu": [],
    "minimum": "-1",
    "name": "stimulus[Int].balance",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1101,7 +1203,8 @@
    ],
    "minimum": null,
    "name": "stimulus[Int].stimtype",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1111,7 +1214,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].bias",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -1121,7 +1225,8 @@
    "menu": [],
    "minimum": "0.1",
    "name": "stimulus[Int].tau_plateau",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -1131,7 +1236,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stimulus[Int].tau_edge",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -1141,7 +1247,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stimulus[Int].s2",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -1151,7 +1258,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].strength",
-   "type": "Float"
+   "type": "Float",
+   "units": "uA/cm^2(2D current), uA/cm^3(3D current), or mV"
   },
   {
    "allocates": [],
@@ -1161,7 +1269,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stimulus[Int].d1",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -1171,7 +1280,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stimulus[Int].duration",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -1181,7 +1291,8 @@
    "menu": [],
    "minimum": "0",
    "name": "stimulus[Int].npls",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1191,7 +1302,8 @@
    "menu": [],
    "minimum": "stimulus[PrMelem1].duration",
    "name": "stimulus[Int].bcl",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -1201,7 +1313,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stimulus[Int].start",
-   "type": "Double"
+   "type": "Double",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -1211,7 +1324,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].geometry",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1221,7 +1335,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].ctr_def",
-   "type": "Flag"
+   "type": "Flag",
+   "units": null
   },
   {
    "allocates": [],
@@ -1231,7 +1346,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stimulus[Int].zd",
-   "type": "Float"
+   "type": "Float",
+   "units": "um"
   },
   {
    "allocates": [],
@@ -1241,7 +1357,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stimulus[Int].yd",
-   "type": "Float"
+   "type": "Float",
+   "units": "um"
   },
   {
    "allocates": [],
@@ -1251,7 +1368,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "stimulus[Int].xd",
-   "type": "Float"
+   "type": "Float",
+   "units": "um"
   },
   {
    "allocates": [],
@@ -1261,7 +1379,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].z0",
-   "type": "Float"
+   "type": "Float",
+   "units": "um"
   },
   {
    "allocates": [],
@@ -1271,7 +1390,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].y0",
-   "type": "Float"
+   "type": "Float",
+   "units": "um"
   },
   {
    "allocates": [],
@@ -1281,7 +1401,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].x0",
-   "type": "Float"
+   "type": "Float",
+   "units": "um"
   },
   {
    "allocates": [],
@@ -1291,7 +1412,8 @@
    "menu": [],
    "minimum": "0",
    "name": "stimulus[Int].dump_vtx_file",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1301,7 +1423,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].vtx_file",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -1311,7 +1434,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimulus[Int].name",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [
@@ -1324,7 +1448,8 @@
    "menu": [],
    "minimum": "0",
    "name": "num_stim",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1337,7 +1462,8 @@
    ],
    "minimum": null,
    "name": "operator_splitting",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1350,7 +1476,8 @@
    ],
    "minimum": null,
    "name": "mass_lumping",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1360,7 +1487,8 @@
    "menu": [],
    "minimum": null,
    "name": "mat_entries_per_row",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1375,7 +1503,8 @@
    ],
    "minimum": null,
    "name": "cg_precond",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1385,7 +1514,8 @@
    "menu": [],
    "minimum": "0",
    "name": "parab_use_pt",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1395,7 +1525,8 @@
    "menu": [],
    "minimum": "0",
    "name": "cg_maxit_parab",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1410,7 +1541,8 @@
    ],
    "minimum": null,
    "name": "cg_norm_parab",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1420,7 +1552,8 @@
    "menu": [],
    "minimum": null,
    "name": "cg_tol_parab",
-   "type": "Double"
+   "type": "Double",
+   "units": null
   },
   {
    "allocates": [],
@@ -1430,7 +1563,8 @@
    "menu": [],
    "minimum": "0",
    "name": "ellip_use_pt",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1440,7 +1574,8 @@
    "menu": [],
    "minimum": "0",
    "name": "cg_maxit_ellip",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1455,7 +1590,8 @@
    ],
    "minimum": null,
    "name": "cg_norm_ellip",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1465,7 +1601,8 @@
    "menu": [],
    "minimum": null,
    "name": "cg_tol_ellip",
-   "type": "Double"
+   "type": "Double",
+   "units": null
   },
   {
    "allocates": [],
@@ -1475,7 +1612,8 @@
    "menu": [],
    "minimum": null,
    "name": "extracell_monodomain_stim",
-   "type": "Flag"
+   "type": "Flag",
+   "units": null
   },
   {
    "allocates": [],
@@ -1485,7 +1623,8 @@
    "menu": [],
    "minimum": "1",
    "name": "ode_fac",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1495,7 +1634,8 @@
    "menu": [],
    "minimum": "1",
    "name": "par_fac",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1505,7 +1645,8 @@
    "menu": [],
    "minimum": "1",
    "name": "vm_per_phie",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1515,7 +1656,8 @@
    "menu": [],
    "minimum": null,
    "name": "stimactivedelay",
-   "type": "Float"
+   "type": "Float",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -1528,7 +1670,8 @@
    ],
    "minimum": null,
    "name": "bidm_eqv_mono",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1538,7 +1681,8 @@
    "menu": [],
    "minimum": null,
    "name": "parab_options_file",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -1548,7 +1692,8 @@
    "menu": [],
    "minimum": "0.1",
    "name": "theta",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -1562,7 +1707,8 @@
    ],
    "minimum": null,
    "name": "parab_solve",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1572,7 +1718,8 @@
    "menu": [],
    "minimum": "0",
    "name": "floating_ground_refnode",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1582,7 +1729,8 @@
    "menu": [],
    "minimum": "0",
    "name": "floating_ground",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1592,7 +1740,8 @@
    "menu": [],
    "minimum": null,
    "name": "ellip_options_file",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -1602,7 +1751,8 @@
    "menu": [],
    "minimum": "0",
    "name": "device_id",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1618,7 +1768,8 @@
    ],
    "minimum": null,
    "name": "ginkgo_exec",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -1628,7 +1779,8 @@
    "menu": [],
    "minimum": null,
    "name": "flavor",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -1641,7 +1793,8 @@
    ],
    "minimum": null,
    "name": "ellip_solve",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1651,7 +1804,8 @@
    "menu": [],
    "minimum": null,
    "name": "pstrat_imbalance",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -1665,7 +1819,8 @@
    ],
    "minimum": null,
    "name": "pstrat_i",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1679,7 +1834,8 @@
    ],
    "minimum": null,
    "name": "pstrat",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1693,7 +1849,8 @@
    ],
    "minimum": null,
    "name": "bidomain",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1706,7 +1863,8 @@
    ],
    "minimum": null,
    "name": "post_processing_opts",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1722,7 +1880,8 @@
    ],
    "minimum": null,
    "name": "experiment",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1732,7 +1891,8 @@
    "menu": [],
    "minimum": null,
    "name": "ppID",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -1742,7 +1902,8 @@
    "menu": [],
    "minimum": null,
    "name": "retagfile",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -1752,7 +1913,8 @@
    "menu": [],
    "minimum": null,
    "name": "tagreg[Int].radius",
-   "type": "Float"
+   "type": "Float",
+   "units": "micrometers"
   },
   {
    "allocates": [],
@@ -1762,7 +1924,8 @@
    "menu": [],
    "minimum": null,
    "name": "tagreg[Int].p1[Int]",
-   "type": "Float"
+   "type": "Float",
+   "units": "micrometers"
   },
   {
    "allocates": [],
@@ -1772,7 +1935,8 @@
    "menu": [],
    "minimum": null,
    "name": "tagreg[Int].p1",
-   "type": "{ 3 x Float }"
+   "type": "{ 3 x Float }",
+   "units": null
   },
   {
    "allocates": [],
@@ -1782,7 +1946,8 @@
    "menu": [],
    "minimum": null,
    "name": "tagreg[Int].p0[Int]",
-   "type": "Float"
+   "type": "Float",
+   "units": "micrometers"
   },
   {
    "allocates": [],
@@ -1792,7 +1957,8 @@
    "menu": [],
    "minimum": null,
    "name": "tagreg[Int].p0",
-   "type": "{ 3 x Float }"
+   "type": "{ 3 x Float }",
+   "units": null
   },
   {
    "allocates": [],
@@ -1802,7 +1968,8 @@
    "menu": [],
    "minimum": null,
    "name": "tagreg[Int].elemfile",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -1812,7 +1979,8 @@
    "menu": [],
    "minimum": "0",
    "name": "tagreg[Int].no_elem_split",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1827,7 +1995,8 @@
    ],
    "minimum": null,
    "name": "tagreg[Int].type",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1837,7 +2006,8 @@
    "menu": [],
    "minimum": null,
    "name": "tagreg[Int].name",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -1847,7 +2017,8 @@
    "menu": [],
    "minimum": null,
    "name": "tagreg[Int].tag",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [
@@ -1859,7 +2030,8 @@
    "menu": [],
    "minimum": "0",
    "name": "numtagreg",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1873,7 +2045,8 @@
    ],
    "minimum": null,
    "name": "meshformat",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1883,7 +2056,8 @@
    "menu": [],
    "minimum": null,
    "name": "orthoname_output",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -1893,7 +2067,8 @@
    "menu": [],
    "minimum": "0",
    "name": "orthogonalize",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1903,7 +2078,8 @@
    "menu": [],
    "minimum": null,
    "name": "orthoname",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -1913,7 +2089,8 @@
    "menu": [],
    "minimum": null,
    "name": "meshname",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -1923,7 +2100,8 @@
    "menu": [],
    "minimum": null,
    "name": "mesh_statistics",
-   "type": "Flag"
+   "type": "Flag",
+   "units": null
   },
   {
    "allocates": [],
@@ -1933,7 +2111,8 @@
    "menu": [],
    "minimum": "0",
    "name": "adjustment[Int].dump",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -1943,7 +2122,8 @@
    "menu": [],
    "minimum": null,
    "name": "adjustment[Int].file",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -1953,7 +2133,8 @@
    "menu": [],
    "minimum": null,
    "name": "adjustment[Int].variable",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [
@@ -1965,7 +2146,8 @@
    "menu": [],
    "minimum": "0",
    "name": "num_adjustments",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1975,7 +2157,8 @@
    "menu": [],
    "minimum": "0.0",
    "name": "fluct",
-   "type": "Float"
+   "type": "Float",
+   "units": "%"
   },
   {
    "allocates": [],
@@ -1985,7 +2168,8 @@
    "menu": [],
    "minimum": null,
    "name": "rseed",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -1998,7 +2182,8 @@
    ],
    "minimum": null,
    "name": "dump_imp_region",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2008,7 +2193,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].dream.Idiff.gamma_i[Int]",
-   "type": "Double"
+   "type": "Double",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -2018,7 +2204,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].dream.Idiff.gamma_i",
-   "type": "{ 3 x Double }"
+   "type": "{ 3 x Double }",
+   "units": null
   },
   {
    "allocates": [],
@@ -2028,7 +2215,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].dream.Idiff.beta_i[Int]",
-   "type": "Double"
+   "type": "Double",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -2038,7 +2226,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].dream.Idiff.beta_i",
-   "type": "{ 3 x Double }"
+   "type": "{ 3 x Double }",
+   "units": null
   },
   {
    "allocates": [],
@@ -2048,7 +2237,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].dream.Idiff.alpha_i[Int]",
-   "type": "Double"
+   "type": "Double",
+   "units": "muA/cm^2"
   },
   {
    "allocates": [],
@@ -2058,7 +2248,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].dream.Idiff.alpha_i",
-   "type": "{ 3 x Double }"
+   "type": "{ 3 x Double }",
+   "units": null
   },
   {
    "allocates": [],
@@ -2068,7 +2259,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].dream.Idiff.V_th",
-   "type": "Double"
+   "type": "Double",
+   "units": "mV"
   },
   {
    "allocates": [],
@@ -2078,7 +2270,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].dream.Idiff.tau_F",
-   "type": "Double"
+   "type": "Double",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -2088,7 +2281,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].dream.Idiff.A_F",
-   "type": "Double"
+   "type": "Double",
+   "units": "mV"
   },
   {
    "allocates": [],
@@ -2101,7 +2295,8 @@
    ],
    "minimum": null,
    "name": "imp_region[Int].dream.Idiff.model",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -2111,7 +2306,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "imp_region[Int].dream.CVrest.psi",
-   "type": "Double"
+   "type": "Double",
+   "units": null
   },
   {
    "allocates": [],
@@ -2121,7 +2317,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "imp_region[Int].dream.CVrest.theta",
-   "type": "Double"
+   "type": "Double",
+   "units": null
   },
   {
    "allocates": [],
@@ -2131,7 +2328,8 @@
    "menu": [],
    "minimum": "-100000.",
    "name": "imp_region[Int].dream.CVrest.kappa",
-   "type": "Double"
+   "type": "Double",
+   "units": null
   },
   {
    "allocates": [],
@@ -2141,7 +2339,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "imp_region[Int].dream.CVrest.rho",
-   "type": "Double"
+   "type": "Double",
+   "units": null
   },
   {
    "allocates": [],
@@ -2151,7 +2350,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "imp_region[Int].cellSurfVolRatio",
-   "type": "Float"
+   "type": "Float",
+   "units": "um^-1"
   },
   {
    "allocates": [],
@@ -2161,7 +2361,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "imp_region[Int].volFrac",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -2171,7 +2372,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].plug_param",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2181,7 +2383,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].plug_sv_dumps",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2191,7 +2394,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].im_sv_dumps",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2201,7 +2405,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].im_param",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2211,7 +2416,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].ID[Int]",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2221,7 +2427,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].ID",
-   "type": "{ imp_region[PrMelem1].num_IDs x Int }"
+   "type": "{ imp_region[PrMelem1].num_IDs x Int }",
+   "units": null
   },
   {
    "allocates": [],
@@ -2231,7 +2438,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].num_IDs",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2241,7 +2449,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].name",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2251,7 +2460,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].plugins",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2261,7 +2471,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].im_sv_init",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -2271,7 +2482,8 @@
    "menu": [],
    "minimum": null,
    "name": "imp_region[Int].im",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [
@@ -2283,7 +2495,8 @@
    "menu": [],
    "minimum": "1",
    "name": "num_imp_regions",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2293,7 +2506,8 @@
    "menu": [],
    "minimum": null,
    "name": "gvec[Int].bogus",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [],
@@ -2303,7 +2517,8 @@
    "menu": [],
    "minimum": null,
    "name": "gvec[Int].imp",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2313,7 +2528,8 @@
    "menu": [],
    "minimum": null,
    "name": "gvec[Int].units",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2323,7 +2539,8 @@
    "menu": [],
    "minimum": null,
    "name": "gvec[Int].ID[Int]",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2333,7 +2550,8 @@
    "menu": [],
    "minimum": null,
    "name": "gvec[Int].ID",
-   "type": "{ num_imp_regions x String }"
+   "type": "{ num_imp_regions x String }",
+   "units": null
   },
   {
    "allocates": [],
@@ -2343,7 +2561,8 @@
    "menu": [],
    "minimum": null,
    "name": "gvec[Int].name",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [
@@ -2355,7 +2574,8 @@
    "menu": [],
    "minimum": null,
    "name": "num_gvecs",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2365,7 +2585,8 @@
    "menu": [],
    "minimum": null,
    "name": "cv_scale_vec",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -2375,7 +2596,8 @@
    "menu": [],
    "minimum": null,
    "name": "ge_scale_vec",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -2385,7 +2607,8 @@
    "menu": [],
    "minimum": null,
    "name": "gi_scale_vec",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -2395,7 +2618,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "gregion[Int].dream.vel_n",
-   "type": "Double"
+   "type": "Double",
+   "units": "mm/s"
   },
   {
    "allocates": [],
@@ -2405,7 +2629,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "gregion[Int].dream.vel_t",
-   "type": "Double"
+   "type": "Double",
+   "units": "mm/s"
   },
   {
    "allocates": [],
@@ -2415,7 +2640,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "gregion[Int].dream.vel_l",
-   "type": "Double"
+   "type": "Double",
+   "units": "mm/s"
   },
   {
    "allocates": [],
@@ -2425,7 +2651,8 @@
    "menu": [],
    "minimum": null,
    "name": "gregion[Int].ID[Int]",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2435,7 +2662,8 @@
    "menu": [],
    "minimum": null,
    "name": "gregion[Int].ID",
-   "type": "{ gregion[PrMelem1].num_IDs x Int }"
+   "type": "{ gregion[PrMelem1].num_IDs x Int }",
+   "units": null
   },
   {
    "allocates": [],
@@ -2445,7 +2673,8 @@
    "menu": [],
    "minimum": null,
    "name": "gregion[Int].num_IDs",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2455,7 +2684,8 @@
    "menu": [],
    "minimum": null,
    "name": "gregion[Int].name",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2465,7 +2695,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "gregion[Int].g_bath",
-   "type": "Double"
+   "type": "Double",
+   "units": "S/m"
   },
   {
    "allocates": [],
@@ -2475,7 +2706,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "gregion[Int].g_en",
-   "type": "Double"
+   "type": "Double",
+   "units": "S/m"
   },
   {
    "allocates": [],
@@ -2485,7 +2717,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "gregion[Int].g_in",
-   "type": "Double"
+   "type": "Double",
+   "units": "S/m"
   },
   {
    "allocates": [],
@@ -2495,7 +2728,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "gregion[Int].g_et",
-   "type": "Double"
+   "type": "Double",
+   "units": "S/m"
   },
   {
    "allocates": [],
@@ -2505,7 +2739,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "gregion[Int].g_it",
-   "type": "Double"
+   "type": "Double",
+   "units": "S/m"
   },
   {
    "allocates": [],
@@ -2515,7 +2750,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "gregion[Int].g_el",
-   "type": "Double"
+   "type": "Double",
+   "units": "S/m"
   },
   {
    "allocates": [],
@@ -2525,7 +2761,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "gregion[Int].g_il",
-   "type": "Double"
+   "type": "Double",
+   "units": "S/m"
   },
   {
    "allocates": [],
@@ -2535,7 +2772,8 @@
    "menu": [],
    "minimum": "0.",
    "name": "gregion[Int].g_mult",
-   "type": "Float"
+   "type": "Float",
+   "units": null
   },
   {
    "allocates": [
@@ -2547,7 +2785,8 @@
    "menu": [],
    "minimum": "1",
    "name": "num_gregions",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2557,7 +2796,8 @@
    "menu": [],
    "minimum": "0",
    "name": "dump_ecg_leads",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2572,7 +2812,8 @@
    ],
    "minimum": null,
    "name": "phie_rec_meth",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2582,7 +2823,8 @@
    "menu": [],
    "minimum": null,
    "name": "phie_recovery_file",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -2592,7 +2834,8 @@
    "menu": [],
    "minimum": null,
    "name": "phie_rec_ptf",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -2602,7 +2845,8 @@
    "menu": [],
    "minimum": "0",
    "name": "dump_protocol",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   },
   {
    "allocates": [],
@@ -2612,7 +2856,8 @@
    "menu": [],
    "minimum": "dt/1000.",
    "name": "tracedt",
-   "type": "Double"
+   "type": "Double",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -2622,7 +2867,8 @@
    "menu": [],
    "minimum": null,
    "name": "trace_node[Int]",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2632,7 +2878,8 @@
    "menu": [],
    "minimum": null,
    "name": "trace_node",
-   "type": "{ num_trace x Int }"
+   "type": "{ num_trace x Int }",
+   "units": null
   },
   {
    "allocates": [
@@ -2644,7 +2891,8 @@
    "menu": [],
    "minimum": null,
    "name": "num_trace",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2654,7 +2902,8 @@
    "menu": [],
    "minimum": null,
    "name": "rt_lib_args",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2664,7 +2913,8 @@
    "menu": [],
    "minimum": null,
    "name": "rt_lib",
-   "type": "String"
+   "type": "String",
+   "units": null
   },
   {
    "allocates": [],
@@ -2674,7 +2924,8 @@
    "menu": [],
    "minimum": null,
    "name": "external_imp[Int]",
-   "type": "RFile"
+   "type": "RFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -2684,7 +2935,8 @@
    "menu": [],
    "minimum": null,
    "name": "external_imp",
-   "type": "{ num_external_imp x RFile }"
+   "type": "{ num_external_imp x RFile }",
+   "units": null
   },
   {
    "allocates": [
@@ -2696,7 +2948,8 @@
    "menu": [],
    "minimum": null,
    "name": "num_external_imp",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2706,7 +2959,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.output.debugNode",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2716,7 +2970,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.output.idifffile",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -2726,7 +2981,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.output.rtfile",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -2736,7 +2992,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.output.atfile",
-   "type": "WFile"
+   "type": "WFile",
+   "units": null
   },
   {
    "allocates": [],
@@ -2746,7 +3003,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.fim.max_coh",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2756,7 +3014,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.fim.max_addpt",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2766,7 +3025,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.fim.max_iter",
-   "type": "Int"
+   "type": "Int",
+   "units": null
   },
   {
    "allocates": [],
@@ -2776,7 +3036,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.fim.tol",
-   "type": "Double"
+   "type": "Double",
+   "units": "ms"
   },
   {
    "allocates": [],
@@ -2786,7 +3047,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.repol_time_thresh",
-   "type": "Double"
+   "type": "Double",
+   "units": "mV"
   },
   {
    "allocates": [],
@@ -2796,7 +3058,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.tau_max",
-   "type": "Double"
+   "type": "Double",
+   "units": null
   },
   {
    "allocates": [],
@@ -2806,7 +3069,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.tau_inc",
-   "type": "Double"
+   "type": "Double",
+   "units": null
   },
   {
    "allocates": [],
@@ -2816,7 +3080,8 @@
    "menu": [],
    "minimum": null,
    "name": "dream.tau_s",
-   "type": "Double"
+   "type": "Double",
+   "units": null
   },
   {
    "allocates": [],
@@ -2831,7 +3096,8 @@
    ],
    "minimum": null,
    "name": "dream.solve",
-   "type": "Short"
+   "type": "Short",
+   "units": null
   }
  ]
 }

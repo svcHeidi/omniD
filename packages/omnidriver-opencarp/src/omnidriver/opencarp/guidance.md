@@ -25,8 +25,14 @@ command line sets.
   `no`, `off`, `yes`, `2` all as ON (F1).
 - Counts size arrays: `stim[1].*` needs `num_stim >= 2`, or openCARP exits (F2).
   `num_stim` defaults to 2, so a case that omits it gets two stimuli (F7).
-- Units: `dt` is in microseconds, `tend` in milliseconds (G2). `spacedt` must
-  be <= `tend` (G1). The mesh axis `dx` is in micrometres (F3).
+- Units: `dt` is in microseconds, `tend` in milliseconds (G2); `describe` lists
+  each parameter's unit as `+Help` prints it. The mesh axis `dx` is in
+  micrometres (F3).
+- Bounds: a bound written as a number is checked when a study sets the key.
+  One that names another parameter (`spacedt` <= `tend`, G1) is checked
+  against that parameter's value in the case, its default where the case omits
+  it. One written as an expression (`dt/1000.`) is not evaluated: the plan
+  warns `opencarp_bound_not_checked` and leaves it to openCARP.
 - A key assigned twice in a .par takes its last value (F8); omniD refuses to
   patch such a key.
 - Strings: omniD always writes a `.par` string quoted (F13). An unquoted
