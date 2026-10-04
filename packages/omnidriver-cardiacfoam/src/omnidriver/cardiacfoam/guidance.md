@@ -10,8 +10,10 @@ this first part is one the record-key validator
 (`record_key_validation.record_key_validator`) or the catalogue already
 enforces; none is new. The last section is about the mesh.
 
-- **Two documents are catalogued**: `constant/electroProperties` and
-  `constant/physicsProperties`. A key in either must be in the catalogue, or
+- **Three documents are catalogued**: `constant/electroProperties`,
+  `constant/physicsProperties` and `constant/prePacingProperties` (its keys at
+  the root or under `regions.<region_name>`, which the file's presence turns
+  on). A key in any of them must be in the catalogue, or
   read by the supplied C++ source at exactly that path: then it is
   `uncatalogued`, accepted (and added if the case lacks it), and checked
   against the type the C++ reads it as (`omnidriver catalog --uncatalogued`
@@ -39,11 +41,13 @@ enforces; none is new. The last section is about the mesh.
   without it takes a map, `{"xMin": 0}`: each member is checked as that
   entry, and the case's sub-dictionary is replaced by exactly the map's
   members. This is how a patch moves from one map to another.
-- **OpenFOAM's `system/` documents are open.** `controlDict`, `fvSchemes`,
-  `fvSolution`, `blockMeshDict` and any other `system/` document are listed
-  once each, with `validated: false`. A key there is written as asked: omniD
-  has no catalogue of OpenFOAM's keys, so it cannot tell whether the solver
-  reads it.
+- **`system/controlDict` is partly catalogued.** The keys the catalogue lists
+  (`deltaT`, `endTime`, `startTime`, `writeInterval`, ...) are checked by
+  shape and bounds: `deltaT` and `writeInterval` must be more than 0 and
+  `endTime` at least 0. Any other key of it, and every key of `fvSchemes`,
+  `fvSolution`, `blockMeshDict` and any other `system/` document, is listed
+  once with `validated: false` and written as asked: omniD has no catalogue of
+  OpenFOAM's other keys, so it cannot tell whether the solver reads them.
 - **Any other document is refused** by name, so a misspelt document is never
   taken for an OpenFOAM one.
 - **Region-split cases are not catalogued yet.** An electromechanics case

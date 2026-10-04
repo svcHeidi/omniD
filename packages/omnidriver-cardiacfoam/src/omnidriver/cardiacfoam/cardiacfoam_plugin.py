@@ -149,7 +149,7 @@ class CardiacFoamPlugin:
 
     @staticmethod
     def get_owned_documents() -> frozenset[str]:
-        return frozenset({"electroProperties", "physicsProperties"})
+        return frozenset({"electroProperties", "physicsProperties", "prePacingProperties"})
 
     def get_named_catalogs(self) -> dict:
         """This plugin's own catalogs -- ionic models and active-tension

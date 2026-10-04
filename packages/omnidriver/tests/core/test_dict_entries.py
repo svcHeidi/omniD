@@ -43,6 +43,13 @@ class TestDictEntryStructuredConstraints(unittest.TestCase):
         entry = self._build_entry(required_one_of=("stimulusLocationMaxList",))
         self.assertEqual(entry.required_one_of, ("stimulusLocationMaxList",))
 
+    def test_numeric_bounds_default_to_none_and_need_a_numeric_kind(self) -> None:
+        entry = self._build_entry()
+        self.assertEqual((entry.minimum, entry.exclusive_minimum), (None, None))
+        self.assertEqual(self._build_entry(value_kind="scalar", exclusive_minimum=0).exclusive_minimum, 0)
+        with self.assertRaises(ValueError):
+            self._build_entry(value_kind="word", minimum=0)
+
     def test_applicable_when_accepts_value_predicate(self) -> None:
         entry = self._build_entry(
             applicable_when={"myocardiumSolver": "monodomainSolver"},

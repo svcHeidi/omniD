@@ -72,7 +72,11 @@ def listed_entry(document: str, key: str, entry: Any) -> dict[str, Any]:
         "examples": list(entry.examples),
         "notes": entry.notes,
     }
-    return {**listing, **{name: value for name, value in extras.items() if value}}
+    bounds = {"minimum": entry.minimum, "exclusive_minimum": entry.exclusive_minimum}
+    return {
+        **listing, **{name: value for name, value in extras.items() if value},
+        **{name: value for name, value in bounds.items() if value is not None},
+    }
 
 
 def scanned_key(
@@ -131,6 +135,16 @@ def scanned_key(
     return kind, True
 
 
+def bound_reasons(entry: Any, value: Any) -> tuple[str, ...]:
+    """Reasons a number lies outside the entry's declared bounds; empty when it fits or none is declared."""
+    reasons = []
+    if entry.minimum is not None and value < entry.minimum:
+        reasons.append(f"must be at least {entry.minimum:g}")
+    if entry.exclusive_minimum is not None and value <= entry.exclusive_minimum:
+        reasons.append(f"must be more than {entry.exclusive_minimum:g}")
+    return tuple(reasons)
+
+
 def check_binding(entry: Any, placeholder: str, bound_value: str) -> None:
     """Refuse a dynamic-path binding the entry's own ``allowed_bindings``
     does not sanction: an undeclared placeholder, an open domain whose value
@@ -174,6 +188,9 @@ class CataloguedDocument:
     match: Callable[[tuple[str, ...]], "tuple[Any, dict[str, str]] | None"]
     scan: Callable[[tuple[str, ...]], tuple[str, ...]]
     members: Callable[[tuple[str, ...]], bool] = lambda key_path: False
+    #: A key neither the catalogue nor the C++ places is written as asked, unvalidated,
+    #: as in a document OpenFOAM reads optionally (``controlDict``) whose catalogue is partial.
+    open: bool = False
 
 
 def make_validator(
@@ -205,6 +222,8 @@ def make_validator(
                         mapping=mapping(), entries=catalogued.entries(),
                     )
                 except KeyError as exc:
+                    if catalogued.open:
+                        return infer_unvalidated_value_kind(value), False
                     raise KeyError(
                         f"{document}:{dotted} is not declared by the {catalogued.label} key catalog, and "
                         f"{exc.args[0]} (omnidriver catalog --uncatalogued lists what it reads)"
@@ -221,6 +240,8 @@ def make_validator(
                 scan is not None and cxx_value_kind(views[scan.digest][document.rsplit("/", 1)[-1]].scan, entry)
             ) or entry.value_kind
             reasons = validate_value_shape(kind, value)
+            if not reasons and (bounded := bound_reasons(entry, value)):
+                raise ValueError(f"{document}:{dotted} = {value!r} is outside the catalogue's bounds: {'; '.join(bounded)}")
             if reasons:
                 raise ValueError(
                     f"{document}:{dotted} does not fit "

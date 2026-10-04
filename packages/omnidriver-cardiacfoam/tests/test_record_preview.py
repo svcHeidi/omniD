@@ -69,7 +69,7 @@ def test_restating_the_cases_own_values_is_unchanged_and_flags_what_the_catalogu
     patches = {tuple(patch["key_path"]): patch for patch in preview["patches"]}
     assert len(patches) == 3
     assert (patches[STIM_AMPLITUDE]["status"], patches[STIM_AMPLITUDE]["validated"]) == ("unchanged", True)
-    assert (patches[("deltaT",)]["status"], patches[("deltaT",)]["validated"]) == ("unchanged", False)
+    assert (patches[("deltaT",)]["status"], patches[("deltaT",)]["validated"]) == ("unchanged", True)
     assert (patches[("hex_cell_counts",)]["status"], patches[("hex_cell_counts",)]["validated"]) == ("unchanged", False)
 
 

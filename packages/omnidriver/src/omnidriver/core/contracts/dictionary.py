@@ -154,6 +154,10 @@ class DictEntry:
     required: bool = False
     constraints: tuple[str, ...] = ()
     unit: str = ""
+    # Numeric bounds on a ``scalar`` or ``integer`` value: at least
+    # ``minimum``, and strictly more than ``exclusive_minimum``.
+    minimum: float | None = None
+    exclusive_minimum: float | None = None
     typical_value: str = ""
     # The value the solver takes when this key is absent. Stated only for a
     # selector whose absence another entry's predicate has to see as that value;
@@ -189,6 +193,11 @@ class DictEntry:
             raise ValueError(
                 f"{self.driver_path!r} declares value_kind {self.value_kind!r}, "
                 f"which is not one of {sorted(VALUE_KINDS)}"
+            )
+        if (self.minimum is not None or self.exclusive_minimum is not None) and self.value_kind not in {"scalar", "integer"}:
+            raise ValueError(
+                f"{self.driver_path!r} declares a numeric bound but its value_kind is {self.value_kind!r}, "
+                "not scalar or integer"
             )
         if self.default and self.enum_values and self.default not in self.enum_values:
             raise ValueError(

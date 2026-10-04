@@ -49,6 +49,10 @@ case_profile:
       kind: openfoam_dictionary
       role: plugin.configuration
       required: always
+    - path: constant/prePacingProperties
+      kind: openfoam_dictionary
+      role: plugin.configuration
+      required: conditional
     - path: system/decomposeParDict
       kind: openfoam_dictionary
       role: openfoam.decomposition

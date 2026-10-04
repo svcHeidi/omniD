@@ -166,12 +166,32 @@ def test_system_document_key_accepted_unvalidated(value, expected_kind):
     assert value_kind == expected_kind
 
 
-def test_system_control_dict_delta_t_is_unvalidated():
-    value_kind, validated = record_key_validator(
-        "system/controlDict", ("deltaT",), 1e-5,
-    )
-    assert value_kind == "scalar"
-    assert validated is False
+def test_a_catalogued_control_dict_key_is_validated_by_kind_and_bounds():
+    assert record_key_validator("system/controlDict", ("deltaT",), 1e-5) == ("scalar", True)
+    with pytest.raises(ValueError, match="must be a number"):
+        record_key_validator("system/controlDict", ("deltaT",), "abc")
+    with pytest.raises(ValueError, match="must be at least 0"):
+        record_key_validator("system/controlDict", ("endTime",), -5)
+    with pytest.raises(ValueError, match="must be more than 0"):
+        record_key_validator("system/controlDict", ("deltaT",), 0)
+    assert record_key_validator("system/controlDict", ("endTime",), 0) == ("scalar", True)
+
+
+def test_a_control_dict_key_the_catalogue_lacks_is_written_as_asked():
+    assert record_key_validator("system/controlDict", ("writePrecision",), 8) == ("integer", False)
+
+
+def test_pre_pacing_keys_are_validated_at_the_root_and_in_a_region_block():
+    document = "constant/prePacingProperties"
+    assert record_key_validator(document, ("maxBeats",), 5) == ("integer", True)
+    assert record_key_validator(document, ("regions", "epicardialCells", "tolerance"), 1e-3) == ("scalar", True)
+    assert record_key_validator(document, ("singleCellStimulus",), {"stim_start": 0}) == ("mapping", True)
+    with pytest.raises(ValueError, match="must be an integer"):
+        record_key_validator(document, ("regions", "epicardialCells", "maxBeats"), "many")
+    with pytest.raises(ValueError, match="not a valid word|whitespace"):
+        record_key_validator(document, ("regions", "not a name", "maxBeats"), 5)
+    with pytest.raises(KeyError, match="prePacingProperties"):
+        record_key_validator(document, ("maxBeatz",), 5)
 
 
 def test_system_block_mesh_dict_hex_cell_counts_is_unvalidated():

@@ -49,3 +49,22 @@ def test_every_listed_key_the_case_holds_is_accepted_by_the_validator_with_its_k
         assert record_key_validator(entry["document"], key_path, value) == (entry["value_kind"], True), entry
         checked.append(entry["key"])
     assert "singleCellSolverCoeffs.tissue" in checked and "myocardiumSolver" in checked
+
+
+def test_the_catalogued_control_dict_keys_are_listed_with_their_bounds_beside_the_open_row():
+    control = [e for e in _catalogue() if e["document"] == "system/controlDict"]
+    delta_t = next(e for e in control if e["key"] == "deltaT")
+    assert delta_t["exclusive_minimum"] == 0 and delta_t["value_kind"] == "scalar"
+    assert next(e for e in control if e["key"] == "endTime")["minimum"] == 0
+    assert [e for e in control if e["key"] == ANY_KEY] == [{"document": "system/controlDict", "key": ANY_KEY, "validated": False}]
+
+
+def test_a_pre_pacing_file_the_case_holds_is_listed_by_the_keys_a_study_may_set(tmp_path):
+    import shutil
+
+    case = tmp_path / "case"
+    shutil.copytree(CASE, case)
+    (case / "constant" / "prePacingProperties").write_text("FoamFile { version 2.0; format ascii; class dictionary; object x; }\n")
+    keys = {e["key"] for e in CardiacFoamPlugin().get_record_key_catalog(case) if e["document"] == "constant/prePacingProperties"}
+    assert {"tolerance", "maxBeats", "regions.<region_name>.maxBeats", "singleCellStimulus"} <= keys
+    assert not [key for key in keys if "$" in key]

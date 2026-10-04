@@ -1,6 +1,6 @@
 """cardiacFOAM's tutorial-record key catalogue and validator, on ``omnidriver-openfoam``'s shared validator (:func:`make_validator`).
 
-Covers ``constant/electroProperties`` and ``constant/physicsProperties``; ``record_key_catalog`` lists what is accepted for one case."""
+Covers ``constant/electroProperties``, ``constant/physicsProperties``, ``constant/prePacingProperties`` and the keys of ``system/controlDict`` the catalogue lists (any other controlDict key is written as asked); ``record_key_catalog`` lists what is accepted for one case."""
 
 from __future__ import annotations
 
@@ -12,21 +12,26 @@ from omnidriver.openfoam.record_key_validation import (
     CataloguedDocument, listed_entry, make_validator, open_system_documents,
 )
 
-from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from .common_dict_entries import CONTROL_DICT_ENTRIES, PHYSICS_PROPERTY_ENTRIES, PRE_PACING_PROPERTY_ENTRIES
 from .detection import detect_myocardium_solver_name
 from .dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from .physics_layout import PhysicsLayoutError, region_of
 
 ELECTRO_DOCUMENT = "constant/electroProperties"
 PHYSICS_DOCUMENT = "constant/physicsProperties"
+PRE_PACING_DOCUMENT = "constant/prePacingProperties"
+CONTROL_DOCUMENT = "system/controlDict"
 
 #: The scope token every coeffs-scoped catalogue ``driver_path`` starts with.
 _COEFFS_TOKEN = "$ELECTRO_MODEL_COEFFS"
+_PRE_PACING_TOKEN = "$PRE_PACING"
 
 _ELECTRO_ENTRIES_BY_PATH = {
     entry.driver_path: entry for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values() for entry in group
 }
 _PHYSICS_ENTRIES_BY_PATH = {entry.driver_path: entry for entry in PHYSICS_PROPERTY_ENTRIES}
+_PRE_PACING_ENTRIES_BY_PATH = {entry.driver_path: entry for entry in PRE_PACING_PROPERTY_ENTRIES}
+_CONTROL_ENTRIES_BY_PATH = {entry.driver_path: entry for entry in CONTROL_DICT_ENTRIES}
 
 
 def _coeffs_names() -> "frozenset[str]":
@@ -77,6 +82,18 @@ def _physics_match(key_path: "tuple[str, ...]"):
     return None if entry is None else (entry, {})
 
 
+def _pre_pacing_match(key_path: "tuple[str, ...]"):
+    """The entry a ``prePacingProperties`` key path addresses, at the file's root or in one ``regions.<name>`` block."""
+    templated = ".".join((_PRE_PACING_TOKEN, *key_path))
+    entry = _PRE_PACING_ENTRIES_BY_PATH.get(templated)
+    return (entry, {}) if entry is not None else match_dynamic_entry(templated, _PRE_PACING_ENTRIES_BY_PATH.values())
+
+
+def _control_match(key_path: "tuple[str, ...]"):
+    entry = _CONTROL_ENTRIES_BY_PATH.get(".".join(key_path))
+    return None if entry is None else (entry, {})
+
+
 def cardiacfoam_mapping() -> Any:
     from .cardiacfoam_plugin import CardiacFoamPlugin
 
@@ -100,6 +117,19 @@ record_key_validator = make_validator(
             entries=_PHYSICS_ENTRIES_BY_PATH.values,
             match=_physics_match,
             scan=lambda key_path: key_path,
+        ),
+        PRE_PACING_DOCUMENT: CataloguedDocument(
+            label="prePacingProperties",
+            entries=_PRE_PACING_ENTRIES_BY_PATH.values,
+            match=_pre_pacing_match,
+            scan=lambda key_path: (_PRE_PACING_TOKEN, *key_path),
+        ),
+        CONTROL_DOCUMENT: CataloguedDocument(
+            label="controlDict",
+            entries=_CONTROL_ENTRIES_BY_PATH.values,
+            match=_control_match,
+            scan=lambda key_path: key_path,
+            open=True,
         ),
     },
     mapping=cardiacfoam_mapping,
@@ -137,4 +167,11 @@ def record_key_catalog(case_root: Path) -> tuple[dict[str, Any], ...]:
         ]
     if (case_root / PHYSICS_DOCUMENT).is_file():
         entries += [listed_entry(PHYSICS_DOCUMENT, path, entry) for path, entry in _PHYSICS_ENTRIES_BY_PATH.items()]
+    if (case_root / PRE_PACING_DOCUMENT).is_file():
+        entries += [
+            listed_entry(PRE_PACING_DOCUMENT, path.removeprefix(f"{_PRE_PACING_TOKEN}."), entry)
+            for path, entry in _PRE_PACING_ENTRIES_BY_PATH.items()
+        ]
+    if (case_root / CONTROL_DOCUMENT).is_file():
+        entries += [listed_entry(CONTROL_DOCUMENT, path, entry) for path, entry in _CONTROL_ENTRIES_BY_PATH.items()]
     return (*entries, *open_system_documents(case_root))
