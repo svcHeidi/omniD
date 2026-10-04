@@ -13,15 +13,8 @@ from typing import TYPE_CHECKING, Callable
 from .core.runtime.failure_context import build_failure_context
 from .core.runtime.launch_readiness import is_execution_successful, is_launchable
 from .core.runtime.remediation import build_candidate_remediations
-from .core.runtime.workflow_runner import (
-    _step_state_by_id,
-    clear_stop_request,
-    has_live_steps,
-    request_stop,
-    run_workflow_step,
-    settle_interrupted_steps,
-    stop_requested,
-)
+from .core.runtime.process_control import clear_stop_request, install_signal_handlers
+from .core.runtime.workflow_runner import _step_state_by_id, run_workflow_step, settle_interrupted_steps
 from .core.runtime.workflow_orchestrator import run_workflow
 from .core.runtime.workflow_state import workflow_state_from_json
 from .core.runtime.case_records import (
@@ -1268,25 +1261,6 @@ def _select_stack(parser: argparse.ArgumentParser, args):
     return context, repository
 
 
-def _stop_steps_on_signals() -> dict[int, object]:
-    """Make SIGTERM and SIGINT end the running step's whole process group before the CLI exits.
-
-    A step is its own session, so a signal to the CLI alone would leave the
-    solver running. With no step running the signal keeps its usual effect;
-    with one, the step is terminated and recorded as cancelled, and a second
-    signal stops the CLI at once. Returns the handlers to restore.
-    """
-    def handler(number: int, _frame) -> None:
-        if not has_live_steps() or stop_requested():
-            raise SystemExit(128 + number)
-        request_stop()
-
-    try:
-        return {number: signal.signal(number, handler) for number in (signal.SIGTERM, signal.SIGINT)}
-    except ValueError:
-        return {}
-
-
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["build"]:
@@ -1297,7 +1271,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     _validate_args(parser, args)
     previous = os.environ.get(SCRATCH_ENV_VAR)
-    previous_handlers = _stop_steps_on_signals() if args.action in {"step", "run"} else {}
+    previous_handlers = (
+        install_signal_handlers() if args.action in {"step", "run", "sweep-run", "check"} else {}
+    )
     if args.scratch_dir and args.action != "recover":
         # The one supplied scratch root, for the layers that cache a scan there.
         os.environ[SCRATCH_ENV_VAR] = str(Path(args.scratch_dir).expanduser())

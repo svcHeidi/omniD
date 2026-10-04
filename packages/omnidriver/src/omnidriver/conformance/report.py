@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from omnidriver.core.environment_connection import load_environment
+from omnidriver.core.runtime.process_control import run_child
 
 from .checks import CHECKS, run_check
 from .target import ConformanceTarget
@@ -44,10 +45,7 @@ def _regression(script: Path, native_case: Path, work: Path, timeout_s: float) -
     shutil.copytree(native_case, case, symlinks=True)
     started = time.monotonic()
     try:
-        proc = subprocess.run(
-            ["bash", str(case / script.relative_to(native_case))], cwd=case, capture_output=True, text=True,
-            timeout=timeout_s,
-        )
+        proc = run_child(["bash", str(case / script.relative_to(native_case))], cwd=case, timeout=timeout_s)
     except subprocess.TimeoutExpired:
         return {"status": "failed", "detail": f"timed out after {timeout_s}s", "case": str(case)}
     status = "skipped" if proc.returncode == _SKIPPED else "passed" if proc.returncode == 0 else "failed"

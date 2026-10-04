@@ -23,6 +23,7 @@ from omnidriver.core.quantities import (
 )
 from omnidriver.core.runtime import mpi
 from omnidriver.core.runtime.models import data_artifact_from_json
+from omnidriver.core.runtime.process_control import run_child
 from omnidriver.core.runtime.case_records import build_sweep_context
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
 from omnidriver.core.runtime.record_surface import lists_key
@@ -228,9 +229,10 @@ def _execute(
 ) -> tuple[subprocess.CompletedProcess, dict[str, Any] | None]:
     # Never hand-build a run command: the canonical builder carries --plugin
     # from ctx.plugin_selector and ctx.repository.
-    proc = subprocess.run(
+    proc = run_child(
         omnidriver_run_command(ctx, "--run-document", str(_run_document_path(report))),
-        capture_output=True, text=True, env={**_child_env(target), **env}, timeout=target.timeout_s,
+        env={**_child_env(target), **env}, timeout=target.timeout_s,
+        state_path=Path(report.launch["workflow_state_path"]),
     )
     try:
         payload = json.loads(proc.stdout)

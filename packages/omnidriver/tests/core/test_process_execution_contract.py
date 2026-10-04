@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from omnidriver.core.runtime.process_control import clear_stop_request, request_stop
 from omnidriver.core.runtime.workflow_runner import run_workflow_step
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
 
@@ -132,8 +133,8 @@ def test_completed_step_cannot_be_replayed_without_new_owned_state(tmp_path: Pat
         run_workflow_step(dag, completed, "run", case_root=tmp_path, log_dir=tmp_path / "logs")
 
 
-def test_cancellation_cleans_owned_descendants(tmp_path: Path) -> None:
-    """Caller cancellation has the same process-tree guarantee as timeout."""
+def test_a_stop_request_cleans_owned_descendants(tmp_path: Path) -> None:
+    """A stop request (a signal to the CLI) has the same process-tree guarantee as timeout."""
     pid_file = tmp_path / "cancelled-child.pid"
     code = (
         "import pathlib, subprocess, sys, time; "
@@ -141,17 +142,16 @@ def test_cancellation_cleans_owned_descendants(tmp_path: Path) -> None:
         f"pathlib.Path({str(pid_file)!r}).write_text(str(p.pid)); "
         "time.sleep(30)"
     )
-    cancelled = threading.Event()
-    timer = threading.Timer(0.2, cancelled.set)
+    timer = threading.Timer(0.2, request_stop, args=(signal.SIGTERM,))
     timer.start()
     try:
         result = run_workflow_step(
             _dag(["-c", code]), initial_workflow_state(_dag(["-c", code])), "run",
             case_root=tmp_path, log_dir=tmp_path / "logs",
-            cancellation_requested=cancelled.is_set,
         )
     finally:
         timer.cancel()
+        clear_stop_request()
     assert any(d["code"] == "workflow_step_cancelled" for d in result.state.steps[0].diagnostics)
     assert pid_file.exists()
     child_pid = int(pid_file.read_text())

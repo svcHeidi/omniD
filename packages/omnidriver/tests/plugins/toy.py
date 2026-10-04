@@ -663,6 +663,13 @@ class SleepingPlugin(ToyStack):
     RECORDS = {"toyTutorial": _toy_record(_solve(("sleep", "60"), produces=()))}
 
 
+class StubbornSleepingPlugin(ToyStack):
+    """Its step ignores SIGTERM, so only SIGKILL ends it."""
+
+    SOLVER_COMMANDS = frozenset({"sh"})
+    RECORDS = {"toyTutorial": _toy_record(_solve(("sh", "-c", "trap '' TERM; sleep 60"), produces=()))}
+
+
 class TwoStepPlugin(ToyStack):
     """A ``mesh`` step, then the ``solve`` step that depends on it."""
 
@@ -990,6 +997,7 @@ EXPLAINING_PLUGIN = _selector("ExplainingFailurePlugin")
 FAILS_UNTIL_SEVEN_CELLS_PLUGIN = _selector("FailsUntilSevenCellsPlugin")
 TWO_STEP_PLUGIN = _selector("TwoStepPlugin")
 SLEEPING_PLUGIN = _selector("SleepingPlugin")
+STUBBORN_SLEEPING_PLUGIN = _selector("StubbornSleepingPlugin")
 ACCEPTING_PLUGIN = _selector("AcceptingAnyKeyPlugin")
 BROKEN_RULE_PLUGIN = _selector("AlwaysBrokenCasePlugin")
 PARALLEL_TOY_PLUGIN = _selector("ParallelToyPlugin")

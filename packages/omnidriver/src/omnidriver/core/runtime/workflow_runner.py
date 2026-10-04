@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import shlex
-import signal
 import socket
 import subprocess
-import threading
 import time
 from contextlib import ExitStack
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Mapping
 
 from ..plugin_profile import replica_directory_globs
 from ..scripts import find_script, script_argv
@@ -33,6 +30,16 @@ from .workflow_state import (
     workflow_state_from_json,
 )
 from .models import DataArtifact
+from .process_control import (
+    group_alive,
+    recorded_here,
+    register,
+    spawning,
+    stop_requested,
+    terminate_group,
+    terminate_process,
+    unregister,
+)
 
 
 @dataclass(frozen=True)
@@ -204,78 +211,6 @@ def _artifact_snapshot(
     return snapshot
 
 
-#: The steps being waited on in this process, and whether the CLI was told to
-#: stop: a SIGTERM or SIGINT sets the flag, and the wait loop then ends each
-#: step's whole process group (a signal handler cannot, since it may not wait
-#: on a process the interrupted code is already waiting on).
-_LIVE_STEPS: set[subprocess.Popen[Any]] = set()
-_STOP_REQUESTED = threading.Event()
-
-
-def has_live_steps() -> bool:
-    return bool(_LIVE_STEPS)
-
-
-def request_stop() -> None:
-    """Ask every step being waited on to be terminated, with its process group."""
-    _STOP_REQUESTED.set()
-
-
-def stop_requested() -> bool:
-    return _STOP_REQUESTED.is_set()
-
-
-def clear_stop_request() -> None:
-    _STOP_REQUESTED.clear()
-
-
-def _terminate_group_id(group: int) -> None:
-    """SIGTERM then, after a second, SIGKILL a process group this process may not own (it cannot be waited on)."""
-    try:
-        os.killpg(group, signal.SIGTERM)
-    except (ProcessLookupError, PermissionError):
-        return
-    deadline = time.monotonic() + 1
-    while time.monotonic() < deadline:
-        try:
-            os.killpg(group, 0)
-        except (ProcessLookupError, PermissionError):
-            return
-        time.sleep(0.02)
-    try:
-        os.killpg(group, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
-        pass
-
-
-def _recorded_live_step(step: WorkflowStepState) -> int | None:
-    """The process group of a ``running`` step recorded by this host that is still its own session leader, else ``None``."""
-    if step.status != "running" or step.pid is None or os.name != "posix":
-        return None
-    if (step.host or {}).get("hostname") != socket.gethostname():
-        return None
-    try:
-        return step.pid if os.getpgid(step.pid) == step.pid else None
-    except ProcessLookupError:
-        return None
-
-
-def terminate_recorded_steps(state_path: Path) -> None:
-    """End the process group of every step ``state_path`` records as ``running``.
-
-    A step is its own session, so ending the omnidriver that started it does
-    not end the step: the caller of a timed-out run does this too.
-    """
-    try:
-        state = workflow_state_from_json(json.loads(Path(state_path).read_text()))
-    except (OSError, ValueError, KeyError):
-        return
-    for step in state.steps:
-        group = _recorded_live_step(step)
-        if group is not None:
-            _terminate_group_id(group)
-
-
 def settle_interrupted_steps(state: WorkflowRunState, state_path: Path) -> WorkflowRunState:
     """Fail a step a dead process left ``running`` as interrupted, and save that; refuse while it is alive.
 
@@ -289,9 +224,9 @@ def settle_interrupted_steps(state: WorkflowRunState, state_path: Path) -> Workf
                 f"step {step.step_id!r} was started on host {step.host['hostname']!r}, so it cannot be "
                 "known to have stopped; resume it there, or plan again"
             )
-        if _recorded_live_step(step) is not None:
+        if recorded_here(step) and group_alive(step.pid):
             raise ValueError(
-                f"step {step.step_id!r} is still running (pid {step.pid}); stop it before resuming"
+                f"step {step.step_id!r} is still running (process group {step.pid}); stop it before resuming"
             )
     for step in running:
         interrupted = replace(
@@ -313,48 +248,6 @@ def settle_interrupted_steps(state: WorkflowRunState, state_path: Path) -> Workf
     if running:
         atomic_write_json(Path(state_path), state.to_json())
     return state
-
-
-def _terminate_process_group(process: subprocess.Popen[Any]) -> None:
-    """Terminate a step and the descendants in its process group; a descendant in a new session is out of scope."""
-    if os.name != "posix":
-        process.kill()
-        process.wait()
-        return
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        process.wait()
-        return
-
-    # Waiting only for the direct parent is insufficient: it may accept TERM
-    # and exit while a child in the same owned group ignores the signal. Keep
-    # observing the group itself for the whole grace period, then escalate the
-    # still-owned group even if the direct parent has already been reaped.
-    deadline = time.monotonic() + 1
-    while _has_live_group_members(process) and time.monotonic() < deadline:
-        try:
-            process.wait(timeout=0)
-        except subprocess.TimeoutExpired:
-            pass
-        time.sleep(0.02)
-    if _has_live_group_members(process):
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
-    process.wait()
-
-
-def _has_live_group_members(process: subprocess.Popen[Any]) -> bool:
-    """Whether descendants remain after their direct workflow parent exits."""
-    if os.name != "posix":
-        return False
-    try:
-        os.killpg(process.pid, 0)
-    except (ProcessLookupError, PermissionError):
-        return False
-    return True
 
 
 #: How much of the end of each log a stack reads to explain a failed step.
@@ -399,20 +292,17 @@ def redact_step_logs(paths: Any, patterns: Any) -> None:
 
 
 def _wait_for_step_process(
-    process: subprocess.Popen[Any],
-    *,
-    timeout_s: int | None,
-    cancellation_requested: Callable[[], bool] | None,
+    process: subprocess.Popen[Any], *, timeout_s: int | None,
 ) -> tuple[int | None, str | None]:
-    """Wait for one owned process group, returning an explicit stop reason."""
+    """Wait for a step, ending its group on a timeout or a stop request; returns the exit code and the stop reason."""
     deadline = None if timeout_s is None else time.monotonic() + timeout_s
     while True:
-        if _STOP_REQUESTED.is_set() or (cancellation_requested is not None and cancellation_requested()):
-            _terminate_process_group(process)
-            return None, "cancelled"
+        if stop_requested():
+            terminate_process(process)
+            return None, "stopped"
         remaining = None if deadline is None else deadline - time.monotonic()
         if remaining is not None and remaining <= 0:
-            _terminate_process_group(process)
+            terminate_process(process)
             return None, "timeout"
         try:
             return process.wait(timeout=0.1 if remaining is None else min(0.1, remaining)), None
@@ -431,7 +321,6 @@ def run_workflow_step(
     env: Mapping[str, str] | None = None,
     expected_artifacts: tuple[DataArtifact, ...] = (),
     driver_context: Any | None = None,
-    cancellation_requested: Callable[[], bool] | None = None,
     leases_held: bool = False,
 ) -> WorkflowStepRunResult:
     """Execute one normalized workflow step and return the updated state.
@@ -455,7 +344,7 @@ def run_workflow_step(
                 workflow_dag, workflow_state, step_id,
                 case_root=case_root, log_dir=log_dir, state_path=state_path, env=env,
                 expected_artifacts=expected_artifacts, driver_context=driver_context,
-                cancellation_requested=cancellation_requested, leases_held=True,
+                leases_held=True,
             )
 
     from .workflow_state import workflow_digest
@@ -513,9 +402,6 @@ def run_workflow_step(
         completed_steps=workflow_state.completed_steps,
         failed_step_id=None,
     )
-    if state_path is not None:
-        atomic_write_json(Path(state_path), running_state.to_json())
-
     required_artifacts = tuple(
         artifact for artifact in expected_artifacts
         if not artifact.optional and artifact.artifact_id in step.get("produces", ())
@@ -529,30 +415,29 @@ def run_workflow_step(
     diagnostics: tuple[dict[str, Any], ...] = ()
     try:
         with stdout_log.open("w") as stdout_handle, stderr_log.open("w") as stderr_handle:
-            process = subprocess.Popen(
-                _argv_for_execution(command, executable, args, env, driver_context),
-                cwd=resolved_cwd,
-                stdout=stdout_handle,
-                stderr=stderr_handle,
-                env=dict(env) if env is not None else None,
-                text=True,
-                start_new_session=(os.name == "posix"),
-            )
-            _LIVE_STEPS.add(process)
+            with spawning():
+                process = subprocess.Popen(
+                    _argv_for_execution(command, executable, args, env, driver_context),
+                    cwd=resolved_cwd,
+                    stdout=stdout_handle,
+                    stderr=stderr_handle,
+                    env=dict(env) if env is not None else None,
+                    text=True,
+                    start_new_session=(os.name == "posix"),
+                )
+                register(process)
             try:
+                # The running state is first written here, with the pid, so
+                # a state that says running always says which process.
                 if state_path is not None:
                     atomic_write_json(Path(state_path), replace_step_state(
                         running_state, replace(running_step, pid=process.pid), status="running",
                         current_step_id=step_id, completed_steps=workflow_state.completed_steps,
                         failed_step_id=None,
                     ).to_json())
-                exit_code, stop_reason = _wait_for_step_process(
-                    process,
-                    timeout_s=step.get("timeout_s"),
-                    cancellation_requested=cancellation_requested,
-                )
+                exit_code, stop_reason = _wait_for_step_process(process, timeout_s=step.get("timeout_s"))
             finally:
-                _LIVE_STEPS.discard(process)
+                unregister(process)
         if driver_context is not None:
             redact_step_logs((stdout_log, stderr_log), driver_context.stack.call("get_log_redaction_patterns"))
         if stop_reason == "timeout":
@@ -562,18 +447,18 @@ def run_workflow_step(
                 "message": f"Workflow step {step_id!r} timed out after {step.get('timeout_s')} seconds.",
                 "field": step_id,
             },)
-        elif stop_reason == "cancelled":
+        elif stop_reason == "stopped":
             diagnostics = ({
                 "level": "error",
                 "code": "workflow_step_cancelled",
-                "message": f"Workflow step {step_id!r} was cancelled by its caller.",
+                "message": f"Workflow step {step_id!r} was stopped by a signal.",
                 "field": step_id,
             },)
-        elif _has_live_group_members(process):
+        elif group_alive(process.pid):
             # A zero-exit launcher that backgrounds work is not a completed
             # workflow step.  Stop the residual owned group rather than
             # allowing it to race a retry or a later attempt.
-            _terminate_process_group(process)
+            terminate_group(process.pid)
             diagnostics = ({
                 "level": "error",
                 "code": "workflow_step_orphaned_descendants",
