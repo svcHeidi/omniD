@@ -11,7 +11,7 @@ import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Mapping, Sequence
 
 from ..case_transaction import commit_case_write
 from ..case_write import CaseMutationRequest, CaseWritePlan, CaseWriteRecord, render_mutation, resolve_mutation
@@ -389,8 +389,9 @@ def _commit_patches(
     execution_env: Any | None,
     requested_by: str,
     case_lease_held: bool = False,
+    verify: Callable[[], None] | None = None,
 ) -> CaseWriteRecord:
-    """Resolve, render and commit ``to_write`` into ``staged_case_root`` through one ``commit_case_write``."""
+    """Resolve, render and commit ``to_write`` into ``staged_case_root`` through one ``commit_case_write``; what ``verify`` raises rolls the commit back."""
     import tempfile
 
     identity = driver_context.identity
@@ -425,7 +426,7 @@ def _commit_patches(
         expected_effects=resolved.expected_effects,
     )
     return commit_case_write(
-        plan, driver_context=driver_context, case_lease_held=case_lease_held,
+        plan, driver_context=driver_context, case_lease_held=case_lease_held, verify=verify,
     )
 
 
@@ -490,8 +491,10 @@ def apply_record_study(
     ``commit_case_write``. The caller holds the case lease.
 
     Refuses a name that is not a ``document:key``: an axis or reserved name
-    changes the plan, which needs a new plan rather than an edit. Returns
-    every patch, serialized, as ``changed`` or ``unchanged``.
+    changes the plan, which needs a new plan rather than an edit. An edit
+    after which the case breaks a rule is rolled back, so a refusal leaves the
+    case as it was. Returns every patch, serialized, as ``changed`` or
+    ``unchanged``.
     """
     plan_changing = sorted(name for name in study if ":" not in name)
     if plan_changing:
@@ -503,16 +506,20 @@ def apply_record_study(
         record, study_by_source={"apply": study}, staged_case_root=case_root,
         driver_context=driver_context,
     )
+
+    def refuse_a_broken_case() -> None:
+        refuse_a_case_that_breaks_a_rule(
+            record, case_root, driver_context, then="; the case is as it was before the edit",
+        )
+
     if to_write:
         _commit_patches(
             record, staged_case_root=case_root, to_write=to_write,
             driver_context=driver_context, execution_env=execution_env,
-            requested_by="step_apply", case_lease_held=True,
+            requested_by="step_apply", case_lease_held=True, verify=refuse_a_broken_case,
         )
-    refuse_a_case_that_breaks_a_rule(
-        record, case_root, driver_context,
-        then="; the edit stays in the case, so patch it again",
-    )
+    else:
+        refuse_a_broken_case()
     return tuple(
         _serialize_sourced_patch(sourced, status=status)
         for status, patches in (("changed", to_write), ("unchanged", unchanged))

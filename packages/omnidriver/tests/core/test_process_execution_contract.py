@@ -128,7 +128,7 @@ def test_completed_step_cannot_be_replayed_without_new_owned_state(tmp_path: Pat
     assert state is not None
     completed = run_workflow_step(dag, state, "run", case_root=tmp_path, log_dir=tmp_path / "logs").state
     assert completed.steps[0].status == "completed"
-    with pytest.raises(ValueError, match="only pending or failed"):
+    with pytest.raises(ValueError, match="only a pending or failed step"):
         run_workflow_step(dag, completed, "run", case_root=tmp_path, log_dir=tmp_path / "logs")
 
 

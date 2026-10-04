@@ -257,3 +257,26 @@ def test_commit_refuses_a_render_claiming_existing_when_the_target_is_missing(tm
     with pytest.raises(case_transaction.CaseTransactionError, match="exists_before"):
         case_transaction.commit_case_write(plan, driver_context=object())
     assert not (tmp_path / "constant" / "a").exists()
+
+
+def test_a_verify_that_refuses_rolls_the_commit_back_and_raises_as_it_is(tmp_path):
+    (tmp_path / "constant").mkdir()
+    existing = tmp_path / "constant" / "a"
+    existing.write_bytes(b"original\n")
+    plan = _plan(tmp_path, [
+        _rendered("constant/a", b"replaced\n", exists_before=True,
+                  before_digest=case_write._digest_bytes(b"original\n")),
+        _rendered("constant/new", b"one\n"),
+    ])
+
+    def refuse():
+        assert existing.read_bytes() == b"replaced\n"
+        raise ValueError("the case breaks a rule")
+
+    with pytest.raises(ValueError, match="breaks a rule"):
+        case_transaction.commit_case_write(plan, driver_context=object(), verify=refuse)
+
+    assert existing.read_bytes() == b"original\n"
+    assert not (tmp_path / "constant" / "new").exists()
+    assert case_transaction.pending_transaction(tmp_path) is None
+    assert not (tmp_path / ".omnidriver" / "case-transactions").exists()

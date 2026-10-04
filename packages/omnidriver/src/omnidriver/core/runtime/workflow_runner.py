@@ -103,6 +103,21 @@ def _dependencies_completed(
     return isinstance(depends_on, list) and all(str(dep) in completed for dep in depends_on)
 
 
+def check_step_runnable(
+    workflow_dag: dict[str, Any], workflow_state: WorkflowRunState, step_id: str,
+) -> None:
+    """Refuse, by name, a step that is neither pending nor failed, or whose dependencies are not completed."""
+    step = _step_by_id(workflow_dag, step_id)
+    status = _step_state_by_id(workflow_state, step_id).status
+    if status not in {"pending", "failed"}:
+        raise ValueError(
+            f"Workflow step {step_id!r} is {status!r}; "
+            "only a pending or failed step can run; plan again to start over"
+        )
+    if not _dependencies_completed(step, workflow_state):
+        raise ValueError(f"Workflow step {step_id!r} has incomplete dependencies")
+
+
 def _resolve_command(command: str, cwd: Path, driver_context: Any | None = None) -> str:
     """Paths verbatim; a declared case-script name case-locally when present; any other bare name via PATH only."""
     if "/" in command:
@@ -347,15 +362,9 @@ def run_workflow_step(
         workflow_state = replace(workflow_state, resume_snapshot=checkpoint_snapshot(
             case_root, workflow_dag, driver_context, env
         ))
+    check_step_runnable(workflow_dag, workflow_state, step_id)
     step = _step_by_id(workflow_dag, step_id)
     previous_step_state = _step_state_by_id(workflow_state, step_id)
-    if previous_step_state.status not in {"pending", "failed"}:
-        raise ValueError(
-            f"Workflow step {step_id!r} is {previous_step_state.status!r}; "
-            "only pending or failed steps can be run by this low-level runner"
-        )
-    if not _dependencies_completed(step, workflow_state):
-        raise ValueError(f"Workflow step {step_id!r} has incomplete dependencies")
 
     attempt = previous_step_state.attempt + 1
     # log_dir is required rather than defaulted: a default anchored on

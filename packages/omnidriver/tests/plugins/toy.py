@@ -646,6 +646,22 @@ class RuleCheckingPlugin(ToyStack):
         return (diagnostic("error", "too_many_cells", f"{cells} cells exceed {TOY_CELL_LIMIT}", field="cells"),)
 
 
+class FailsUntilSevenCellsPlugin(RuleCheckingPlugin):
+    """The rule of RuleCheckingPlugin, and a solve step that fails until the case holds seven cells."""
+
+    SOLVER_COMMANDS = frozenset({"touch", "sh"})
+    RECORDS = {"toyTutorial": _toy_record(_solve(("sh", "-c", "grep -q 7 constant/mesh.json && touch solved.marker")))}
+
+
+class TwoStepPlugin(ToyStack):
+    """A ``mesh`` step, then the ``solve`` step that depends on it."""
+
+    RECORDS = {"toyTutorial": _toy_record(
+        dataclasses.replace(_solve(("touch", "mesh.marker"), produces=("mesh.marker",)), step_id="mesh"),
+        _solve(("touch", "solved.marker")),
+    )}
+
+
 class AcceptingAnyKeyPlugin(ToyStack):
     """Its key validator accepts a key nobody declared, so a typo in a study reaches the case."""
 
@@ -961,6 +977,8 @@ WITH_INPUT_PLUGIN = _selector("WithInputPlugin")
 DEFAULT_ARGUMENT_PLUGIN = _selector("DefaultArgumentPlugin")
 RULE_CHECKING_PLUGIN = _selector("RuleCheckingPlugin")
 EXPLAINING_PLUGIN = _selector("ExplainingFailurePlugin")
+FAILS_UNTIL_SEVEN_CELLS_PLUGIN = _selector("FailsUntilSevenCellsPlugin")
+TWO_STEP_PLUGIN = _selector("TwoStepPlugin")
 ACCEPTING_PLUGIN = _selector("AcceptingAnyKeyPlugin")
 BROKEN_RULE_PLUGIN = _selector("AlwaysBrokenCasePlugin")
 PARALLEL_TOY_PLUGIN = _selector("ParallelToyPlugin")

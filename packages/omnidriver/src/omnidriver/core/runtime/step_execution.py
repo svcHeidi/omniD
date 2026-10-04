@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Literal, Mapping
 
@@ -12,9 +12,10 @@ from .failure_context import build_failure_context
 from .launch_readiness import is_execution_successful
 from .remediation import build_candidate_remediations
 from .remediation_audit import append_remediation_record
-from .resume import validate_resume
+from .resume import checkpoint_snapshot, validate_resume
+from .transaction_mechanics import atomic_write_json
 from .workflow_orchestrator import STATE_FILENAME, WORKFLOW_LOGS_DIRNAME
-from .workflow_runner import WorkflowStepRunResult, _step_state_by_id, run_workflow_step
+from .workflow_runner import WorkflowStepRunResult, _step_state_by_id, check_step_runnable, run_workflow_step
 from .workflow_state import workflow_digest, workflow_state_from_json
 from ..case_transaction import CaseTransactionError
 
@@ -36,9 +37,12 @@ def execute_step_owned(
     """Run one step while both leases are held, first editing the case with
     ``study`` (``document:key`` patches) when one is given.
 
-    The edit commits through the case writer, which journals and rolls back
-    its own failure; a plan that no longer validates, or whose workflow
-    changed, refuses to run and leaves the committed edit in the case.
+    A step that cannot run is refused before the case is touched. The edit
+    commits through the case writer, which journals and rolls back its own
+    failure, and which the stack's rules can refuse the same way, leaving the
+    case as it was. Patches that change nothing neither rerun the step nor
+    spend an attempt (status ``unchanged``). A plan whose workflow changed
+    refuses to run and leaves the committed edit in the case.
     """
     case_root = Path(context.case_root)
     output_dir = Path(context.output_dir)
@@ -62,10 +66,27 @@ def execute_step_owned(
     expected_artifacts = context.expected_artifacts
     applied: tuple[dict[str, Any], ...] = ()
     if study is not None:
+        check_step_runnable(workflow_dag, workflow_state, step_id)
         try:
             if context.apply_study is None or context.replan_after_mutation is None:
                 raise ValueError("this plan has no tutorial record whose case can be edited")
             applied = context.apply_study(study)
+            if all(patch["status"] == "unchanged" for patch in applied):
+                return StepResult("succeeded", {
+                    "status": "unchanged",
+                    "entry": context.entry_label,
+                    "step": step_id,
+                    "message": "no patch changed the case, so the step was not rerun and no attempt was spent",
+                    "applied_patches": list(applied),
+                    "workflow_state": workflow_state.to_json(),
+                })
+            if state_path.exists() and context.driver_context is not None:
+                # The edit is deliberate, so the saved evidence follows it: a
+                # later edit must not be refused for this one.
+                workflow_state = replace(workflow_state, resume_snapshot=checkpoint_snapshot(
+                    case_root, workflow_dag, context.driver_context, context.execution_env,
+                ))
+                atomic_write_json(state_path, workflow_state.to_json())
             replanned = context.replan_after_mutation()
             if workflow_digest(replanned.workflow_dag) != workflow_digest(workflow_dag):
                 raise ValueError(

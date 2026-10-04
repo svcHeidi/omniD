@@ -193,7 +193,12 @@ def _execute_step(
             payload["workflow_state_path"] = str(state_path)
         print(json.dumps(payload, indent=2))
         return 1
-    print(json.dumps(dict(result.payload), indent=2))
+    payload = dict(result.payload)
+    if result.status != "rejected":
+        payload["artifact_reconciliation"] = _reconciliation_payload(
+            case_root, expected_artifacts, driver_context=driver_context,
+        )
+    print(json.dumps(payload, indent=2))
     return 0 if result.status == "succeeded" else 1
 
 
@@ -722,7 +727,10 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Path to a RunDocument v3 JSON file. With action=run/step, "
             "executes the document's workflowDag instead of regenerating "
-            "the plan from --entry. Mutually exclusive with --entry/--case."
+            "the plan from --entry. Mutually exclusive with --entry/--case. "
+            "Given neither --plugin nor --repo, the stack is the installed "
+            "plugin (and repository) the plan recorded in the document's "
+            "launch command."
         ),
     )
     parser.add_argument(
@@ -803,7 +811,10 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "action=step with --run-document only: edit the staged case with a "
             "JSON object of 'document:key' patches, the same a study takes, "
-            "then rerun the step."
+            "then rerun the step. The step must be pending or failed with its "
+            "dependencies completed, or nothing is written. An edit the "
+            "stack's rules refuse is rolled back; patches that change nothing "
+            "do not rerun the step (status 'unchanged')."
         ),
     )
     parser.add_argument(
@@ -1158,6 +1169,30 @@ def _check(args, driver_context, repository, cases_root: Path, inputs: dict[str,
     return 0
 
 
+def _adopt_run_document_stack(args) -> None:
+    """With neither ``--plugin`` nor ``--repo``, take them from the command the run document was planned with.
+
+    Only an installed plugin id is taken: a document never names Python to
+    import (a ``module:Class`` selector must be passed explicitly).
+    """
+    if not args.run_document or args.plugin or args.repo:
+        return
+    try:
+        command = json.loads(Path(args.run_document).read_text())["launch"]["command"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return
+    if not isinstance(command, list):
+        return
+
+    def recorded(flag: str) -> str | None:
+        position = command.index(flag) + 1 if flag in command else len(command)
+        return command[position] if position < len(command) and isinstance(command[position], str) else None
+
+    plugin, repo = recorded("--plugin"), recorded("--repo")
+    if plugin is not None and ":" not in plugin:
+        args.plugin, args.repo = plugin, repo
+
+
 def _select_stack(parser: argparse.ArgumentParser, args):
     """The stack and the repository it came from (``--repo`` or a supplied cases root, never a search); ``--plugin`` and the repository must agree."""
     from .core.plugin_interface import load_plugin_context
@@ -1245,6 +1280,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
     if args.action == "compare":
         return _compare_quantities(args)
 
+    _adopt_run_document_stack(args)
     driver_context, repository = _select_stack(parser, args)
 
     if args.action == "env":

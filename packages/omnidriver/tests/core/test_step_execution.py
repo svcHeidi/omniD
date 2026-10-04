@@ -172,3 +172,43 @@ def test_unowned_execution_never_edits(tmp_path, held):
             )
 
     assert events == []
+
+
+def test_a_refused_replan_leaves_the_saved_evidence_matching_the_edited_case(tmp_path):
+    import sys
+
+    from omnidriver.core.plugin_interface import driver_context
+    from omnidriver.core.runtime.workflow_runner import run_workflow_step
+    from plugins.toy import ResumeTestPlugin
+
+    case_root = tmp_path / "case"
+    (case_root / "system").mkdir(parents=True)
+    settings = case_root / "system" / "settings"
+    settings.write_text("value 1;\n")
+    output_dir = tmp_path / "output"
+    dag = _dag(sys.executable)
+    dag["steps"][0]["args"] = ["-c", "raise SystemExit(1)"]
+    changed = _dag("changed")
+    stack = driver_context(ResumeTestPlugin(), source="test:resume")
+    first = run_workflow_step(
+        dag, initial_workflow_state(dag), "run", case_root=case_root, log_dir=output_dir / "logs",
+        state_path=output_dir / "workflow_state.json", env={}, driver_context=stack,
+    )
+
+    def edit(value: int, replanned: dict):
+        def apply_study(study):
+            settings.write_text(f"value {value};\n")
+            return ({"status": "changed"},)
+
+        return StepExecutionContext(
+            entry_label="neutral", workflow_dag=dag, planned_state=first.state, case_root=case_root,
+            output_dir=output_dir, expected_artifacts=(), execution_env={}, driver_context=stack,
+            apply_study=apply_study,
+            replan_after_mutation=lambda: ReplannedExecution(replanned, initial_workflow_state(replanned), ()),
+        )
+
+    refused = _execute(edit(2, changed), run_step=lambda *a, **k: pytest.fail("dispatch must not run"))
+    assert refused.status == "rejected"
+
+    again = _execute(edit(3, dag))
+    assert again.status == "failed" and "input evidence changed" not in str(again.payload)

@@ -9,9 +9,12 @@ from pathlib import Path
 
 import pytest
 
+from omnidriver import cli
 from omnidriver.cli import main
 from omnidriver.core import case_transaction
-from plugins.toy import EXPLAINING_PLUGIN, RULE_CHECKING_PLUGIN, write_toy_native_case
+from plugins.toy import (
+    EXPLAINING_PLUGIN, FAILS_UNTIL_SEVEN_CELLS_PLUGIN, RULE_CHECKING_PLUGIN, TWO_STEP_PLUGIN, write_toy_native_case,
+)
 
 PLUGIN = "plugins.toy:ToyStack"
 
@@ -39,14 +42,14 @@ class _Case:
         self.mesh = self.root / "constant" / "mesh.json"
         self.patches = tmp_path / "patches.json"
 
-    def step(self, *extra: str) -> tuple[int, dict]:
+    def step(self, *extra: str, step: str = "solve") -> tuple[int, dict]:
         return _cli(
-            "step", "--plugin", self.plugin, "--run-document", str(self.run_document), "--step", "solve", *extra,
+            "step", "--plugin", self.plugin, "--run-document", str(self.run_document), "--step", step, *extra,
         )
 
-    def apply(self, study: dict) -> tuple[int, dict]:
+    def apply(self, study: dict, **kwargs) -> tuple[int, dict]:
         self.patches.write_text(json.dumps(study))
-        return self.step("--apply", str(self.patches))
+        return self.step("--apply", str(self.patches), **kwargs)
 
     def cells(self) -> str:
         return json.loads(self.mesh.read_text())["cells"]
@@ -81,12 +84,23 @@ def test_apply_edits_the_staged_case_then_reruns_the_step(case):
     assert record["applied_patches"] == payload["applied_patches"]
 
 
-def test_a_patch_that_changes_nothing_is_reported_unchanged_and_writes_nothing(case):
+def test_a_patch_that_changes_nothing_says_so_and_neither_reruns_the_step_nor_spends_an_attempt(case):
     code, payload = case.apply({"constant/mesh.json:cells": 1})
 
-    assert code == 0
+    assert code == 0 and payload["status"] == "unchanged"
+    assert "not rerun" in payload["message"]
     assert [p["status"] for p in payload["applied_patches"]] == ["unchanged"]
     assert not (case.root / ".omnidriver" / "case-transactions").exists()
+    assert not (case.root / "solved.marker").exists()
+    assert not (case.root / "workflow_state.json").exists()
+    assert not (case.root / "remediation_history.jsonl").exists()
+
+
+def test_a_step_reports_the_artifacts_it_left_on_disk(case):
+    code, payload = case.step()
+
+    assert code == 0
+    assert payload["artifact_reconciliation"]["artifacts"][0]["status"] == "matched"
 
 
 def test_a_key_the_record_does_not_accept_is_refused_and_nothing_runs(case):
@@ -143,22 +157,53 @@ def test_recover_with_nothing_interrupted_says_so(case):
     assert code == 0 and payload["transaction_id"] is None
 
 
-def test_a_case_left_breaking_a_rule_by_a_refused_edit_does_not_run_until_it_is_patched(tmp_path):
-    case = _Case(tmp_path, RULE_CHECKING_PLUGIN)
-    code, payload = case.apply({"constant/mesh.json:cells": 12})
-    assert code == 1 and "12 cells exceed 10" in payload["error"] and "the edit stays in the case" in payload["error"]
-    assert case.cells() == "12"
-
+def test_an_edit_that_breaks_a_rule_is_rolled_back_and_the_case_still_takes_a_valid_edit(tmp_path):
+    case = _Case(tmp_path, FAILS_UNTIL_SEVEN_CELLS_PLUGIN)
     code, payload = case.step()
-    assert code == 1 and payload["status"] == "failed" and "12 cells exceed 10" in payload["error"]
-    assert not (case.root / "solved.marker").exists()
-    code, payload = _cli("run", "--plugin", RULE_CHECKING_PLUGIN, "--run-document", str(case.run_document))
-    assert code == 1 and "12 cells exceed 10" in payload["error"]
-    assert not (case.root / "solved.marker").exists()
+    assert code == 1 and payload["status"] == "failed"
+
+    code, payload = case.apply({"constant/mesh.json:cells": 12})
+    assert code == 1 and "12 cells exceed 10" in payload["error"] and "as it was" in payload["error"]
+    assert case.cells() == "1"
+    assert "applied_patches" not in payload
+    assert not (case.root / ".omnidriver" / "case-transaction.json").exists()
 
     code, payload = case.apply({"constant/mesh.json:cells": 7})
-    assert code == 0 and payload["status"] == "ok"
+    assert code == 0 and payload["status"] == "ok", payload
     assert (case.root / "solved.marker").is_file()
+    assert [s["attempt"] for s in payload["workflow_state"]["steps"]] == [2]
+
+
+def test_an_edit_of_a_completed_step_is_refused_before_the_case_is_touched(case):
+    code, _ = case.step()
+    assert code == 0
+
+    code, payload = case.apply({"constant/mesh.json:cells": 7})
+
+    assert code == 1 and "'completed'" in payload["error"]
+    assert case.cells() == "1"
+    assert not (case.root / "remediation_history.jsonl").exists()
+
+
+def test_an_edit_of_a_step_whose_dependencies_are_incomplete_is_refused_before_the_case_is_touched(tmp_path):
+    case = _Case(tmp_path, TWO_STEP_PLUGIN)
+
+    code, payload = case.apply({"constant/mesh.json:cells": 7})
+
+    assert code == 1 and "incomplete dependencies" in payload["error"]
+    assert case.cells() == "1"
+
+
+def test_a_failed_rerun_after_an_edit_still_takes_the_next_edit(tmp_path):
+    case = _Case(tmp_path, FAILS_UNTIL_SEVEN_CELLS_PLUGIN)
+    assert case.step()[0] == 1
+
+    code, payload = case.apply({"constant/mesh.json:cells": 9})
+    assert code == 1
+    assert case.cells() == "9"
+
+    code, payload = case.apply({"constant/mesh.json:cells": 7})
+    assert code == 0 and payload["status"] == "ok", payload
 
 
 def test_a_failed_step_carries_what_the_stack_reads_in_its_log(tmp_path):
@@ -171,3 +216,26 @@ def test_a_failed_step_carries_what_the_stack_reads_in_its_log(tmp_path):
     )
     (state,) = (s for s in payload["workflow_state"]["steps"] if s["step_id"] == "solve")
     assert state["diagnostics"] == [explained]
+
+
+def test_a_run_document_names_the_stack_it_was_planned_for(case, monkeypatch):
+    """With no --plugin or --repo the command the plan recorded says which installed plugin and repository."""
+    document = json.loads(case.run_document.read_text())
+    document["launch"]["command"] = ["python", "-m", "omnidriver", "run", "--plugin", "toy-stack", "--repo", "/repo"]
+    case.run_document.write_text(json.dumps(document))
+    seen = {}
+
+    def select(parser, args):
+        seen["plugin"], seen["repo"] = args.plugin, args.repo
+        raise SystemExit(0)
+
+    monkeypatch.setattr(cli, "_select_stack", select)
+    with pytest.raises(SystemExit):
+        main(["step", "--run-document", str(case.run_document), "--step", "solve"])
+    assert seen == {"plugin": "toy-stack", "repo": "/repo"}
+
+    document["launch"]["command"] = ["python", "-m", "omnidriver", "run", "--plugin", "some.module:Class"]
+    case.run_document.write_text(json.dumps(document))
+    with pytest.raises(SystemExit):
+        main(["step", "--run-document", str(case.run_document), "--step", "solve"])
+    assert seen == {"plugin": None, "repo": None}
