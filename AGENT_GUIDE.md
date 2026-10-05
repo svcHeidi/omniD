@@ -349,18 +349,27 @@ One case with study values is the same spec with one-value axes:
 ```
 
 Each case is staged from the native case into `<output_dir>/cases/<case_id>/`
-and committed there; the native tree is never written. A `caseId` dependent
+and committed there; the native tree is never written. That one folder is the
+case: its `run_document.json`, `workflow_state.json`, `workflow_logs/` and
+`case_record.json` sit beside the case files. A `caseId` dependent
 entry becomes the case's directory name (validated for uniqueness and
 path-safety); otherwise cases are named `case_0001`, `case_0002`, ... in
 expansion order. A case that cannot be staged or planned fails alone
-(`materialization_error`, or `plan_error` in `sweep-run`), not the whole
-sweep. `sweep-plan` reports each
+(`materialization_error`, or `plan_error` in `sweep-run`, which lists the plan's
+error diagnostics), not the whole sweep. `sweep-plan` reports each
 case's `status`, `record_commit_status`, `unchanged_patches` (a patch that
 already matched the case) and its full `plan`.
 
 `sweep-run` plans and runs the cases serially, each as a child
-`omnidriver run --run-document <output_dir>/<case_id>/run_document.json`, and
-records them in `sweep_manifest.json`. A sweep does not resume across
+`omnidriver run --run-document <output_dir>/cases/<case_id>/run_document.json`, and
+records them in `sweep_manifest.json` (the shared `base_study`, and per case its
+start time, outcome and, when it failed, why). A case that did not complete
+carries the child's own `error`, `environment_diagnostics` and `failure_context`
+(with the failed step's diagnostics, such as `solver_entry_missing`) in its
+summary and manifest entry (the manifest keeps the failed step's diagnostics and log
+paths, not the log text). A sweep ended by SIGTERM or SIGINT marks its running case
+`stopped` in the manifest, prints its report with `status: "failed"` and exits with the
+signal's code; resume that case with `step`. A sweep does not resume across
 invocations: an `--output-dir` that already holds a manifest is refused by
 name, and `--fresh` clears the `--output-dir` (it must hold a
 `sweep_manifest.json`; the spec is validated first) and starts over.
@@ -477,7 +486,11 @@ updated after every step, so the read above is safe at any instant.
 
 `build_sweep_context` (`core/runtime/case_records.py`) reads the sweep's own
 record (`sweep_manifest.json`) and returns one `SweepContext`: each case's
-status, resolved axis values and `workflow_state_path`. Core never inspects
+status, resolved axis values and `workflow_state_path`. A case's status is what
+its own `workflow_state.json` says now (`not_run` when no workflow was started), so a
+case a later `step` completed is completed for `compare`; the manifest keeps only
+what the sweep observed, as `sweep_outcome`. A case's `case_record.json` holds its
+identity and locations (relative to its own folder), never a status. Core never inspects
 solver output. If an agent needs deeper reasoning than the flat summary, it
 reads one case's `workflow_state.json` from the path the `SweepContext` records
 for it.
@@ -628,8 +641,8 @@ The report is written once, read-only, to a path that must not exist; a
 changed request is a new report, and the request's digest is recorded in it.
 `compare` exits 0 whenever a report is written, whatever its `status`: read
 the report's `status`, not the exit code. Exit 1 means the request was refused
-(malformed, an existing report path, ...), with an `error` in the JSON and no
-file. Core cannot verify that the request was written before the results were
+(malformed, an existing report path, ...), with an `error` in the JSON, every
+problem found as the `errors` list, and no file. Core cannot verify that the request was written before the results were
 seen; that is the agent's discipline.
 
 Each pair in `metrics` has a `status`: `within_tolerance`,
@@ -637,7 +650,9 @@ Each pair in `metrics` has a `status`: `within_tolerance`,
 conversion and never converted), `reached_on_one_side`, `sampled_off_point`, or
 `not_evaluated` (a `reason` says why: the case did not complete, no reader for
 the format, a missing artifact, a reader error, or no reported location to
-check). Each side shows its `value`, `unit`, `sampling_rule`, `sampled_at`,
+check). Each point of a run is read on its own when the run's batch read is
+refused, so one point the reader cannot place is `not_evaluated` and the run's other
+points are still compared. Each side shows its `value`, `unit`, `sampling_rule`, `sampled_at`,
 `requested_at` and `sampling_offset`, each with its unit, so a wrong pairing or
 frame is visible in the report. The overall `status` is `failed` when any pair
 is outside tolerance, reached on one side, sampled off point or, with
@@ -818,8 +833,12 @@ omnidriver check --repo <cardiacFOAM> --scratch-dir <dir> --record singleCell --
 `check` runs the conformance checks C1 to C14, and with `--regression` the
 record's native regression script (the one its case-file rules name) in a copy
 under the scratch root, against the solver your shell holds, and prints the
-verdicts as JSON. It **reports and gates nothing**: the exit code is 0 whenever
-the checks ran, and a failing check is the report doing its job. Each record
+verdicts as JSON, each `passed`, `failed` or `not_applicable` (the check verifies
+nothing for this record: C12 with no step declaring an output format, C13 and C14 with
+no declared quantity), with the three counted
+apart in `summary`. C14 checks the mechanism (sweep, compare, attach), never that
+the two resolutions agree. It **reports and gates nothing**: the exit code is 0
+whenever the checks ran, and a failing check is the report doing its job. Each record
 declares how it is exercised briefly (`TutorialRecord.conformance`: a short
 study, a patch, a sweep and, for a record that compares against a benchmark, the
 quantity C13 and C14 compare); a record that declares none is reported

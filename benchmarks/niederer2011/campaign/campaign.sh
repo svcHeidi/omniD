@@ -119,11 +119,14 @@ case "${1:-}" in
       if ! "$PYTHON" - "$request" <<'EOF'
 import json, sys
 from pathlib import Path
+from omnidriver.core.runtime.case_records import build_sweep_context
 request = Path(sys.argv[1])
 for run in json.loads(request.read_text())["runs"].values():
-    manifest = request.parent / run["sweep_output"] / "sweep_manifest.json"
-    cases = json.loads(manifest.read_text())["cases"] if manifest.is_file() else []
-    if not any(c["case_id"] == run["case_id"] and c["status"] == "completed" for c in cases):
+    try:
+        cases = build_sweep_context(request.parent / run["sweep_output"]).cases
+    except OSError:
+        cases = ()
+    if not any(c.case_id == run["case_id"] and c.status == "completed" for c in cases):
         sys.exit(1)
 EOF
       then echo "$stem: not every case it names has completed; not compared"; continue; fi

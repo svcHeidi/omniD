@@ -27,7 +27,7 @@ from .core.case_transaction import CaseTransactionError, pending_transaction, re
 from .core.environment_connection import load_environment
 from .core.refusal import Refusal, RefusingParser, print_refusal
 from .core.plugin_discovery import discover_plugins
-from .core.runtime.sweep_runner import sweep_plan, sweep_run
+from .core.runtime.sweep_runner import SweepStopped, sweep_plan, sweep_run
 from omnidriver.core.introspection import describe_entry, describe_stack, named_catalog
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.provider_identity import stack_identity_mismatch
@@ -235,6 +235,11 @@ def _execute_run(
 ) -> int:
     """Run a workflow to completion and print the JSON payload; refuses to auto-resume a terminally failed saved state (use action=step)."""
     state_path = output_dir / STATE_FILENAME
+    case_record_path = output_dir / CASE_RECORD_FILENAME
+    if not case_record_path.exists():
+        write_case_record(case_record_path, build_standalone_case_record(
+            entry=entry_label, case_root=case_root, setup_root=setup_root, output_dir=output_dir,
+        ))
     workflow_state = planned_state
     replayed = False
     if state_path.exists():
@@ -311,11 +316,6 @@ def _execute_run(
     payload["artifact_reconciliation"] = _reconciliation_payload(
         case_root, expected_artifacts, driver_context=driver_context,
     )
-    case_record = build_standalone_case_record(
-        entry=entry_label, case_root=case_root, setup_root=setup_root, output_dir=output_dir,
-    )
-    case_record_path = output_dir / CASE_RECORD_FILENAME
-    write_case_record(case_record_path, case_record)
     payload["case_record_path"] = str(case_record_path)
     _attach_failure_context(payload, workflow_state, workflow_state.failed_step_id, tail_lines=tail_lines)
     print(json.dumps(payload, indent=2))
@@ -645,7 +645,7 @@ def _compare_quantities(args) -> int:
     try:
         report = run_quantity_comparison(Path(args.comparison_request), Path(args.report))
     except QuantityComparisonError as exc:
-        print(json.dumps({"status": "failed", "action": "compare", "error": str(exc)}, indent=2))
+        print(json.dumps({"status": "failed", "action": "compare", "error": str(exc), "errors": list(exc.errors)}, indent=2))
         return 1
     print(json.dumps(report, indent=2))
     return 0
@@ -1511,6 +1511,9 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             )
         except (SweepValidationError, TutorialRecordError) as exc:
             return _sweep_refusal(args, exc)
+        except SweepStopped as stop:
+            print(json.dumps({"status": "failed", **stop.report}, indent=2))
+            return stop.code
         failed = result["failed_count"] > 0
         print(json.dumps({"status": "failed" if failed else "ok", **result}, indent=2))
         return 1 if failed else 0

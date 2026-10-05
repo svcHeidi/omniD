@@ -29,6 +29,7 @@ from .workflow_state import (
     replace_step_state,
     workflow_state_from_json,
 )
+from .failure_context import redact_text
 from .models import DataArtifact
 from .process_control import (
     group_alive,
@@ -286,21 +287,15 @@ def _solver_log_signatures(driver_context: Any, cwd: Path) -> dict[Path, tuple[i
 
 
 def redact_step_logs(paths: Any, patterns: Any) -> None:
-    """Replace every match of each pattern, whole, with ``[REDACTED]``.
-
-    Capture groups are not preserved: a pattern that must keep context
-    around the secret uses lookarounds instead, e.g.
-    ``(?<=://)[^/\\s@]+(?=@)`` matches only a URL's credential."""
-    compiled = [re.compile(p) for p in patterns]
-    if not compiled:
+    """Redact every match of each pattern, whole, in each step log (see ``redact_text``)."""
+    patterns = tuple(patterns)
+    if not patterns:
         return
     for path in paths:
         if not Path(path).is_file():
             continue
         text = Path(path).read_text(errors="replace")
-        redacted = text
-        for pattern in compiled:
-            redacted = pattern.sub(lambda _match: "[REDACTED]", redacted)
+        redacted = redact_text(text, patterns)
         if redacted != text:
             Path(path).write_text(redacted)
 

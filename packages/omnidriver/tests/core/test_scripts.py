@@ -203,4 +203,4 @@ def test_check_runs_a_script_step_in_the_repositorys_own_child_processes(tmp_pat
         "--checks", "C6,C7",
     ]) == 0
     [entry] = json.loads(capsys.readouterr().out)["records"]
-    assert [(v["check"], v["passed"]) for v in entry["checks"]] == [("C6", True), ("C7", True)], entry
+    assert [(v["check"], v["status"]) for v in entry["checks"]] == [("C6", "passed"), ("C7", "passed")], entry

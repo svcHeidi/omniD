@@ -26,8 +26,20 @@ def test_the_selected_checks_run_on_the_records_declared_study_and_are_reported(
     assert code == 0
     (record,) = report["records"]
     assert (record["record"], record["status"]) == ("toyTutorial", "passed")
-    assert [(item["check"], item["passed"]) for item in record["checks"]] == [("C1", True), ("C3", True), ("C4", True)]
-    assert report["summary"] == {"checks": 3, "passed": 3, "failed": 0}
+    assert [(item["check"], item["status"]) for item in record["checks"]] == [
+        ("C1", "passed"), ("C3", "passed"), ("C4", "passed"),
+    ]
+    assert report["summary"] == {"checks": 3, "passed": 3, "failed": 0, "not_applicable": 0}
+
+
+def test_a_check_that_verifies_nothing_is_counted_apart_from_the_passed(tmp_path, capsys):
+    code, report = _check(tmp_path, capsys, "--record", "toyTutorial", "--checks", "C1,C2,C12,C13")
+    (record,) = report["records"]
+    assert code == 0 and record["status"] == "passed"
+    assert [(item["check"], item["status"]) for item in record["checks"]] == [
+        ("C1", "passed"), ("C2", "passed"), ("C12", "not_applicable"), ("C13", "not_applicable"),
+    ]
+    assert report["summary"] == {"checks": 4, "passed": 2, "failed": 0, "not_applicable": 2}
 
 
 def test_a_failing_check_is_reported_with_its_reason_and_the_exit_code_stays_zero(tmp_path, capsys):
@@ -76,13 +88,13 @@ def test_a_probe_of_the_record_reports_beside_the_checks_and_a_drifted_one_fails
 
     code, report = _check(tmp_path / "all", capsys, "--record", "toyTutorial", plugin=PROBING_PLUGIN)
     (record,) = report["records"]
-    probes = {name: (item["passed"], item["detail"]) for name, item in record["probes"].items()}
+    probes = {name: (item["status"], item["detail"]) for name, item in record["probes"].items()}
     assert code == 0 and probes == {
-        "matches": (True, "3 models match"),
-        "drifted": (False, "model A has a constant the solver lacks"),
-        "unreadable": (False, "OSError: the utility is not built"),
+        "matches": ("passed", "3 models match"),
+        "drifted": ("failed", "model A has a constant the solver lacks"),
+        "unreadable": ("failed", "OSError: the utility is not built"),
     }
-    assert all(item["passed"] for item in record["checks"]) and record["status"] == "failed"
+    assert all(item["status"] != "failed" for item in record["checks"]) and record["status"] == "failed"
 
 
 def _native_with_script(tmp_path, body):

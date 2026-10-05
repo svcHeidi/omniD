@@ -1,6 +1,7 @@
 """C1-C14. Each check is self-contained: it builds its own context, stages its own copy, and returns a verdict.
 
-No check skips; a check that cannot run is a failure saying why."""
+A check that cannot run is a failure saying why. A check that verifies nothing for the target (no output
+format, no declared quantity) is ``not_applicable`` and says what it would have needed."""
 from __future__ import annotations
 
 import dataclasses
@@ -22,6 +23,8 @@ from omnidriver.core.quantities import (
     Quantity, ReadRequest, ReaderDeclarationError, check_reader, convert, experiment_comparisons, read_quantities,
 )
 from omnidriver.core.runtime import mpi
+from omnidriver.core.runtime.artifacts import DRIVER_PRODUCED_BY
+from omnidriver.core.runtime.failure_context import OUTPUT_TAIL_CHARS, redact_text, why_a_child_stopped
 from omnidriver.core.runtime.models import data_artifact_from_json
 from omnidriver.core.runtime.process_control import run_child
 from omnidriver.core.runtime.case_records import build_sweep_context
@@ -39,13 +42,54 @@ from omnidriver.core.tutorial_records import PLAIN_FILE_FORMAT, TutorialRecordEr
 from .harness import sweep_run, sweep_spec
 from .target import CheckVerdict, ConformanceTarget
 
-_PLAN_DIAGNOSTIC_GROUPS = (
-    "workflow_diagnostics", "artifact_diagnostics", "environment_diagnostics", "plugin_diagnostics",
-    "configuration_diagnostics",
-)
 
 def _verdict(check_id: str, passed: bool, detail: str) -> CheckVerdict:
-    return CheckVerdict(check_id=check_id, passed=passed, detail=detail)
+    return CheckVerdict(check_id=check_id, status="passed" if passed else "failed", detail=detail)
+
+
+def _not_applicable(check_id: str, detail: str) -> CheckVerdict:
+    return CheckVerdict(check_id=check_id, status="not_applicable", detail=detail)
+
+
+def _recorded_failure(state_path: Path) -> str | None:
+    """The error diagnostics the failed steps of a case's ``workflow_state.json`` recorded, or ``None``."""
+    try:
+        steps = json.loads(state_path.read_text()).get("steps", ())
+    except (OSError, ValueError, AttributeError):
+        return None
+    reasons = [
+        f"step {step.get('step_id')!r}: {d.get('code')}: {d.get('message')}"
+        for step in steps if isinstance(step, dict) and step.get("status") == "failed"
+        for d in step.get("diagnostics", ()) if isinstance(d, dict) and d.get("level") == "error"
+    ]
+    return "; ".join(reasons) or None
+
+
+def _with_recorded_failure(problems: list[str], state_path: Path, subject: str) -> list[str]:
+    reason = _recorded_failure(state_path)
+    return [*problems, f"{subject} recorded: {reason}"] if reason else problems
+
+
+def _why_a_run_stopped(ctx, proc: subprocess.CompletedProcess, state_path: Path) -> str:
+    """What a run that did not complete said (redacted), and what the failed step recorded in its workflow state."""
+    said = why_a_child_stopped(proc.stdout, proc.stderr, ctx.stack.call("get_log_redaction_patterns"))
+    return "; ".join(_with_recorded_failure([said], state_path, "the workflow state"))
+
+
+_CASE_REASON_KEYS = ("plan_error", "materialization_error", "timeout_error", "error")
+
+
+def _failed_cases(ctx, payload: Mapping[str, Any], out: Path) -> list[str]:
+    """One problem for each case of a sweep report that did not complete: its reason (redacted) and its workflow state's."""
+    patterns = ctx.stack.call("get_log_redaction_patterns")
+    problems = []
+    for case in payload.get("cases", ()):
+        if case.get("status") == "completed":
+            continue
+        reason = next((str(case[key]) for key in _CASE_REASON_KEYS if case.get(key)), "no reason reported")
+        said = f"case {case.get('case_id')} is {case.get('status')}: {redact_text(reason, patterns)[-OUTPUT_TAIL_CHARS:]}"
+        problems += _with_recorded_failure([said], out / case.get("workflow_state_path", ""), "its workflow state")
+    return problems
 
 
 def _context(target: ConformanceTarget):
@@ -92,7 +136,7 @@ def check_describe_noop(target: ConformanceTarget) -> CheckVerdict:
     changed = [p for p in preview["patches"] if p["status"] != "unchanged"]
     if changed:
         return _verdict("C2", False, f"describe proposes {len(changed)} change(s) to the untouched native case: {changed}")
-    return _verdict("C2", True, "no changes proposed")
+    return _verdict("C2", True, "no patches proposed" if not preview["patches"] else "every proposed patch leaves the native case unchanged")
 
 
 def _quotes(message: str, name: str) -> bool:
@@ -181,16 +225,6 @@ def _plan(target: ConformanceTarget, ctx, study: Mapping[str, Any] = {}):
     )
 
 
-def _plan_errors(report) -> list[str]:
-    payload = report.to_json()
-    return [
-        f"{d.get('code')}: {d.get('message')}"
-        for group in _PLAN_DIAGNOSTIC_GROUPS
-        for d in payload.get(group, ()) or ()
-        if d.get("level") == "error"
-    ]
-
-
 def _child_env(target: ConformanceTarget) -> dict[str, str]:
     """The caller's environment plus the target's scratch root, set in the copy only, never in ``os.environ``."""
     env = dict(os.environ)
@@ -205,7 +239,7 @@ def _run_document_path(report) -> Path:
 def check_strict_plan(target: ConformanceTarget) -> CheckVerdict:
     """C5: plan --strict on the record has no errors, and its launch command is runnable as written."""
     report = _plan(target, _context(target))
-    errors = _plan_errors(report)
+    errors = report.error_messages()
     command = list(report.launch.get("command") or ())
     problems = list(errors)
     if report.status != "ok":
@@ -247,13 +281,14 @@ def check_run(target: ConformanceTarget) -> CheckVerdict:
     ctx = _context(target)
     report = _plan(target, ctx)
     if report.status != "ok":
-        return _verdict("C6", False, f"cannot run: plan failed: {_plan_errors(report)}")
+        return _verdict("C6", False, f"cannot run: plan failed: {report.error_messages()}")
     try:
         proc, payload = _execute(target, ctx, report)
     except subprocess.TimeoutExpired:
         return _verdict("C6", False, f"run timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     if payload is None:
-        return _verdict("C6", False, f"run printed no JSON (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}")
+        stopped = _why_a_run_stopped(ctx, proc, Path(report.launch["workflow_state_path"]))
+        return _verdict("C6", False, f"run printed no JSON (rc={proc.returncode}); {stopped}")
     reconciliation = payload.get("artifact_reconciliation") or {}
     artifacts = reconciliation.get("artifacts", ())
     declared = [a for a in artifacts if a["artifact_id"].startswith("record.")]
@@ -265,6 +300,7 @@ def check_run(target: ConformanceTarget) -> CheckVerdict:
         problems.append("the record declares no artifacts (no step `produces`), so a run proves nothing about outputs")
     if missing:
         problems.append(f"missing artifacts {missing}")
+    problems = _with_recorded_failure(problems, Path(report.launch["workflow_state_path"]), "the workflow state")
     return _verdict("C6", not problems, "; ".join(problems) or f"{len(declared)} declared artifact(s) present")
 
 
@@ -298,10 +334,11 @@ def check_sweep(target: ConformanceTarget) -> CheckVerdict:
     except subprocess.TimeoutExpired:
         return _verdict("C7", False, f"sweep timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     if payload is None:
-        return _verdict("C7", False, f"sweep printed no JSON (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}")
+        return _verdict("C7", False, f"sweep printed no JSON (rc={proc.returncode}); {_why_a_run_stopped(ctx, proc, work)}")
     problems = []
     if payload.get("completed_count") != 2 or payload.get("failed_count"):
         problems.append(f"completed {payload.get('completed_count')}, failed {payload.get('failed_count')}")
+    problems += _failed_cases(ctx, payload, work / "out")
     for case in payload.get("cases", ()):
         rec = case.get("artifact_reconciliation")
         if rec is None:
@@ -332,7 +369,7 @@ def check_provenance(target: ConformanceTarget) -> CheckVerdict:
     ctx = _context(target)
     report = _plan(target, ctx)
     if report.status != "ok" or report.workflow_dag is None:
-        return _verdict("C8", False, f"cannot check: plan failed: {_plan_errors(report)}")
+        return _verdict("C8", False, f"cannot check: plan failed: {report.error_messages()}")
     consumed = sorted({_posix(str(e)) for s in report.workflow_dag.get("steps", ()) for e in s.get("consumes", ()) or ()})
     if not consumed:
         return _verdict("C8", False, "no step declares `consumes`, so provenance cannot be shown to cover the record's inputs")
@@ -378,7 +415,7 @@ def check_environment(target: ConformanceTarget) -> CheckVerdict:
     ctx = _context(target)
     report = _plan(target, ctx)
     if report.workflow_dag is None:
-        return _verdict("C9", False, f"cannot check: plan failed: {_plan_errors(report)}")
+        return _verdict("C9", False, f"cannot check: plan failed: {report.error_messages()}")
     def preflight(env):
         found = ctx.stack.call("get_environment_diagnostics", report.workflow_dag, env=env, driver_context=ctx)
         return [m for level, m in _levels(found) if level == "error"]
@@ -488,13 +525,14 @@ def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
     record = _record(ctx, target.record)
     report = _plan(target, ctx)
     if report.status != "ok":
-        return _verdict("C11", False, f"cannot check: plan failed: {_plan_errors(report)}")
+        return _verdict("C11", False, f"cannot check: plan failed: {report.error_messages()}")
     try:
         proc, payload = _execute(target, ctx, report)
     except subprocess.TimeoutExpired:
         return _verdict("C11", False, f"the first run timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     if payload is None or payload.get("status") != "ok":
-        return _verdict("C11", False, f"cannot check: the first run did not complete (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}")
+        stopped = _why_a_run_stopped(ctx, proc, Path(report.launch["workflow_state_path"]))
+        return _verdict("C11", False, f"cannot check: the first run did not complete (rc={proc.returncode}); {stopped}")
     work = target.scratch_root / "conformance" / "C11"
     if work.exists():
         shutil.rmtree(work)
@@ -538,8 +576,12 @@ def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
 def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:
     """C12: every record output that declares a format has a reader for it,
     through the reader contract, with a valid declaration. A record whose
-    outputs declare no format passes and says so: not every record is
+    outputs declare no format is not applicable: not every record is
     compared.
+
+    The formats are the ones the record's own steps declare on their produced
+    paths. A format only a plugin predicts for the plan's artifacts is named in
+    the not-applicable detail, and no record asked for it to be read.
 
     This checks the reader's *declaration* only (``check_reader``) -- it
     never calls ``read``, so a reader whose ``read`` always raises still
@@ -549,7 +591,20 @@ def check_readable_quantities(target: ConformanceTarget) -> CheckVerdict:
     formats = sorted({step.produced_format(path) for step in record.workflow_steps for path in step.produces}
                      - {PLAIN_FILE_FORMAT})
     if not formats:
-        return _verdict("C12", True, "no output declares a format, so there is nothing to read")
+        detail = "no workflow step of the record declares a format on a produced path, so no reader is expected"
+        try:
+            predicted = [
+                a for a in _plan(target, ctx).expected_artifacts
+                if a.format != PLAIN_FILE_FORMAT and a.produced_by != DRIVER_PRODUCED_BY
+            ]
+        except TutorialRecordError:
+            predicted = []
+        if predicted:
+            detail += (
+                f"; the plan predicts {len(predicted)} artifact(s) in formats {sorted({a.format for a in predicted})} "
+                f"(for example {predicted[0].artifact_id!r}), which the plugin declares and the record does not ask to be read"
+            )
+        return _not_applicable("C12", detail)
     problems = []
     for artifact_format in formats:
         reader = ctx.stack.call("get_artifact_value_reader", artifact_format)
@@ -589,13 +644,14 @@ def _run_for_quantities(
     """The run document, declared quantities, case root and step logs of ``study``'s run, or a failure's detail."""
     report = _plan(target, ctx, study)
     if report.status != "ok":
-        return f"the {label} plan failed: {_plan_errors(report)}"
+        return f"the {label} plan failed: {report.error_messages()}"
     try:
         proc, payload = _execute(target, ctx, report, env)
     except subprocess.TimeoutExpired:
         return f"the {label} run timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)"
     if payload is None or payload.get("status") != "ok":
-        return f"the {label} run did not complete (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}"
+        stopped = _why_a_run_stopped(ctx, proc, Path(report.launch["workflow_state_path"]))
+        return f"the {label} run did not complete (rc={proc.returncode}); {stopped}"
     document, quantities = _artifact_and_quantities(target, ctx, report)
     logs = [Path(step[key]) for step in payload["workflow_state"]["steps"] for key in ("stdout_log", "stderr_log") if step.get(key)]
     return document, quantities, Path(report.launch["case_root"]), logs
@@ -622,12 +678,12 @@ def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
     the parallel run says it asked for those ranks, and the solver's own
     output shows it ran on them (``QuantityTarget.rank_evidence``).
 
-    A target that declares no quantity passes and says so."""
+    A target that declares no quantity is not applicable."""
     ctx = _context(target)
     _record(ctx, target.record)
     declared = target.quantity
     if declared is None:
-        return _verdict("C13", True, "the target declares no quantity, so there is nothing to compare")
+        return _not_applicable("C13", "the target declares no quantity, so there is nothing to compare")
     serial = _run_for_quantities(target, ctx, declared.study, "serial")
     if isinstance(serial, str):
         return _verdict("C13", False, serial)
@@ -663,13 +719,15 @@ def check_quantity_across_sweep(target: ConformanceTarget) -> CheckVerdict:
     target's sweep axis, end to end as an agent would: ``sweep-run``,
     ``compare`` on the target's reference, the report attached to each case.
     The comparison must read both sides of at least one pair; whether the two
-    resolutions agree is physics, not conformance.
+    resolutions agree is physics, not conformance: this checks the mechanism,
+    never that the values agree.
 
-    A target that declares no quantity passes and says so."""
-    _record(_context(target), target.record)
+    A target that declares no quantity is not applicable."""
+    ctx = _context(target)
+    _record(ctx, target.record)
     declared = target.quantity
     if declared is None:
-        return _verdict("C14", True, "the target declares no quantity, so there is nothing to compare")
+        return _not_applicable("C14", "the target declares no quantity, so there is nothing to compare")
     work = target.scratch_root / "conformance" / "C14"
     if work.exists():
         shutil.rmtree(work)
@@ -685,7 +743,11 @@ def check_quantity_across_sweep(target: ConformanceTarget) -> CheckVerdict:
     except subprocess.TimeoutExpired:
         return _verdict("C14", False, f"sweep timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     if payload is None or payload.get("completed_count") != 2 or payload.get("failed_count"):
-        return _verdict("C14", False, f"cannot compare: the sweep did not complete both cases (rc={proc.returncode}); stderr tail: {proc.stderr[-800:]}")
+        reasons = _failed_cases(ctx, payload, work / "out") if payload else [_why_a_run_stopped(ctx, proc, work)]
+        return _verdict(
+            "C14", False,
+            f"cannot compare: the sweep did not complete both cases (rc={proc.returncode}); " + ("; ".join(reasons) or "no case reported why"),
+        )
     output = work / "out"
     cases = build_sweep_context(output).cases
     runs = {}
@@ -719,7 +781,7 @@ def check_quantity_across_sweep(target: ConformanceTarget) -> CheckVerdict:
     except subprocess.TimeoutExpired:
         return _verdict("C14", False, f"compare timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     if compare.returncode != 0:
-        return _verdict("C14", False, f"compare exited {compare.returncode}: {compare.stdout[-800:]} {compare.stderr[-800:]}")
+        return _verdict("C14", False, f"compare exited {compare.returncode}: {compare.stdout[-OUTPUT_TAIL_CHARS:]} {compare.stderr[-OUTPUT_TAIL_CHARS:]}")
     report = json.loads(report_path.read_text())
     metrics = report["metrics"]
     problems = []
@@ -736,7 +798,11 @@ def check_quantity_across_sweep(target: ConformanceTarget) -> CheckVerdict:
         problems.append(f"the report is not attached to both cases as run_verified: {[c.comparison.association_status for c in experiment.cases]}")
     elif {c.comparison.status for c in experiment.cases} != {report["status"]}:
         problems.append("a case carries a comparison status other than the report's")
-    return _verdict("C14", not problems, "; ".join(problems) or f"{len(metrics)} pair(s) compared, report {report['status']}")
+    return _verdict(
+        "C14", not problems,
+        "; ".join(problems) or f"{len(metrics)} pair(s) compared, report {report['status']}: this checks that the sweep, "
+        "compare and attachment work, not that the two resolutions agree",
+    )
 
 
 CHECKS: dict[str, Callable[[ConformanceTarget], CheckVerdict]] = {
@@ -780,7 +846,7 @@ def _guarded(verdict: CheckVerdict, changed: list[str], cases_root: Path) -> Che
         return verdict
     shown = changed[:20] + ([f"... {len(changed) - 20} more"] if len(changed) > 20 else [])
     guard = f"the native tree {cases_root} changed during the check: {shown}"
-    if verdict.passed:
+    if verdict.status != "failed":
         return _verdict(verdict.check_id, False, guard)
     return _verdict(verdict.check_id, False, f"{verdict.detail}; {guard}")
 

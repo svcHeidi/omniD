@@ -30,7 +30,7 @@ def test_a_plugin_without_them_loads_and_composes_to_empty_answers():
 @pytest.mark.parametrize("check_id", ["C1", "C2", "C6", "C10"])
 def test_a_plugin_without_them_loads_describes_and_runs(check_id, tmp_path):
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
-    assert verdict.passed, verdict.detail
+    assert verdict.status == "passed", verdict.detail
 
 
 class _EmptyStubs(ToyProvider):

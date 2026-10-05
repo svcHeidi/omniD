@@ -7,6 +7,7 @@ import dataclasses
 import shutil
 import subprocess
 import time
+from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
@@ -68,7 +69,7 @@ def _probe(probe: Any, env: Mapping[str, str]) -> dict[str, Any]:
         passed, detail = probe(env)
     except Exception as exc:
         passed, detail = False, f"{type(exc).__name__}: {exc}"
-    return {"passed": passed, "detail": detail, "seconds": round(time.monotonic() - started, 1)}
+    return {"status": "passed" if passed else "failed", "detail": detail, "seconds": round(time.monotonic() - started, 1)}
 
 
 def _target(
@@ -98,6 +99,8 @@ def check_report(
 ) -> dict[str, Any]:
     """Run ``check_ids`` (all when empty) over ``records`` (every record that
     declares a study when empty) and report each verdict, in the order run.
+    A check that verifies nothing for the record is ``not_applicable``, counted
+    apart from ``passed`` and ``failed``.
 
     A check that cannot run is a failed verdict saying why; a record whose
     commands are not on ``PATH`` is reported ``not_run`` naming them, so the
@@ -129,19 +132,19 @@ def check_report(
             )
             started = time.monotonic()
             if check_id in {"C13", "C14"} and quantity_problem:
-                passed, detail = False, f"could not place the quantity: {quantity_problem}"
+                status, detail = "failed", f"could not place the quantity: {quantity_problem}"
             else:
                 verdict = run_check(check_id, target)
-                passed, detail = verdict.passed, verdict.detail
+                status, detail = verdict.status, verdict.detail
             verdicts.append({
-                "check": check_id, "passed": passed, "detail": detail, "seconds": round(time.monotonic() - started, 1),
+                "check": check_id, "status": status, "detail": detail, "seconds": round(time.monotonic() - started, 1),
             })
         entry["checks"] = verdicts
-        passed = all(v["passed"] for v in verdicts)
+        passed = all(v["status"] != "failed" for v in verdicts)
         if not check_ids and record.conformance.probes:
             env = load_environment(driver_context, None)
             entry["probes"] = {name: _probe(probe, env) for name, probe in record.conformance.probes.items()}
-            passed = passed and all(item["passed"] for item in entry["probes"].values())
+            passed = passed and all(item["status"] == "passed" for item in entry["probes"].values())
         entry["status"] = "passed" if passed else "failed"
         if regression:
             native_case = cases_root / record.native_case_relpath
@@ -153,13 +156,16 @@ def check_report(
                 )
                 if script is not None else {"status": "no_script", "detail": "the native case has no regression script"}
             )
-    counts = [verdict["passed"] for entry in reported for verdict in entry.get("checks", ())]
+    counts = Counter(verdict["status"] for entry in reported for verdict in entry.get("checks", ()))
     return {
         "action": "check",
         "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
         "cases_root": str(cases_root),
         "scratch_root": str(scratch_root),
         "records": reported,
-        "summary": {"checks": len(counts), "passed": sum(counts), "failed": len(counts) - sum(counts)},
+        "summary": {
+            "checks": counts.total(), "passed": counts["passed"], "failed": counts["failed"],
+            "not_applicable": counts["not_applicable"],
+        },
         "gates": "nothing: this reports",
     }

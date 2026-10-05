@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from omnidriver.cli import main
 from omnidriver.core import plugin_discovery
 from omnidriver.core.experiments import inspect_sweep_experiment
 from omnidriver.core.quantities import QuantityComparisonError, experiment_comparisons, run_quantity_comparison
@@ -171,6 +172,77 @@ def test_a_malformed_request_is_refused_before_anything_is_read(tmp_path, edit, 
     with pytest.raises(QuantityComparisonError, match=match):
         run_quantity_comparison(_request(tmp_path, runs, pairs), tmp_path / "report.json")
     assert not (tmp_path / "report.json").exists()
+
+
+def test_every_error_of_a_request_is_reported_at_once(tmp_path):
+    sweep, runs = _two_runs(tmp_path)
+    runs["one"].update(case_id="nine")
+    runs["spare"] = dict(runs["two"])
+    pairs = [_pair("A", "one", "two"), _pair("Z", "one", "two", "a", "a"), _pair("A", "one", "three")]
+
+    with pytest.raises(QuantityComparisonError) as refused:
+        run_quantity_comparison(_request(tmp_path, runs, pairs), tmp_path / "report.json")
+
+    errors = refused.value.errors
+    assert len(errors) == 4, errors
+    assert any("'Z'" in e for e in errors) and any("'three'" in e for e in errors)
+    assert any("'nine'" in e for e in errors) and any("'spare'" in e and "no pair" in e for e in errors)
+    assert all(e in str(refused.value) for e in errors)
+    assert not (tmp_path / "report.json").exists()
+
+
+def test_schema_errors_are_one_entry_each(tmp_path):
+    sweep, runs = _two_runs(tmp_path)
+    request = _request(tmp_path, runs, [_pair("A", "one", "two")])
+    document = json.loads(request.read_text())
+    del document["both_not_reached"], document["tolerance"]
+    request.write_text(json.dumps(document))
+
+    with pytest.raises(QuantityComparisonError) as refused:
+        run_quantity_comparison(request, tmp_path / "report.json")
+
+    assert len(refused.value.errors) >= 2
+    assert all("not a comparison request" in e for e in refused.value.errors)
+
+
+def test_a_refused_pair_does_not_make_its_runs_points_look_unmatched(tmp_path):
+    """Run one gives points for 'a' and 'b'; pair B is refused for its label, which must not also read as 'points ... but its pairs use'."""
+    sweep, runs = _two_runs(tmp_path)
+    for run in runs.values():
+        run.update(points={"unit": "m", "at": {"a": [0, 0, 0.007], "b": [0.02, 0.003, 0]}}, max_sampling_offset=0.001)
+
+    with pytest.raises(QuantityComparisonError) as refused:
+        run_quantity_comparison(
+            _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("Z", "one", "two", "b", "b")]),
+            tmp_path / "report.json",
+        )
+
+    assert len(refused.value.errors) == 1 and "'Z'" in refused.value.errors[0]
+
+
+def test_a_reference_that_cannot_be_read_says_the_rest_was_not_checked(tmp_path):
+    sweep, runs = _two_runs(tmp_path)
+    request = _request(tmp_path, runs, [_pair("A", "one", "two")], reference=tmp_path / "absent.json")
+
+    with pytest.raises(QuantityComparisonError, match="were not checked"):
+        run_quantity_comparison(request, tmp_path / "report.json")
+
+
+def test_a_point_the_reader_cannot_place_does_not_take_the_run_s_other_points_with_it(tmp_path):
+    """Run two lacks 'b': 'a' is still read and compared, only 'b' is not_evaluated."""
+    sweep, runs = _two_runs(tmp_path, second="a 0.0015 0 0 0.007\n")
+    for run in runs.values():
+        run.update(points={"unit": "m", "at": {"a": [0, 0, 0.007], "b": [0.02, 0.003, 0]}}, max_sampling_offset=0.001)
+
+    report = run_quantity_comparison(
+        _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")]), tmp_path / "report.json",
+    )
+
+    by_label = {m["reference_label"]: m for m in report["metrics"]}
+    assert by_label["A"]["status"] == "within_tolerance"
+    assert by_label["A"]["right"]["status"] == "evaluated"
+    assert by_label["B"]["status"] == "not_evaluated"
+    assert "'b'" in by_label["B"]["right"]["reason"] and "no sampled_at" not in by_label["B"]["right"]["reason"]
 
 
 def test_a_tolerance_in_the_wrong_dimension_is_refused(tmp_path):
@@ -555,3 +627,15 @@ def test_an_agent_compares_two_real_runs_through_the_cli(tmp_path):
     assert {case.comparison.association_status for case in experiment.cases} == {"run_verified"}
     again = subprocess.run(command, capture_output=True, text=True, env=env)
     assert again.returncode == 1 and "already exists" in json.loads(again.stdout)["error"]
+
+
+def test_the_cli_prints_every_request_error_as_a_list(tmp_path, capsys):
+    sweep, runs = _two_runs(tmp_path)
+    runs["one"].update(case_id="nine")
+    pairs = [_pair("Z", "one", "two", "a", "a"), _pair("A", "one", "three")]
+    request = _request(tmp_path, runs, pairs)
+
+    code = main(["compare", "--comparison-request", str(request), "--report", str(tmp_path / "report.json")])
+
+    printed = json.loads(capsys.readouterr().out)
+    assert code == 1 and len(printed["errors"]) == 3

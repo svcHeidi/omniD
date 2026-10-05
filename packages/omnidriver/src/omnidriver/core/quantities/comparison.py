@@ -17,7 +17,7 @@ from ..experiments import ComparisonRequest, read_json_object
 from ..plugin_interface import load_plugin_context
 from ..provider_identity import stack_identity_mismatch
 from ..runtime.models import DataArtifact, data_artifact_from_json
-from ..runtime.case_records import CaseRecord, build_sweep_context
+from ..runtime.case_records import SweepCase, build_sweep_context
 from ..runtime.reconciler import reconcile_artifacts
 from .errors import QuantityComparisonError, QuantityError
 from .model import Point, Quantity, ReadRequest, not_evaluated
@@ -113,7 +113,7 @@ class _Run:
     plugin: str
     stack: tuple[str, ...]
     sweep_output: Path
-    case: CaseRecord
+    case: SweepCase
     artifact: DataArtifact
     reader: Any | None
     points: Mapping[str, Point]
@@ -134,31 +134,40 @@ def _location(base: Path, runs: Mapping[str, Any], side: Mapping[str, str]) -> t
     return (str(_resolve(base, run["sweep_output"]).resolve()), run["case_id"], run["artifact_id"], side["quantity"])
 
 
-def _pairs(request: Mapping[str, Any], reference: PointReference, default: Tolerance, *, base: Path) -> tuple[_Pair, ...]:
-    pairs = []
+def _pair(index: int, raw: Mapping[str, Any], request: Mapping[str, Any], reference: PointReference, default: Tolerance,
+          *, base: Path) -> _Pair:
     runs = request["runs"]
-    for index, raw in enumerate(request["pairs"]):
-        label = raw["reference_label"]
-        point = reference.points.get(label)
-        if point is None:
-            raise QuantityComparisonError(f"pair {index} names {label!r}; reference {reference.reference_id!r} has {sorted(reference.points)}")
-        if point.coordinates is None:
-            raise QuantityComparisonError(
-                f"pair {index} names {label!r}, which reference {reference.reference_id!r} leaves unresolved: {point.unresolved}"
-            )
-        for side in ("left", "right"):
-            if raw[side]["run"] not in runs:
-                raise QuantityComparisonError(f"pair {index} {side} names run {raw[side]['run']!r}; the request has {sorted(runs)}")
-        if _location(base, runs, raw["left"]) == _location(base, runs, raw["right"]):
-            raise QuantityComparisonError(
-                f"pair {index} compares {raw['left']} with itself: both resolve to the same "
-                "(sweep_output, case_id, artifact_id, quantity), whatever the run names"
-            )
-        tolerance = default if "tolerance" not in raw else Tolerance.from_json(
-            raw["tolerance"], where=f"pair {index}", reference_unit=reference.quantity_unit)
-        pairs.append(_Pair(label, raw["left"]["run"], raw["left"]["quantity"], raw["right"]["run"],
-                           raw["right"]["quantity"], tolerance, raw.get("note")))
-    return tuple(pairs)
+    label = raw["reference_label"]
+    point = reference.points.get(label)
+    if point is None:
+        raise QuantityComparisonError(f"pair {index} names {label!r}; reference {reference.reference_id!r} has {sorted(reference.points)}")
+    if point.coordinates is None:
+        raise QuantityComparisonError(
+            f"pair {index} names {label!r}, which reference {reference.reference_id!r} leaves unresolved: {point.unresolved}"
+        )
+    for side in ("left", "right"):
+        if raw[side]["run"] not in runs:
+            raise QuantityComparisonError(f"pair {index} {side} names run {raw[side]['run']!r}; the request has {sorted(runs)}")
+    if _location(base, runs, raw["left"]) == _location(base, runs, raw["right"]):
+        raise QuantityComparisonError(
+            f"pair {index} compares {raw['left']} with itself: both resolve to the same "
+            "(sweep_output, case_id, artifact_id, quantity), whatever the run names"
+        )
+    tolerance = default if "tolerance" not in raw else Tolerance.from_json(
+        raw["tolerance"], where=f"pair {index}", reference_unit=reference.quantity_unit)
+    return _Pair(label, raw["left"]["run"], raw["left"]["quantity"], raw["right"]["run"],
+                 raw["right"]["quantity"], tolerance, raw.get("note"))
+
+
+def _names_by_run(pairs: Iterable[_Pair]) -> dict[str, tuple[str, ...]]:
+    """The quantities each run is asked for by the pairs that are sound, in request order."""
+    names: dict[str, list[str]] = {}
+    for pair in pairs:
+        for run, quantity in ((pair.left_run, pair.left_quantity), (pair.right_run, pair.right_quantity)):
+            listed = names.setdefault(run, [])
+            if quantity not in listed:
+                listed.append(quantity)
+    return {name: tuple(listed) for name, listed in names.items()}
 
 
 def _artifact(name: str, document: Mapping[str, Any], artifact_id: str) -> DataArtifact:
@@ -206,7 +215,7 @@ def _points(name: str, raw: Mapping[str, Any], reader: Any, names: tuple[str, ..
     return points, max_offset
 
 
-def _run_evidence(case: CaseRecord) -> dict[str, str] | None:
+def _run_evidence(case: SweepCase) -> dict[str, str] | None:
     state = read_json_object(Path(case.workflow_state_path))
     snapshot = state.get("resume_snapshot")
     digest = state.get("workflow_digest")
@@ -216,7 +225,11 @@ def _run_evidence(case: CaseRecord) -> dict[str, str] | None:
     return {"case_id": case.case_id, "workflow_digest": digest, "input_provenance_digest": aggregate}
 
 
-def _resolve_run(name: str, raw: Mapping[str, Any], *, base: Path, reference_unit: str, names: tuple[str, ...]) -> _Run:
+def _resolve_run(
+    name: str, raw: Mapping[str, Any], *, base: Path, reference_unit: str, names: tuple[str, ...] | None,
+) -> _Run:
+    """``names`` is what the run's sound pairs ask of it; ``None`` when a pair naming it was refused, so its points
+    are not judged against an incomplete list."""
     sweep_output = _resolve(base, raw["sweep_output"])
     try:
         context = build_sweep_context(sweep_output)
@@ -260,7 +273,7 @@ def _resolve_run(name: str, raw: Mapping[str, Any], *, base: Path, reference_uni
             check_convertible(reader.value_unit, reference_unit)
         except QuantityError as exc:
             raise QuantityComparisonError(f"run {name!r}: {exc}") from exc
-        points, max_offset = _points(name, raw, reader, names)
+        points, max_offset = ({}, None) if names is None else _points(name, raw, reader, names)
     return _Run(name, raw["plugin"], stack, sweep_output, case, artifact, reader, points, max_offset, _run_evidence(case))
 
 
@@ -283,16 +296,33 @@ def _quantities(run: _Run, names: tuple[str, ...]) -> dict[str, Quantity]:
     # A self-sampling reader never receives points; `_side` compares them
     # with what it reports.
     request_points = run.points if run.reader.takes_points else {}
+
+    def read(these: tuple[str, ...]) -> tuple[Quantity, ...]:
+        return read_quantities(
+            run.reader, case_root, run.artifact,
+            ReadRequest(names=these, points={name: request_points[name] for name in these if name in request_points}),
+        )
+
+    # Any reader exception, not only ValueError, becomes a named gap; a report is always written.
     try:
-        read = read_quantities(run.reader, case_root, run.artifact, ReadRequest(names=names, points=request_points))
-    except Exception as exc:  # any reader exception, not only ValueError, becomes a named gap; a report is always written
-        return gap(f"the reader raised {type(exc).__name__}: {exc}")
-    quantities = {q.name: q for q in read}
+        quantities = {q.name: q for q in read(names)}
+    except Exception as exc:
+        if len(names) == 1:
+            return gap(f"the reader raised {type(exc).__name__}: {exc}")
+        # One name the reader cannot place must not take the others of the run with it.
+        quantities = {}
+        for name in names:
+            try:
+                quantities[name] = read((name,))[0]
+            except Exception as each:
+                quantities[name] = not_evaluated(
+                    (name,), source_artifact=source, reason=f"the reader raised {type(each).__name__}: {each}",
+                )[0]
     # A reader reporting no sampled_at is a named gap, not a silently
     # unchecked offset (`sampling_offset: null` would pass).
     for name, expected in run.points.items():
         quantity = quantities.get(name)
-        if quantity is not None and quantity.sampled_at is None:
+        if quantity is not None and quantity.status != "not_evaluated" and quantity.sampled_at is None:
             quantities[name] = not_evaluated(
                 (name,), source_artifact=source,
                 reason=f"an expected location {list(expected)} was given, but the reader reported no sampled_at for {name!r}",
@@ -406,31 +436,44 @@ def run_quantity_comparison(request_path: str | Path, report_path: str | Path) -
         request = json.loads(raw_bytes)
     except (OSError, json.JSONDecodeError) as exc:
         raise QuantityComparisonError(f"cannot read the comparison request {request_path}: {exc}") from exc
-    errors = schema_errors(request, _REQUEST_SCHEMA)
-    if errors:
-        raise QuantityComparisonError(f"{request_path} is not a comparison request: " + "; ".join(errors))
+    schema_problems = schema_errors(request, _REQUEST_SCHEMA)
+    if schema_problems:
+        raise QuantityComparisonError(*(f"not a comparison request ({request_path}): {problem}" for problem in schema_problems))
     base = request_path.parent
     try:
         reference = load_point_reference(_resolve(base, request["reference"]))
+        default = Tolerance.from_json(request["tolerance"], where="the request", reference_unit=reference.quantity_unit)
     except QuantityError as exc:
-        raise QuantityComparisonError(str(exc)) from exc
-    default = Tolerance.from_json(request["tolerance"], where="the request", reference_unit=reference.quantity_unit)
-    pairs = _pairs(request, reference, default, base=base)
-    names_by_run: dict[str, list[str]] = {}
-    for pair in pairs:
-        for run_name, quantity in ((pair.left_run, pair.left_quantity), (pair.right_run, pair.right_quantity)):
-            names = names_by_run.setdefault(run_name, [])
-            if quantity not in names:
-                names.append(quantity)
-    unused = sorted(set(request["runs"]) - set(names_by_run))
-    if unused:
-        raise QuantityComparisonError(f"run {unused[0]!r} is named but no pair uses it")
-    runs = {
-        name: _resolve_run(name, raw, base=base, reference_unit=reference.quantity_unit, names=tuple(names_by_run[name]))
-        for name, raw in request["runs"].items()
-    }
+        raise QuantityComparisonError(
+            f"{exc}; the pairs and runs were not checked, since they depend on the reference and the default tolerance"
+        ) from exc
+    errors: list[str] = []
+    pairs: list[_Pair] = []
+    refused_runs: set[str] = set()
+    for index, raw in enumerate(request["pairs"]):
+        try:
+            pairs.append(_pair(index, raw, request, reference, default, base=base))
+        except QuantityComparisonError as exc:
+            errors.extend(exc.errors)
+            refused_runs.update(side["run"] for side in (raw["left"], raw["right"]))
+    names_by_run = _names_by_run(pairs)
+    named = {side["run"] for raw in request["pairs"] for side in (raw["left"], raw["right"])}
+    errors.extend(f"run {name!r} is named but no pair uses it" for name in sorted(set(request["runs"]) - named))
+    runs = {}
+    for name, raw in request["runs"].items():
+        if name not in named:
+            continue
+        try:
+            runs[name] = _resolve_run(
+                name, raw, base=base, reference_unit=reference.quantity_unit,
+                names=None if name in refused_runs else names_by_run[name],
+            )
+        except QuantityComparisonError as exc:
+            errors.extend(exc.errors)
+    if errors:
+        raise QuantityComparisonError(*errors)
     # Nothing above read an artifact; everything below does.
-    quantities = {name: _quantities(run, tuple(names_by_run[name])) for name, run in runs.items()}
+    quantities = {name: _quantities(run, names_by_run[name]) for name, run in runs.items()}
     metrics = [_metric(pair, runs, quantities, reference) for pair in pairs]
     both_not_reached = request["both_not_reached"]
     status, status_reason = overall_status((metric["status"] for metric in metrics), both_not_reached=both_not_reached)

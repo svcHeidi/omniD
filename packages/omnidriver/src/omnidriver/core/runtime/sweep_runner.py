@@ -7,16 +7,17 @@ import shutil
 import subprocess
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Sequence
 
 from omnidriver.core.plugin_profile import is_replica_directory_name, replica_directory_globs
 from omnidriver.core.strict_planning import _strict_plan_for_spec
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
 from omnidriver.core.tutorial_records import TutorialRecordError, lookup_record, sort_study_name
+from .failure_context import why_a_child_stopped
 from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
-from .case_records import CASE_RECORD_FILENAME, build_sweep_context
+from .case_records import CASE_RECORD_FILENAME, sweep_case_record, workflow_status, write_case_record
 from .record_execution import (
     commit_and_build_record_spec,
     record_case_members,
@@ -42,14 +43,46 @@ if TYPE_CHECKING:
     from ..plugin_interface import DriverContext
 
 
-def _child_reconciliation(stdout: str) -> dict[str, Any] | None:
-    """The child ``run --run-document``'s artifact reconciliation, parsed from its stdout."""
+#: What a child ``run --run-document`` says about why it did not complete.
+_CHILD_FAILURE_KEYS = ("error", "blocking_reason", "diagnostics", "environment_diagnostics", "failure_context")
+#: What of a failed step the manifest keeps: where it failed and why, and the logs' paths, never their text.
+_MANIFEST_FAILURE_CONTEXT_KEYS = ("step_id", "attempt", "exit_code", "diagnostics", "stdout_log", "stderr_log")
+
+
+def _child_payload(stdout: str) -> dict[str, Any]:
+    """The JSON a child ``run --run-document`` printed, or ``{}`` when it printed none."""
     try:
         payload = json.loads(stdout)
     except (TypeError, ValueError):
-        return None
-    value = payload.get("artifact_reconciliation") if isinstance(payload, dict) else None
-    return value if isinstance(value, dict) else None
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _child_failure(
+    result: subprocess.CompletedProcess[str], payload: Mapping[str, Any], *, redaction_patterns: Iterable[str],
+) -> dict[str, Any]:
+    """The reasons a child reported, whole; a child that failed without a report gets its output's tail, redacted."""
+    failure = {key: payload[key] for key in _CHILD_FAILURE_KEYS if key in payload}
+    if not failure and result.returncode != 0:
+        tail = why_a_child_stopped(result.stdout, result.stderr, redaction_patterns)
+        failure["error"] = f"the run exited {result.returncode} without a report" + (f"; {tail}" if tail else "")
+    return failure
+
+
+def _manifest_failure(failure: Mapping[str, Any]) -> dict[str, Any]:
+    """``failure`` for the manifest: its failure context cut to the diagnostics and the log paths."""
+    context = failure.get("failure_context")
+    if not isinstance(context, dict):
+        return dict(failure)
+    return {**failure, "failure_context": {k: context[k] for k in _MANIFEST_FAILURE_CONTEXT_KEYS if k in context}}
+
+
+class SweepStopped(SystemExit):
+    """A signal ended a sweep-run; ``report`` is the sweep's JSON report up to that point."""
+
+    def __init__(self, code: int, report: dict[str, Any]) -> None:
+        super().__init__(code)
+        self.report = report
 
 
 def _load_spec(spec_path: str | Path) -> dict[str, Any]:
@@ -191,37 +224,59 @@ def _record_sweep_run(
     base = sweep_spec.get("base", {})
 
     manifest_path = output_dir / SWEEP_MANIFEST_FILENAME
-    spec_hash = compute_spec_hash(sweep_spec)
     manifest = SweepManifest(
-        schema_version="1.0", sweep_spec_hash=spec_hash,
+        schema_version="1.0", sweep_spec_hash=compute_spec_hash(sweep_spec),
         created_at=utc_now(), updated_at=utc_now(), cases=[],
+        base_study={key: value for key, value in base.items() if key not in _RECORD_NON_STUDY_BASE_KEYS},
+        cli_study=dict(cli_study or {}),
     )
 
     completed_count = 0
     failed_count = 0
     case_summaries: list[dict[str, Any]] = []
 
+    def sweep_report() -> dict[str, Any]:
+        return {
+            "case_count": len(resolved_cases),
+            "completed_count": completed_count,
+            "failed_count": failed_count,
+            "skipped_count": len(resolved_cases) - len(case_summaries),
+            "cases": case_summaries,
+        }
+
     for case in resolved_cases:
-        staged_case_root = output_dir / "cases" / case.case_id
-        case_dir = output_dir / case.case_id
-        run_document_path = case_dir / RUN_DOCUMENT_FILENAME
-        workflow_state_path = case_dir / STATE_FILENAME
-        case_record_path = case_dir / CASE_RECORD_FILENAME
+        case_root = output_dir / "cases" / case.case_id
+        run_document_path = case_root / RUN_DOCUMENT_FILENAME
+        workflow_state_path = case_root / STATE_FILENAME
+        case_record_path = case_root / CASE_RECORD_FILENAME
         study_by_source = _record_case_study_by_source(
             base=base, resolved_axis_values=case.resolved_axis_values, cli_study=cli_study,
         )
+        entry = CaseManifestEntry(
+            case_id=case.case_id,
+            resolved_axis_values=case.resolved_axis_values,
+            override_hash=compute_override_hash(study_by_source.get("sweep", {})),
+            run_document_path=_relative_or_absolute(run_document_path, output_dir),
+            workflow_state_path=_relative_or_absolute(workflow_state_path, output_dir),
+            sweep_outcome="running",
+            outcome="fresh",
+            started_at=utc_now(),
+            updated_at=utc_now(),
+            case_record_path=_relative_or_absolute(case_record_path, output_dir),
+        )
+        manifest.cases.append(entry)
+        write_manifest(manifest_path, manifest)
 
         status = "failed"
-        materialization_error = None
-        plan_error = None
-        timeout_error = None
+        failure: dict[str, Any] = {}
         commit_status = None
         unchanged_patches: list[dict[str, Any]] = []
         artifact_reconciliation = None
+        stopped: SystemExit | None = None
         try:
             commit_result, spec = commit_and_build_record_spec(
                 record, case_id=case.case_id, cases_root=cases_root,
-                staged_case_root=staged_case_root, study_by_source=study_by_source,
+                staged_case_root=case_root, study_by_source=study_by_source,
                 driver_context=driver_context, inputs=inputs,
             )
             commit_status = commit_result.status
@@ -232,7 +287,9 @@ def _record_sweep_run(
             report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
             payload = report.to_json()
             if report.status != "ok":
-                plan_error = f"strict_plan reported {report.status} status"
+                failure["plan_error"] = (
+                    "; ".join(report.error_messages()) or f"strict_plan reported {report.status} status"
+                )
             else:
                 run_document = payload["run_document"]
                 workflow_state_path = _workflow_state_path_from_run_document(run_document)
@@ -240,27 +297,37 @@ def _record_sweep_run(
                 run_document_path.write_text(json.dumps(run_document, indent=2))
                 if workflow_state_path.exists():
                     workflow_state_path.unlink()
+                write_case_record(case_record_path, sweep_case_record(entry, output_dir))
                 result = run_child(
                     omnidriver_run_command(driver_context, "--run-document", str(run_document_path)),
                     env=execution_environment,
                     timeout=case_timeout_s,
                     state_path=workflow_state_path,
                 )
-                artifact_reconciliation = _child_reconciliation(result.stdout)
+                child = _child_payload(result.stdout)
+                artifact_reconciliation = child.get("artifact_reconciliation")
+                failure.update(_child_failure(
+                    result, child, redaction_patterns=driver_context.stack.call("get_log_redaction_patterns"),
+                ))
                 if workflow_state_path.exists():
                     status = json.loads(workflow_state_path.read_text()).get("status", "pending")
                 elif result.returncode != 0:
                     status = "failed"
                 else:
                     status = "pending"
+        except SystemExit as stop:
+            stopped = stop
+            # A stopped child leaves its state as it was mid-run; only a case that finished first counts as completed.
+            status = "completed" if workflow_status(workflow_state_path) == "completed" else "failed"
+            failure["stopped_by_signal"] = int(stop.code) - 128 if isinstance(stop.code, int) else None
         except subprocess.TimeoutExpired as exc:
-            timeout_error = (
+            failure["timeout_error"] = (
                 f"case exceeded timeout of {case_timeout_s}s and was terminated: {exc}"
             )
         except (OSError, ValueError) as exc:
-            materialization_error = str(exc)
+            failure["materialization_error"] = str(exc)
         except Exception as exc:
-            plan_error = str(exc)
+            failure["plan_error"] = str(exc)
 
         if status == "completed":
             completed_count += 1
@@ -271,7 +338,7 @@ def _record_sweep_run(
             "case_id": case.case_id,
             "status": status,
             "outcome": "fresh",
-            "run_document_path": _relative_or_absolute(run_document_path, output_dir),
+            "run_document_path": entry.run_document_path,
             "workflow_state_path": _relative_or_absolute(workflow_state_path, output_dir),
         }
         if commit_status is not None:
@@ -280,43 +347,24 @@ def _record_sweep_run(
             # A patch that already matched the case is real information
             # about this case -- persisted here, not discarded.
             case_summary["unchanged_patches"] = unchanged_patches
-        if materialization_error is not None:
-            case_summary["materialization_error"] = materialization_error
-        if plan_error is not None:
-            case_summary["plan_error"] = plan_error
-        if timeout_error is not None:
-            case_summary["timeout_error"] = timeout_error
         if artifact_reconciliation is not None:
             case_summary["artifact_reconciliation"] = artifact_reconciliation
+        case_summary.update(failure)
         case_summaries.append(case_summary)
 
-        manifest.cases.append(
-            CaseManifestEntry(
-                case_id=case.case_id,
-                resolved_axis_values=case.resolved_axis_values,
-                override_hash=compute_override_hash(study_by_source.get("sweep", {})),
-                run_document_path=_relative_or_absolute(run_document_path, output_dir),
-                workflow_state_path=_relative_or_absolute(workflow_state_path, output_dir),
-                status=status,
-                outcome="fresh",
-                started_at=utc_now(),
-                updated_at=utc_now(),
-                case_record_path=_relative_or_absolute(case_record_path, output_dir),
-                unchanged_patches=tuple(unchanged_patches),
-            )
-        )
-        manifest.updated_at = utc_now()
+        entry.sweep_outcome = "stopped" if stopped is not None else status
+        entry.workflow_state_path = case_summary["workflow_state_path"]
+        entry.updated_at = utc_now()
+        entry.unchanged_patches = tuple(unchanged_patches)
+        entry.failure = _manifest_failure(failure)
+        manifest.updated_at = entry.updated_at
         write_manifest(manifest_path, manifest)
+        write_case_record(case_record_path, sweep_case_record(entry, output_dir))
 
-    build_sweep_context(output_dir, persist_case_records=True)
+        if stopped is not None:
+            raise SweepStopped(stopped.code, sweep_report())
 
-    return {
-        "case_count": len(resolved_cases),
-        "completed_count": completed_count,
-        "failed_count": failed_count,
-        "skipped_count": 0,
-        "cases": case_summaries,
-    }
+    return sweep_report()
 
 
 def _relative_or_absolute(path: Path, base: Path) -> str:

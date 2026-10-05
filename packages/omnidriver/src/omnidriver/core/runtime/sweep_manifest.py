@@ -20,7 +20,10 @@ class CaseManifestEntry:
     override_hash: str
     run_document_path: str
     workflow_state_path: str
-    status: str  # "pending" | "running" | "completed" | "failed"
+    #: What the sweep observed of the case: ``running`` while it ran, then the status its workflow state had when
+    #: the sweep finished with it, or ``stopped`` when a signal ended the sweep. The case's current status is its
+    #: ``workflow_state.json``, which ``build_sweep_context`` reads.
+    sweep_outcome: str  # "running" | "completed" | "failed" | "pending" | "stopped"
     outcome: str  # "fresh" | "skipped" | "retried"
     started_at: str | None
     updated_at: str
@@ -30,6 +33,9 @@ class CaseManifestEntry:
     #: `record_execution._serialize_sourced_patch` produces. Always `()`
     #: for a factory-entry case, which has no such concept.
     unchanged_patches: tuple[dict[str, Any], ...] = ()
+    #: Why the case failed, when it did: the plan's or the child's ``error``,
+    #: ``environment_diagnostics`` and ``failure_context``, as the case summary reports them.
+    failure: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -39,6 +45,10 @@ class SweepManifest:
     created_at: str
     updated_at: str
     cases: list[CaseManifestEntry] = field(default_factory=list)
+    #: The study values every case shares, by source (the spec's ``base`` less its
+    #: dispatch keys, and the CLI's own); a case's own values are its ``resolved_axis_values``.
+    base_study: dict[str, Any] = field(default_factory=dict)
+    cli_study: dict[str, Any] = field(default_factory=dict)
 
 
 def _stable_json_bytes(data: Any) -> bytes:
@@ -69,4 +79,6 @@ def read_manifest(path: Path) -> SweepManifest:
         created_at=payload["created_at"],
         updated_at=payload["updated_at"],
         cases=cases,
+        base_study=payload.get("base_study", {}),
+        cli_study=payload.get("cli_study", {}),
     )

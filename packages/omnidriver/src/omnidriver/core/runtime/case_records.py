@@ -5,11 +5,11 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from .sweep_manifest import SWEEP_MANIFEST_FILENAME, read_manifest
+from .sweep_manifest import SWEEP_MANIFEST_FILENAME, CaseManifestEntry, read_manifest
 from .workflow_orchestrator import STATE_FILENAME
 
 #: The standalone case record's on-disk filename, named once here instead
@@ -20,7 +20,42 @@ CASE_RECORD_FILENAME = "case_record.json"
 
 @dataclass(frozen=True)
 class CaseRecord:
-    """One Core-owned execution record with opaque adapter-owned locations."""
+    """What a case is, as ``case_record.json`` states it: identity and locations, never how the run went.
+
+    Every location is relative to the folder holding the record. The case's
+    status is its ``workflow_state.json``, the one place a run's progress is kept."""
+
+    case_id: str
+    resolved_axis_values: dict[str, Any]
+    outcome: str
+    workflow_state_path: str
+    case_output_dir: str | None
+    setup_root: str | None
+    case_root: str | None = None
+    run_document_path: str | None = None
+    override_hash: str | None = None
+    started_at: str | None = None
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "case_id": self.case_id,
+            "resolved_axis_values": dict(self.resolved_axis_values),
+            "outcome": self.outcome,
+            "workflow_state_path": self.workflow_state_path,
+            "case_output_dir": self.case_output_dir,
+            "setup_root": self.setup_root,
+            "case_root": self.case_root,
+            "run_document_path": self.run_document_path,
+            "override_hash": self.override_hash,
+            "started_at": self.started_at,
+        }
+
+
+@dataclass(frozen=True)
+class SweepCase:
+    """A case of a sweep as ``build_sweep_context`` reads it: its record's identity, with locations in the
+    manifest's terms (the run document relative to the sweep's output directory, the others absolute) and
+    the ``status`` its ``workflow_state.json`` has now, ``not_run`` when no workflow was started."""
 
     case_id: str
     resolved_axis_values: dict[str, Any]
@@ -33,23 +68,9 @@ class CaseRecord:
     run_document_path: str | None = None
     override_hash: str | None = None
     started_at: str | None = None
-    updated_at: str | None = None
 
     def to_json(self) -> dict[str, Any]:
-        return {
-            "case_id": self.case_id,
-            "resolved_axis_values": dict(self.resolved_axis_values),
-            "status": self.status,
-            "outcome": self.outcome,
-            "workflow_state_path": self.workflow_state_path,
-            "case_output_dir": self.case_output_dir,
-            "setup_root": self.setup_root,
-            "case_root": self.case_root,
-            "run_document_path": self.run_document_path,
-            "override_hash": self.override_hash,
-            "started_at": self.started_at,
-            "updated_at": self.updated_at,
-        }
+        return asdict(self)
 
 
 def write_case_record(path: Path, record: CaseRecord) -> None:
@@ -61,22 +82,28 @@ def write_case_record(path: Path, record: CaseRecord) -> None:
     os.replace(temporary, path)
 
 
+def workflow_status(state_path: Path) -> str | None:
+    """The status ``workflow_state.json`` records, or ``None`` when it is absent or unreadable."""
+    try:
+        status = json.loads(Path(state_path).read_text()).get("status")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return status if isinstance(status, str) else None
+
+
+def _relative_to(folder: Path, location: str | Path | None) -> str | None:
+    return None if location is None else os.path.relpath(location, folder)
+
+
 def build_standalone_case_record(
     *, entry: str, case_root: Path, setup_root: Path | None, output_dir: Path,
 ) -> CaseRecord:
-    """Record a standalone run without scanning its output directory."""
+    """Record a run by what it is, without scanning its output directory."""
     output_dir = Path(output_dir)
-    workflow_state_path = output_dir / STATE_FILENAME
-    status = "unknown"
-    if workflow_state_path.is_file():
-        try:
-            status = json.loads(workflow_state_path.read_text()).get("status", "unknown")
-        except json.JSONDecodeError:
-            pass
     return CaseRecord(
-        case_id=entry, resolved_axis_values={}, status=status, outcome="fresh",
-        workflow_state_path=str(workflow_state_path), case_output_dir=str(output_dir),
-        setup_root=str(setup_root) if setup_root else None, case_root=str(case_root),
+        case_id=entry, resolved_axis_values={}, outcome="fresh",
+        workflow_state_path=STATE_FILENAME, case_output_dir=".",
+        setup_root=_relative_to(output_dir, setup_root), case_root=_relative_to(output_dir, case_root),
     )
 
 
@@ -89,7 +116,7 @@ class SweepContext:
     case_count: int
     completed_count: int
     failed_count: int
-    cases: tuple[CaseRecord, ...]
+    cases: tuple[SweepCase, ...]
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -116,45 +143,50 @@ def _run_document_field(raw_path: str, field: str, *, output_dir: Path) -> str |
     return str(value) if value else None
 
 
-def build_sweep_context(
-    output_dir: Path,
-    *,
-    persist_case_records: bool = False,
-) -> SweepContext:
-    """Read a sweep's durable Core records without inspecting solver outputs.
+def sweep_case(entry: CaseManifestEntry, output_dir: Path) -> SweepCase:
+    output_dir = Path(output_dir)
+    candidate = Path(entry.workflow_state_path)
+    state_path = candidate if candidate.is_absolute() else output_dir / candidate
+    return SweepCase(
+        case_id=entry.case_id,
+        resolved_axis_values=dict(entry.resolved_axis_values),
+        status=workflow_status(state_path) or "not_run",
+        outcome=entry.outcome,
+        workflow_state_path=str(state_path),
+        case_output_dir=str(state_path.parent),
+        setup_root=_run_document_field(entry.run_document_path, "setupRoot", output_dir=output_dir),
+        case_root=_run_document_field(entry.run_document_path, "caseRoot", output_dir=output_dir),
+        run_document_path=entry.run_document_path,
+        override_hash=entry.override_hash,
+        started_at=entry.started_at,
+    )
 
-    Read-only by default; pass ``persist_case_records=True`` only once the
-    sweep executor has finished updating its own manifest.
-    """
+
+def sweep_case_record(entry: CaseManifestEntry, output_dir: Path) -> CaseRecord:
+    """The record of one sweep case, written into the case's own folder."""
+    output_dir = Path(output_dir)
+    case = sweep_case(entry, output_dir)
+    folder = (output_dir / entry.case_record_path).parent
+    return CaseRecord(
+        case_id=case.case_id, resolved_axis_values=case.resolved_axis_values, outcome=case.outcome,
+        workflow_state_path=_relative_to(folder, case.workflow_state_path),
+        case_output_dir=_relative_to(folder, case.case_output_dir),
+        setup_root=_relative_to(folder, case.setup_root), case_root=_relative_to(folder, case.case_root),
+        run_document_path=_relative_to(folder, output_dir / entry.run_document_path),
+        override_hash=case.override_hash, started_at=case.started_at,
+    )
+
+
+def build_sweep_context(output_dir: Path) -> SweepContext:
+    """Read a sweep's durable Core records without inspecting solver outputs."""
     output_dir = Path(output_dir)
     manifest = read_manifest(output_dir / SWEEP_MANIFEST_FILENAME)
-    records: list[CaseRecord] = []
-    for entry in manifest.cases:
-        candidate = Path(entry.workflow_state_path)
-        state_path = candidate if candidate.is_absolute() else output_dir / candidate
-        record = CaseRecord(
-            case_id=entry.case_id,
-            resolved_axis_values=dict(entry.resolved_axis_values),
-            status=entry.status,
-            outcome=entry.outcome,
-            workflow_state_path=str(state_path),
-            case_output_dir=str(state_path.parent),
-            setup_root=_run_document_field(entry.run_document_path, "setupRoot", output_dir=output_dir),
-            case_root=_run_document_field(entry.run_document_path, "caseRoot", output_dir=output_dir),
-            run_document_path=entry.run_document_path,
-            override_hash=entry.override_hash,
-            started_at=entry.started_at,
-            updated_at=entry.updated_at,
-        )
-        if persist_case_records and entry.case_record_path:
-            write_case_record(output_dir / entry.case_record_path, record)
-        records.append(record)
+    cases = tuple(sweep_case(entry, output_dir) for entry in manifest.cases)
     return SweepContext(
         output_dir=str(output_dir), sweep_spec_hash=manifest.sweep_spec_hash,
         started_at=manifest.created_at, finished_at=manifest.updated_at,
-        case_count=len(records),
-        completed_count=sum(entry.status == "completed" for entry in manifest.cases),
-        failed_count=sum(entry.status == "failed" for entry in manifest.cases),
-        cases=tuple(records),
+        case_count=len(cases),
+        completed_count=sum(case.status == "completed" for case in cases),
+        failed_count=sum(case.status in {"failed", "not_run"} for case in cases),
+        cases=cases,
     )
-

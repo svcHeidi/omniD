@@ -23,4 +23,8 @@ class PointReferenceError(QuantityError):
 
 
 class QuantityComparisonError(QuantityError):
-    """A comparison request refused before its report is written."""
+    """A comparison request refused before its report is written; ``errors`` is every problem found, not the first."""
+
+    def __init__(self, *errors: str) -> None:
+        super().__init__("; ".join(errors))
+        self.errors = errors

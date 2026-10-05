@@ -1,10 +1,45 @@
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 DEFAULT_TAIL_LINES = 200
 DEFAULT_TAIL_BYTES = 65536  # 64 KiB default cap on the tail read window
+#: How much of a child's own output a report quotes.
+OUTPUT_TAIL_CHARS = 800
+
+
+def redact_text(text: str, patterns: Iterable[str]) -> str:
+    """Replace every match of each pattern, whole, with ``[REDACTED]``.
+
+    Capture groups are not preserved: a pattern that must keep context
+    around the secret uses lookarounds instead, e.g.
+    ``(?<=://)[^/\\s@]+(?=@)`` matches only a URL's credential."""
+    for pattern in [re.compile(p) for p in patterns]:
+        text = pattern.sub(lambda _match: "[REDACTED]", text)
+    return text
+
+
+def why_a_child_stopped(stdout: str, stderr: str, patterns: Iterable[str]) -> str:
+    """What a child omnidriver that did not complete said: the error and the error diagnostics its JSON report
+    carries, else the tail of its stderr or stdout. Matches of ``patterns`` are redacted."""
+    try:
+        report = json.loads(stdout)
+    except (TypeError, ValueError):
+        report = None
+    report = report if isinstance(report, dict) else {}
+    context = report.get("failure_context")
+    diagnostics = [
+        d for group in (report.get("environment_diagnostics"), report.get("diagnostics"),
+                        context.get("diagnostics") if isinstance(context, dict) else None)
+        for d in group or () if isinstance(d, dict) and d.get("level") == "error"
+    ]
+    said = [str(report["error"])] if report.get("error") else []
+    said += [f"{d.get('code')}: {d.get('message')}" for d in diagnostics]
+    text = "; ".join(said) or (stderr or "").strip() or (stdout or "").strip()
+    return redact_text(text, patterns)[-OUTPUT_TAIL_CHARS:]
 
 
 def _tail_file(path: str | None, *, max_lines: int, max_bytes: int) -> tuple[str, bool]:
