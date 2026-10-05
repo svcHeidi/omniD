@@ -238,6 +238,6 @@ only normalises them inside `restitutionEikonalSolver1D`.
    `phiE` at the electrode positions, and `pseudoECG` and `eikonalECG` use the
    electrode positions only. Its face centres would be ECG evaluation points
    in the same frame as the electrodes, so the STL would have to be in mesh
-   units (metres). It stays uncatalogued, because it has no place in
-   `electroProperties` and setting it does nothing. Should it be deleted, or
-   wired to an ECG model?
+   units (metres). It stays uncatalogued until it has a place in
+   `electroProperties`. Owner, 2026-10-05: it is wired with the bath-heart
+   case, on a branch that lands soon.

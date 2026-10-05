@@ -219,7 +219,10 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      sweep's axis values.
 3. **Uncatalogued cardiacFOAM keys:** 12 for electromechanics (they wait for
    it), two `couplingSignal` literals, `offsetField` (a field-file key that no
-   catalogued document holds) and `torsoSurface`. The Purkinje graph file is
+   catalogued document holds) and `torsoSurface`, read only by
+   `ecgModelIO::loadSurface`, which nothing calls yet: the owner wires it with
+   the bath-heart case (on a branch, landing soon), and it is catalogued once
+   it has a place in `electroProperties`. The Purkinje graph file is
    catalogued as the `purkinjeGraph` document, and a case's graph is judged
    before it runs (`docs/solver-learning/cardiacfoam-conduction-graph.md`).
    The owner still has to settle the questions that document lists under
@@ -230,8 +233,6 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      unit;
    - whether the native code should check the length of `pvjResistances` and
      the range of `rootStimulus.node`;
-   - `torsoSurface`, read only by `ecgModelIO::loadSurface`, which nothing
-     calls: delete it or wire it to an ECG model.
 
    `conductionEdges` is a list of four-number lists, which no value kind
    states: core's closed `VALUE_KINDS` has no list of lists, and a `DictEntry`
