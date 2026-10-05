@@ -384,3 +384,85 @@ def test_a_rollback_that_itself_fails_names_the_path_and_says_to_plan_again(tmp_
     assert "constant/a" in str(excinfo.value)
     assert "plan again" in str(excinfo.value)
     assert case_transaction.interrupted_commit(tmp_path) == ("constant/a", "constant/unwritable/b")
+
+
+def test_a_second_signal_during_the_rollback_waits_for_it_to_finish(tmp_path, monkeypatch):
+    import signal
+
+    (tmp_path / "constant").mkdir()
+    existing = tmp_path / "constant" / "a"
+    existing.write_bytes(b"original\n")
+    real = case_transaction.atomic_write_bytes
+
+    def _signalled_while_restoring(target, content, **kwargs):
+        if content == b"original\n":
+            signal.raise_signal(signal.SIGINT)
+        return real(target, content, **kwargs)
+
+    monkeypatch.setattr(case_transaction, "atomic_write_bytes", _signalled_while_restoring)
+    plan = _plan(tmp_path, [
+        _rendered("constant/a", b"new\n", exists_before=True, before_digest=case_write._digest_bytes(b"original\n")),
+    ])
+
+    def refuse():
+        raise ValueError("the case breaks a rule")
+
+    with pytest.raises(KeyboardInterrupt):
+        case_transaction.commit_case_write(plan, driver_context=object(), verify=refuse)
+
+    assert existing.read_bytes() == b"original\n"
+    assert case_transaction.interrupted_commit(tmp_path) is None
+
+
+def test_only_the_files_a_commit_reached_are_restored(tmp_path, monkeypatch):
+    (tmp_path / "constant").mkdir()
+    for name in ("a", "c"):
+        (tmp_path / "constant" / name).write_bytes(b"original\n")
+    digest = case_write._digest_bytes(b"original\n")
+    real = case_transaction.atomic_write_bytes
+    touched = []
+
+    def _fails_on_b(target, content, **kwargs):
+        touched.append(target.name)
+        if target.name == "b":
+            raise OSError("disk full")
+        return real(target, content, **kwargs)
+
+    monkeypatch.setattr(case_transaction, "atomic_write_bytes", _fails_on_b)
+    plan = _plan(tmp_path, [
+        _rendered("constant/a", b"new\n", exists_before=True, before_digest=digest),
+        _rendered("constant/b", b"two\n"),
+        _rendered("constant/c", b"new\n", exists_before=True, before_digest=digest),
+    ])
+    with pytest.raises(case_transaction.CaseTransactionError, match="disk full"):
+        case_transaction.commit_case_write(plan, driver_context=object())
+
+    assert "c" not in touched
+    assert (tmp_path / "constant" / "a").read_bytes() == b"original\n"
+
+
+@pytest.mark.parametrize("stop", [KeyboardInterrupt(), SystemExit(143)], ids=["interrupt", "terminate"])
+def test_a_signal_stays_what_propagates_when_its_rollback_then_fails(tmp_path, monkeypatch, capsys, stop):
+    (tmp_path / "constant").mkdir()
+    (tmp_path / "constant" / "a").write_bytes(b"original\n")
+    real = case_transaction.atomic_write_bytes
+
+    def _stopped_on_b_and_unable_to_restore(target, content, **kwargs):
+        if target.name == "b":
+            raise stop
+        if content == b"original\n":
+            raise OSError("restore failed")
+        return real(target, content, **kwargs)
+
+    monkeypatch.setattr(case_transaction, "atomic_write_bytes", _stopped_on_b_and_unable_to_restore)
+    plan = _plan(tmp_path, [
+        _rendered("constant/a", b"new\n", exists_before=True, before_digest=case_write._digest_bytes(b"original\n")),
+        _rendered("constant/b", b"two\n"),
+    ])
+    with pytest.raises(type(stop)) as excinfo:
+        case_transaction.commit_case_write(plan, driver_context=object())
+
+    assert excinfo.value is stop
+    assert any("rollback failed" in note for note in stop.__notes__)
+    assert "rollback failed" in capsys.readouterr().err
+    assert case_transaction.interrupted_commit(tmp_path) == ("constant/a", "constant/b")

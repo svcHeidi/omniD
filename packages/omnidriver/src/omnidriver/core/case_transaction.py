@@ -10,9 +10,11 @@ writers outside the framework. A symlinked write target is refused outright.
 from __future__ import annotations
 
 import json
-from contextlib import ExitStack
+import signal
+import sys
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Iterator, Mapping
 
 from .case_write import CaseWritePlan, CaseWriteRecord, RenderedFile
 from .runtime.attempt_lease import AttemptLeaseError, acquire_case_lease, case_lease_is_held
@@ -90,12 +92,26 @@ def _missing_ancestors(case_root: Path, targets: list[Path]) -> list[Path]:
     return sorted(created, key=lambda path: len(path.parts), reverse=True)
 
 
+@contextmanager
+def _signals_deferred() -> Iterator[None]:
+    """Hold SIGINT and SIGTERM until the block ends, so a second signal cannot cut a rollback short."""
+    if not hasattr(signal, "pthread_sigmask"):
+        yield
+        return
+    previous = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+    try:
+        yield
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous)
+
+
 def _rollback(
-    case_root: Path, before: Mapping[Path, tuple[bytes, int] | None], created_dirs: list[Path],
+    case_root: Path, reached: list[Path], before: Mapping[Path, tuple[bytes, int] | None], created_dirs: list[Path],
 ) -> None:
-    """Put every file back as it was; on any failure raise naming every path left unrestored."""
+    """Put every file the commit reached back as it was; on any failure raise naming every path left unrestored."""
     failures: list[tuple[Path, Exception]] = []
-    for target, image in before.items():
+    for target in reached:
+        image = before[target]
         try:
             if image is None:
                 target.unlink(missing_ok=True)
@@ -160,7 +176,10 @@ def commit_case_write(
 
     A failed write rolls the commit back. ``verify`` runs once every file is
     written: what it raises rolls the commit back and propagates unchanged.
-    If the rollback itself fails, the error names every path left unrestored.
+    If the rollback itself fails, the error names every path left unrestored;
+    when a signal's ``KeyboardInterrupt`` or ``SystemExit`` caused the commit
+    to stop, that stays what propagates and the failure is told beside it.
+    A signal that arrives during the rollback is held until it ends.
 
     The case lease is host-local and not reentrant, so a caller that already
     holds it (``--apply`` holds it for the whole step) passes
@@ -194,18 +213,29 @@ def commit_case_write(
         created_dirs = _missing_ancestors(case_root, list(before))
 
         marker = case_root / COMMIT_MARKER_FILENAME
+        reached: list[Path] = []
         try:
             atomic_write_bytes(marker, json.dumps({"paths": [rendered.path for rendered in plan.files]}).encode())
             try:
                 for rendered in plan.files:
+                    reached.append(targets[rendered.path])
                     atomic_write_bytes(targets[rendered.path], rendered.content, mode=rendered.mode)
             except Exception as exc:
                 raise CaseTransactionError(f"commit of {case_root} failed: {exc}") from exc
             if verify is not None:
                 verify()
-        except BaseException:
-            _rollback(case_root, before, created_dirs)
-            marker.unlink(missing_ok=True)
+        except BaseException as error:
+            with _signals_deferred():
+                try:
+                    _rollback(case_root, reached, before, created_dirs)
+                except CaseTransactionError as failure:
+                    if isinstance(error, Exception):
+                        raise
+                    # A signal's own exit stays what the caller sees; the failed rollback is told beside it.
+                    error.add_note(str(failure))
+                    print(failure, file=sys.stderr)
+                else:
+                    marker.unlink(missing_ok=True)
             raise
         marker.unlink(missing_ok=True)
 
