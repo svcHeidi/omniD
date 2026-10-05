@@ -1682,12 +1682,13 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.pvjCouplingScheme',
-            description="PVJ source treatment for reactionDiffusionPvjCoupler: 'explicit' injects the full coupling current as a source, while 'implicit' splits the tissue-voltage part onto the myocardium Vm matrix diagonal. Default: explicit.",
+            description="How reactionDiffusionPvjCoupler gives the tissue its junction current. 'explicit' deposits the current (Vm of the network node after its step - the junction's kernel-weighted mean tissue Vm at the old time) / R as a source, spread over the junction's cells. 'implicit' deposits, per cell, a source w*Vm(network)/(R*V) and a coefficient w/(R*V) on the cell's own Vm (w the kernel weight, V the junction's kernel-weighted volume). The coefficient sits on the Vm matrix diagonal only when the myocardium's solutionAlgorithm is implicit; with an explicit solutionAlgorithm it multiplies the old Vm on the right-hand side, so the junction term is explicit in effect, in its per-cell form. Default: explicit.",
             source_refs=('src/electroModels/electroCouplers/pvjCoupler/reactionDiffusion/reactionDiffusionPvjCoupler.C',),
             value_kind='enum',
             enum_values=('explicit', 'implicit'),
             allowed_bindings={"<name>": None},
             typical_value='explicit',
+            notes="eikonalMonodomainPvjCoupler and eikonalPvjCoupler do not read this key; eikonalMonodomainPvjCoupler always deposits the explicit form. By combination: scheme explicit, any solutionAlgorithm, deposits the source from the old mean tissue Vm; scheme implicit with solutionAlgorithm implicit puts the coefficient on the diagonal, so the junction sets no step-size bound; scheme implicit with solutionAlgorithm explicit multiplies the coefficient by the old Vm of each cell. Where the junction term acts on the old tissue Vm, the tissue Vm near the junction alternates in sign and grows once R is below dt*Sw2V/(chi*Cm*SwV^2*A) (scheme explicit) or dt*wmax/(chi*Cm*SwV*A) (scheme implicit with solutionAlgorithm explicit): A is 2 for ddtSchemes Euler and 4 for backward, chi and cm the myocardium's, SwV the sum of w*cell volume over the junction's cells, Sw2V the sum of w^2*cell volume and wmax the largest kernel weight w.",
             constraints=("Only applicable to reactionDiffusionPvjCoupler.",),
             applicable_when={"$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.electroDomainCoupler": "reactionDiffusionPvjCoupler"},
         ),
@@ -1709,7 +1710,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.couplingMode',
-            description="Coupling direction: 'unidirectional' (Purkinje→myocardium only) or 'bidirectional' (both ways). REQUIRED -- pvjCoupler.C:91 uses get<word>, so omitting it is a fatal error, not a default.",
+            description="Coupling direction. 'unidirectional': the network drives the tissue and receives nothing (reactionDiffusionPvjCoupler clears the network's applied-current buffers before it advances). 'bidirectional': reactionDiffusionPvjCoupler also subtracts the junction current from the network node's applied current, as A used as A/m³ without a node volume, so the node's voltage changes by only the current over the network's chi*Cm per second; the eikonal couplers return the earliest tissue activation near each junction to its node as an activation-time candidate. REQUIRED: the coupler reads it with get<word>, so omitting it is a fatal error, not a default.",
             source_refs=('src/electroModels/electroCouplers/pvjCoupler/pvjCoupler.C',),
             value_kind='enum',
             enum_values=('unidirectional', 'bidirectional'),

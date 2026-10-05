@@ -135,16 +135,20 @@ A coupling is `domainCouplings.<name>` with `electroDomainCoupler` and
 - `reactionDiffusionPvjCoupler` (monodomain network to monodomain or bidomain
   tissue): `I_pvj = (Vm_network - Vm_tissue)/R_pvj` at each junction. The
   tissue receives it explicitly, or with `pvjCouplingScheme implicit` as a
-  source `w*Vm_network/(R*V_sphere)` plus an implicit coefficient
-  `w/(R*V_sphere)` on the cell's own `Vm`. In `bidirectional` mode the network
-  node loses the same current (`appliedCurrent[pvjNode] -= I_pvj`); in
-  `unidirectional` mode the buffers are cleared before the network advances.
+  source `w*Vm_network/(R*V_sphere)` plus a coefficient `w/(R*V_sphere)` on the
+  cell's own `Vm`. The coefficient is on the `Vm` matrix diagonal only when the
+  myocardium's `solutionAlgorithm` is `implicit`; with `explicit` it multiplies
+  the old `Vm` on the right-hand side. In `bidirectional` mode the network
+  node loses the same number (`appliedCurrent[pvjNode] -= I_pvj`), used as
+  A/m³ without a node volume; in `unidirectional` mode the buffers are cleared
+  before the network advances.
   This is the coupler the 1D-3D manufactured solution exercises.
 - `eikonalMonodomainPvjCoupler` (eikonal network to monodomain tissue): the
   network's activation time drives a voltage template at each junction, offset
   to the tissue's resting potential, and the same `(V - Vm_tissue)/R` current
-  enters the tissue; in `bidirectional` mode the tissue's activation times are
-  returned to the junction nodes.
+  enters the tissue explicitly (it does not read `pvjCouplingScheme`); in
+  `bidirectional` mode the tissue's activation times are returned to the
+  junction nodes.
 - `eikonalPvjCoupler` (eikonal to eikonal): copies junction activation times
   into the tissue's activation-time field; `bidirectional` returns the tissue's.
   It reads no resistance.
