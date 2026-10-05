@@ -91,9 +91,11 @@ class TestDictEntryCatalog(unittest.TestCase):
             set(active_tension["$ELECTRO_MODEL_COEFFS.activeTensionModel"].enum_values),
             set(ACTIVE_TENSION_MODEL_CATALOG),
         )
+        signal = active_tension["$ELECTRO_MODEL_COEFFS.couplingSignal"]
+        self.assertEqual(signal.enum_values, ("Vm", "vm", "Cai", "cai"))
         self.assertEqual(
-            active_tension["$ELECTRO_MODEL_COEFFS.couplingSignal"].enum_values,
-            ("Vm", "vm"),
+            set(signal.applicable_when["activeTensionModel"]),
+            {name for name, model in ACTIVE_TENSION_MODEL_CATALOG.items() if model.coupling_signal},
         )
 
 

@@ -296,6 +296,20 @@ def test_batched_integrator_does_not_constrain_active_tension_model():
         assert not [d for d in diagnostics if d.field == "batchedIntegrator"]
 
 
+def test_coupling_signal_must_be_the_one_the_model_accepts():
+    """Each model's constructor stops on any other signal: NashPanfilov on anything but Vm, the batched Land models on anything but Cai."""
+    def judged(model, signal):
+        return [d for d in cross_field_diagnostics({"activeTensionModel": model, "couplingSignal": signal})
+                if d.field == "$ELECTRO_MODEL_COEFFS.couplingSignal"]
+
+    assert not judged("NashPanfilov", "Vm") and not judged("NashPanfilovBatched", "vm")
+    assert not judged("LandNiedererBatched", "Cai") and not judged("LandNiedererTWorldBatched", "cai")
+    assert len(judged("NashPanfilov", "Cai")) == 1
+    assert "'Vm' or 'vm'" in judged("NashPanfilovBatched", "Cai")[0].message
+    assert len(judged("LandNiedererBatched", "Vm")) == 1
+    assert not judged("LandNiederer", "Vm")
+
+
 def test_constraint_violation_is_flagged():
     # eikonalSolver disallows an explicit ionicModel.
     run = _filled_run(config={

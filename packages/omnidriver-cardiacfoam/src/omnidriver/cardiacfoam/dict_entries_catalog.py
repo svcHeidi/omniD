@@ -1592,12 +1592,12 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.couplingSignal',
-            description='Coupling signal requested by the active-tension model. Flat sibling of activeTensionModel inside <solver>Coeffs, not nested under it.',
-            source_refs=('src/activeTensionModels/NashPanfilov/NashPanfilov.C',),
+            description="The ionic-model signal that drives the active-tension model. Vm is the cell's transmembrane potential, which NashPanfilov maps between its constants AC_Vr and AC_Vp to an activation level from 0 to 1. Cai is the intracellular calcium concentration, which the Land models' troponin binding follows. Each model accepts one signal, in either spelling: Vm or vm for NashPanfilov and NashPanfilovBatched (default Vm), Cai or cai for LandNiedererBatched and LandNiedererTWorldBatched (default Cai); any other value is a fatal error. LandNiederer and LandNiedererTWorld do not read the key and are driven by Cai. Flat sibling of activeTensionModel inside <solver>Coeffs, not nested under it.",
+            source_refs=('src/activeTensionModels/NashPanfilov/NashPanfilov.C', 'src/activeTensionModels/NashPanfilovBatched/NashPanfilovBatched.C', 'src/activeTensionModels/LandNiedererBatched/LandNiedererBatched.C', 'src/activeTensionModels/LandNiedererTWorldBatched/LandNiedererTWorldBatched.C'),
             value_kind='enum',
-            enum_values=('Vm', 'vm'),
-            constraints=('Only applicable when activeTensionModel is configured.',),
-            applicable_when={"activeTensionModel": "NashPanfilov"},
+            enum_values=('Vm', 'vm', 'Cai', 'cai'),
+            constraints=('Vm or vm for NashPanfilov and NashPanfilovBatched; Cai or cai for LandNiedererBatched and LandNiedererTWorldBatched.',),
+            applicable_when={"activeTensionModel": ('NashPanfilov', 'NashPanfilovBatched', 'LandNiedererBatched', 'LandNiedererTWorldBatched')},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.constants.<constant_name>',

@@ -218,7 +218,7 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - *After `step --apply` changes a swept key,* the case record still shows the
      sweep's axis values.
 3. **Uncatalogued cardiacFOAM keys:** 12 for electromechanics (they wait for
-   it), two `couplingSignal` literals, `offsetField` (a field-file key that no
+   it), `offsetField` (a field-file key that no
    catalogued document holds) and `torsoSurface`, read only by
    `ecgModelIO::loadSurface`, which nothing calls yet: the owner wires it with
    the bath-heart case (on a branch, landing soon), and it is catalogued once
