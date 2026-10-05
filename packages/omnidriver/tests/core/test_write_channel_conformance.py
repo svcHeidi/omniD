@@ -175,7 +175,7 @@ def test_format_specific_patching(tmp_path):
     )
     assert (tmp_path / "constant" / "a").read_bytes() == b"alpha\n"
     assert (tmp_path / "system" / "b").read_bytes() == b"beta\n"
-    assert record.committed
+    assert record
 
 
 # --------------------------------------------------------------------------
@@ -249,7 +249,7 @@ def test_new_files(tmp_path):
         plan, driver_context=object(),
     )
     assert (tmp_path / "constant" / "brand_new").read_bytes() == b"hello\n"
-    assert record.committed
+    assert record
 
 
 # --------------------------------------------------------------------------
@@ -548,7 +548,7 @@ def test_post_write_evidence_unavailable(tmp_path):
     record = case_transaction.commit_case_write(
         plan, driver_context=object(),
     )
-    assert record.committed
+    assert record
     assert (tmp_path / "constant" / "a").exists()
 
     readiness = is_launchable(

@@ -16,7 +16,7 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping
 
-from .case_write import CaseWritePlan, CaseWriteRecord, RenderedFile, _digest_bytes
+from .case_write import CaseWritePlan, RenderedFile, _digest_bytes
 from .runtime.attempt_lease import AttemptLeaseError, acquire_case_lease, case_lease_is_held
 from .runtime.transaction_mechanics import atomic_write_bytes, fsync_directory
 
@@ -177,8 +177,8 @@ def commit_case_write(
     driver_context: Any,
     case_lease_held: bool = False,
     verify: Callable[[], None] | None = None,
-) -> CaseWriteRecord:
-    """Commit a reviewed plan.
+) -> tuple[str, ...]:
+    """Commit a reviewed plan; returns the case-relative paths it wrote.
 
     A failed write rolls the commit back. ``verify`` runs once every file is
     written: what it raises rolls the commit back and propagates unchanged.
@@ -245,8 +245,4 @@ def commit_case_write(
             raise
         marker.unlink(missing_ok=True)
 
-    return CaseWriteRecord(
-        committed=tuple(rendered.path for rendered in plan.files),
-        parameters=plan.request.parameters,
-        expected_effects=plan.expected_effects,
-    )
+    return tuple(rendered.path for rendered in plan.files)

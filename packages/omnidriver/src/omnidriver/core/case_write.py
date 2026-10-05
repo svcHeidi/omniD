@@ -278,8 +278,7 @@ class RenderedFile:
 class CaseWritePlan:
     """Everything that will be written, reviewable before any of it is.
 
-    The plan holds no execution state. ``expected_effects`` comes from the
-    ``ResolvedMutation`` and is copied onto the committed ``CaseWriteRecord``.
+    The plan holds no execution state.
     """
 
     request: CaseMutationRequest
@@ -305,15 +304,6 @@ class CaseWritePlan:
                     f"surviving content would depend on ordering"
                 )
             seen.add(rendered.path)
-
-
-@dataclass(frozen=True)
-class CaseWriteRecord:
-    """What a commit wrote: the case-relative paths, and the plan's parameters and expected effects."""
-
-    committed: tuple[str, ...]
-    parameters: tuple[ParameterAssignment, ...] = ()
-    expected_effects: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -14,7 +14,6 @@ from omnidriver.core.case_transaction import commit_case_write
 from omnidriver.core.case_write import (
     CaseMutationRequest,
     CaseWritePlan,
-    CaseWriteRecord,
     RenderedFile,
 )
 from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
@@ -244,7 +243,7 @@ def write_documents(
     driver_context: Any,
     executable: frozenset[str] = frozenset(),
     keep_existing: frozenset[str] = frozenset(),
-) -> CaseWriteRecord:
+) -> tuple[str, ...]:
     """Commit ``documents`` (case-relative path to text) into ``case_dir`` as
     one commit. A path in ``keep_existing`` that already exists
     is left alone; one in ``executable`` is written ``0o755``."""

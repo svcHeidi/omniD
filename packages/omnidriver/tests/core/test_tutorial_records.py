@@ -1279,7 +1279,7 @@ def test_an_applied_edit_that_breaks_a_rule_is_refused_and_rolled_back(tmp_path)
     assert json.loads((tmp_path / "staged" / "constant" / "mesh.json").read_text())["cells"] == "5"
 
 
-def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(tmp_path):
+def test_commit_record_case_writes_one_case(tmp_path):
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(axes=())
     context = _context_with_writer()
@@ -1298,16 +1298,7 @@ def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(t
     )
     assert result.status == "committed"
     assert result.unchanged == ()
-    write_record = result.write_record
-    assert write_record is not None
-    by_qualified_id = {p.qualified_id: p for p in write_record.parameters}
-    assert by_qualified_id["constant/physics.json::modelName"].validated is True
-    assert by_qualified_id["system/unowned.json::endTime"].validated is False
-    # The owner is the provider that resolves the stack's mutations.
-    assert (
-        by_qualified_id["constant/physics.json::modelName"].owner
-        == context.identity.resolutions["resolve_case_mutation"]
-    )
+    assert set(result.committed) == {"constant/physics.json", "system/unowned.json"}
     written = json.loads((tmp_path / "staged" / "constant" / "physics.json").read_text())
     assert written["modelName"] == "modelBeta"
 
@@ -1381,7 +1372,7 @@ def test_commit_record_case_writes_nothing_when_every_patch_is_unchanged(tmp_pat
         study_by_source={"base": {"constant/physics.json:modelName": "modelAlpha"}},
         driver_context=context,
     )
-    assert result.write_record is None
+    assert result.committed is None
     assert result.status == "unchanged"
     assert [p.patch.value for p in result.unchanged] == ["modelAlpha"]
 
@@ -1598,10 +1589,10 @@ def test_a_sweep_over_a_record_entry_produces_one_commit_per_case(tmp_path):
             study_by_source={"base": sweep_spec["base"], "sweep": case.resolved_axis_values},
             driver_context=context,
         )
-        assert result.write_record is not None
-        committed.append(result.write_record)
+        assert result.committed is not None
+        committed.append(result.committed)
 
-    assert all(r.committed for r in committed)
+    assert all(committed)
     cells_by_case = {
         case.case_id: json.loads(
             (tmp_path / "sweep_cases" / case.case_id / "constant" / "mesh.json").read_text()

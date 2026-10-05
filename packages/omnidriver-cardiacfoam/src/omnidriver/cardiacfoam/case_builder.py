@@ -512,7 +512,7 @@ def build_case(
         raise ValueError(f"dx has no effect for myocardiumSolver={solver!r}: it has no geometry for dx to resolve")
     uncatalogued = uncatalogued_entries(electro_overrides)
     electro_text = build_electro_properties(electro_selectors, overrides=electro_overrides, uncatalogued=uncatalogued)
-    record = write_documents(
+    committed = write_documents(
         case_dir,
         {
             _ELECTRO_DOCUMENT: electro_text,
@@ -544,7 +544,7 @@ def build_case(
     return {
         "status": "failed" if any(item.level == "error" for item in found) else "ok",
         "case_dir": str(case_dir),
-        "files": list(record.committed),
+        "files": list(committed),
         "diagnostics": [
             {"level": item.level, "code": item.code, "field": item.field, "message": item.message} for item in found
         ],

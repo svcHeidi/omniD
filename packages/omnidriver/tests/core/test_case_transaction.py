@@ -50,8 +50,7 @@ def test_a_plan_writes_every_file_and_records_their_digests(tmp_path):
     )
     assert (tmp_path / "constant" / "a").read_bytes() == b"one\n"
     assert (tmp_path / "system" / "b").read_bytes() == b"two\n"
-    assert record.committed == ("constant/a", "system/b")
-    assert record.parameters == plan.request.parameters
+    assert record == ("constant/a", "system/b")
 
 
 @_root_makes_chmod_tests_meaningless
@@ -161,7 +160,7 @@ def test_case_lease_held_reuses_the_callers_own_lease(tmp_path):
             plan, driver_context=object(),
             case_lease_held=True,
         )
-    assert record.committed == ("constant/a",)
+    assert record == ("constant/a",)
     assert (tmp_path / "constant" / "a").read_bytes() == b"one\n"
 
 

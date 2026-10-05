@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Mapping, Sequence
 
 from ..case_transaction import commit_case_write
-from ..case_write import CaseKeyNotFound, CaseMutationRequest, CaseWritePlan, CaseWriteRecord, render_mutation, resolve_mutation
+from ..case_write import CaseKeyNotFound, CaseMutationRequest, CaseWritePlan, render_mutation, resolve_mutation
 from ..provider_stack import MemberAbsent
 from ..sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
 from .models import DataArtifact
@@ -42,7 +42,7 @@ class RecordCommitResult:
     unchanged, and what its workflow needs to run.
     """
 
-    write_record: CaseWriteRecord | None
+    committed: tuple[str, ...] | None
     unchanged: tuple[SourcedPatch, ...]
     command_arguments: dict[str, tuple[str, ...]]
     #: The ordered step ids this case's workflow actually runs -- the
@@ -59,7 +59,7 @@ class RecordCommitResult:
 
     @property
     def status(self) -> str:
-        return "committed" if self.write_record is not None else "unchanged"
+        return "committed" if self.committed is not None else "unchanged"
 
 
 def _native_case_root(record: TutorialRecord, *, cases_root: Path) -> Path:
@@ -394,7 +394,7 @@ def _commit_patches(
     requested_by: str,
     case_lease_held: bool = False,
     verify: Callable[[], None] | None = None,
-) -> CaseWriteRecord:
+) -> tuple[str, ...]:
     """Resolve, render and commit ``to_write`` into ``staged_case_root`` through one ``commit_case_write``; what ``verify`` raises rolls the commit back."""
     import tempfile
 
@@ -451,7 +451,7 @@ def commit_record_case(
     ``preview_record_case``'s scratch clone) -- it is the sweep's real,
     per-case staging directory, the same one a later workflow-step run reads.
 
-    Returns a :class:`RecordCommitResult` whose ``write_record`` is ``None``
+    Returns a :class:`RecordCommitResult` whose ``committed`` is ``None``
     when every patch was already unchanged -- a legitimate no-op, not a
     failure, so nothing is committed and no transaction is created --
     reported explicitly via ``result.status``/``result.unchanged``.
@@ -466,16 +466,16 @@ def commit_record_case(
         record, study_by_source=study_by_source,
         staged_case_root=staged_case_root, driver_context=driver_context,
     )
-    write_record = None
+    committed = None
     if to_write:
-        write_record = _commit_patches(
+        committed = _commit_patches(
             record, staged_case_root=staged_case_root, to_write=to_write,
             driver_context=driver_context, execution_env=execution_env,
             requested_by=requested_by,
         )
     refuse_a_case_that_breaks_a_rule(record, staged_case_root, driver_context)
     return RecordCommitResult(
-        write_record=write_record, unchanged=unchanged, command_arguments=command_arguments,
+        committed=committed, unchanged=unchanged, command_arguments=command_arguments,
         workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,
         resolved_inputs=resolved_inputs,
     )

@@ -577,7 +577,7 @@ def test_sweep_run_over_a_record_entry_commits_and_runs_two_cases(tmp_path):
     assert result["completed_count"] == 2
     assert result["failed_count"] == 0
     assert len(commits) == 2
-    assert all(c.write_record for c in commits)
+    assert all(c.committed for c in commits)
     for case in result["cases"]:
         assert case["status"] == "completed"
         assert case["record_commit_status"] == "committed"
