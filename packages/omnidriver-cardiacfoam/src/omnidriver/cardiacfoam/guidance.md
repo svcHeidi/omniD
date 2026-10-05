@@ -128,4 +128,11 @@ check it; the refusals it names are the record's own.
   state each key, its unit and its constraints; no study key addresses it, so
   write a new graph with a graph tool and select it. The graph the case holds
   is judged against those entries before the run; one a later step writes is
-  judged by the solver alone.
+  judged by the solver alone. Beside the entries, omniD refuses an edge of no
+  positive length or of negative conductance, a node index with a fraction, a
+  `pvjResistances` or `rPvj` not above 0, a `rootStimulus.node` past the
+  graph's last node, and a `pvjLocations` more than `pvjRadius` outside the
+  mesh's bounding box. A location more than `pvjRadius` from its node's
+  `points` position is a warning. The mesh is read where `constant/polyMesh`
+  exists when the case is judged, so a plan of a case that has yet to make its
+  mesh does not judge the locations, and `step` does once the mesh step has run.

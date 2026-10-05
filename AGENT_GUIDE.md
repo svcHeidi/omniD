@@ -923,7 +923,7 @@ and the native case all count.
 - **Tissue compatibility** — `tissue` must be in the `ionicModel`'s `compatible_tissues`.
 - **ECG consistency** — `personalizedTemplates` and the pseudo-ECG `anisotropic` switch must agree with the verifier and solver they sit beside.
 - **Purkinje resistance** — `reactionDiffusionPvjCoupler` needs `rPvj` unless its materialized graph carries `pvjResistances`.
-- **Purkinje graph** — the materialized `constant/<graphFile>` must meet its catalogue document `purkinjeGraph` (`common_dict_entries.PURKINJE_GRAPH_ENTRIES`: the required keys and each entry's `constraints`).
+- **Purkinje graph** — the materialized `constant/<graphFile>` must meet its catalogue document `purkinjeGraph` (`common_dict_entries.PURKINJE_GRAPH_ENTRIES`: the required keys and each entry's `constraints`), and fit the case beside it: `rootStimulus.node` within the graph, and `pvjLocations` within `pvjRadius` of the mesh's bounding box where `constant/polyMesh` exists.
 
 A rule refuses a combination it knows is wrong, never a name the C++ accepts:
 an ionic model, tissue or verifier the catalogue lacks but the scan finds

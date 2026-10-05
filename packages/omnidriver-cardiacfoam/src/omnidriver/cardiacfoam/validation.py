@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from omnidriver.cardiacfoam.dict_entries_catalog import HETEROGENEITY_MODELS
 from omnidriver.cardiacfoam.solver_coupling import SOLVER_COMPATIBILITY_RULES
@@ -551,20 +551,29 @@ _RPVJ_COUPLER = "reactionDiffusionPvjCoupler"
 _GRAPH_FILE_SUFFIX = ".purkinjeGraphModelCoeffs.graphFile"
 
 
+class _Graph(NamedTuple):
+    """What a graph file says: its catalogued keys, the ways they break the C++, and the facts other documents are judged against."""
+
+    raw: dict[str, str]
+    breaks: tuple[tuple[str, str, str], ...]
+    nodes: int | None
+    locations: tuple[tuple[float, float, float], ...] | None
+    offsets: tuple[float, ...] | None
+
+
 @lru_cache(maxsize=8)
-def _read_graph(path: str, stamp: tuple[int, int]) -> tuple[dict[str, str], tuple[tuple[str, str, str], ...]]:
-    """A graph file's catalogued keys and its breaks, once per file version: a plan judges the case twice."""
+def _read_graph(path: str, stamp: tuple[int, int]) -> _Graph:
+    """A graph file once per file version: a plan judges the case twice."""
     from omnidriver.openfoam.mutators import read_foam_entries
 
     from .common_dict_entries import PURKINJE_GRAPH_ENTRIES
 
-    raw = read_foam_entries(Path(path), [entry.driver_path for entry in PURKINJE_GRAPH_ENTRIES])
-    return raw, tuple(_graph_breaks(raw))
+    return _parse_graph(read_foam_entries(Path(path), [entry.driver_path for entry in PURKINJE_GRAPH_ENTRIES]))
 
 
-def _materialized_graphs(case_root: Path, context: dict[str, Any]) -> dict[str, tuple[str, dict[str, str], tuple]]:
-    """Each network's graph file the case holds: its case-relative path, catalogued keys and breaks."""
-    graphs: dict[str, tuple[str, dict[str, str], tuple]] = {}
+def _materialized_graphs(case_root: Path, context: dict[str, Any]) -> dict[str, tuple[str, _Graph]]:
+    """Each network's graph file the case holds: its case-relative path and what it says."""
+    graphs: dict[str, tuple[str, _Graph]] = {}
     for key, name in context.items():
         if not (key.startswith(_CONDUCTION_NET_PREFIX) and key.endswith(_GRAPH_FILE_SUFFIX)):
             continue
@@ -574,7 +583,7 @@ def _materialized_graphs(case_root: Path, context: dict[str, Any]) -> dict[str, 
             continue
         status = path.stat()
         graphs[key[len(_CONDUCTION_NET_PREFIX):-len(_GRAPH_FILE_SUFFIX)]] = (
-            relpath, *_read_graph(str(path.resolve()), (status.st_mtime_ns, status.st_size)),
+            relpath, _read_graph(str(path.resolve()), (status.st_mtime_ns, status.st_size)),
         )
     return graphs
 
@@ -601,11 +610,12 @@ def _tree_break(pairs: list[tuple[int, int]], nodes: int) -> str | None:
     return None
 
 
-def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str, str]]:
-    """``(level, key, reason)`` for each way a graph's text breaks what ``conductionGraph::readFromDict`` and
-    ``conductionSystemDomain::readGraphFile`` require, an error, and each key it sets that omniD cannot read, a
-    note that leaves it to the solver; a key the file lacks is the catalogue's to report."""
-    from omnidriver.openfoam.literals import list_elements, parse_scalar_list_literal
+def _parse_graph(raw: dict[str, str]) -> _Graph:
+    """A graph's catalogued keys read once. Its breaks are, as ``(level, key, reason)``, each way the text breaks
+    what ``conductionGraph::readFromDict`` and ``conductionSystemDomain::readGraphFile`` require or what a solver
+    then divides by or sorts on, an error, and each key it sets that omniD cannot read, a note that leaves it to
+    the solver; a key the file lacks is the catalogue's to report."""
+    from omnidriver.openfoam.literals import list_elements, parse_scalar_list_literal, parse_vector3_literal
 
     breaks: list[tuple[str, str, str]] = []
 
@@ -626,10 +636,30 @@ def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str, str]]:
             unread(key, "a value is not a node index")
             return None
 
+    def scalars(key: str, values: list[str]) -> list[float] | None:
+        try:
+            return [float(value) for value in values]
+        except ValueError:
+            unread(key, "a value is not a number")
+            return None
+
+    def positions(key: str, values: list[str]) -> list[tuple[float, float, float]] | None:
+        try:
+            return [parse_vector3_literal(value) for value in values]
+        except ValueError as exc:
+            unread(key, str(exc))
+            return None
+
+    def invalid(key: str, noun: str, rule: str, entries: list[tuple[int, float]]) -> None:
+        shown = ", ".join(f"entry {index} has {value:g}" for index, value in entries[:5])
+        breaks.append(("error", key, f"{key} holds {len(entries)} {noun}{'' if len(entries) == 1 else 's'} {rule}: {shown}"))
+
     nodes = None
     edges = elements("conductionEdges")
     if edges is not None:
         pairs = []
+        lengths: list[tuple[int, float]] = []
+        conductances: list[tuple[int, float]] = []
         for index, text in enumerate(edges):
             try:
                 values = parse_scalar_list_literal(text)
@@ -645,7 +675,18 @@ def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str, str]]:
             if not all(math.isfinite(value) for value in values[:2]):
                 breaks.append(("error", "conductionEdges", f"conductionEdges entry {index} names a node that is no number"))
                 break
+            if values[0] != int(values[0]) or values[1] != int(values[1]):
+                breaks.append((
+                    "error", "conductionEdges",
+                    f"conductionEdges entry {index} names node {values[0]:g} and {values[1]:g}; the solver truncates a "
+                    "node index to a whole number",
+                ))
+                break
             pairs.append((int(values[0]), int(values[1])))
+            if not (math.isfinite(values[2]) and values[2] > 0):
+                lengths.append((index, values[2]))
+            if not (math.isfinite(values[3]) and values[3] >= 0):
+                conductances.append((index, values[3]))
         else:
             if any(node < 0 for pair in pairs for node in pair):
                 breaks.append(("error", "conductionEdges", "conductionEdges names a negative node index; nodes count from 0"))
@@ -653,8 +694,13 @@ def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str, str]]:
                 nodes = max([0, *(node for pair in pairs for node in pair)]) + 1
                 if (reason := _tree_break(pairs, nodes)) is not None:
                     breaks.append(("error", "conductionEdges", reason))
+            if lengths:
+                invalid("conductionEdges", "edge", "whose length is not above 0, which the solvers divide by or sort on", lengths)
+            if conductances:
+                invalid("conductionEdges", "edge", "whose conductance is not 0 or more, 0 being a blocked edge", conductances)
     pvj = elements("pvjNodes")
     pvj_nodes = labels("pvjNodes", pvj) if pvj is not None else None
+    points = elements("points") if nodes is not None else None
     if nodes is not None:
         root = labels("rootNode", [raw["rootNode"]]) if "rootNode" in raw else None
         if root is not None and not 0 <= root[0] < nodes:
@@ -662,30 +708,42 @@ def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str, str]]:
         outside = [node for node in pvj_nodes or () if not 0 <= node < nodes]
         if outside:
             breaks.append(("error", "pvjNodes", f"pvjNodes {outside[:5]} are outside the graph's nodes 0 to {nodes - 1}"))
-        points = elements("points")
         if points is not None and len(points) != nodes:
             breaks.append(("error", "points", f"points holds {len(points)} positions for {nodes} nodes"))
     locations = elements("pvjLocations")
     if pvj_nodes is not None and locations is not None and len(locations) != len(pvj_nodes):
         breaks.append(("error", "pvjLocations", f"pvjLocations holds {len(locations)} values for {len(pvj_nodes)} pvjNodes"))
-    return breaks
+    resistances = elements("pvjResistances")
+    values = scalars("pvjResistances", resistances) if resistances is not None else None
+    if values is not None and (bad := [(i, v) for i, v in enumerate(values) if not (math.isfinite(v) and v > 0)]):
+        invalid("pvjResistances", "junction", "whose resistance is not above 0, which a junction current is divided by", bad)
+    located = positions("pvjLocations", locations) if locations is not None else None
+    offsets = None
+    if (
+        located is not None and pvj_nodes is not None and points is not None and nodes is not None
+        and len(points) == nodes and len(located) == len(pvj_nodes) and all(0 <= node < nodes for node in pvj_nodes)
+    ):
+        junctions = positions("points", [points[node] for node in pvj_nodes])
+        if junctions is not None:
+            offsets = tuple(math.dist(here, there) for here, there in zip(located, junctions))
+    return _Graph(raw, tuple(breaks), nodes, tuple(located) if located is not None else None, offsets)
 
 
-def _evaluate_conduction_graphs(graphs: dict[str, tuple[str, dict[str, str], tuple]]) -> list["StrictDiagnostic"]:
+def _evaluate_conduction_graphs(graphs: dict[str, tuple[str, _Graph]]) -> list["StrictDiagnostic"]:
     """The catalogue's rules and the tree the C++ requires, over each network's graph file."""
     from omnidriver.openfoam.case_rules import rule_diagnostics
 
     from .common_dict_entries import PURKINJE_GRAPH_ENTRIES
 
     found: list["StrictDiagnostic"] = []
-    for relpath, raw, breaks in graphs.values():
-        found += rule_diagnostics(PURKINJE_GRAPH_ENTRIES, raw, document=relpath)
+    for relpath, graph in graphs.values():
+        found += rule_diagnostics(PURKINJE_GRAPH_ENTRIES, graph.raw, document=relpath)
         found += [
             diagnostic(
                 level, "conduction_graph_invalid" if level == "error" else "conduction_graph_unjudged",
                 f"{relpath}: {reason}.", source=relpath, field=key,
             )
-            for level, key, reason in breaks
+            for level, key, reason in graph.breaks
         ]
     return found
 
@@ -694,7 +752,7 @@ _RESISTANCE_READERS = (_RPVJ_COUPLER, "eikonalMonodomainPvjCoupler")
 
 
 def _evaluate_pvj_resistance_lengths(
-    context: dict[str, Any], graphs: dict[str, tuple[str, dict[str, str], tuple]],
+    context: dict[str, Any], graphs: dict[str, tuple[str, _Graph]],
 ) -> list["StrictDiagnostic"]:
     """A graph's ``pvjResistances`` of the wrong length, where a coupling of its network reads it: the implicit
     scheme stops on any other length than one per junction (``pvjMapper::depositImplicitCoupling``), and the
@@ -707,9 +765,10 @@ def _evaluate_pvj_resistance_lengths(
             continue
         block = key[: -len(_COUPLER_SUFFIX)]
         network = context.get(block + _NETWORK_REF_SUFFIX)
-        if network not in graphs or "pvjResistances" not in graphs[network][1]:
+        if network not in graphs or "pvjResistances" not in graphs[network][1].raw:
             continue
-        relpath, raw, _breaks = graphs[network]
+        relpath, graph = graphs[network]
+        raw = graph.raw
         try:
             resistances, junctions = len(list_elements(raw["pvjResistances"])), len(list_elements(raw["pvjNodes"]))
         except (KeyError, ValueError):
@@ -731,7 +790,7 @@ def _evaluate_pvj_resistance_lengths(
 
 
 def _evaluate_pvj_resistance_requirement(
-    context: dict[str, Any], graphs: dict[str, tuple[str, dict[str, str], tuple]], electro_path: Path,
+    context: dict[str, Any], graphs: dict[str, tuple[str, _Graph]], electro_path: Path,
 ) -> list["StrictDiagnostic"]:
     """``rPvj`` is required only when the materialized graph has no ``pvjResistances``, which a ``required_when`` cannot see; an absent graph defers."""
     from omnidriver.openfoam.literals import list_elements
@@ -745,7 +804,8 @@ def _evaluate_pvj_resistance_requirement(
         rpvj_key = f"{block}.rPvj"
         if network is None or rpvj_key in context or network not in graphs:
             continue
-        relpath, raw, _breaks = graphs[network]
+        relpath, graph = graphs[network]
+        raw = graph.raw
         try:
             if "pvjResistances" in raw and list_elements(raw["pvjResistances"]):
                 continue
@@ -761,6 +821,99 @@ def _evaluate_pvj_resistance_requirement(
             ),
             source=str(electro_path), field=rpvj_key,
         ))
+    return found
+
+
+_ROOT_NODE_SUFFIX = ".purkinjeGraphModelCoeffs.rootStimulus.node"
+_PVJ_RADIUS_PATH = "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.pvjRadius"
+
+
+def _vector(point: tuple[float, ...]) -> str:
+    return "(" + " ".join(f"{component:g}" for component in point) + ")"
+
+
+def _distance_outside(point: tuple[float, ...], low: tuple[float, ...], high: tuple[float, ...]) -> float:
+    return math.sqrt(sum(max(floor - x, x - ceiling, 0.0) ** 2 for x, floor, ceiling in zip(point, low, high)))
+
+
+def _evaluate_graph_placement(
+    context: dict[str, Any], graphs: dict[str, tuple[str, _Graph]], case_root: Path, electro_path: Path,
+) -> list["StrictDiagnostic"]:
+    """What the case's ``electroProperties`` and mesh say about each network's graph.
+
+    ``rootStimulus.node`` past the graph's last node is an error: ``conductionSystemDomain::readRootStimulus``
+    range-checks only the graph's own ``rootNode``, and the stimulus is then added past the end of the applied-current
+    buffer. A junction whose location lies more than the coupling's ``pvjRadius`` beyond the mesh's bounding box has
+    no cell centre within its sphere, and ``pvjMapper`` silently couples it to the nearest cell, however far: an
+    error. A location more than ``pvjRadius`` from its node's ``points`` position is a warning, since the C++ couples
+    at the location and compares the two nowhere, but a junction drawn beyond its own sphere is a graph that
+    disagrees with itself."""
+    from omnidriver.openfoam.mesh_points import points_bounds
+
+    from .record_key_validation import _ELECTRO_ENTRIES_BY_PATH
+
+    document = electro_path.relative_to(case_root).as_posix()
+    found: list["StrictDiagnostic"] = []
+    for network, (relpath, graph) in graphs.items():
+        key = f"{_CONDUCTION_NET_PREFIX}{network}{_ROOT_NODE_SUFFIX}"
+        node = context.get(key)
+        if graph.nodes is not None and isinstance(node, int) and node >= graph.nodes:
+            found.append(diagnostic(
+                "error", "conduction_graph_invalid",
+                f"{document}: {key} is {node}, outside the nodes 0 to {graph.nodes - 1} of {relpath}; the solver "
+                "adds the stimulus past the end of the network's buffers without a message.",
+                source=document, field=key,
+            ))
+    default_radius = float(_ELECTRO_ENTRIES_BY_PATH[_PVJ_RADIUS_PATH].default)
+    points_file = electro_path.parent / "polyMesh" / "points"
+    extent: tuple[tuple[float, ...], tuple[float, ...]] | None = None
+    unreadable = False
+    for key, network in context.items():
+        if not (key.startswith(_DOMAIN_COUPLINGS_PREFIX) and key.endswith(_NETWORK_REF_SUFFIX)) or network not in graphs:
+            continue
+        block = key[: -len(_NETWORK_REF_SUFFIX)]
+        radius = context.get(block + ".pvjRadius", default_radius)
+        if isinstance(radius, bool) or not isinstance(radius, (int, float)):
+            continue
+        relpath, graph = graphs[network]
+        far = [(i, d) for i, d in enumerate(graph.offsets or ()) if d > radius]
+        if far:
+            i, distance = far[0]
+            found.append(diagnostic(
+                "warning", "pvj_location_off_node",
+                f"{relpath}: {len(far)} of {len(graph.offsets)} pvjLocations lie more than {block}'s pvjRadius "
+                f"({radius:g} m) from their pvjNodes' positions in points; junction {i} is {distance:g} m away. The "
+                "solver couples the tissue at the location and writes the node at its position, and compares "
+                "them nowhere.",
+                source=relpath, field="pvjLocations",
+            ))
+        if graph.locations is None:
+            continue
+        if extent is None and not unreadable:
+            try:
+                extent = points_bounds(points_file)
+            except ValueError as exc:
+                unreadable = True
+                found.append(diagnostic(
+                    "info", "conduction_graph_unjudged",
+                    f"{relpath}: pvjLocations are not judged against the mesh, since omniD cannot read its extent ({exc}); "
+                    "the solver will not judge them either.",
+                    source=relpath, field="pvjLocations",
+                ))
+        if extent is None:
+            continue
+        outside = [(i, d) for i, location in enumerate(graph.locations) if (d := _distance_outside(location, *extent)) > radius]
+        if outside:
+            i, distance = outside[0]
+            found.append(diagnostic(
+                "error", "conduction_graph_invalid",
+                f"{relpath}: {len(outside)} of {len(graph.locations)} pvjLocations lie more than {block}'s pvjRadius "
+                f"({radius:g} m) outside the mesh's bounding box {_vector(extent[0])} to {_vector(extent[1])}; "
+                f"junction {i} at {_vector(graph.locations[i])} is {distance:g} m outside it. pvjMapper couples such "
+                "a junction to the nearest cell, however far, without a message. Do the graph and the mesh use the "
+                "same unit?",
+                source=relpath, field="pvjLocations",
+            ))
     return found
 
 
@@ -838,4 +991,5 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDi
         + _evaluate_conduction_graphs(graphs)
         + _evaluate_pvj_resistance_lengths(context, graphs)
         + _evaluate_pvj_resistance_requirement(context, graphs, electro_path)
+        + _evaluate_graph_placement(context, graphs, case_root, electro_path)
     )

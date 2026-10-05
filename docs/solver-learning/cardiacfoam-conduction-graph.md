@@ -200,6 +200,12 @@ only normalises them inside `restitutionEikonalSolver1D`.
 | G5 | `plan --strict --case` on a copy of `monodomain1D3D` with `pvjNodes (20 41)` | refused: "pvjNodes [41] are outside the graph's nodes 0 to 40" | the C++'s `readGraphFile` fatal, named before the run |
 | G6 | `plan --strict --repo <tree> --entry <record>`, every record, before and after | all `ok`, no diagnostic added or removed | |
 | G7 | `run --strict --entry manufacturedMonodomain1D3D` (20³ cells, 41-node graph, `rPvj 1`) | `ok` in 13 s; log: `Purkinje edge conductance multiplier: 0.111453`; `PVJ coupling debug`: `networkVm` ±1.0, `tissueVm` ±0.45, `terminalCurrent` ±1.45, `terminalSource` ±2081; graph error summary `Vm1D` L2 7.1e-6 | `terminalCurrent = ΔV/R` with R = 1 (1.0 - (-0.45) = 1.45), and `terminalSource = I/V_sphere` |
+| G8 | the native utilities `checkMeshGeometry` and `runPurkinjeGraph`, read for what they check (`.C`, README, manifest) | `checkMeshGeometry` reads `constant/<region>/polyMesh` points and compares the largest bounding-box dimension with fixed thresholds (below 20 is metres, 20 to 1000 mm, 1000 to 1e6 µm); it never reads a graph. `runPurkinjeGraph` builds the `conductionSystemDomain` and advances it for the case's whole `controlDict`; the checks it runs are `conductionGraph::readFromDict`'s and `readGraphFile`'s, which omniD already mirrors; it builds no coupler and so reads no `pvjLocations` against the mesh and no `pvjResistances`, and `readRootStimulus` is unchecked | neither compares a graph with a mesh, and neither judges a sign: omniD's checks duplicate neither |
+| G9 | min, median and max of \|`pvjLocations[i]` − `points[pvjNodes[i]]`\|, and of edge lengths and conductances, over the human and pig `idealizedHeart` graphs, `purkinjeRestitution2D`, and every `monodomain1D3D` graph | the offset is 0 for every junction of every graph; lengths 7.8e-6 to 3.4e-4 m (idealizedHeart), 0.00625 to 0.5 (monodomain1D3D, a unit cube); every conductance 1; no edge of length 0; no node index with a fraction | a check that a location sits at its node's position, a length above 0, and a conductance of 0 or more refuses no native data |
+| G10 | `plan --strict --case` of each native graph case materialized as its `Allrun` does (human and pig × monodomain, eikonal and hybrid; `conductionBlock` lbbb and rbbb; `ionicPathology` brugada and ischemia; `purkinjeRestitution2D` three variants; `monodomain1D3D` and its six graphs), on `main` and with the checks | all 20 `ok` on both, the same diagnostics; human `idealizedHeart` 3.6 s on both | no native case is newly refused, and the check is not felt in a plan |
+| G11 | the same, `rootStimulus.node 50000` | refused: "rootStimulus.node is 50000, outside the nodes 0 to 44499 of constant/purkinjeGraph" | the C++ gives no message |
+| G12 | `monodomain1D3D` with `pvjLocations` in millimetres against its metre mesh: `plan --strict --entry`, then `step --step mesh`, then `step --step solve`; then `run` | `plan` is `ok` with the `pvj_location_off_node` warning; `step --step solve` refuses with the bounding-box error before `cardiacFoam` starts; `run` completes `ok` | a plan cannot see a mesh the case has yet to make (`polyMesh` is a generated directory and is not staged), and `run` validates once, before its first step; the bounding-box check fires wherever the mesh exists when the case is judged |
+
 
 ## Needs owner confirmation
 
@@ -225,13 +231,18 @@ only normalises them inside `restitutionEikonalSolver1D`.
    `R_pvj_[i]` for each junction, and only the implicit scheme
    (`pvjMapper::depositImplicitCoupling`) checks the size. With the explicit
    scheme, a short list reads past its end. omniD refuses a list whose length
-   is not the number of `pvjNodes`.
+   is not the number of `pvjNodes`, and a value that is not above 0 (the
+   current is divided by it); likewise an `rPvj` that is not above 0.
 4. **`rootStimulus.node` is not range-checked.** The graph's `rootNode` is, but
    the override from `readRootStimulus` goes straight into
-   `appliedCurrent[rootNode_]`.
+   `appliedCurrent[rootNode_]`. omniD refuses a node past the graph's last.
 5. **`pvjLocations` against `points[pvjNodes]`.** They are never compared, so a
    junction can couple away from its node's position. Is that intended, for
-   example a junction placed inside the wall?
+   example a junction placed inside the wall? Every native graph, the pig
+   tree's transmural junctions included, writes the two equal (G9), so omniD
+   warns of a location more than the coupling's `pvjRadius` from its node's
+   position. It refuses a location more than `pvjRadius` outside the mesh's
+   bounding box, which `pvjMapper` would couple to its nearest cell, however far.
 6. **`eikonalMonodomainPvjCoupler` requires `rPvj`** even when the graph lists
    `pvjResistances`, and then never uses it.
 7. **`torsoSurface`.** The only reader is `ecgModelIO::loadSurface`

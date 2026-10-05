@@ -193,9 +193,10 @@ PURKINJE_GRAPH_ENTRIES: Final[tuple[DictEntry, ...]] = (
             _SOLVERS + "restitutionEikonalSolver1D/restitutionEikonalSolver1D.C", _GRAPH_WRITER,
         ),
         constraints=(
-            "Each entry is a list of four numbers.",
+            "Each entry is a list of four numbers, the first two whole.",
             "A tree: one edge fewer than nodes, and every node reached from node 0.",
-            "A conductance of 0 blocks the edge in monodomain1DSolver and restitutionEikonalSolver1D.",
+            "A length above 0: monodomain1DSolver divides by it and the eikonal solvers sort on it.",
+            "A conductance of 0 or more; 0 blocks the edge in monodomain1DSolver and restitutionEikonalSolver1D.",
         ),
     ),
     DictEntry(
@@ -234,9 +235,14 @@ PURKINJE_GRAPH_ENTRIES: Final[tuple[DictEntry, ...]] = (
         description=(
             "Position [m] of each PVJ in the myocardium mesh's coordinates, in pvjNodes order: pvjMapper "
             "couples the junction to the myocardium cells within pvjRadius of it. The C++ does not compare it "
-            "with the points entry of the same node; 1DgraphToFoam writes that position."
+            "with the points entry of the same node, and 1DgraphToFoam writes that position, so omniD warns of a "
+            "location more than the coupling's pvjRadius from it."
         ),
         source_refs=(_GRAPH_READER, _COUPLERS + "pvjMapper.C", _GRAPH_WRITER),
+        constraints=(
+            "Within pvjRadius of the myocardium mesh's bounding box: a junction with no cell centre in its sphere "
+            "is silently coupled to the nearest cell, however far.",
+        ),
     ),
     DictEntry(
         driver_path="pvjResistances", phases=frozenset({"physics"}), value_kind="scalar_list",
@@ -254,6 +260,7 @@ PURKINJE_GRAPH_ENTRIES: Final[tuple[DictEntry, ...]] = (
         constraints=(
             "One per pvjNodes entry where a coupler reads them: the implicit scheme stops on any other length, "
             "and the explicit couplers read past the end of a shorter list.",
+            "Each above 0: a junction current is divided by its resistance.",
         ),
     ),
 )

@@ -995,7 +995,7 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
                      myocardium_solver="monodomainSolver",
                      conduction_solver="monodomain1DSolver",
                      set_rpvj=False, graph_present=None, graph_has_resistances=False,
-                     graph_file_key=True, scheme=None):
+                     graph_file_key=True, scheme=None, root_node="0", rpvj="150.0", pvj_radius=None):
     from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
     prefix = (
@@ -1008,7 +1008,7 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
         f"{prefix}.conductionSystemSolver": conduction_solver,
         f"{prefix}.ionicModel": "BuenoOrovio",
         f"{prefix}.vm1DRest": "-0.084",
-        f"{prefix}.rootStimulus.node": "0",
+        f"{prefix}.rootStimulus.node": root_node,
         f"{prefix}.rootStimulus.startTime": "0.0",
         f"{prefix}.rootStimulus.duration": "0.0",
         f"{prefix}.rootStimulus.intensity": "0.0",
@@ -1030,7 +1030,9 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
     if set_rpvj:
         # rPvj lives on the coupler's own block (domainCouplings.<name>.rPvj),
         # not on the network's purkinjeGraphModelCoeffs.
-        overrides["$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.rPvj"] = "150.0"
+        overrides["$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.rPvj"] = rpvj
+    if pvj_radius is not None:
+        overrides["$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.pvjRadius"] = pvj_radius
 
     selectors = {"myocardiumSolver": myocardium_solver}
     if myocardium_solver != "eikonalSolver":
@@ -1147,6 +1149,161 @@ def test_a_resistance_list_of_the_wrong_length_is_refused_where_a_coupler_reads_
     text = _NATIVE_GRAPH.read_text() + f"pvjResistances {resistances};\n"
     found = [(code, field) for code, field, _ in _graph_diagnostics(tmp_path, text, **case)]
     assert found == ([("conduction_graph_invalid", "pvjResistances")] if refused else [])
+
+
+@pytest.mark.parametrize("old,new,reason", [
+    ("(2 3 0.1 1)", "(2 3 0 1)", "1 edge whose length is not above 0, which the solvers divide by or sort on: entry 2 has 0"),
+    ("(2 3 0.1 1)", "(2 3 -0.1 1)", "1 edge whose length is not above 0, which the solvers divide by or sort on: entry 2 has -0.1"),
+    ("(2 3 0.1 1)", "(2 3 nan 1)", "1 edge whose length is not above 0, which the solvers divide by or sort on: entry 2 has nan"),
+    ("(2 3 0.1 1)", "(2 3 0.1 -1)", "1 edge whose conductance is not 0 or more, 0 being a blocked edge: entry 2 has -1"),
+    ("(2 3 0.1 1)", "(2 3 0.1 nan)", "1 edge whose conductance is not 0 or more, 0 being a blocked edge: entry 2 has nan"),
+    ("(2 3 0.1 1)", "(2 3.5 0.1 1)", "entry 2 names node 2 and 3.5; the solver truncates"),
+    ("(2 3 0.1 1)", "(2 -3 0.1 1)", "names a negative node index"),
+])
+def test_an_edge_the_solvers_divide_by_or_truncate_is_named(tmp_path, old, new, reason):
+    text = _NATIVE_GRAPH.read_text()
+    assert old in text
+    found = _graph_diagnostics(tmp_path, text.replace(old, new, 1))
+    assert [(code, name) for code, name, _ in found] == [("conduction_graph_invalid", "conductionEdges")]
+    assert reason in found[0][2]
+
+
+def test_a_blocked_edge_is_no_break(tmp_path):
+    """conductionBlock severs a bundle branch by zeroing an edge's conductance."""
+    text = _NATIVE_GRAPH.read_text()
+    assert _graph_diagnostics(tmp_path, text.replace("(2 3 0.1 1)", "(2 3 0.1 0)", 1)) == []
+
+
+def test_every_bad_edge_is_counted_and_the_first_few_shown(tmp_path):
+    text = _NATIVE_GRAPH.read_text()
+    for edge in ("(0 1 0.1 1)", "(1 2 0.1 1)", "(2 3 0.1 1)"):
+        text = text.replace(edge, edge.replace("0.1", "0", 1), 1)
+    (_, _, message), = _graph_diagnostics(tmp_path, text)
+    assert "holds 3 edges whose length is not above 0, which the solvers divide by or sort on: entry 0 has 0, entry 1 has 0, entry 2 has 0" in message
+
+
+@pytest.mark.parametrize("resistances,reason", [
+    ("(150 0)", "1 junction whose resistance is not above 0, which a junction current is divided by: entry 1 has 0"),
+    ("(-150 150)", "entry 0 has -150"),
+    ("(150 nan)", "entry 1 has nan"),
+])
+def test_a_junction_resistance_that_is_not_positive_is_named(tmp_path, resistances, reason):
+    found = _graph_diagnostics(tmp_path, _NATIVE_GRAPH.read_text() + f"pvjResistances {resistances};\n")
+    assert [(code, name) for code, name, _ in found] == [("conduction_graph_invalid", "pvjResistances")]
+    assert reason in found[0][2]
+
+
+# -------- the graph against the rest of the case --------
+#
+# conductionSystemDomain::readRootStimulus and pvjMapper accept what the graph and the mesh
+# hold beside them without a message; the checks below name it before the run.
+
+_ELECTRO = "constant/electroProperties"
+_ROOT_NODE = "conductionNetworkDomains.purkinjeNetwork.purkinjeGraphModelCoeffs.rootStimulus.node"
+
+
+def _case_findings(tmp_path, *, graph_text=None, mesh=None, **case):
+    """``(level, code, field, message)`` of every finding of a case holding the native graph, and the unit-cube mesh
+    in the points layout ``mesh`` names unless it is ``None``, bar the catalogue's own rules."""
+    from omnidriver.cardiacfoam.validation import case_diagnostics
+
+    _build_pvj_case(tmp_path, **{"set_rpvj": True, **case})
+    (tmp_path / "constant" / "purkinjeGraph").write_text(graph_text or _NATIVE_GRAPH.read_text())
+    if mesh is not None:
+        (tmp_path / "constant" / "polyMesh").mkdir()
+        (tmp_path / "constant" / "polyMesh" / "points").write_text(_CUBE_POINTS.replace("LAYOUT", mesh))
+    return [
+        (item.level, item.code, item.field, item.message) for item in case_diagnostics(tmp_path)
+        if item.code != "catalog_rule"
+    ]
+
+
+@pytest.mark.parametrize("node,refused", [("0", False), ("10", False), ("11", True), ("100000", True)])
+def test_a_root_stimulus_node_past_the_graph_is_refused(tmp_path, node, refused):
+    found = _case_findings(tmp_path, root_node=node)
+    assert [(level, code, field) for level, code, field, _ in found] == (
+        [("error", "conduction_graph_invalid", _ROOT_NODE)] if refused else []
+    )
+    if refused:
+        assert f"is {node}, outside the nodes 0 to 10 of constant/purkinjeGraph" in found[0][3]
+
+
+def test_a_negative_root_stimulus_node_breaks_the_catalogue_bound(tmp_path):
+    from omnidriver.cardiacfoam.validation import case_diagnostics
+
+    _build_pvj_case(tmp_path, set_rpvj=True, graph_present=True, root_node="-1")
+    assert [(item.code, item.field) for item in case_diagnostics(tmp_path)] == [("catalog_rule", _ROOT_NODE)]
+
+
+@pytest.mark.parametrize("rpvj,refused", [("150.0", False), ("0", True), ("-10", True)])
+def test_a_coupling_resistance_that_is_not_positive_breaks_the_catalogue_bound(tmp_path, rpvj, refused):
+    from omnidriver.cardiacfoam.validation import case_diagnostics
+
+    _build_pvj_case(tmp_path, set_rpvj=True, rpvj=rpvj)
+    assert [item.field for item in case_diagnostics(tmp_path)] == (["domainCouplings.pvj.rPvj"] if refused else [])
+
+
+#: blockMesh's points for monodomain1D3D's unit-cube mesh (system/blockMeshDict.3D), as OpenFOAM lays out the file.
+_CUBE_POINTS = (
+    "FoamFile\n{\n    version 2.0;\n    format LAYOUT;\n    class vectorField;\n    object points;\n}\n\n8\n(\n"
+    "(0 0 0)\n(1 0 0)\n(1 1 0)\n(0 1 0)\n(0 0 1)\n(1 0 1)\n(1 1 1)\n(0 1 1)\n)\n"
+)
+
+
+def _graph_with_second_junction_moved(dx=0.0, dy=0.0):
+    """The native graph with its second pvjLocation, the one at the mesh's x = 1 face, moved; its node stays."""
+    old = "    (1 0.166666666667 0.333333333333)\n)"
+    assert old in _NATIVE_GRAPH.read_text()
+    return _NATIVE_GRAPH.read_text().replace(old, f"    ({1 + dx!r} {0.166666666667 + dy!r} 0.333333333333)\n)", 1)
+
+
+def test_the_native_graph_in_its_own_mesh_is_judged_and_passes(tmp_path):
+    assert _case_findings(tmp_path, mesh="ascii") == []
+
+
+def test_a_graph_in_millimetres_against_a_mesh_in_metres_is_refused(tmp_path):
+    """pvjMapper then couples every junction to the nearest cell without a message."""
+    text = _NATIVE_GRAPH.read_text().replace(
+        "    (0 0.166666666667 0.333333333333)\n    (1 0.166666666667 0.333333333333)\n",
+        "    (0 166.666666667 333.333333333)\n    (1000 166.666666667 333.333333333)\n",
+    )
+    found = _case_findings(tmp_path, graph_text=text, mesh="ascii")
+    assert [(level, code) for level, code, _, _ in found] == [
+        ("warning", "pvj_location_off_node"), ("error", "conduction_graph_invalid"),
+    ]
+    assert "2 of 2 pvjLocations lie more than domainCouplings.pvj's pvjRadius (0.0005 m) outside the mesh's bounding box (0 0 0) to (1 1 1)" in found[1][3]
+    assert "junction 0 at (0 166.667 333.333) is 371.337 m outside it" in found[1][3]
+
+
+@pytest.mark.parametrize("radius,distance,refused", [(None, 0.0004, False), (None, 0.0006, True), ("0.11", 0.1, False), ("0.11", 0.12, True)])
+def test_a_junction_beyond_the_pvj_radius_of_the_mesh_is_refused(tmp_path, radius, distance, refused):
+    found = _case_findings(tmp_path, graph_text=_graph_with_second_junction_moved(dx=distance), pvj_radius=radius, mesh="ascii")
+    assert [(level, code, field) for level, code, field, _ in found if level == "error"] == (
+        [("error", "conduction_graph_invalid", "pvjLocations")] if refused else []
+    )
+
+
+@pytest.mark.parametrize("dy,radius,warned", [(0.0004, None, False), (0.0006, None, True), (0.01, "0.11", False)])
+def test_a_location_far_from_its_nodes_position_is_a_warning(tmp_path, dy, radius, warned):
+    """The location is where the solver couples; points only places the node in the output."""
+    found = _case_findings(tmp_path, graph_text=_graph_with_second_junction_moved(dy=dy), pvj_radius=radius)
+    assert [(level, code, field) for level, code, field, _ in found] == (
+        [("warning", "pvj_location_off_node", "pvjLocations")] if warned else []
+    )
+    if warned:
+        assert "1 of 2 pvjLocations lie more than domainCouplings.pvj's pvjRadius (0.0005 m) from their pvjNodes' positions" in found[0][3]
+
+
+def test_an_unreadable_mesh_leaves_the_junctions_to_the_solver(tmp_path):
+    found = _case_findings(tmp_path, mesh="compressed")
+    assert [(level, code, field) for level, code, field, _ in found] == [("info", "conduction_graph_unjudged", "pvjLocations")]
+    assert "no ascii or binary list of points" in found[0][3]
+
+
+def test_a_case_without_a_mesh_is_judged_against_none(tmp_path):
+    """A junction far outside any mesh the case has yet to make is the mesh step's to meet, not a break."""
+    found = _case_findings(tmp_path, graph_text=_graph_with_second_junction_moved(dx=50.0))
+    assert [(level, code) for level, code, _, _ in found] == [("warning", "pvj_location_off_node")]
 
 
 def test_a_graph_without_a_key_the_solver_reads_is_refused(tmp_path):

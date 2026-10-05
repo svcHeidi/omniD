@@ -1503,6 +1503,8 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             description='Optional Purkinje node index that overrides the graph-file rootNode for rootStimulus.',
             source_refs=('src/electroModels/electroDomains/conductionSystemDomain/conductionSystemDomain.C',),
             value_kind='integer',
+            minimum=0,
+            constraints=("A node of the graph, up to its last: the C++ range-checks only the graph's own rootNode.",),
             allowed_bindings={"<name>": None},
         ),
         DictEntry(
@@ -1656,6 +1658,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             notes='The 3D mapper path interprets voltage/rPvj as a terminal current and divides it by PVJ volume, which implies rPvj in Ω. The same terminal-current array is later inserted into the 1D applied-current array without control-volume normalization, while the 1D equation requires an A/m³ source. Do not publish a single physical unit for rPvj until this shared-current normalization is resolved.',
             value_kind='scalar',
             allowed_bindings={"<name>": None},
+            exclusive_minimum=0,
             required=True,
             required_when={"$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.electroDomainCoupler": "eikonalMonodomainPvjCoupler"},
         ),
@@ -1665,6 +1668,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             source_refs=('src/electroModels/electroCouplers/pvjCoupler/pvjCoupler.C',),
             value_kind='scalar',
             unit='m',
+            default='0.5e-3',
             allowed_bindings={"<name>": None},
         ),
         DictEntry(
