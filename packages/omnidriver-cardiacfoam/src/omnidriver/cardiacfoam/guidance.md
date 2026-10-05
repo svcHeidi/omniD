@@ -31,10 +31,17 @@ enforces; none is new. The last section is about the mesh.
   `singleCellSolverCoeffs.tissue`. `describe` lists the case's own scope. A
   first segment that is no `<solver>Coeffs` of the catalogue's
   `myocardiumSolver` menu is refused.
-- **Shape, not meaning.** A value is checked against its entry's `value_kind`
-  by shape only. An `enum` value is not checked against its `menu`, and an
-  entry's conditions on other keys are not evaluated. Read the `menu` and
-  `description` before choosing a value.
+- **Shape when written, meaning before the run.** Writing a value checks it
+  against its entry's `value_kind` and numeric bounds. Once the study is
+  written, and before anything runs, the resolved case passes the catalogue's
+  relations (`applicable_when`, `required_when`, `forbidden_when`,
+  `mutually_exclusive_with`, `co_required_with`, `required_one_of`), its enum
+  menus (the names the supplied C++'s selection table registers, else the
+  catalogue's menu and the literals the C++ compares the value against) and
+  cardiacFOAM's cross-field rules, over `electroProperties`,
+  `prePacingProperties` and `system/controlDict`. A break refuses the plan or
+  the sweep case by name, quoting the rule: `tissue` outside its menu, say.
+  Read the `menu` and `description` of an entry before choosing a value.
 - **Named segments.** A `<name>` segment in a listed key (for example
   `ecgDomains.<name>.ecgSolver`) is a name the case chooses. Where the
   catalogue gives a closed set of names, a name outside it is refused.
@@ -44,11 +51,14 @@ enforces; none is new. The last section is about the mesh.
   entry, and the case's sub-dictionary is replaced by exactly the map's
   members. This is how a patch moves from one map to another.
 - **`system/controlDict` is partly catalogued.** The keys the catalogue lists
-  (`omnidriver catalog` shows each with its bounds) are checked by shape and
-  bounds. Any other key of it, and every key of `fvSchemes`, `fvSolution`,
-  `blockMeshDict` and any other `system/` document, is listed once with
-  `validated: false` and written as asked: omniD has no catalogue of
-  OpenFOAM's other keys, so it cannot tell whether the solver reads them.
+  are the ones `Foam::Time` reads (`omnidriver catalog` shows each with its
+  bounds): checked by shape and bounds when written, and with their menus and
+  relations before the run (`writeInterval` or its older name `writeFrequency`
+  is required; `endTime` when `stopAt` is `endTime`). Any other key of it, and
+  every key of `fvSchemes`, `fvSolution`, `blockMeshDict` and any other
+  `system/` document, is listed once with `validated: false` and written as
+  asked: omniD has no catalogue of OpenFOAM's other keys, so it cannot tell
+  whether the solver reads them.
 - **Any other document is refused** by name, so a misspelt document is never
   taken for an OpenFOAM one.
 - **Region-split cases are not catalogued yet.** An electromechanics case

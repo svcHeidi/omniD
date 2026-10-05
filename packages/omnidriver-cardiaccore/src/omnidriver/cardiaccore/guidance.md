@@ -28,18 +28,23 @@ A study addresses a utility's dictionary directly, as
 `system/<utility>Dict:<dotted.key>`, e.g. `system/setPurkinjeSlabDict:thickness`.
 `describe` lists every key a record accepts in `record_surface.keys`.
 
-- **A catalogued key** (`catalogs/inputs.py`) is checked against its entry's
-  `value_kind`, by shape only: an `enum` value is not checked against its
-  menu, and conditions on other keys are not evaluated. Read the entry's
-  description and notes before choosing a value.
+- **A catalogued key** (`catalogs/inputs.py`) is checked when written against
+  its entry's `value_kind` (shape) and numeric bounds. Once the study is
+  written, and before anything runs, the resolved case passes the entry's
+  relations (`applicable_when`, `required_when`, `forbidden_when`,
+  `mutually_exclusive_with`, `co_required_with`, `required_one_of`) and its enum
+  menu (the names the supplied C++ registers, else the catalogue's); a break
+  refuses the plan by name, quoting the rule. Read the entry's description and
+  notes before choosing a value.
 - **A key the catalogue lacks but the supplied C++ reads** is accepted as
   `uncatalogued` and checked against the type the C++ reads it as
   (`omnidriver catalog --uncatalogued` lists them). Any other key of a
   catalogued dictionary is refused by name.
 - **`system/controlDict`** is partly catalogued, as for every OpenFOAM-based
   solver: the keys `Foam::Time` reads that the catalogue lists are checked by
-  shape and bounds (`omnidriver catalog` lists them), and any other key is
-  written as asked and flagged `validated: false`.
+  shape and bounds when written, and their menus and relations before the run
+  (`omnidriver catalog` lists them). Any other key is written as asked and
+  flagged `validated: false`.
 - **Any other `system/` document** (`fvSchemes`, ...) is written as asked and
   flagged `validated: false`: omniD has no catalogue of OpenFOAM's keys.
 - **Any other document** (anything outside `system/`) is refused by name.
