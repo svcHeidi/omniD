@@ -23,26 +23,31 @@ from plugins.toy import (
 from plugins.toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN
 
 
-#: The toy proposes no patch from an empty study, declares no output format and no quantity, so these
-#: verify nothing for it and are reported apart from the checks that passed.
-TOY_NOT_APPLICABLE = {"C2", "C12", "C13", "C14"}
+#: The toy declares no output format and no quantity, so these verify nothing for it and are reported
+#: apart from the checks that passed.
+TOY_NOT_APPLICABLE = {"C12", "C13", "C14"}
 
 
 def _toy_status(check_id):
     return "not_applicable" if check_id in TOY_NOT_APPLICABLE else "passed"
 
 
-@pytest.mark.parametrize("check_id", ["C1", "C3", "C5", "C6", "C7", "C8", "C9", "C10", "C11"])
+@pytest.mark.parametrize("check_id", ["C1", "C2", "C3", "C5", "C6", "C7", "C8", "C9", "C10", "C11"])
 def test_toy_passes(check_id, tmp_path):
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert verdict.status == "passed", verdict.detail
+
+
+def test_c2_passes_when_an_empty_study_proposes_no_patch(tmp_path):
+    verdict = run_check("C2", toy_conformance_target(tmp_path))
+    assert (verdict.status, verdict.detail) == ("passed", "no patches proposed")
 
 
 @pytest.mark.parametrize("check_id", sorted(TOY_NOT_APPLICABLE))
 def test_a_check_that_verifies_nothing_for_the_toy_is_not_applicable_and_says_why(check_id, tmp_path):
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert verdict.status == "not_applicable", verdict.detail
-    assert any(word in verdict.detail for word in ("no patches", "no workflow step", "no quantity"))
+    assert any(word in verdict.detail for word in ("no workflow step", "no quantity"))
 
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
@@ -528,9 +533,8 @@ def test_c12_bites_a_declared_format_it_cannot_read(plugin, named, tmp_path):
 
 @pytest.mark.parametrize("check_id", sorted(CHECKS))
 def test_a_record_with_declared_quantities_passes_every_check(check_id, tmp_path):
-    """Only C2 verifies nothing here: the record proposes no patch from an empty study."""
     verdict = run_check(check_id, quantity_toy_conformance_target(tmp_path))
-    assert verdict.status == ("not_applicable" if check_id == "C2" else "passed"), verdict.detail
+    assert verdict.status == "passed", verdict.detail
     if check_id == "C14":
         assert "not that the two resolutions agree" in verdict.detail
 

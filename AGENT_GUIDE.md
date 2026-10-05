@@ -813,8 +813,8 @@ omnidriver check --repo <cardiacFOAM> --scratch-dir <dir> --record singleCell --
 record's native regression script (the one its case-file rules name) in a copy
 under the scratch root, against the solver your shell holds, and prints the
 verdicts as JSON, each `passed`, `failed` or `not_applicable` (the check verifies
-nothing for this record: C2 with no patch proposed, C12 with no step declaring an
-output format, C13 and C14 with no declared quantity), with the three counted
+nothing for this record: C12 with no step declaring an output format, C13 and C14 with
+no declared quantity), with the three counted
 apart in `summary`. C14 checks the mechanism (sweep, compare, attach), never that
 the two resolutions agree. It **reports and gates nothing**: the exit code is 0
 whenever the checks ran, and a failing check is the report doing its job. Each record

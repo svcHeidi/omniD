@@ -37,9 +37,9 @@ def test_a_check_that_verifies_nothing_is_counted_apart_from_the_passed(tmp_path
     (record,) = report["records"]
     assert code == 0 and record["status"] == "passed"
     assert [(item["check"], item["status"]) for item in record["checks"]] == [
-        ("C1", "passed"), ("C2", "not_applicable"), ("C12", "not_applicable"), ("C13", "not_applicable"),
+        ("C1", "passed"), ("C2", "passed"), ("C12", "not_applicable"), ("C13", "not_applicable"),
     ]
-    assert report["summary"] == {"checks": 4, "passed": 1, "failed": 0, "not_applicable": 3}
+    assert report["summary"] == {"checks": 4, "passed": 2, "failed": 0, "not_applicable": 2}
 
 
 def test_a_failing_check_is_reported_with_its_reason_and_the_exit_code_stays_zero(tmp_path, capsys):

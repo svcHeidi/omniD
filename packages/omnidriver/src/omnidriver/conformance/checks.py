@@ -1,7 +1,7 @@
 """C1-C14. Each check is self-contained: it builds its own context, stages its own copy, and returns a verdict.
 
-A check that cannot run is a failure saying why. A check that verifies nothing for the target (no patch to
-compare, no output format, no declared quantity) is ``not_applicable`` and says what it would have needed."""
+A check that cannot run is a failure saying why. A check that verifies nothing for the target (no output
+format, no declared quantity) is ``not_applicable`` and says what it would have needed."""
 from __future__ import annotations
 
 import dataclasses
@@ -107,9 +107,7 @@ def check_load(target: ConformanceTarget) -> CheckVerdict:
 
 
 def check_describe_noop(target: ConformanceTarget) -> CheckVerdict:
-    """C2: with no study values, describe proposes no change to the native case.
-
-    A record that proposes no patch at all has nothing to compare with the native case: not applicable."""
+    """C2: with no study values, describe proposes no change to the native case."""
     ctx = _context(target)
     payload = describe_entry(
         target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=ctx,
@@ -120,9 +118,7 @@ def check_describe_noop(target: ConformanceTarget) -> CheckVerdict:
     changed = [p for p in preview["patches"] if p["status"] != "unchanged"]
     if changed:
         return _verdict("C2", False, f"describe proposes {len(changed)} change(s) to the untouched native case: {changed}")
-    if not preview["patches"]:
-        return _not_applicable("C2", "the record proposes no patches, so there is nothing to compare with the native case")
-    return _verdict("C2", True, f"{len(preview['patches'])} patch(es) proposed, all unchanged from the native case")
+    return _verdict("C2", True, "no patches proposed" if not preview["patches"] else "every proposed patch leaves the native case unchanged")
 
 
 def _quotes(message: str, name: str) -> bool:
