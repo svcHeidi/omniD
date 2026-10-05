@@ -142,15 +142,21 @@ def test_a_stop_request_cleans_owned_descendants(tmp_path: Path) -> None:
         f"pathlib.Path({str(pid_file)!r}).write_text(str(p.pid)); "
         "time.sleep(30)"
     )
-    timer = threading.Timer(0.2, request_stop, args=(signal.SIGTERM,))
-    timer.start()
+    def stop_once_the_child_runs() -> None:
+        deadline = time.monotonic() + 20
+        while not pid_file.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        request_stop(signal.SIGTERM)
+
+    stopper = threading.Thread(target=stop_once_the_child_runs, daemon=True)
+    stopper.start()
     try:
         result = run_workflow_step(
             _dag(["-c", code]), initial_workflow_state(_dag(["-c", code])), "run",
             case_root=tmp_path, log_dir=tmp_path / "logs",
         )
     finally:
-        timer.cancel()
+        stopper.join()
         clear_stop_request()
     assert any(d["code"] == "workflow_step_cancelled" for d in result.state.steps[0].diagnostics)
     assert pid_file.exists()
