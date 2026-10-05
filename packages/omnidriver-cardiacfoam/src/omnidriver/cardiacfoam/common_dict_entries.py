@@ -251,6 +251,9 @@ PURKINJE_GRAPH_ENTRIES: Final[tuple[DictEntry, ...]] = (
             _COUPLERS + "reactionDiffusion/reactionDiffusionPvjCoupler.C",
             _COUPLERS + "eikonalMonodomain/eikonalMonodomainPvjCoupler.C",
         ),
-        constraints=("One per pvjNodes entry.",),
+        constraints=(
+            "One per pvjNodes entry where a coupler reads them: the implicit scheme stops on any other length, "
+            "and the explicit couplers read past the end of a shorter list.",
+        ),
     ),
 )

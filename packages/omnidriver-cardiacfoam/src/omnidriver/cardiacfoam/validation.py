@@ -579,6 +579,28 @@ def _materialized_graphs(case_root: Path, context: dict[str, Any]) -> dict[str, 
     return graphs
 
 
+def _tree_break(pairs: list[tuple[int, int]], nodes: int) -> str | None:
+    """Why ``pairs`` over ``nodes`` nodes is not the tree ``conductionGraph::buildTreeTopology`` requires, or ``None``."""
+    if len(pairs) != nodes - 1:
+        return (
+            f"conductionEdges has {len(pairs)} edges over {nodes} nodes; the tree "
+            f"conductionGraph::buildTreeTopology requires has {nodes - 1}"
+        )
+    neighbours: dict[int, list[int]] = {}
+    for a, b in pairs:
+        neighbours.setdefault(a, []).append(b)
+        neighbours.setdefault(b, []).append(a)
+    reached, frontier = {0}, [0]
+    while frontier:
+        for neighbour in neighbours.get(frontier.pop(), ()):
+            if neighbour not in reached:
+                reached.add(neighbour)
+                frontier.append(neighbour)
+    if len(reached) != nodes:
+        return f"conductionEdges is not connected: node 0 reaches {len(reached)} of {nodes} nodes"
+    return None
+
+
 def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str, str]]:
     """``(level, key, reason)`` for each way a graph's text breaks what ``conductionGraph::readFromDict`` and
     ``conductionSystemDomain::readGraphFile`` require, an error, and each key it sets that omniD cannot read, a
@@ -629,28 +651,8 @@ def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str, str]]:
                 breaks.append(("error", "conductionEdges", "conductionEdges names a negative node index; nodes count from 0"))
             else:
                 nodes = max([0, *(node for pair in pairs for node in pair)]) + 1
-                if len(pairs) != nodes - 1:
-                    breaks.append((
-                        "error", "conductionEdges",
-                        f"conductionEdges has {len(pairs)} edges over {nodes} nodes; the tree "
-                        f"conductionGraph::buildTreeTopology requires has {nodes - 1}",
-                    ))
-                else:
-                    neighbours: dict[int, list[int]] = {}
-                    for a, b in pairs:
-                        neighbours.setdefault(a, []).append(b)
-                        neighbours.setdefault(b, []).append(a)
-                    reached, frontier = {0}, [0]
-                    while frontier:
-                        for neighbour in neighbours.get(frontier.pop(), ()):
-                            if neighbour not in reached:
-                                reached.add(neighbour)
-                                frontier.append(neighbour)
-                    if len(reached) != nodes:
-                        breaks.append((
-                            "error", "conductionEdges",
-                            f"conductionEdges is not connected: node 0 reaches {len(reached)} of {nodes} nodes",
-                        ))
+                if (reason := _tree_break(pairs, nodes)) is not None:
+                    breaks.append(("error", "conductionEdges", reason))
     pvj = elements("pvjNodes")
     pvj_nodes = labels("pvjNodes", pvj) if pvj is not None else None
     if nodes is not None:
@@ -780,7 +782,8 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDi
     """Every rule the resolved case at ``case_root`` violates: the catalogue's
     relations over its ``electroProperties``, ``prePacingProperties``,
     ``controlDict`` and the Purkinje graph each conduction network names, the
-    keys the supplied C++ (``mapping``) requires, and cardiacFOAM's cross-field rules. A case with no ``electroProperties``
+    keys the supplied C++ (``mapping``) requires, and cardiacFOAM's
+    cross-field rules. A case with no ``electroProperties``
     violates none. ``physicsProperties``' one key is judged by ``physics_layout``."""
     from foamlib import FoamFile
 

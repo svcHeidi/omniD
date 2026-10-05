@@ -124,11 +124,8 @@ check it; the refusals it names are the record's own.
   `constant/purkinjeGraph*` file either route reads, by name, checked
   against the staged case.
 - **A Purkinje graph is data, selected and never edited.** The file
-  `graphFile` names is catalogued (document `purkinjeGraph`: its edges,
-  node positions, root, junctions and their resistances, with units), but no
-  study key addresses it: write a new graph with a graph tool and select it.
-  Before the run, the graph the case holds must have every key the C++ reads
-  and be the tree the C++ requires (four values per edge, one edge fewer than
-  nodes, every node reached from node 0, root and junction nodes in range, one
-  position per node and per junction, one resistance per junction when it
-  lists them); a graph a later step writes is judged by the solver alone.
+  `graphFile` names is the catalogue's `purkinjeGraph` document, whose entries
+  state each key, its unit and its constraints; no study key addresses it, so
+  write a new graph with a graph tool and select it. The graph the case holds
+  is judged against those entries before the run; one a later step writes is
+  judged by the solver alone.

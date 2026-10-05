@@ -1555,7 +1555,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.purkinjeConductivity',
             phases=frozenset({'physics'}),
-            description="Multiplier on the Purkinje graph edge conductances. Each edge's conductance times this value is the edge conductivity sigma of the cable equation, in S/m; native graphs give every edge conductance 1, so there this value is the network's conductivity. The primary knob for tuning conduction velocity along the network.",
+            description="Multiplier on the Purkinje graph edge conductances. Each edge's conductance times this value is the edge conductivity sigma of the cable equation, in S/m. The primary knob for tuning conduction velocity along the network.",
             source_refs=('src/electroModels/electroDomains/conductionSystemDomain/conductionSystemDomain.C',),
             notes='conductionSystemDomain.C:176-177, lookupOrDefault default 1.0; multiplies graph_.edgeConductances. Requires a graphFile (:154).',
             value_kind='scalar',

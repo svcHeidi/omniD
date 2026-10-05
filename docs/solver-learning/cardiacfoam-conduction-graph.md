@@ -21,7 +21,7 @@ the 3D myocardium does declare with OpenFOAM dimension sets.
 | `Iion` | the ionic model, per node | V/s | `monodomain1DSolver::advance`: `rhs = Vm - dt*Iion`; in 3D `chi*Cm*Iion` stands beside A/m³ terms |
 | applied current, `rootStimulus.intensity` | `conductionSystemDomain::assembleAppliedCurrent` | A/m³ | `rhs += dt*Iapp/(chi*Cm)` must be a voltage: A/m³ ÷ F/m³ × s = V |
 | edge `length` (3rd value of `conductionEdges`) | `conductionGraph::readFromDict` | m | `1DgraphToFoam` writes `mag(points[b] - points[a])` in mesh coordinates; `eikonalSolver1D` adds `length/purkinjeCV` (m ÷ m/s) to a time |
-| edge conductivity `sigma_e` = 4th value × `purkinjeConductivity` | `readGraphFile` multiplies, `monodomain1DSolver` uses | S/m | see the derivation below |
+| edge conductivity `sigma_e` = 4th value × `purkinjeConductivity` | `readGraphFile` multiplies, `monodomain1DSolver` uses | S/m, given `chi` [1/m] and `cm` [F/m²] | see the derivation below |
 | `purkinjeConductivity` | `readGraphFile` | the product's unit is S/m; see "needs owner confirmation" 1 | the C++ prints it as a "multiplier" (default 1.0); native graphs give every edge conductance 1, so in every native case it carries the S/m |
 | `referenceConductance` | `restitutionEikonalSolver1D` | S/m | it divides `G.edgeConductances`, which hold `sigma_e` after the multiplication |
 | `purkinjeCV` | `eikonalSolver1D` | m/s | dimensioned `[0 1 -1 0 0 0 0]` |
@@ -41,7 +41,9 @@ dV_i/dt = (1/(chi*Cm*controlLength_i)) * sum_e sigma_e/L_e * (V_j - V_i) - Iion_
 
 with `controlLength_i` half the length of every edge at node `i`, and assembles
 exactly that: `edgeCoeff = edgeConductance/edgeLength`, `coeff =
-dt*edgeCoeff/(chiCm*controlLength)`. For `dV/dt` in V/s:
+dt*edgeCoeff/(chiCm*controlLength)`. The equation itself fixes only
+`sigma/(chi*Cm)`, a diffusivity in m²/s. Given `chi` in 1/m and `cm` in F/m², as
+the 3D myocardium declares them, and `dV/dt` in V/s:
 
 [sigma] = (V/s) × (F/m³) × m × m / V = F/(m·s) = S/m.
 
@@ -50,7 +52,9 @@ cancels between the axial flux and the membrane capacitance, which assumes one
 cross-section for the whole tree. The native README `idealizedHeart/electroHeart`
 measures the conduction velocity grow with it (3.16 m/s at 0.35, 5.8 m/s at 1.5,
 about 8.7 m/s at 10.0, with `chi 14000`, `cm 0.01`), and `sigma/(chi*Cm)` at 0.4
-is 2.9e-3 m²/s, a diffusivity of the order a ~3 m/s cable needs.
+is 2.9e-3 m²/s, a diffusivity of the order a ~3 m/s cable needs. An
+observation: that case gives the network `chi 14000` and the myocardium
+`chi [0 -1 0 0 0 0 0] 140000`, a tenth of the tissue's surface-to-volume ratio.
 
 ## The 1D network
 
@@ -191,8 +195,8 @@ only normalises them inside `restitutionEikonalSolver1D`.
 |---|---|---|---|
 | G1 | `omnidriver catalog --repo <tree> --uncatalogued`, before the graph document | `conductionEdges` and `pvjResistances` uncatalogued (root `param:readFromDict:dict`, no document); `rootNode`, `pvjNodes`, `points`, `pvjLocations` unresolved (the receiver is an `IOdictionary` named by a variable); `torsoSurface` uncatalogued | the scan sees all six graph reads |
 | G2 | the same, after (`purkinjeGraph` document, `common_dict_entries.PURKINJE_GRAPH_ENTRIES`) | `conductionEdges` and `pvjResistances` gone; `--unread` empty; no disagreement | the scan places `readFromDict`'s dictionary in the graph document by the entries' `source_refs` |
-| G3 | foamlib's `FoamFile(...).as_dict()` on the first 100 and 1000 edges of `idealizedHeart/mesh/constant/purkinjeGraph` | 0.45 s and 43 s; the full file (44499 edges) does not finish in 5 minutes | foamlib cannot read a real graph; omniD reads one lexically (`mutators.read_foam_entry`, `literals.list_elements`) |
-| G4 | `validation.case_diagnostics` on `electroHeart/constant/electroProperties.monodomain` with the human graph, then the pig graph | no diagnostic, 9 s for the human graph | both native trees are trees with consistent sizes |
+| G3 | foamlib's `FoamFile(...).as_dict()` on the first 100 and 1000 edges of `idealizedHeart/mesh/constant/purkinjeGraph` | 0.45 s and 43 s; the full file (44499 edges) does not finish in 5 minutes | foamlib cannot read a real graph; omniD reads one lexically (`mutators.read_foam_entries`, `literals.list_elements`) |
+| G4 | `validation.case_diagnostics` on `electroHeart/constant/electroProperties.monodomain` with the human graph, then the pig graph | no diagnostic; one pass of `mutators.read_foam_entries` reads the human graph's keys in 0.12 s | both native trees are trees with consistent sizes |
 | G5 | `plan --strict --case` on a copy of `monodomain1D3D` with `pvjNodes (20 41)` | refused: "pvjNodes [41] are outside the graph's nodes 0 to 40" | the C++'s `readGraphFile` fatal, named before the run |
 | G6 | `plan --strict --repo <tree> --entry <record>`, every record, before and after | all `ok`, no diagnostic added or removed | |
 | G7 | `run --strict --entry manufacturedMonodomain1D3D` (20³ cells, 41-node graph, `rPvj 1`) | `ok` in 13 s; log: `Purkinje edge conductance multiplier: 0.111453`; `PVJ coupling debug`: `networkVm` ±1.0, `tissueVm` ±0.45, `terminalCurrent` ±1.45, `terminalSource` ±2081; graph error summary `Vm1D` L2 7.1e-6 | `terminalCurrent = ΔV/R` with R = 1 (1.0 - (-0.45) = 1.45), and `terminalSource = I/V_sphere` |

@@ -827,8 +827,6 @@ Fixture-to-solver mapping (derived from each spec's defaults.ELECTRO_PROPERTIES_
 """
 
 
-from pathlib import Path
-
 import pytest
 
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
