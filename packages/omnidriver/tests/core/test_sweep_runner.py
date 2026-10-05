@@ -895,7 +895,7 @@ def test_a_sweep_stopped_by_a_signal_marks_its_running_case_and_reports(tmp_path
     assert stopped.value.code == 143
     report = stopped.value.report
     assert (report["case_count"], report["failed_count"], report["skipped_count"]) == (3, 1, 2)
-    assert report["cases"][0]["stopped_by_signal"] == 15
+    assert (report["cases"][0]["status"], report["cases"][0]["stopped_by_signal"]) == ("failed", 15)
     manifest = json.loads((tmp_path / "out" / "sweep_manifest.json").read_text())
     assert [(c["case_id"], c["sweep_outcome"]) for c in manifest["cases"]] == [("2", "stopped")]
     assert manifest["cases"][0]["failure"]["stopped_by_signal"] == 15

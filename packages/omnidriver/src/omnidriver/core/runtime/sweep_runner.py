@@ -317,7 +317,8 @@ def _record_sweep_run(
                     status = "pending"
         except SystemExit as stop:
             stopped = stop
-            status = workflow_status(workflow_state_path) or "failed"
+            # A stopped child leaves its state as it was mid-run; only a case that finished first counts as completed.
+            status = "completed" if workflow_status(workflow_state_path) == "completed" else "failed"
             failure["stopped_by_signal"] = int(stop.code) - 128 if isinstance(stop.code, int) else None
         except subprocess.TimeoutExpired as exc:
             failure["timeout_error"] = (
