@@ -30,7 +30,7 @@ def _utility_manifests() -> Any:
 
 
 class CardiacCorePlugin:
-    """OmniD API-v2 adapter for a documented cardiacCore preprocessing slice."""
+    """The omniD plugin for cardiacCore's documented preprocessing records."""
 
     @property
     def plugin_name(self) -> str:

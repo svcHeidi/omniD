@@ -214,8 +214,9 @@ the stack declares no entrypoint (openCARP).
 
 A folder inside the repository supplied with `--repo` is staged at its
 repository-relative depth (`<scratch>/records/<dir name>/cases/<dir name>`, say),
-and a copy of the repository's declared `scripts` folder (without `__pycache__`, so no
-step can write into the repository) sits beside it at its own relative path, so a native `Allrun` that calls `$case_dir/../../applications/scripts/...`
+and a copy of the repository's declared `scripts` folder (without `__pycache__`,
+so no step can write into the repository) sits beside it at its own relative
+path, so a native `Allrun` that calls `$case_dir/../../applications/scripts/...`
 finds the repository's layout; `check --regression` runs the native regression
 script the same way. A folder outside the repository, or with no `--repo`, is
 staged at `<scratch>/records/<dir name>`.
@@ -350,8 +351,8 @@ One case with study values is the same spec with one-value axes:
 
 Each case is staged from the native case into `<output_dir>/cases/<case_id>/`
 and committed there; the native tree is never written. That one folder is the
-case: its `run_document.json`, `workflow_state.json`, `workflow_logs/` and
-`case_record.json` sit beside the case files. A `caseId` dependent
+case, and `sweep-run` writes its `run_document.json`, `workflow_state.json`,
+`workflow_logs/` and `case_record.json` beside the case files. A `caseId` dependent
 entry becomes the case's directory name (validated for uniqueness and
 path-safety); otherwise cases are named `case_0001`, `case_0002`, ... in
 expansion order. A case that cannot be staged or planned fails alone
@@ -363,7 +364,7 @@ already matched the case) and its full `plan`.
 `sweep-run` plans and runs the cases serially, each as a child
 `omnidriver run --run-document <output_dir>/cases/<case_id>/run_document.json`, and
 records them in `sweep_manifest.json` (the shared `base_study`, and per case its
-start time, outcome and, when it failed, why). A case that did not complete
+start time, its `sweep_outcome` and, when it failed, why). A case that did not complete
 carries the child's own `error`, `environment_diagnostics` and `failure_context`
 (with the failed step's diagnostics, such as `solver_entry_missing`) in its
 summary and manifest entry (the manifest keeps the failed step's diagnostics and log
@@ -897,14 +898,16 @@ resolved case breaks N rule(s): <field>: <message>`), with the rule's own
 message. The rules read the resolved case's files, so a direct key, an axis
 and the native case all count.
 
-- **Catalogue relations** (cardiacFOAM's `electroProperties` and `prePacingProperties`, each cardiacCore
-  utility dictionary) — `applicable_when` / `required_when` / `forbidden_when` /
-  `mutually_exclusive_with` / `co_required_with` / `required_one_of`, once per instance of a
-  `<name>` block. A predicate on a selector the case omits reads the
-  selector's catalogued `default` where it has one. An enum value outside its menu is refused: the names the
+- **Catalogue relations** (cardiacFOAM's `electroProperties`, `prePacingProperties`
+  and `system/controlDict`, each cardiacCore utility dictionary and its `system/controlDict`)
+  — `applicable_when` / `required_when` / `forbidden_when` / `mutually_exclusive_with` /
+  `co_required_with` / `required_one_of`, once per instance of a `<name>` block. A
+  predicate on a selector the case omits reads the selector's catalogued `default`
+  where it has one. An enum value outside its menu is refused: the names the
   supplied C++'s selection table registers when the source is supplied, the
-  catalogue's menu otherwise. Value types are the C++'s: a study's value is
-  checked against them when it is written.
+  catalogue's menu and the literals the C++ compares the value against otherwise.
+  A number outside its entry's `minimum` or `exclusive_minimum` is refused. Value
+  types are the C++'s: a study's value is checked against them when it is written.
 - **Keys the C++ requires** — a key the supplied C++ reads with `get<T>` or
   `lookup` and no default, in a class the case selects (a selection table
   registers it under a name the case holds, or the plugin's reviewed
@@ -922,8 +925,7 @@ and the native case all count.
 A rule refuses a combination it knows is wrong, never a name the C++ accepts:
 an ionic model, tissue or verifier the catalogue lacks but the scan finds
 registered (reported `uncatalogued`) passes every rule. `step --apply` runs the
-same rules after its edit commits; a refusal leaves the edit in the case, so
-patch it again.
+same rules after its edit, and rolls the edit back when they refuse the case.
 
 ## Function objects (probes, sampling, sets, …)
 

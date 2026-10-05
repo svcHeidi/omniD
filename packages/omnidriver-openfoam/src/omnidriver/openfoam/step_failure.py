@@ -35,21 +35,31 @@ REBUILD_HINT = (
 )
 
 
-def _document_and_scope(dictionary: str, case_root: Path) -> tuple[str, list[str]]:
-    """The case file a dictionary path names (relative to the case when inside it) and the sub-dictionaries below it."""
+def _file_and_scope(path: Path, stop: Path | None) -> tuple[Path, list[str]] | None:
     scope: list[str] = []
-    path = Path(dictionary)
-    if not path.is_absolute():
-        path = case_root / path
-    while path.parent != path and not path.is_file():
+    while path != stop and path.parent != path and not path.is_file():
         scope.insert(0, path.name)
         path = path.parent
-    if not path.is_file():
+    return (path, scope) if path.is_file() else None
+
+
+def _document_and_scope(dictionary: str, case_root: Path) -> tuple[str, list[str]]:
+    """The case file a dictionary path names (relative to the case when inside it) and the sub-dictionaries below it."""
+    path = Path(dictionary)
+    found = _file_and_scope(path, None) if path.is_absolute() else None
+    # A log read after its case moved names the old place; its tail still names this case's files.
+    tails = path.parts[1:] if path.is_absolute() else path.parts
+    for start in range(len(tails)):
+        if found is not None:
+            break
+        found = _file_and_scope(case_root.joinpath(*tails[start:]), case_root)
+    if found is None:
         return dictionary, []
+    file, scope = found
     try:
-        return path.resolve().relative_to(case_root.resolve()).as_posix(), scope
+        return file.resolve().relative_to(case_root.resolve()).as_posix(), scope
     except ValueError:
-        return str(path), scope
+        return str(file), scope
 
 
 def _missing_entry_diagnostics(message: str, case_root: Path, driver_context: Any) -> tuple[StrictDiagnostic, ...]:

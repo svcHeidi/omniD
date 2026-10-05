@@ -483,8 +483,8 @@ class TestBuildCase(unittest.TestCase):
             self.assertIn("myocardiumSolver singleCellSolver;", (case_dir / "constant" / "electroProperties").read_text())
 
     def test_an_override_no_catalogue_entry_places_is_refused_not_dropped(self) -> None:
-        with self.assertRaisesRegex(ValueError, "sealedWallTrace"):
-            self._build(_MONODOMAIN, electro_overrides={"$ELECTRO_MODEL_COEFFS.sealedWallTrace": "zeroGradient"})
+        with self.assertRaisesRegex(ValueError, "unplacedKey"):
+            self._build(_MONODOMAIN, electro_overrides={"$ELECTRO_MODEL_COEFFS.unplacedKey": "zeroGradient"})
 
     def test_single_cell_gets_one_cell_and_refuses_dx(self) -> None:
         case_dir, _ = self._build(_SINGLE_CELL)
@@ -801,7 +801,16 @@ _SEALED = "$ELECTRO_MODEL_COEFFS.sealedHeartBoundary"
 _TRACE = "$ELECTRO_MODEL_COEFFS.sealedWallTrace"
 
 
+def _without_sealed_wall(monkeypatch) -> None:
+    """The catalogue holds both keys, so the tests that need a key the C++ reads and the catalogue lacks take their group out."""
+    from omnidriver.cardiacfoam import case_builder
+
+    groups = {name: group for name, group in case_builder.ELECTRO_PROPERTY_ENTRY_GROUPS.items() if name != "sealed_wall"}
+    monkeypatch.setattr(case_builder, "ELECTRO_PROPERTY_ENTRY_GROUPS", groups)
+
+
 def _native_tree(tmp_path: Path, monkeypatch) -> None:
+    _without_sealed_wall(monkeypatch)
     source = tmp_path / "native" / "src" / "electroModels" / "myocardiumModels" / "bidomainSolver"
     source.mkdir(parents=True)
     (source / "bidomainSolver.C").write_text(BIDOMAIN_SOLVER_CXX.read_text())
@@ -846,4 +855,4 @@ def test_a_build_without_the_cxx_source_says_so_and_refuses_an_uncatalogued_key(
     built = build_case(_BIDOMAIN, case_dir=tmp_path / "case", driver_context=_CTX)
     assert [d["code"] for d in built["diagnostics"]] == ["plugin_cxx_source_not_supplied"]
     with pytest.raises(ValueError, match="C\\+\\+ source is not supplied"):
-        build_case(_BIDOMAIN, case_dir=tmp_path / "other", electro_overrides={_SEALED: "true"}, driver_context=_CTX)
+        build_case(_BIDOMAIN, case_dir=tmp_path / "other", electro_overrides={"$ELECTRO_MODEL_COEFFS.unplacedKey": "true"}, driver_context=_CTX)
