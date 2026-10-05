@@ -16,7 +16,7 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping
 
-from .case_write import CaseWritePlan, CaseWriteRecord, RenderedFile
+from .case_write import CaseWritePlan, CaseWriteRecord, RenderedFile, _digest_bytes
 from .runtime.attempt_lease import AttemptLeaseError, acquire_case_lease, case_lease_is_held
 from .runtime.transaction_mechanics import atomic_write_bytes, fsync_directory
 
@@ -69,16 +69,22 @@ def _resolve_target(case_root: Path, rendered_path: str) -> Path:
 
 
 def _before_image(rendered: RenderedFile, target: Path) -> tuple[bytes, int] | None:
-    """The file's bytes and mode, or ``None`` when the commit creates it."""
+    """The file's bytes and mode, or ``None`` when the commit creates it; refused when the file is not the one that was rendered against."""
     if not target.exists() or target.is_dir():
         return None
     try:
-        return target.read_bytes(), target.stat().st_mode & 0o7777
+        content, mode = target.read_bytes(), target.stat().st_mode & 0o7777
     except OSError as exc:
         raise CaseTransactionError(
             f"cannot read {rendered.path!r} to keep its before-image "
             f"before overwriting it: {exc}"
         ) from exc
+    if _digest_bytes(content) != rendered.before_digest:
+        raise CaseTransactionError(
+            f"{rendered.path!r} changed since it was rendered (its digest is no longer "
+            f"{rendered.before_digest!r}); plan again rather than overwrite an edit nobody reviewed"
+        )
+    return content, mode
 
 
 def _missing_ancestors(case_root: Path, targets: list[Path]) -> list[Path]:

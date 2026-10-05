@@ -466,3 +466,18 @@ def test_a_signal_stays_what_propagates_when_its_rollback_then_fails(tmp_path, m
     assert any("rollback failed" in note for note in stop.__notes__)
     assert "rollback failed" in capsys.readouterr().err
     assert case_transaction.interrupted_commit(tmp_path) == ("constant/a", "constant/b")
+
+
+def test_a_file_that_changed_since_it_was_rendered_is_refused_before_any_write(tmp_path):
+    (tmp_path / "constant").mkdir()
+    (tmp_path / "constant" / "a").write_bytes(b"edited by someone else\n")
+    plan = _plan(tmp_path, [
+        _rendered("constant/b", b"two\n"),
+        _rendered("constant/a", b"new\n", exists_before=True, before_digest=case_write._digest_bytes(b"original\n")),
+    ])
+    with pytest.raises(case_transaction.CaseTransactionError, match="changed since it was rendered"):
+        case_transaction.commit_case_write(plan, driver_context=object())
+
+    assert (tmp_path / "constant" / "a").read_bytes() == b"edited by someone else\n"
+    assert not (tmp_path / "constant" / "b").exists()
+    assert case_transaction.interrupted_commit(tmp_path) is None
