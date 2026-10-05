@@ -928,16 +928,68 @@ def _scalar(value: Any) -> float | None:
         return None
 
 
-def _sphere(around: Any, radius: float, kernel: str) -> list[tuple[float, float]]:
-    """``(weight, volume)`` of the cells ``pvjMapper`` gathers for a junction: those with a centre within ``radius``,
-    weighted by the kernel, or the nearest cell alone with weight 1 when none is."""
+_PVJ_COUPLERS = (_RPVJ_COUPLER, "eikonalMonodomainPvjCoupler")
+
+
+def _sphere(around: Any, radius: float, kernel: str) -> list[tuple[int, float, float]]:
+    """``(cell, weight, volume)`` of the cells ``pvjMapper`` gathers for a junction: those with a centre within
+    ``radius``, weighted by the kernel, or the nearest cell alone with weight 1 when none is."""
     if not around.within:
-        return [(1.0, around.nearest.volume)] if around.nearest is not None else []
+        return [(around.nearest.label, 1.0, around.nearest.volume)] if around.nearest is not None else []
     if kernel == "gaussian":
-        return [(math.exp(-4.5 * c.distance ** 2 / (radius * radius)), c.volume) for c in around.within]
+        return [(c.label, math.exp(-4.5 * c.distance ** 2 / (radius * radius)), c.volume) for c in around.within]
     if kernel == "linear":
-        return [(1.0 - c.distance / radius, c.volume) for c in around.within]
-    return [(1.0, c.volume) for c in around.within]
+        return [(c.label, 1.0 - c.distance / radius, c.volume) for c in around.within]
+    return [(c.label, 1.0, c.volume) for c in around.within]
+
+
+def _groups(spheres: list[list[tuple[int, float, float]]]) -> list[list[int]]:
+    """The junctions whose cell sets overlap, transitively, as lists of junction indices."""
+    parent = list(range(len(spheres)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    owner: dict[int, int] = {}
+    for junction, cells in enumerate(spheres):
+        for cell, _, _ in cells:
+            parent[find(junction)] = find(owner.setdefault(cell, junction))
+    groups: dict[int, list[int]] = {}
+    for junction in range(len(spheres)):
+        groups.setdefault(find(junction), []).append(junction)
+    return list(groups.values())
+
+
+def _decay_rate(members: list[tuple[float, list[tuple[int, float, float]]]]) -> float:
+    """The largest decay rate, in 1/(ohm m^3), of the explicit junction terms of ``members``, each a resistance and
+    its ``(cell, weight, volume)``. Junction ``k`` gives its cells ``w_ck / (R_k V_k)`` times the difference of the
+    network voltage and ``<V>_k = sum_j w_jk V_j Vm_j / V_k``, ``V_k = sum(w V)``: a sum of rank-one operators
+    ``a_k b_k^T`` whose non-zero eigenvalues are those of ``N_lk = sum_j w_lj w_kj V_j / (V_l V_k R_k)``. That is
+    similar to the symmetric ``D^(1/2) P P^T D^(1/2)``, ``D = diag(1/R)``, ``P_lj = w_lj sqrt(V_j) / V_l``, whose
+    largest eigenvalue the power iteration finds."""
+    scaled = []
+    for resistance, cells in members:
+        total = sum(w * v for _, w, v in cells)
+        scaled.append((resistance ** -0.5, [(cell, w * v ** 0.5 / total) for cell, w, v in cells]))
+    x = [1.0] * len(scaled)
+    rate = 0.0
+    for _ in range(1000):
+        along: dict[int, float] = {}
+        for (d, row), xk in zip(scaled, x):
+            for cell, p in row:
+                along[cell] = along.get(cell, 0.0) + d * xk * p
+        y = [d * sum(p * along[cell] for cell, p in row) for d, row in scaled]
+        norm = math.sqrt(sum(value * value for value in y))
+        if norm == 0.0:
+            return 0.0
+        previous, rate = rate, sum(a * b for a, b in zip(x, y)) / sum(a * a for a in x)
+        x = [value / norm for value in y]
+        if abs(rate - previous) <= 1e-9 * rate:
+            break
+    return rate
 
 
 def _evaluate_pvj_stability(
@@ -945,13 +997,15 @@ def _evaluate_pvj_stability(
 ) -> list["StrictDiagnostic"]:
     """A junction resistance below the bound under which the tissue's Vm near the junction alternates in sign and grows.
 
-    ``pvjCouplingScheme explicit`` spreads ``w (Vn - <V>) / (R V_s)`` over the junction's cells, ``<V>`` being the
-    old mean of their Vm: a rank-one operator whose one nonzero decay rate is
-    ``k = sum(w^2 V) / (R chi cm V_s^2)``, ``V_s = sum(w V)`` over the cells. The tissue's ``ddtSchemes`` operator
-    keeps it stable while ``k dt`` stays below 2 (``Euler``) or 4 (``backward``). The inputs are ``deltaT``,
-    ``ddtSchemes``, the tissue's ``chi`` and ``cm``, the resistance and the weights and volumes of the cells
-    ``pvjMapper`` gathers. Each junction is judged alone, whatever cells it shares. The cells need the mesh, so a
-    case without one is reported as not judged."""
+    ``pvjCouplingScheme explicit`` (``eikonalMonodomainPvjCoupler`` too, when its scheme is explicit or absent)
+    spreads ``w (Vn - <V>) / (R V_s)`` over each junction's cells, ``<V>`` being the old mean of their Vm,
+    ``V_s = sum(w V)``. That is a rank-one operator per junction, and the junctions whose cells overlap form one
+    operator: its largest decay rate ``k`` is the largest eigenvalue of ``N_lk = sum_j w_lj w_kj V_j / (V_l V_k R_k chi cm)``
+    (for a junction alone, ``sum(w^2 V) / (R chi cm V_s^2)``). The tissue's ``ddtSchemes`` operator keeps it stable
+    while ``k dt`` stays below 2 (``Euler``) or 4 (``backward``), and decays it with an alternating ripple above
+    half of that. The inputs are ``deltaT``, ``ddtSchemes``, the tissue's ``chi`` and ``cm``, the resistances and
+    the weights, volumes and labels of the cells ``pvjMapper`` gathers. The cells need the mesh, so a case without
+    one is reported as not judged."""
     from foamlib import FoamFile
 
     from omnidriver.openfoam.literals import list_elements
@@ -962,7 +1016,7 @@ def _evaluate_pvj_stability(
     blocks = [
         (key[: -len(_COUPLER_SUFFIX)], context.get(key[: -len(_COUPLER_SUFFIX)] + _NETWORK_REF_SUFFIX))
         for key, coupler in context.items()
-        if key.startswith(_DOMAIN_COUPLINGS_PREFIX) and key.endswith(_COUPLER_SUFFIX) and coupler == _RPVJ_COUPLER
+        if key.startswith(_DOMAIN_COUPLINGS_PREFIX) and key.endswith(_COUPLER_SUFFIX) and coupler in _PVJ_COUPLERS
         and context.get(key[: -len(_COUPLER_SUFFIX)] + ".pvjCouplingScheme", "explicit") == "explicit"
     ]
     blocks = [(block, network) for block, network in blocks if network in graphs]
@@ -988,28 +1042,33 @@ def _evaluate_pvj_stability(
             source=document, field="ddtSchemes",
         )]
     limit = _DDT_STABILITY_LIMIT[scheme]
-    scale = dt / (chi * cm * limit)
+    scale = dt / (chi * cm)
     default_radius = float(_ELECTRO_ENTRIES_BY_PATH[_PVJ_RADIUS_PATH].default)
-    form = f"dt*sum(w^2 V)/(chi*cm*sum(w V)^2*A) with A = {limit:g} (ddtSchemes {scheme})"
+    form = (
+        f"dt*sum(w^2 V)/(chi*cm*sum(w V)^2*A) for a junction sharing no cells, and for junctions that share cells "
+        f"the largest eigenvalue of N_lk = sum_j(w_lj w_kj V_j)/(V_l V_k R_k) times dt/(chi*cm) must stay below "
+        f"A (w the kernel weight, V the cell volume, V_l = sum(w V)); A = {limit:g} for ddtSchemes {scheme}"
+    )
+    capped = (
+        " The explicit solver caps deltaT at maxCo*min(dx^2/D) (myocardiumDomain::applyModelTimeControls), which "
+        "lowers the bound." if context.get("solutionAlgorithm") == "explicit" else ""
+    )
     found: list["StrictDiagnostic"] = []
     for block, network in blocks:
         graph = graphs[network][1]
-        junctions = len(graph.locations or ())
+        locations = graph.locations or ()
         try:
             listed = [float(item) for item in list_elements(graph.raw["pvjResistances"])] if "pvjResistances" in graph.raw else []
         except ValueError:
             continue
         rpvj = _scalar(context.get(block + ".rPvj"))
-        resistances = listed if len(listed) >= junctions > 0 else [rpvj] * junctions
-        if junctions == 0 or None in resistances:
-            continue
+        resistances = listed if len(listed) >= len(locations) > 0 else [rpvj] * len(locations)
         radius = _scalar(context.get(block + ".pvjRadius", default_radius))
-        kernel = str(context.get(block + ".pvjKernel", "uniform"))
-        if radius is None or not radius > 0:
+        if not locations or None in resistances or radius is None or not radius > 0:
             continue
         surroundings, why = None, "before the mesh exists"
         try:
-            surroundings = cells_around(electro_path.parent / "polyMesh", graph.locations or (), radius)
+            surroundings = cells_around(electro_path.parent / "polyMesh", locations, radius)
         except FileNotFoundError:
             pass
         except ValueError as exc:
@@ -1018,31 +1077,43 @@ def _evaluate_pvj_stability(
             found.append(diagnostic(
                 "info", "pvj_stability_unjudged",
                 f"{document}: {block}'s junction resistance is not judged against a stability bound {why}. "
-                f"pvjCouplingScheme explicit is stable only above R = {form}, the sums over the junction's cells "
-                f"(w the kernel weight, V the cell volume); dt/(chi*cm*A) is {scale:.4g} ohm m^3 "
+                f"pvjCouplingScheme explicit is stable only above R = {form}; dt/(chi*cm) is {scale:.4g} ohm m^3/A "
                 f"(dt {dt:g} s, chi*cm {chi * cm:g} F/m^3).",
                 source=document, field=block + ".rPvj",
             ))
             continue
-        low: list[tuple[float, int, float, int]] = []
-        for i, resistance in enumerate(resistances):
-            cells = _sphere(surroundings[i], radius, kernel)
-            if not cells:
-                continue
-            volume = sum(w * v for w, v in cells)
-            bound = scale * sum(w * w * v for w, v in cells) / volume ** 2
-            if resistance < bound:
-                low.append((bound / resistance, i, bound, len(cells)))
-        if low:
-            _, worst, bound, cells = max(low)
+        kernel = str(context.get(block + ".pvjKernel", "uniform"))
+        spheres = [_sphere(around, radius, kernel) for around in surroundings]
+        keep = [i for i, cells in enumerate(spheres) if cells]
+        spheres, resistances = [spheres[i] for i in keep], [resistances[i] for i in keep]
+        judged = [
+            (group, scale * _decay_rate([(resistances[i], spheres[i]) for i in group])) for group in _groups(spheres)
+        ]
+        unstable = [(rate / limit, group) for group, rate in judged if rate > limit]
+        if unstable:
+            worst, group = max(unstable)
+            lowest = min(group, key=lambda i: resistances[i])
             found.append(diagnostic(
                 "error", "pvj_resistance_below_stability_bound",
-                f"{document}: {len(low)} of {junctions} junctions of {block} have a resistance below the bound under "
-                f"which the tissue's Vm near the junction alternates in sign and grows. With pvjCouplingScheme "
-                f"explicit the bound is R = {form}, dt {dt:g} s, chi*cm {chi * cm:g} F/m^3, over the cells within "
-                f"pvjRadius {radius:g} m. The worst, junction {worst}, has a resistance of {resistances[worst]:g} "
-                f"ohm against a bound of {bound:.4g} ohm over {cells} cells. Raise the resistance, shorten deltaT, "
-                "or use pvjCouplingScheme implicit.",
+                f"{document}: {sum(len(g) for _, g in unstable)} junctions of {block}, in {len(unstable)} groups of "
+                f"junctions that share cells, have resistances below the bound under which the tissue's Vm near the "
+                f"junction alternates in sign and grows. With pvjCouplingScheme explicit the bound is R = {form}; "
+                f"dt {dt:g} s, chi*cm {chi * cm:g} F/m^3, cells within pvjRadius {radius:g} m. The worst group has "
+                f"{len(group)} junctions and a rate times dt of {worst * limit:.4g} against {limit:g}: its lowest "
+                f"resistance, {resistances[lowest]:g} ohm, would have to be {resistances[lowest] * worst:.4g} ohm, "
+                f"with the others raised alike. Raise the resistances, shorten deltaT, or use a coupling solved "
+                f"implicitly (pvjCouplingScheme implicit).{capped}",
+                source=document, field=block + ".rPvj",
+            ))
+            continue
+        rippling = [(rate / limit, group) for group, rate in judged if rate > limit / 2]
+        if rippling:
+            worst, group = max(rippling)
+            found.append(diagnostic(
+                "info", "pvj_stability_ripple",
+                f"{document}: {len(rippling)} groups of junctions of {block} are stable but within a factor 2 of the "
+                f"bound: the rate times dt of the worst, {len(group)} junctions, is {worst * limit:.4g} against "
+                f"{limit:g}, so the tissue's Vm near them carries a decaying ripple that alternates in sign each step.",
                 source=document, field=block + ".rPvj",
             ))
     return found

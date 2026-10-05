@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 
 import pytest
@@ -1314,89 +1315,154 @@ def test_a_case_without_a_mesh_is_judged_against_none(tmp_path):
 
 # -------- the explicit junction term against the time step --------
 #
-# The slab is the cell geometry of purkinjeRestitution2D (0.333 mm cells, 0.1 mm thick) made by blockMesh, and its
-# junction sits on a cell corner, as the one that diverged there did: twelve cells within 0.6 mm, a linear kernel.
+# The slab is the cell geometry of purkinjeRestitution2D (0.333 mm cells, 0.1 mm thick) made by blockMesh
+# (fixtures/slab_mesh/blockMeshDict). A junction on a cell corner has twelve cells within 0.6 mm, as the one that
+# diverged there did; each case below gives the junctions' graph beside it.
 
-_SLAB_MESH = Path(__file__).resolve().parents[2] / "omnidriver-openfoam" / "tests" / "core" / "fixtures" / "slab_mesh" / "ascii"
-_SLAB_GRAPH = (
-    "FoamFile { version 2.0; format ascii; class dictionary; object purkinjeGraph; }\n"
-    "conductionEdges ((0 1 0.001 1));\npoints ((0 0 0) (0.002 0.002 0.00005));\n"
-    "pvjNodes (1);\npvjLocations ((0.002 0.002 0.00005));\nrootNode 0;\n"
-)
+_SLAB_MESH = Path(__file__).parent / "fixtures" / "slab_mesh"
+_CELL = 1e-3 / 3
+_GRAPH_HEAD = "FoamFile { version 2.0; format ascii; class dictionary; object purkinjeGraph; }\n"
 
 
-def _slab_bound(dt=5e-5, chi_cm=1400.0, limit=4.0):
-    """The explicit scheme's bound for that junction, from the cell centres' offsets in the grid."""
-    cell = 1e-3 / 3
-    weights = [
-        1.0 - (cell * ((i + 0.5) ** 2 + (j + 0.5) ** 2) ** 0.5) / 0.6e-3
-        for i in range(-2, 2) for j in range(-2, 2) if cell * ((i + 0.5) ** 2 + (j + 0.5) ** 2) ** 0.5 <= 0.6e-3
+def _slab_graph(*locations):
+    """A graph with a root and one node per junction, each junction at a ``location`` (in cells from the slab's corner)."""
+    nodes = len(locations) + 1
+    edges = " ".join(f"({i} {i + 1} 0.001 1)" for i in range(nodes - 1))
+    points = " ".join(f"({x * _CELL:g} {y * _CELL:g} 5e-05)" for x, y in [(0, 0), *locations])
+    junctions = " ".join(f"({x * _CELL:.9g} {y * _CELL:.9g} 5e-05)" for x, y in locations)
+    return (
+        _GRAPH_HEAD + f"conductionEdges ({edges});\npoints ({points});\npvjNodes ({' '.join(map(str, range(1, nodes)))});\n"
+        f"pvjLocations ({junctions});\nrootNode 0;\n"
+    )
+
+
+def _weights(location, radius=0.6e-3):
+    """``{cell: kernel weight}`` of the slab's cells with a centre within ``radius``, for a linear kernel."""
+    found = {}
+    for i in range(12):
+        for j in range(12):
+            distance = ((location[0] * _CELL - (i + 0.5) * _CELL) ** 2 + (location[1] * _CELL - (j + 0.5) * _CELL) ** 2) ** 0.5
+            if distance <= radius:
+                found[i, j] = 1.0 - distance / radius
+    return found
+
+
+def _bound_factor(*locations):
+    """``dt/(chi*cm*A)`` times the largest eigenvalue of ``N_lk = sum_j w_lj w_kj V_j / (V_l V_k)`` (R = 1), from the
+    cells' weights alone, for one or two junctions."""
+    volume = _CELL * _CELL * 1e-4
+    sets = [_weights(location) for location in locations]
+    totals = [sum(w * volume for w in cells.values()) for cells in sets]
+    n = [
+        [sum(a.get(c, 0.0) * b.get(c, 0.0) * volume for c in set(a) | set(b)) / (totals[i] * totals[j])
+         for j, b in enumerate(sets)]
+        for i, a in enumerate(sets)
     ]
-    volume = cell * cell * 1e-4
-    assert len(weights) == 12
-    return dt / (chi_cm * limit) * sum(w * w * volume for w in weights) / (sum(w * volume for w in weights)) ** 2
+    if len(n) == 1:
+        largest = n[0][0]
+    else:
+        mean, gap = (n[0][0] + n[1][1]) / 2, ((n[0][0] - n[1][1]) / 2) ** 2 + n[0][1] * n[1][0]
+        largest = mean + gap ** 0.5
+    return 5e-5 / (1400.0 * 4.0) * largest
 
 
-def _stability_findings(tmp_path, *, rpvj, scheme="explicit", ddt="backward", mesh=True, graph=_SLAB_GRAPH):
-    import shutil
-
+def _stability_findings(tmp_path, *, rpvj, graph, scheme="explicit", ddt="backward", mesh=True, coupler=None, kernel="linear"):
     from omnidriver.cardiacfoam.validation import case_diagnostics
 
-    electro = _build_pvj_case(tmp_path, set_rpvj=True, rpvj=rpvj, scheme=scheme, pvj_radius="0.0006")
-    electro.write_text(re.sub(r"pvjKernel\s+\w+;", "pvjKernel linear;", electro.read_text()))
+    electro = _build_pvj_case(tmp_path, set_rpvj=True, rpvj=rpvj, scheme=scheme, pvj_radius="0.0006",
+                              coupler=coupler or "reactionDiffusionPvjCoupler",
+                              conduction_solver="eikonalSolver1D" if coupler == "eikonalMonodomainPvjCoupler" else "monodomain1DSolver")
+    electro.write_text(re.sub(r"pvjKernel\s+\w+;", f"pvjKernel {kernel};", electro.read_text()))
     (tmp_path / "constant" / "purkinjeGraph").write_text(graph)
     (tmp_path / "system").mkdir()
     header = "FoamFile { version 2.0; format ascii; class dictionary; object x; }\n"
     (tmp_path / "system" / "controlDict").write_text(header + "deltaT 5e-5;\n")
     (tmp_path / "system" / "fvSchemes").write_text(header + f"ddtSchemes {{ default {ddt}; }}\n")
     if mesh:
-        shutil.copytree(_SLAB_MESH, tmp_path / "constant" / "polyMesh")
+        (tmp_path / "constant" / "polyMesh").mkdir()
+        for name in ("points", "faces", "owner", "neighbour"):
+            shutil.copy(_SLAB_MESH / name, tmp_path / "constant" / "polyMesh" / name)
     return [
         (item.level, item.code, item.message) for item in case_diagnostics(tmp_path)
         if item.code.startswith("pvj_") and item.code != "pvj_location_off_node"
     ]
 
 
-def test_the_slab_bound_is_the_one_derived_for_the_diverged_probe():
-    assert _slab_bound() == pytest.approx(110.6, abs=0.1)
+_CORNER = (6, 6)
 
 
-@pytest.mark.parametrize("rpvj,refused", [("90", True), ("105", True), ("110", True), ("111", False), ("115", False), ("150", False)])
-def test_an_explicit_junction_below_the_stability_bound_is_refused(tmp_path, rpvj, refused):
-    """90, 105 and 110 ohm crashed on this geometry; 115, 125 and 150 ran."""
-    found = _stability_findings(tmp_path, rpvj=rpvj)
-    assert [(level, code) for level, code, _ in found] == ([("error", "pvj_resistance_below_stability_bound")] if refused else [])
-    if refused:
-        message = found[0][2]
-        assert f"resistance of {rpvj} ohm against a bound of {_slab_bound():.4g} ohm over 12 cells" in message
-        assert "dt 5e-05 s, chi*cm 1400 F/m^3" in message and "A = 4 (ddtSchemes backward)" in message
+@pytest.mark.parametrize("rpvj,code", [("90", "error"), ("105", "error"), ("110", "error"), ("111", "info"), ("115", "info"), ("150", "info"), ("300", None)])
+def test_an_explicit_junction_below_the_stability_bound_is_refused(tmp_path, rpvj, code):
+    """90, 105 and 110 ohm crashed on this geometry, and 115, 125 and 150 ran; within twice the bound the ripple is noted."""
+    found = _stability_findings(tmp_path, rpvj=rpvj, graph=_slab_graph(_CORNER))
+    assert [level for level, _, _ in found] == ([code] if code else [])
+    if code == "error":
+        assert found[0][1] == "pvj_resistance_below_stability_bound"
+        assert f"its lowest resistance, {rpvj} ohm, would have to be 110.6 ohm" in found[0][2]
+        assert "dt 5e-05 s, chi*cm 1400 F/m^3" in found[0][2] and "A = 4 for ddtSchemes backward" in found[0][2]
+    if code == "info":
+        assert found[0][1] == "pvj_stability_ripple"
 
 
 @pytest.mark.parametrize("rpvj,refused", [("200", True), ("230", False)])
 def test_euler_doubles_the_bound_backward_allows(tmp_path, rpvj, refused):
     """Euler tolerates a decay rate times dt of 2, backward of 4."""
-    assert _slab_bound(limit=2.0) == pytest.approx(_slab_bound() * 2)
-    found = _stability_findings(tmp_path, rpvj=rpvj, ddt="Euler")
-    assert [code for _, code, _ in found] == (["pvj_resistance_below_stability_bound"] if refused else [])
+    found = _stability_findings(tmp_path, rpvj=rpvj, graph=_slab_graph(_CORNER), ddt="Euler")
+    assert ("error" in [level for level, _, _ in found]) == refused
+
+
+@pytest.mark.parametrize("coupler", ["reactionDiffusionPvjCoupler", "eikonalMonodomainPvjCoupler"])
+def test_both_couplers_that_deposit_the_explicit_term_are_judged(tmp_path, coupler):
+    found = _stability_findings(tmp_path, rpvj="50", graph=_slab_graph(_CORNER), coupler=coupler)
+    assert [code for _, code, _ in found] == ["pvj_resistance_below_stability_bound"]
+
+
+def test_junctions_that_share_cells_have_one_bound_above_each_alone(tmp_path):
+    """Two junctions a third of a cell apart gather mostly the same cells, so the term they put on them adds up."""
+    here, beside = (6, 6), (6.3, 6)
+    alone, together = _bound_factor(here), _bound_factor(here, beside)
+    assert together > 1.5 * alone
+    between = (alone + together) / 2
+    refused = _stability_findings(tmp_path, rpvj=f"{together * 0.98:.6g}", graph=_slab_graph(here, beside))
+    assert [code for _, code, _ in refused] == ["pvj_resistance_below_stability_bound"]
+    assert "in 1 groups of junctions that share cells" in refused[0][2]
+    assert f"would have to be {together:.4g} ohm" in refused[0][2]
+    (tmp_path / "again").mkdir()
+    passed = _stability_findings(tmp_path / "again", rpvj=f"{together * 1.02:.6g}", graph=_slab_graph(here, beside))
+    assert "pvj_resistance_below_stability_bound" not in [code for _, code, _ in passed]
+    # a resistance between the bounds is below the group's but above each junction's alone
+    assert alone < between < together
+    (tmp_path / "third").mkdir()
+    judged_alone = _stability_findings(tmp_path / "third", rpvj=f"{between:.6g}", graph=_slab_graph(here, (1, 1)))
+    assert "pvj_resistance_below_stability_bound" not in [code for _, code, _ in judged_alone]
 
 
 def test_a_resistance_the_graph_lists_stands_in_for_rpvj(tmp_path):
-    found = _stability_findings(tmp_path, rpvj="10000", graph=_SLAB_GRAPH + "pvjResistances (100);\n")
+    found = _stability_findings(tmp_path, rpvj="10000", graph=_slab_graph(_CORNER) + "pvjResistances (100);\n")
     assert [code for _, code, _ in found] == ["pvj_resistance_below_stability_bound"]
 
 
 def test_an_implicit_junction_is_not_judged(tmp_path):
-    assert _stability_findings(tmp_path, rpvj="1", scheme="implicit") == []
+    assert _stability_findings(tmp_path, rpvj="1", scheme="implicit", graph=_slab_graph(_CORNER)) == []
 
 
 def test_a_case_without_a_mesh_reports_the_bound_it_can_compute(tmp_path):
-    (level, code, message), = _stability_findings(tmp_path, rpvj="1", mesh=False)
+    (level, code, message), = _stability_findings(tmp_path, rpvj="1", mesh=False, graph=_slab_graph(_CORNER))
     assert (level, code) == ("info", "pvj_stability_unjudged")
-    assert "before the mesh exists" in message and "dt/(chi*cm*A) is 8.929e-09 ohm m^3" in message
+    assert "before the mesh exists" in message and "dt/(chi*cm) is 3.571e-08 ohm m^3/A" in message
+
+
+def test_a_compressed_mesh_is_said_to_be_unreadable_not_absent(tmp_path):
+    from omnidriver.cardiacfoam.validation import case_diagnostics
+
+    _stability_findings(tmp_path, rpvj="1", graph=_slab_graph(_CORNER))
+    (tmp_path / "constant" / "polyMesh" / "faces").rename(tmp_path / "constant" / "polyMesh" / "faces.gz")
+    (message,) = [item.message for item in case_diagnostics(tmp_path) if item.code == "pvj_stability_unjudged"]
+    assert "since omniD cannot read the mesh" in message and "faces.gz is compressed" in message
 
 
 def test_a_time_scheme_whose_limit_is_unknown_is_not_judged(tmp_path):
-    (level, code, message), = _stability_findings(tmp_path, rpvj="1", ddt="CrankNicolson")
+    (level, code, message), = _stability_findings(tmp_path, rpvj="1", ddt="CrankNicolson", graph=_slab_graph(_CORNER))
     assert (level, code) == ("info", "pvj_stability_unjudged") and "'CrankNicolson'" in message
 
 
