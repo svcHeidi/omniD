@@ -159,15 +159,14 @@ def _pair(index: int, raw: Mapping[str, Any], request: Mapping[str, Any], refere
                  raw["right"]["quantity"], tolerance, raw.get("note"))
 
 
-def _names_by_run(request: Mapping[str, Any]) -> dict[str, tuple[str, ...]]:
-    """The quantities each run is asked for, in request order, from every pair whatever else is wrong with it."""
+def _names_by_run(pairs: Iterable[_Pair]) -> dict[str, tuple[str, ...]]:
+    """The quantities each run is asked for by the pairs that are sound, in request order."""
     names: dict[str, list[str]] = {}
-    for raw in request["pairs"]:
-        for side in ("left", "right"):
-            if raw[side]["run"] in request["runs"]:
-                listed = names.setdefault(raw[side]["run"], [])
-                if raw[side]["quantity"] not in listed:
-                    listed.append(raw[side]["quantity"])
+    for pair in pairs:
+        for run, quantity in ((pair.left_run, pair.left_quantity), (pair.right_run, pair.right_quantity)):
+            listed = names.setdefault(run, [])
+            if quantity not in listed:
+                listed.append(quantity)
     return {name: tuple(listed) for name, listed in names.items()}
 
 
@@ -226,7 +225,11 @@ def _run_evidence(case: SweepCase) -> dict[str, str] | None:
     return {"case_id": case.case_id, "workflow_digest": digest, "input_provenance_digest": aggregate}
 
 
-def _resolve_run(name: str, raw: Mapping[str, Any], *, base: Path, reference_unit: str, names: tuple[str, ...]) -> _Run:
+def _resolve_run(
+    name: str, raw: Mapping[str, Any], *, base: Path, reference_unit: str, names: tuple[str, ...] | None,
+) -> _Run:
+    """``names`` is what the run's sound pairs ask of it; ``None`` when a pair naming it was refused, so its points
+    are not judged against an incomplete list."""
     sweep_output = _resolve(base, raw["sweep_output"])
     try:
         context = build_sweep_context(sweep_output)
@@ -270,7 +273,7 @@ def _resolve_run(name: str, raw: Mapping[str, Any], *, base: Path, reference_uni
             check_convertible(reader.value_unit, reference_unit)
         except QuantityError as exc:
             raise QuantityComparisonError(f"run {name!r}: {exc}") from exc
-        points, max_offset = _points(name, raw, reader, names)
+        points, max_offset = ({}, None) if names is None else _points(name, raw, reader, names)
     return _Run(name, raw["plugin"], stack, sweep_output, case, artifact, reader, points, max_offset, _run_evidence(case))
 
 
@@ -435,28 +438,36 @@ def run_quantity_comparison(request_path: str | Path, report_path: str | Path) -
         raise QuantityComparisonError(f"cannot read the comparison request {request_path}: {exc}") from exc
     schema_problems = schema_errors(request, _REQUEST_SCHEMA)
     if schema_problems:
-        raise QuantityComparisonError(f"{request_path} is not a comparison request: " + "; ".join(schema_problems))
+        raise QuantityComparisonError(*(f"not a comparison request ({request_path}): {problem}" for problem in schema_problems))
     base = request_path.parent
     try:
         reference = load_point_reference(_resolve(base, request["reference"]))
+        default = Tolerance.from_json(request["tolerance"], where="the request", reference_unit=reference.quantity_unit)
     except QuantityError as exc:
-        raise QuantityComparisonError(str(exc)) from exc
-    default = Tolerance.from_json(request["tolerance"], where="the request", reference_unit=reference.quantity_unit)
+        raise QuantityComparisonError(
+            f"{exc}; the pairs and runs were not checked, since they depend on the reference and the default tolerance"
+        ) from exc
     errors: list[str] = []
-    pairs = []
+    pairs: list[_Pair] = []
+    refused_runs: set[str] = set()
     for index, raw in enumerate(request["pairs"]):
         try:
             pairs.append(_pair(index, raw, request, reference, default, base=base))
         except QuantityComparisonError as exc:
             errors.extend(exc.errors)
-    names_by_run = _names_by_run(request)
-    errors.extend(f"run {name!r} is named but no pair uses it" for name in sorted(set(request["runs"]) - set(names_by_run)))
+            refused_runs.update(side["run"] for side in (raw["left"], raw["right"]))
+    names_by_run = _names_by_run(pairs)
+    named = {side["run"] for raw in request["pairs"] for side in (raw["left"], raw["right"])}
+    errors.extend(f"run {name!r} is named but no pair uses it" for name in sorted(set(request["runs"]) - named))
     runs = {}
     for name, raw in request["runs"].items():
-        if name not in names_by_run:
+        if name not in named:
             continue
         try:
-            runs[name] = _resolve_run(name, raw, base=base, reference_unit=reference.quantity_unit, names=names_by_run[name])
+            runs[name] = _resolve_run(
+                name, raw, base=base, reference_unit=reference.quantity_unit,
+                names=None if name in refused_runs else names_by_run[name],
+            )
         except QuantityComparisonError as exc:
             errors.extend(exc.errors)
     if errors:
