@@ -352,7 +352,10 @@ records them in `sweep_manifest.json` (the shared `base_study`, and per case its
 start time, outcome and, when it failed, why). A case that did not complete
 carries the child's own `error`, `environment_diagnostics` and `failure_context`
 (with the failed step's diagnostics, such as `solver_entry_missing`) in its
-summary and manifest entry. A sweep does not resume across
+summary and manifest entry (the manifest keeps the failed step's diagnostics and log
+paths, not the log text). A sweep ended by SIGTERM or SIGINT marks its running case
+`stopped` in the manifest, prints its report with `status: "failed"` and exits with the
+signal's code; resume that case with `step`. A sweep does not resume across
 invocations: an `--output-dir` that already holds a manifest is refused by
 name, and `--fresh` clears the `--output-dir` (it must hold a
 `sweep_manifest.json`; the spec is validated first) and starts over.
