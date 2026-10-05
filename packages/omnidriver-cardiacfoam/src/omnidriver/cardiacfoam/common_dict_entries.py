@@ -177,7 +177,7 @@ PURKINJE_GRAPH_DOCUMENT = "purkinjeGraph"
 
 PURKINJE_GRAPH_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
-        driver_path="conductionEdges", phases=frozenset({"anatomy"}), value_kind="scalar_list", required=True,
+        driver_path="conductionEdges", phases=frozenset({"anatomy"}), value_kind="scalar_list_list", required=True,
         description=(
             "The edges of the conduction tree, one (nodeA nodeB length conductance) entry each. Node indices "
             "count from 0, and the graph has one node more than the largest index. length is the edge length "
@@ -193,7 +193,7 @@ PURKINJE_GRAPH_ENTRIES: Final[tuple[DictEntry, ...]] = (
             _SOLVERS + "restitutionEikonalSolver1D/restitutionEikonalSolver1D.C", _GRAPH_WRITER,
         ),
         constraints=(
-            "Each entry is itself a list of four numbers; the catalogue has no value kind for a list of lists.",
+            "Each entry is a list of four numbers.",
             "A tree: one edge fewer than nodes, and every node reached from node 0.",
             "A conductance of 0 blocks the edge in monodomain1DSolver and restitutionEikonalSolver1D.",
         ),

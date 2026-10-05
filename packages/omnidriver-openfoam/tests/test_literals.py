@@ -11,6 +11,8 @@ from omnidriver.openfoam.literals import (
     format_vector3_list_literal,
     format_vector3_literal,
     list_elements,
+    format_scalar_list_list_literal,
+    parse_scalar_list_list_literal,
     parse_scalar_list_literal,
     parse_vector3_list_literal,
     parse_vector3_literal,
@@ -69,6 +71,12 @@ def test_a_count_that_is_not_the_number_of_elements_is_refused():
         list_elements("3(1 2)")
 
 
+def test_a_list_of_scalar_lists_round_trips_byte_for_byte():
+    text = "((0 1 0.5 1) (1 2 0.5 1))"
+    assert format_scalar_list_list_literal(parse_scalar_list_list_literal(text)) == text
+    assert parse_scalar_list_list_literal("2(4(0 1 0.5 1)4(1 2 0.5 1))") == ((0, 1, 0.5, 1), (1, 2, 0.5, 1))
+
+
 def test_a_malformed_list_literal_is_refused():
     with pytest.raises(ValueError, match="list"):
         parse_scalar_list_literal("1 2 3")
@@ -77,7 +85,7 @@ def test_a_malformed_list_literal_is_refused():
 def test_every_container_kind_has_a_formatter_and_boolean_has_none():
     assert set(CONTAINER_FORMATTERS) == {
         "dimensioned_scalar", "dimensioned_tensor", "vector3", "word_list", "scalar_list",
-        "integer_list", "vector3_list",
+        "integer_list", "vector3_list", "scalar_list_list",
     }
 
 

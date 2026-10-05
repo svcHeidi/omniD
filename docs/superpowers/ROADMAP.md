@@ -234,13 +234,6 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - whether the native code should check the length of `pvjResistances` and
      the range of `rootStimulus.node`;
 
-   `conductionEdges` is a list of four-number lists, which no value kind
-   states: core's closed `VALUE_KINDS` has no list of lists, and a `DictEntry`
-   must name one of them, so it is declared `scalar_list`, which is false of
-   its elements. The graph check (`validation._graph_breaks`) judges each
-   edge's four values; the value kind is never checked, since no study writes
-   the graph. Owner decision: a list-of-lists kind in core, or a way for an
-   entry to declare none.
 4. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the
    solver changed.

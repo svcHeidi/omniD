@@ -1151,6 +1151,7 @@ _KINDS_BY_TYPE: dict[str, frozenset[str]] = {
     "pointField": frozenset({"vector3_list"}),
     "List<vector>": frozenset({"vector3_list"}),
     "List<point>": frozenset({"vector3_list"}),
+    "List<scalarList>": frozenset({"scalar_list_list"}),
     "dimensionedScalar": frozenset({"dimensioned_scalar", "scalar"}),
     "dimensioned<scalar>": frozenset({"dimensioned_scalar", "scalar"}),
     "dimensionedTensor": frozenset({"dimensioned_tensor"}),

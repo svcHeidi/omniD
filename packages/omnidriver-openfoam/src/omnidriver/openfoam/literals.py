@@ -158,6 +158,15 @@ def format_scalar_list_literal(value: Sequence[Any]) -> str:
     return "(" + " ".join(_format_number(item) for item in value) + ")"
 
 
+def parse_scalar_list_list_literal(text: str) -> tuple[tuple[float, ...], ...]:
+    """Parse ``"((0 1 0.5 1) (1 2 0.5 1))"`` into a tuple of scalar tuples."""
+    return tuple(parse_scalar_list_literal(token) for token in list_elements(text))
+
+
+def format_scalar_list_list_literal(value: Sequence[Sequence[Any]]) -> str:
+    return "(" + " ".join(format_scalar_list_literal(item) for item in value) + ")"
+
+
 def format_integer_list_literal(value: Sequence[Any]) -> str:
     return "(" + " ".join(str(int(item)) for item in value) + ")"
 
@@ -241,6 +250,7 @@ CONTAINER_FORMATTERS = {
     "scalar_list": format_scalar_list_literal,
     "integer_list": format_integer_list_literal,
     "vector3_list": format_vector3_list_literal,
+    "scalar_list_list": format_scalar_list_list_literal,
 }
 
 

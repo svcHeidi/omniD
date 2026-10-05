@@ -35,6 +35,7 @@ def test_every_declared_kind_is_accepted(kind):
     ("scalar_list", (1.0, 2.0, 3.0)),
     ("vector3_list", ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))),
     ("integer_list", (0, 1, 2)),
+    ("scalar_list_list", ((0, 1, 0.5, 1), (1, 2, 0.5, 1))),
     ("mapping", {"s1_interval_ms": 2000, "n_s1": 10}),
 ])
 def test_a_well_shaped_value_passes(kind, value):
@@ -62,6 +63,8 @@ def test_a_well_shaped_value_passes(kind, value):
     ("word_list", ("alpha", ""), "empty"),
     ("scalar_list", ("1", "2"), "number"),
     ("integer_list", (1.5,), "integer"),
+    ("scalar_list_list", (1.0, 2.0), "sequence"),
+    ("scalar_list_list", ((1.0, "2"),), "number"),
     # `bytes` is a `collections.abc.Sequence`, so a branch that excludes only
     # `str` (not `(str, bytes)`) would let `b"abc"` through as three "numbers".
     ("vector3", b"abc", "three"),

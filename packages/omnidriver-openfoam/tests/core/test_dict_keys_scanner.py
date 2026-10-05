@@ -1271,3 +1271,10 @@ def test_a_read_through_a_dictionary_the_scan_cannot_place_may_be_of_any_documen
     assert sorted(note["key"] for note in report["uncatalogued"]) == ["enabled", "maxBeats", "minBeats", "tolerance"]
     assert all("documents" not in note for note in report["uncatalogued"])
     assert report["unread"] == []
+
+
+def test_a_list_of_scalar_lists_is_read_as_its_own_kind():
+    """conductionGraph::readFromDict reads conductionEdges as get<List<scalarList>>."""
+    from omnidriver.openfoam.dict_keys_scanner import value_kind_of
+
+    assert value_kind_of("List<scalarList>") == value_kind_of("Foam::List<Foam::scalarList>") == "scalar_list_list"

@@ -29,7 +29,7 @@ from .catalogue_paths import PLACEHOLDER
 VALUE_KINDS = frozenset({
     "scalar", "integer", "boolean", "word", "enum", "vector3",
     "dimensioned_scalar", "dimensioned_tensor",
-    "word_list", "scalar_list", "vector3_list", "integer_list",
+    "word_list", "scalar_list", "vector3_list", "integer_list", "scalar_list_list",
     "mapping", "string",
 })
 
@@ -39,6 +39,7 @@ _LIST_ELEMENT_KIND = {
     "scalar_list": "scalar",
     "vector3_list": "vector3",
     "integer_list": "integer",
+    "scalar_list_list": "scalar_list",
 }
 
 
