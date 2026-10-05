@@ -952,7 +952,7 @@ def write_toy_sweep(output_dir: Path, cases: Mapping[str, str | None], *, plugin
             case_id=case_id, resolved_axis_values={}, override_hash="sha256:none",
             run_document_path=f"cases/{case_id}/run_document.json",
             workflow_state_path=f"cases/{case_id}/workflow_state.json",
-            status=status, outcome="fresh", started_at=None, updated_at="2026-09-26T00:00:00+00:00",
+            sweep_outcome=status, outcome="fresh", started_at=None, updated_at="2026-09-26T00:00:00+00:00",
         ))
     write_manifest(output_dir / "sweep_manifest.json", SweepManifest(
         schema_version="1.0", sweep_spec_hash="sha256:toy", created_at="2026-09-26T00:00:00+00:00",

@@ -69,8 +69,9 @@ def test_plan_then_run_document_round_trip_executes(tmp_path) -> None:
     assert case_record_path.exists()
     case_record = json.loads(case_record_path.read_text())
     # setup_root flows from the RunDocument's own launch.setupRoot into the
-    # standalone case record, the same way it does for a sweep case.
-    assert case_record["setup_root"] == document["launch"]["setupRoot"]
+    # standalone case record, the same way it does for a sweep case, relative to the record's folder.
+    assert (case_record_path.parent / case_record["setup_root"]).resolve() == Path(document["launch"]["setupRoot"]).resolve()
+    assert "status" not in case_record
 
 
 def test_step_via_run_document_executes_named_step(tmp_path) -> None:

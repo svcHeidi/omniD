@@ -760,7 +760,8 @@ def test_a_sweep_case_has_one_folder_holding_its_case_run_document_state_and_rec
         record = json.loads((folder / "case_record.json").read_text())
         assert record["case_id"] == case["case_id"]
         assert record["resolved_axis_values"]["number_cells"] in (2, 3)
-        assert record["run_document_path"] == case["run_document_path"]
+        assert "status" not in record
+        assert (record["run_document_path"], record["workflow_state_path"]) == ("run_document.json", "workflow_state.json")
         document = json.loads((folder / "run_document.json").read_text())
         assert str(folder / "run_document.json") in document["launch"]["command"]
 
@@ -770,7 +771,7 @@ def test_the_manifest_stamps_a_case_before_its_child_starts_and_records_the_base
 
     def child(cmd, **kwargs):
         manifest = json.loads((tmp_path / "out" / "sweep_manifest.json").read_text())
-        seen.append([(c["case_id"], c["status"], c["started_at"] is not None) for c in manifest["cases"]])
+        seen.append([(c["case_id"], c["sweep_outcome"], c["started_at"] is not None) for c in manifest["cases"]])
         return _completing_child(cmd, **kwargs)
 
     _run_toy_sweep(tmp_path, child)

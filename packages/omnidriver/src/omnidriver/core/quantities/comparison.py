@@ -17,7 +17,7 @@ from ..experiments import ComparisonRequest, read_json_object
 from ..plugin_interface import load_plugin_context
 from ..provider_identity import stack_identity_mismatch
 from ..runtime.models import DataArtifact, data_artifact_from_json
-from ..runtime.case_records import CaseRecord, build_sweep_context
+from ..runtime.case_records import SweepCase, build_sweep_context
 from ..runtime.reconciler import reconcile_artifacts
 from .errors import QuantityComparisonError, QuantityError
 from .model import Point, Quantity, ReadRequest, not_evaluated
@@ -113,7 +113,7 @@ class _Run:
     plugin: str
     stack: tuple[str, ...]
     sweep_output: Path
-    case: CaseRecord
+    case: SweepCase
     artifact: DataArtifact
     reader: Any | None
     points: Mapping[str, Point]
@@ -216,7 +216,7 @@ def _points(name: str, raw: Mapping[str, Any], reader: Any, names: tuple[str, ..
     return points, max_offset
 
 
-def _run_evidence(case: CaseRecord) -> dict[str, str] | None:
+def _run_evidence(case: SweepCase) -> dict[str, str] | None:
     state = read_json_object(Path(case.workflow_state_path))
     snapshot = state.get("resume_snapshot")
     digest = state.get("workflow_digest")

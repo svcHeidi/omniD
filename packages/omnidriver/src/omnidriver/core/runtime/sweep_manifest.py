@@ -20,9 +20,10 @@ class CaseManifestEntry:
     override_hash: str
     run_document_path: str
     workflow_state_path: str
-    #: What the sweep saw when it finished the case. The case's own
-    #: ``workflow_state.json`` is the current status; ``build_sweep_context`` reads that.
-    status: str  # "pending" | "running" | "completed" | "failed"
+    #: What the sweep observed of the case: ``running`` while it ran, then the status its workflow state had when
+    #: the sweep finished with it, or ``stopped`` when a signal ended the sweep. The case's current status is its
+    #: ``workflow_state.json``, which ``build_sweep_context`` reads.
+    sweep_outcome: str  # "running" | "completed" | "failed" | "pending" | "stopped"
     outcome: str  # "fresh" | "skipped" | "retried"
     started_at: str | None
     updated_at: str

@@ -20,7 +20,6 @@ from .core.runtime.workflow_state import workflow_state_from_json
 from .core.runtime.case_records import (
     CASE_RECORD_FILENAME,
     build_standalone_case_record,
-    refresh_case_record,
     write_case_record,
 )
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
@@ -198,8 +197,6 @@ def _execute_step(
             payload["workflow_state_path"] = str(state_path)
         print(json.dumps(payload, indent=2))
         return 1
-    finally:
-        refresh_case_record(output_dir)
     payload = dict(result.payload)
     if result.status != "rejected":
         payload["artifact_reconciliation"] = _reconciliation_payload(
@@ -238,6 +235,11 @@ def _execute_run(
 ) -> int:
     """Run a workflow to completion and print the JSON payload; refuses to auto-resume a terminally failed saved state (use action=step)."""
     state_path = output_dir / STATE_FILENAME
+    case_record_path = output_dir / CASE_RECORD_FILENAME
+    if not case_record_path.exists():
+        write_case_record(case_record_path, build_standalone_case_record(
+            entry=entry_label, case_root=case_root, setup_root=setup_root, output_dir=output_dir,
+        ))
     workflow_state = planned_state
     replayed = False
     if state_path.exists():
@@ -314,11 +316,6 @@ def _execute_run(
     payload["artifact_reconciliation"] = _reconciliation_payload(
         case_root, expected_artifacts, driver_context=driver_context,
     )
-    case_record = build_standalone_case_record(
-        entry=entry_label, case_root=case_root, setup_root=setup_root, output_dir=output_dir,
-    )
-    case_record_path = output_dir / CASE_RECORD_FILENAME
-    write_case_record(case_record_path, case_record)
     payload["case_record_path"] = str(case_record_path)
     _attach_failure_context(payload, workflow_state, workflow_state.failed_step_id, tail_lines=tail_lines)
     print(json.dumps(payload, indent=2))

@@ -54,7 +54,7 @@ def _case(output_dir: Path, case_id: str, *, status: str) -> CaseManifestEntry:
         override_hash=f"sha256:override-{case_id}",
         run_document_path=f"{case_id}/run_document.json",
         workflow_state_path=f"{case_id}/outputs/workflow_state.json",
-        status=status,
+        sweep_outcome=status,
         outcome="fresh",
         started_at="2026-09-10T12:00:00+00:00",
         updated_at="2026-09-10T12:01:00+00:00",

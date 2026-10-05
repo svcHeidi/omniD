@@ -65,7 +65,7 @@ def sweeps(runs: Path) -> dict[tuple[Path, str], dict]:
             state = json.loads(state_path.read_text()) if state_path.is_file() else {}
             table[(output.resolve(), case["case_id"])] = {
                 "sweep": output.relative_to(runs) if output.is_relative_to(runs) else output,
-                "values": case.get("resolved_axis_values", {}), "status": case.get("status"),
+                "values": case.get("resolved_axis_values", {}), "status": state.get("status", "not_run"),
                 **_case_timings(state)}
     return table
 

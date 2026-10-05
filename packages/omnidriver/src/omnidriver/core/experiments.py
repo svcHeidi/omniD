@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from .runtime.case_records import CaseRecord, SweepContext, build_sweep_context
+from .runtime.case_records import SweepCase, SweepContext, build_sweep_context
 
 
 _COMPARISON_STATUSES = frozenset({"passed", "failed", "unavailable", "not_requested", "unknown"})
@@ -226,13 +226,13 @@ def _comparison_requests_by_case(
 
 def _inspect_case(
     context: SweepContext,
-    record: CaseRecord,
+    record: SweepCase,
     request: ComparisonRequest | None,
     *,
     comparison_limits: ComparisonReportLimits,
 ) -> ExperimentCase:
     state = read_json_object(Path(record.workflow_state_path))
-    execution_status = str(state.get("status", record.status)) if state else record.status
+    execution_status = record.status
     steps = tuple(
         dict(step) for step in state.get("steps", ())
         if isinstance(step, dict)
@@ -258,7 +258,7 @@ def _inspect_case(
     )
 
 
-def _expected_artifacts(context: SweepContext, record: CaseRecord) -> tuple[dict[str, Any], ...]:
+def _expected_artifacts(context: SweepContext, record: SweepCase) -> tuple[dict[str, Any], ...]:
     if not record.run_document_path:
         return ()
     path = Path(record.run_document_path)
@@ -270,7 +270,7 @@ def _expected_artifacts(context: SweepContext, record: CaseRecord) -> tuple[dict
     return tuple(dict(item) for item in raw_artifacts if isinstance(item, dict))
 
 
-def _output_status(record: CaseRecord, execution_status: str) -> str:
+def _output_status(record: SweepCase, execution_status: str) -> str:
     del execution_status
     if record.case_output_dir is None:
         return "unavailable"
@@ -279,7 +279,7 @@ def _output_status(record: CaseRecord, execution_status: str) -> str:
 
 def _read_comparison(
     context: SweepContext,
-    record: CaseRecord,
+    record: SweepCase,
     state: Mapping[str, Any],
     request: ComparisonRequest | None,
     *,
@@ -382,7 +382,7 @@ def _quantities_status(report: Mapping[str, Any], *, stated_status: str) -> tupl
 
 
 def _association_status(
-    report: Mapping[str, Any], record: CaseRecord, state: Mapping[str, Any],
+    report: Mapping[str, Any], record: SweepCase, state: Mapping[str, Any],
 ) -> str:
     """Verify a declared run identity; Core never verifies solver outputs."""
     evidence = report.get("run_evidence")

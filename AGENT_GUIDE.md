@@ -470,8 +470,10 @@ updated after every step, so the read above is safe at any instant.
 `build_sweep_context` (`core/runtime/case_records.py`) reads the sweep's own
 record (`sweep_manifest.json`) and returns one `SweepContext`: each case's
 status, resolved axis values and `workflow_state_path`. A case's status is what
-its own `workflow_state.json` says now, so a case a later `step` completed is
-completed for `compare`; the manifest keeps the status the sweep saw. Core never inspects
+its own `workflow_state.json` says now (`not_run` when no workflow was started), so a
+case a later `step` completed is completed for `compare`; the manifest keeps only
+what the sweep observed, as `sweep_outcome`. A case's `case_record.json` holds its
+identity and locations (relative to its own folder), never a status. Core never inspects
 solver output. If an agent needs deeper reasoning than the flat summary, it
 reads one case's `workflow_state.json` from the path the `SweepContext` records
 for it.

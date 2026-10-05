@@ -230,7 +230,7 @@ def _record_sweep_run(
             override_hash=compute_override_hash(study_by_source.get("sweep", {})),
             run_document_path=_relative_or_absolute(run_document_path, output_dir),
             workflow_state_path=_relative_or_absolute(workflow_state_path, output_dir),
-            status="running",
+            sweep_outcome="running",
             outcome="fresh",
             started_at=utc_now(),
             updated_at=utc_now(),
@@ -316,7 +316,7 @@ def _record_sweep_run(
         case_summary.update(failure)
         case_summaries.append(case_summary)
 
-        entry.status = status
+        entry.sweep_outcome = status
         entry.workflow_state_path = case_summary["workflow_state_path"]
         entry.updated_at = utc_now()
         entry.unchanged_patches = tuple(unchanged_patches)
