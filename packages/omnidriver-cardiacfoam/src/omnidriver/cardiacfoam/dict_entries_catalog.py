@@ -1277,7 +1277,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.graphFile',
             phases=frozenset({'physics', 'anatomy'}),
-            description="REQUIRED: Basename of the solver-facing graph dictionary in constant/. The value may name any graph dictionary produced by upstream preprocessing and may vary between study cases. The selected file must contain 'conductionEdges', 'points', 'pvjNodes', and 'pvjLocations'.",
+            description="REQUIRED: Basename of the solver-facing graph dictionary in constant/. The value may name any graph dictionary produced by upstream preprocessing and may vary between study cases. Its keys are the purkinjeGraph document's.",
             source_refs=('src/electroModels/electroDomains/conductionSystemDomain/conductionSystemDomain.C',),
             value_kind='word',
             allowed_bindings={"<name>": None},
@@ -1308,11 +1308,11 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.referenceConductance',
             phases=frozenset({'physics'}),
-            description='Reference conductance [S] used to normalize local edge conductances when scaling velocity. The solver divides each local graph conductance by this value; the resulting relative conductance may be below, equal to, or above 1.0.',
+            description="Reference conductance [S/m] used to normalize local edge conductances when scaling velocity. The solver divides each edge's conductance (the graph's value times purkinjeConductivity, the edge conductivity) by this value and scales the edge's velocity by the square root of the ratio, which may be below, equal to, or above 1.0.",
             source_refs=('src/electroModels/conductionSystemModels/restitutionEikonalSolver1D/restitutionEikonalSolver1D.C',),
             value_kind='scalar',
             allowed_bindings={"<name>": None},
-            unit='S',
+            unit='S/m',
             typical_value='1.0',
             applicable_when={"$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.conductionSystemSolver": ("restitutionEikonalSolver1D",)},
         ),
@@ -1555,7 +1555,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.purkinjeConductivity',
             phases=frozenset({'physics'}),
-            description='Multiplier on the Purkinje graph edge conductances. The primary knob for tuning conduction velocity along the network.',
+            description="Multiplier on the Purkinje graph edge conductances. Each edge's conductance times this value is the edge conductivity sigma of the cable equation, in S/m; native graphs give every edge conductance 1, so there this value is the network's conductivity. The primary knob for tuning conduction velocity along the network.",
             source_refs=('src/electroModels/electroDomains/conductionSystemDomain/conductionSystemDomain.C',),
             notes='conductionSystemDomain.C:176-177, lookupOrDefault default 1.0; multiplies graph_.edgeConductances. Requires a graphFile (:154).',
             value_kind='scalar',
