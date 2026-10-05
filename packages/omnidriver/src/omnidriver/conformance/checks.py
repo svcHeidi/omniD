@@ -781,7 +781,7 @@ def check_quantity_across_sweep(target: ConformanceTarget) -> CheckVerdict:
     except subprocess.TimeoutExpired:
         return _verdict("C14", False, f"compare timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     if compare.returncode != 0:
-        return _verdict("C14", False, f"compare exited {compare.returncode}: {compare.stdout[-800:]} {compare.stderr[-800:]}")
+        return _verdict("C14", False, f"compare exited {compare.returncode}: {compare.stdout[-OUTPUT_TAIL_CHARS:]} {compare.stderr[-OUTPUT_TAIL_CHARS:]}")
     report = json.loads(report_path.read_text())
     metrics = report["metrics"]
     problems = []

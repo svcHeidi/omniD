@@ -10,11 +10,14 @@ from unittest import mock
 
 import pytest
 
+from omnidriver.cli import main
 from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
+from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.core.runtime.attempt_lease import AttemptLeaseError, acquire_case_lease
 from omnidriver.core.runtime.process_control import run_child
+from omnidriver.core.runtime import sweep_runner
 from omnidriver.core.runtime.sweep_runner import SweepStopped, _stage_entry_case, sweep_plan, sweep_run
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 from omnidriver.core.tutorial_records import (
@@ -30,7 +33,7 @@ from omnidriver.core.tutorial_records import (
 # sweep bookkeeping (staging, timeout, manifest), not cardiac routing, which
 # is tested against the real plugin in the cardiacfoam package.
 from plugins.toy import DeclaredCasePlugin
-from plugins.toy import ToyProvider
+from plugins.toy import QUANTITY_TOY_PLUGIN, ToyProvider, write_quantity_toy_case
 
 _CTX = _driver_context(DeclaredCasePlugin(), source="test:sweep_runner")
 
@@ -844,13 +847,10 @@ def test_the_stderr_fallback_of_a_case_is_redacted_with_the_stacks_patterns(tmp_
 
 
 def test_a_plan_that_cannot_run_says_why_in_plan_error(tmp_path):
-    from omnidriver.core.runtime import sweep_runner
-
     real = sweep_runner._strict_plan_for_spec
 
     def blocked(*args, **kwargs):
         report = real(*args, **kwargs)
-        from omnidriver.core.planning_types import diagnostic
         return dataclasses.replace(
             report, status="blocked",
             environment_diagnostics=(diagnostic("error", "launcher_mismatch", "wrong MPI first on PATH"),),
@@ -902,9 +902,6 @@ def test_a_sweep_stopped_by_a_signal_marks_its_running_case_and_reports(tmp_path
 
 
 def test_the_cli_prints_the_report_of_a_sweep_a_signal_stopped(tmp_path, capsys):
-    from omnidriver.cli import main
-    from plugins.toy import QUANTITY_TOY_PLUGIN, write_quantity_toy_case
-
     write_quantity_toy_case(tmp_path / "native", "A 0.0015 0 0 0.007\n")
     spec = {"base": {"entry": "toyQuantities", "cases_root": str(tmp_path / "native")},
             "sweep": {"mode": "cross_product", "independent": {"number_cells": [2, 3]}}}

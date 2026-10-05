@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from omnidriver.cli import main
 from omnidriver.core import plugin_discovery
 from omnidriver.core.experiments import inspect_sweep_experiment
 from omnidriver.core.quantities import QuantityComparisonError, experiment_comparisons, run_quantity_comparison
@@ -629,8 +630,6 @@ def test_an_agent_compares_two_real_runs_through_the_cli(tmp_path):
 
 
 def test_the_cli_prints_every_request_error_as_a_list(tmp_path, capsys):
-    from omnidriver.cli import main
-
     sweep, runs = _two_runs(tmp_path)
     runs["one"].update(case_id="nine")
     pairs = [_pair("Z", "one", "two", "a", "a"), _pair("A", "one", "three")]

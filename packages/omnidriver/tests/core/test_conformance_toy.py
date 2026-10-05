@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from types import SimpleNamespace
 
 import pytest
 
 from omnidriver.conformance import CHECKS, run_check
+from omnidriver.conformance.checks import _failed_cases, _with_recorded_failure
 from omnidriver.core.runtime.failure_context import OUTPUT_TAIL_CHARS, why_a_child_stopped
 from plugins.toy import (
     ACCEPTING_PLUGIN, BROKEN_RULE_PLUGIN,
@@ -627,10 +629,6 @@ def test_a_child_with_no_report_is_quoted_by_stderr_then_stdout_and_redacted():
 
 
 def test_a_failed_case_of_a_sweep_is_quoted_with_its_reason_and_its_workflow_state(tmp_path):
-    from types import SimpleNamespace
-
-    from omnidriver.conformance.checks import _failed_cases
-
     state = tmp_path / "cases" / "a" / "workflow_state.json"
     state.parent.mkdir(parents=True)
     state.write_text(json.dumps({"steps": [{"step_id": "solve", "status": "failed", "diagnostics": [
@@ -648,8 +646,6 @@ def test_a_failed_case_of_a_sweep_is_quoted_with_its_reason_and_its_workflow_sta
 
 
 def test_a_failed_step_diagnostic_in_the_workflow_state_is_quoted(tmp_path):
-    from omnidriver.conformance.checks import _with_recorded_failure
-
     state = tmp_path / "workflow_state.json"
     state.write_text(json.dumps({"steps": [
         {"step_id": "mesh", "status": "completed", "diagnostics": []},

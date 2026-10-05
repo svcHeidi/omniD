@@ -245,7 +245,6 @@ def _record_sweep_run(
         }
 
     for case in resolved_cases:
-        # One folder per case: the staged case, its run document, workflow state and record.
         case_root = output_dir / "cases" / case.case_id
         run_document_path = case_root / RUN_DOCUMENT_FILENAME
         workflow_state_path = case_root / STATE_FILENAME
