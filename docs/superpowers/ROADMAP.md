@@ -233,9 +233,13 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - `torsoSurface`, read only by `ecgModelIO::loadSurface`, which nothing
      calls: delete it or wire it to an ECG model.
 
-   The catalogue has no value kind for a list of lists, so `conductionEdges`
-   is declared `scalar_list` with its element shape in `constraints`. No study
-   writes the graph, so no shape check runs on it.
+   `conductionEdges` is a list of four-number lists, which no value kind
+   states: core's closed `VALUE_KINDS` has no list of lists, and a `DictEntry`
+   must name one of them, so it is declared `scalar_list`, which is false of
+   its elements. The graph check (`validation._graph_breaks`) judges each
+   edge's four values; the value kind is never checked, since no study writes
+   the graph. Owner decision: a list-of-lists kind in core, or a way for an
+   entry to declare none.
 4. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the
    solver changed.
