@@ -15,7 +15,7 @@ from .runtime.artifacts import predict_data_artifacts
 from .runtime.execution_context import resolve_execution_context
 from .runtime.models import DataArtifact
 from .runtime.record_execution import commit_and_build_record_spec
-from .runtime.repository_staging import link_repository_scripts, staged_case_path
+from .runtime.repository_staging import copy_repository_scripts, staged_case_path
 from .runtime.run_command import omnidriver_run_command
 from .runtime.run_document_adapter import build_run_document
 from .runtime.run_document_exec import RUN_DOCUMENT_FILENAME
@@ -222,7 +222,7 @@ def strict_plan(
 
     The case is staged at ``<scratch_root>/records/<name>``; a case folder
     (``--case``) inside the supplied repository is staged at its
-    repository-relative depth under that, beside a link to the repository's
+    repository-relative depth under that, beside a copy of the repository's
     ``scripts`` folder, so a native ``Allrun`` that reaches its repository's
     scripts from ``$case/../..`` runs. The scratch
     root is supplied (``scratch_root``, else ``OMNIDRIVER_SCRATCH_DIR``) or
@@ -254,7 +254,7 @@ def strict_plan(
         staged_case_root = staged_case_path(
             native_case, driver_context.repository, staging_root=staging_root, flat=staging_root,
         )
-        link_repository_scripts(driver_context.repository, native_case, staging_root=staging_root)
+        copy_repository_scripts(driver_context.repository, native_case, staging_root=staging_root)
     try:
         _commit_result, spec = commit_and_build_record_spec(
             record,

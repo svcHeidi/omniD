@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from omnidriver.core.environment_connection import load_environment
 from omnidriver.core.runtime.process_control import run_child
-from omnidriver.core.runtime.repository_staging import link_repository_scripts, staged_case_path
+from omnidriver.core.runtime.repository_staging import copy_repository_scripts, staged_case_path
 
 from .checks import CHECKS, run_check
 from .target import ConformanceTarget
@@ -48,7 +48,7 @@ def _regression(
     a repository; the native case is never written."""
     case = staged_case_path(native_case, repository, staging_root=work, flat=work / native_case.name)
     shutil.rmtree(case, ignore_errors=True)
-    link_repository_scripts(repository, native_case, staging_root=work)
+    copy_repository_scripts(repository, native_case, staging_root=work)
     shutil.copytree(native_case, case, symlinks=True)
     started = time.monotonic()
     try:

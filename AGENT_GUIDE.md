@@ -214,8 +214,8 @@ the stack declares no entrypoint (openCARP).
 
 A folder inside the repository supplied with `--repo` is staged at its
 repository-relative depth (`<scratch>/records/<dir name>/cases/<dir name>`, say),
-and the repository's declared `scripts` folder is linked beside it at its own
-relative path, so a native `Allrun` that calls `$case_dir/../../applications/scripts/...`
+and a copy of the repository's declared `scripts` folder (without `__pycache__`, so no
+step can write into the repository) sits beside it at its own relative path, so a native `Allrun` that calls `$case_dir/../../applications/scripts/...`
 finds the repository's layout; `check --regression` runs the native regression
 script the same way. A folder outside the repository, or with no `--repo`, is
 staged at `<scratch>/records/<dir name>`.

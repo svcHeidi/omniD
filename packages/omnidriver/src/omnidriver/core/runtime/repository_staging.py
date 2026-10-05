@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from ..repository import Repository
@@ -21,11 +22,11 @@ def staged_case_path(native_case: Path, repository: Repository | None, *, stagin
     return flat if relative == Path(".") else staging_root / relative
 
 
-def link_repository_scripts(repository: Repository | None, native_case: Path, *, staging_root: Path) -> None:
+def copy_repository_scripts(repository: Repository | None, native_case: Path, *, staging_root: Path) -> None:
     """Make the repository's declared ``scripts`` folder available at its
-    repository-relative path under ``staging_root`` as a symlink; the native tree is
-    never written. Nothing is linked when the case holds the scripts folder, or
-    sits inside it."""
+    repository-relative path under ``staging_root`` as a copy (without
+    ``__pycache__``), so no step can write into the native tree. Nothing is copied
+    when the case holds the scripts folder, or sits inside it."""
     if repository is None:
         return
     native_case = Path(native_case).resolve()
@@ -33,8 +34,7 @@ def link_repository_scripts(repository: Repository | None, native_case: Path, *,
         return
     if native_case.is_relative_to(repository.scripts) or repository.scripts.is_relative_to(native_case):
         return
-    link = staging_root / repository.scripts.relative_to(repository.root)
-    link.parent.mkdir(parents=True, exist_ok=True)
-    if link.is_symlink() or link.is_file():
-        link.unlink()
-    link.symlink_to(repository.scripts, target_is_directory=True)
+    copy = staging_root / repository.scripts.relative_to(repository.root)
+    shutil.rmtree(copy, ignore_errors=True)
+    copy.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(repository.scripts, copy, symlinks=True, ignore=shutil.ignore_patterns("__pycache__"))

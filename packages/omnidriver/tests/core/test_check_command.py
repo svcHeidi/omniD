@@ -103,7 +103,7 @@ def test_the_native_regression_runs_in_a_copy_and_leaves_the_native_case_alone(t
     assert not (native / "produced.txt").exists()
 
 
-def test_a_regression_in_a_repository_runs_at_its_depth_beside_the_repository_scripts(tmp_path):
+def test_a_regression_in_a_repository_runs_at_its_depth_beside_a_copy_of_the_repository_scripts(tmp_path):
     from omnidriver.conformance.report import _regression
     from omnidriver.core.repository import read_repository
 
@@ -122,7 +122,8 @@ def test_a_regression_in_a_repository_runs_at_its_depth_beside_the_repository_sc
 
     assert (result["status"], result["output_tail"].strip()) == ("passed", "compared")
     assert result["case"] == str(tmp_path / "work" / "cases" / "case")
-    assert (tmp_path / "work" / "applications" / "scripts").is_symlink()
+    copy = tmp_path / "work" / "applications" / "scripts"
+    assert not copy.is_symlink() and (copy / "compare.sh").is_file()
 
 
 @pytest.mark.parametrize(("body", "status"), [("exit 77\n", "skipped"), ("echo drifted >&2; exit 3\n", "failed")])

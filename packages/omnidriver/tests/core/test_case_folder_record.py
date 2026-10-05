@@ -134,6 +134,8 @@ def _repository_with_a_case_that_reaches_its_scripts(root: Path) -> Path:
     helper = root / "applications" / "scripts" / "helper"
     helper.write_text("#!/bin/sh\necho done\n")
     helper.chmod(helper.stat().st_mode | stat.S_IXUSR)
+    (root / "applications" / "scripts" / "__pycache__").mkdir()
+    (root / "applications" / "scripts" / "__pycache__" / "helper.pyc").write_bytes(b"")
     (root / "omnidriver.toml").write_text(
         f'plugin = "{_DECLARED}"\ntutorials = "cases"\nsource = "src"\nscripts = "applications/scripts"\n'
     )
@@ -146,7 +148,7 @@ def _run_case(case: Path, repo: Path, scratch: Path, *extra: str) -> int:
     return main(["run", "--strict", "--repo", str(repo), "--case", str(case), "--scratch-dir", str(scratch), *extra])
 
 
-def test_a_case_inside_the_repository_is_staged_at_its_depth_beside_the_repository_scripts(tmp_path, capsys, monkeypatch):
+def test_a_case_inside_the_repository_is_staged_at_its_depth_beside_a_copy_of_the_repository_scripts(tmp_path, capsys, monkeypatch):
     monkeypatch.setenv("PYTHONPATH", str(Path(__file__).resolve().parents[1]))
     repo = tmp_path / "repo"
     case = _repository_with_a_case_that_reaches_its_scripts(repo)
@@ -156,8 +158,9 @@ def test_a_case_inside_the_repository_is_staged_at_its_depth_beside_the_reposito
 
     staging = tmp_path / "scratch" / "records" / "myCase"
     assert (staging / "cases" / "myCase" / "ran.marker").read_text() == "done\n"
-    link = staging / "applications" / "scripts"
-    assert link.is_symlink() and link.resolve() == (repo / "applications" / "scripts").resolve()
+    copy = staging / "applications" / "scripts"
+    assert not copy.is_symlink() and (copy / "helper").read_text() == "#!/bin/sh\necho done\n"
+    assert not (copy / "__pycache__").exists()
     assert sorted(p.relative_to(repo).as_posix() for p in repo.rglob("*")) == before
 
 
