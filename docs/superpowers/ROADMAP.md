@@ -246,14 +246,14 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - *Restart of the network's ionic state,* the coupler's last observation and the
      time series. Tested by restart equivalence, 0 to 0.06 s against 0 to 0.03 to
      0.06 s, to round-off.
-   - *A junction must have tissue* (a fatal in `pvjMapper` in place of the
-     nearest-cell fallback), the input ranges of `pvjResistances` and
-     `rootStimulus.node`, and the smaller items in the measurements document.
+   - *The input ranges* of `pvjResistances` and `rootStimulus.node`, and the
+     smaller items in the measurements document.
 
    Until the first fix lands, results of bidirectional cable coupling
    (`reactionDiffusionPvjCoupler`, `couplingMode bidirectional`) are not reliable;
    unidirectional coupling and both eikonal couplers are unaffected. omniD refuses
-   an explicit-scheme `rPvj` below the stability bound once the mesh exists; its
+   an explicit-scheme `rPvj` below the stability bound, judging junctions that share
+   cells together, once the mesh exists; its
    inputs are listed in the measurements document, to re-check against the fixed
    C++.
 5. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).

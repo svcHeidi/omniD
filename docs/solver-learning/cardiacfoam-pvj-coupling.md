@@ -1,8 +1,11 @@
 # cardiacFOAM's Purkinje-myocardium (PVJ) coupling: what native main did, measured
 
-**Method:** [`method.md`](method.md). **State described:** native main `0b1bf13c`
-(the installed `cardiacFoam` and `libelectroModels` were built from this source),
-before the fixes in progress on cardiacFOAM PR #53's branch. **Date:** 2026-10-05.
+**Method:** [`method.md`](method.md). **State described:** native main `0b1bf13c`,
+before the fixes in progress on cardiacFOAM PR #53's branch. The binary the runs
+used was built from the owner's working tree at `31c5dbea`, whose PVJ sources
+(`pvjMapper`, `pvjCoupler`, `reactionDiffusionPvjCoupler`,
+`eikonalMonodomainPvjCoupler`, `conductionSystemDomain`, `monodomain1DSolver`,
+`monodomainSolver`) are byte-identical to `0b1bf13c`. **Date:** 2026-10-05.
 The catalogue describes the intended semantics; this file records the behaviour
 the fixes remove and the numbers they are tested against. Keys and units are in
 [`cardiacfoam-conduction-graph.md`](cardiacfoam-conduction-graph.md).
@@ -87,14 +90,32 @@ ripple without crashing. An implicit tissue with the implicit scheme ran stably 
 `rPvj` 10.
 
 omniD's check (`validation._evaluate_pvj_stability`) judges the explicit scheme of
-`reactionDiffusionPvjCoupler`. Its inputs are `deltaT` (`system/controlDict`),
-`ddtSchemes` (`ddt(Vm)`, else `default`, in `system/fvSchemes`), the tissue's `chi` and
-`cm`, each junction's resistance (the graph's `pvjResistances`, else `rPvj`), and the
-weights and volumes of the cells `pvjMapper` gathers (`pvjLocations`, `pvjRadius`,
-`pvjKernel`, the mesh's cell centres and volumes). Its refusals on the slab are 90, 105
-and 110 Ω, and it passes 111 Ω and above, matching the bracket above. It is not
-judged before the mesh exists; the mesh is read where `constant/polyMesh` exists when
-the case is judged.
+`reactionDiffusionPvjCoupler` and of `eikonalMonodomainPvjCoupler`, which adds the same
+explicit term every step (at `0b1bf13c` it has no other; omniD judges it when its
+`pvjCouplingScheme` is explicit or absent, as the fixed C++ reads it). Its inputs are
+`deltaT` (`system/controlDict`), `ddtSchemes` (`ddt(Vm)`, else `default`, in
+`system/fvSchemes`), the tissue's `chi` and `cm`, each junction's resistance (the
+graph's `pvjResistances`, else `rPvj`), and the labels, weights and volumes of the
+cells `pvjMapper` gathers (`pvjLocations`, `pvjRadius`, `pvjKernel`, the mesh's cell
+centres and volumes). The explicit solver may cap `deltaT` below the written value
+(`myocardiumDomain::applyModelTimeControls`, `maxCo*min(dx^2/D)`), which lowers the
+bound; omniD uses the value as written and says so.
+
+**Junctions that share cells.** The bound above treats a junction alone. Junctions whose
+cell sets overlap add their terms on the shared cells, so the operator is a sum of
+rank-one terms `a_k b_k^T` with `a_k[c] = w_ck / (R_k V_k chi*Cm)` and
+`b_k[j] = w_jk V_j / V_k`, and its non-zero eigenvalues are those of the K x K matrix
+`N_lk = sum_j w_lj w_kj V_j / (V_l V_k R_k chi*Cm)`. omniD groups the junctions that
+overlap and takes the largest eigenvalue of each group (a power iteration on the
+similar symmetric matrix `D^(1/2) P P^T D^(1/2)`). Human idealizedHeart's 1142
+junctions (`rPvj` 1000, `pvjRadius` 1.65 mm, linear kernel, `dt` 2e-5, backward) need
+`rPvj` above 2.47 ohm as a group, against 1.09 ohm for a junction alone; at 2.0 ohm the
+check refuses, at 3.0 ohm it passes with a note that the rate times `dt`, 3.29, is within
+a factor 2 of the limit 4. Between half the limit and the limit the tissue is stable but
+carries the alternating ripple, and omniD says so. It is not judged before the mesh
+exists; the mesh is read where `constant/polyMesh` exists when the case is judged, only
+for the cells with a point within 2.5 `pvjRadius` of a junction, and a mesh whose such
+cells have more than 600000 faces is reported as unreadable, not read for minutes.
 
 ## Other measurements
 
