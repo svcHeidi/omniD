@@ -1,5 +1,5 @@
-"""``step`` over the conformance toy: run one step, edit the staged case with
-``--apply`` (the ``document:key`` patches a study takes), and ``recover``."""
+"""``step`` over the conformance toy: run one step and edit the staged case with
+``--apply`` (the ``document:key`` patches a study takes)."""
 from __future__ import annotations
 
 import json
@@ -106,7 +106,6 @@ def test_a_patch_that_changes_nothing_still_runs_a_step_that_never_ran(case):
 
     assert code == 0 and payload["status"] == "ok"
     assert [p["status"] for p in payload["applied_patches"]] == ["unchanged"]
-    assert not (case.root / ".omnidriver" / "case-transactions").exists()
     assert (case.root / "solved.marker").is_file()
 
 
@@ -185,7 +184,6 @@ def test_an_edit_that_breaks_a_rule_is_rolled_back_and_the_case_still_takes_a_va
     assert code == 1 and "12 cells exceed 10" in payload["error"] and "as it was" in payload["error"]
     assert case.cells() == "1"
     assert "applied_patches" not in payload
-    assert not (case.root / ".omnidriver").exists()
 
     code, payload = case.apply({"constant/mesh.json:cells": 7})
     assert code == 0 and payload["status"] == "ok", payload

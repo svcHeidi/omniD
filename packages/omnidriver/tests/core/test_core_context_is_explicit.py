@@ -156,9 +156,6 @@ def test_core_threads_its_context_through_the_public_edge() -> None:
 #: package may rebuild the `<base>/.omnidriver` default it replaced.
 _SCRATCH_RESOLVER = "resolve_scratch_root"
 _PACKAGE_ROOT = _CORE_ROOT.parent
-#: `case_transaction` journals inside the case it transacts (a staged copy,
-#: never the native tree): a per-case directory, not a scratch root.
-_DOT_OMNIDRIVER_EXEMPT = {_CORE_ROOT / "case_transaction.py"}
 
 
 def test_the_scratch_resolver_invents_no_default(tmp_path, monkeypatch) -> None:
@@ -188,7 +185,7 @@ def test_nothing_rebuilds_a_dot_omnidriver_scratch_default() -> None:
             if isinstance(node, ast.Constant) and node.value == ".omnidriver"
         ]
         for path in sorted(_PACKAGE_ROOT.rglob("*.py"))
-        if "__pycache__" not in path.parts and path not in _DOT_OMNIDRIVER_EXEMPT
+        if "__pycache__" not in path.parts
     }
     assert {f: ls for f, ls in offenders.items() if ls} == {}
 
