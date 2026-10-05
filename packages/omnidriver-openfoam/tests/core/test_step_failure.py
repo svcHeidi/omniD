@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from omnidriver.core.plugin_profile import CxxMapping
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
-from omnidriver.openfoam.step_failure import REBUILD_HINT, fatal_error_diagnostics
+from omnidriver.openfoam.step_failure import REBUILD_HINT, _document_and_scope, fatal_error_diagnostics
 
 # cardiacFoam (built from a branch that reads sealedHeartBoundary) on a case whose electroProperties
 # lacks the key: the end of the step's stderr.
@@ -209,3 +209,8 @@ def test_a_parallel_fatal_is_read_without_its_rank_prefixes(tmp_path):
     (found,) = fatal_error_diagnostics(PARALLEL, _case(tmp_path), _context(None))
     assert found.message.endswith('cannot find file "/case/processor1/constant/polyMesh/points"')
     assert "[1]" not in found.message
+
+
+def test_a_log_naming_a_case_that_has_moved_is_read_against_this_case(tmp_path):
+    moved = "/elsewhere/records/x/constant/electroProperties/monodomainSolverCoeffs"
+    assert _document_and_scope(moved, _case(tmp_path)) == ("constant/electroProperties", ["monodomainSolverCoeffs"])
