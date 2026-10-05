@@ -1268,11 +1268,9 @@ def test_a_graph_in_millimetres_against_a_mesh_in_metres_is_refused(tmp_path):
         "    (0 166.666666667 333.333333333)\n    (1000 166.666666667 333.333333333)\n",
     )
     found = _case_findings(tmp_path, graph_text=text, mesh="ascii")
-    assert [(level, code) for level, code, _, _ in found] == [
-        ("warning", "pvj_location_off_node"), ("error", "conduction_graph_invalid"),
-    ]
-    assert "2 of 2 pvjLocations lie more than domainCouplings.pvj's pvjRadius (0.0005 m) outside the mesh's bounding box (0 0 0) to (1 1 1)" in found[1][3]
-    assert "junction 0 at (0 166.667 333.333) is 371.337 m outside it" in found[1][3]
+    assert [(level, code) for level, code, _, _ in found] == [("error", "conduction_graph_invalid")]
+    assert "2 of 2 pvjLocations lie more than domainCouplings.pvj's pvjRadius (0.0005 m) outside the mesh's bounding box (0 0 0) to (1 1 1)" in found[0][3]
+    assert "junction 0 at (0 166.667 333.333) is 371.337 m outside it" in found[0][3]
 
 
 @pytest.mark.parametrize("radius,distance,refused", [(None, 0.0004, False), (None, 0.0006, True), ("0.11", 0.1, False), ("0.11", 0.12, True)])
@@ -1283,15 +1281,9 @@ def test_a_junction_beyond_the_pvj_radius_of_the_mesh_is_refused(tmp_path, radiu
     )
 
 
-@pytest.mark.parametrize("dy,radius,warned", [(0.0004, None, False), (0.0006, None, True), (0.01, "0.11", False)])
-def test_a_location_far_from_its_nodes_position_is_a_warning(tmp_path, dy, radius, warned):
-    """The location is where the solver couples; points only places the node in the output."""
-    found = _case_findings(tmp_path, graph_text=_graph_with_second_junction_moved(dy=dy), pvj_radius=radius)
-    assert [(level, code, field) for level, code, field, _ in found] == (
-        [("warning", "pvj_location_off_node", "pvjLocations")] if warned else []
-    )
-    if warned:
-        assert "1 of 2 pvjLocations lie more than domainCouplings.pvj's pvjRadius (0.0005 m) from their pvjNodes' positions" in found[0][3]
+def test_a_location_away_from_its_nodes_position_is_left_to_the_solver(tmp_path):
+    """A surface-grown junction need not sit on its node's points position; the solver couples at the location."""
+    assert _case_findings(tmp_path, graph_text=_graph_with_second_junction_moved(dy=0.01)) == []
 
 
 def test_an_unreadable_mesh_leaves_the_junctions_to_the_solver(tmp_path):
@@ -1302,8 +1294,7 @@ def test_an_unreadable_mesh_leaves_the_junctions_to_the_solver(tmp_path):
 
 def test_a_case_without_a_mesh_is_judged_against_none(tmp_path):
     """A junction far outside any mesh the case has yet to make is the mesh step's to meet, not a break."""
-    found = _case_findings(tmp_path, graph_text=_graph_with_second_junction_moved(dx=50.0))
-    assert [(level, code) for level, code, _, _ in found] == [("warning", "pvj_location_off_node")]
+    assert _case_findings(tmp_path, graph_text=_graph_with_second_junction_moved(dx=50.0)) == []
 
 
 def test_a_graph_without_a_key_the_solver_reads_is_refused(tmp_path):
