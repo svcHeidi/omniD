@@ -53,11 +53,13 @@ command line sets.
 
 `out/init_acts_vm_act-thresh.dat` has format `opencarp_lat_per_node`. `omnidriver
 compare` reads it at points you supply in the request (`runs.<name>.points`, any
-length unit; omniD converts to µm). The reader takes the value of the nearest mesh
-node and reports that node's coordinates as `sampled_at`, with rule `node`, unit
-`ms`, and `-1` as `not_reached`. It refuses a point equidistant from two nodes: at
-dx 1000 the slab centre is one. Pick a dx whose nodes include your points (dx 500
-and 250 contain the Niederer corners and centre). The mesh is the one openCARP
+length unit; omniD converts to µm). The reader finds the tetrahedron of the mesh
+that contains each point and interpolates the nodal times linearly in it
+(`sampling_rule` `linear`), in `ms`; `sampled_at` is the point you asked for.
+The interpolation agrees across a shared face, edge or node, so a point on one
+needs no tie-break and no dx has to contain your points. A point whose
+tetrahedron has a node that never activated (`-1`) is `not_reached`, the same
+as `-1` itself; a point in no element is refused by name. The mesh is the one openCARP
 records in `out/parameters.par` (F16). `lats[0].all` must stay `0`: with `1`
 there is no per-node file (F17). openCARP's slab is 0–20000 × 0–7000 × 0–3000 µm
 with the stimulus cube at the origin and fibres along x (F3). That is the frame
