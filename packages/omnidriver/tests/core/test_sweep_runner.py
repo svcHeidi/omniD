@@ -137,7 +137,7 @@ def test_entry_case_staging_copy_failure_leaves_existing_case_untouched(tmp_path
     assert (staged / "live-result").read_text() == "must survive"
 
 
-def test_entry_case_staging_recovers_prior_case_after_interrupted_promotion(tmp_path, monkeypatch):
+def test_entry_case_staging_restages_after_an_interrupted_promotion(tmp_path, monkeypatch):
     source = tmp_path / "source"
     source.mkdir()
     (source / "system").mkdir()
@@ -155,7 +155,7 @@ def test_entry_case_staging_recovers_prior_case_after_interrupted_promotion(tmp_
         source_name = Path(source_path).name
         if (
             not failed
-            and ".omnidriver-candidate-" in source_name
+            and ".omnidriver-candidate" in source_name
             and Path(destination_path) == staged
         ):
             failed = True
@@ -166,16 +166,28 @@ def test_entry_case_staging_recovers_prior_case_after_interrupted_promotion(tmp_
     with pytest.raises(OSError, match="simulated interruption"):
         _stage_entry_case(source, staged)
 
-    # The target is absent only while the durable journal and old sibling are
-    # present. A later holder restores the prior tree before restaging.
+    # Staging replaces the whole case, so the next stage needs nothing of the old one.
     assert not staged.exists()
     _stage_entry_case(source, staged)
     assert (staged / "system" / "controlDict").read_text() == "new\n"
-    leftovers = [
-        path for path in staged.parent.glob(".case.omnidriver-*")
-        if "candidate" in path.name or "backup" in path.name or "staging" in path.name
-    ]
-    assert not leftovers
+    assert not [p for p in staged.parent.glob(".case.omnidriver-*") if "lock" not in p.name]
+
+
+def test_entry_case_staging_discards_what_a_killed_stage_left_beside_the_case(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "controlDict").write_text("new\n")
+    staged = tmp_path / "scratch" / "case"
+    staged.mkdir(parents=True)
+    for role in ("candidate", "replaced"):
+        leftover = staged.parent / f".case.omnidriver-{role}"
+        leftover.mkdir()
+        (leftover / "half").write_text("x")
+
+    _stage_entry_case(source, staged)
+
+    assert not [p for p in staged.parent.glob(".case.omnidriver-*") if "lock" not in p.name]
+    assert (staged / "controlDict").read_text() == "new\n"
 
 
 def test_case_run_command_forwards_the_selector_the_sweep_was_given():
