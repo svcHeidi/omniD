@@ -21,7 +21,7 @@ explicit unresolved status for an executable directive, an unset variable or a
 runtime-dependent include form.
 
 Mutation is transactional within one case write (`commit_case_write`): a failed
-edit restores the original bytes of every target dictionary, and an
-interrupted one is restored by `omnidriver recover`. Directive-shaped values
+edit restores the original bytes of every target dictionary; a crash
+mid-write is repaired by planning again, which restages the case. Directive-shaped values
 are rejected. In particular, `#calc` and `#codeStream` are never evaluated by
 inspection or mutation.

@@ -17,7 +17,6 @@ from omnidriver.core.runtime.attempt_lease import (
 )
 from omnidriver.core.runtime.workflow_runner import WorkflowStepRunResult
 from omnidriver.core.runtime.workflow_state import initial_workflow_state
-from omnidriver.core.case_transaction import _write_journal
 
 
 def _dag(command: str = "ignored") -> dict:
@@ -231,78 +230,3 @@ def test_fresh_refuses_live_output_owner_before_deleting_contents(
     assert sentinel.read_text() == "owned"
     payload = json.loads(capsys.readouterr().out)
     assert "output directory is already owned" in payload["error"]
-
-
-def test_an_interrupted_case_transaction_blocks_a_step(
-    monkeypatch, capsys, tmp_path: Path,
-) -> None:
-    case_root = tmp_path / "case"
-    case_root.mkdir()
-    output_dir = tmp_path / "output"
-    _write_journal(case_root, {
-        "transaction_id": "interrupted", "plan_id": "p", "plan_digest": "d",
-        "state": "applying", "before_images": [], "created_dirs": [],
-    })
-    dag = _dag()
-    state = initial_workflow_state(dag)
-    assert state is not None
-    context = cli._ExecutionContext(
-        entry_label="case",
-        workflow_dag=dag,
-        planned_state=state,
-        case_root=case_root,
-        output_dir=output_dir,
-        expected_artifacts=(),
-    )
-    args = _args(tmp_path / "unused.json")
-    args.apply = None
-    monkeypatch.setattr(
-        cli,
-        "run_workflow_step",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("interrupted case must not dispatch")
-        ),
-    )
-
-    assert cli._dispatch_context(args, context) == 1
-
-    payload = json.loads(capsys.readouterr().out)
-    assert "was interrupted" in payload["error"]
-
-
-def test_an_interrupted_case_transaction_blocks_a_full_run(
-    monkeypatch, capsys, tmp_path: Path,
-) -> None:
-    case_root = tmp_path / "case"
-    case_root.mkdir()
-    output_dir = tmp_path / "output"
-    _write_journal(case_root, {
-        "transaction_id": "interrupted", "plan_id": "p", "plan_digest": "d",
-        "state": "applying", "before_images": [], "created_dirs": [],
-    })
-    dag = _dag()
-    state = initial_workflow_state(dag)
-    assert state is not None
-    context = cli._ExecutionContext(
-        entry_label="case",
-        workflow_dag=dag,
-        planned_state=state,
-        case_root=case_root,
-        output_dir=output_dir,
-        expected_artifacts=(),
-    )
-    args = _args(tmp_path / "unused.json")
-    args.action = "run"
-    args.apply = None
-    monkeypatch.setattr(
-        cli,
-        "run_workflow",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("interrupted case must not dispatch a full run")
-        ),
-    )
-
-    assert cli._dispatch_context(args, context) == 1
-
-    payload = json.loads(capsys.readouterr().out)
-    assert "was interrupted" in payload["error"]

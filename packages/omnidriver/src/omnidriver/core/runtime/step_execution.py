@@ -40,7 +40,7 @@ def execute_step_owned(
     ``study`` (``document:key`` patches) when one is given.
 
     A step that cannot run is refused before the case is touched. The edit
-    commits through the case writer, which journals and rolls back its own
+    commits through the case writer, which rolls back its own
     failure, and which the stack's rules can refuse the same way, leaving the
     case as it was, as does a replan whose workflow changed. Patches that
     change nothing neither rerun a step that has run nor spend an attempt

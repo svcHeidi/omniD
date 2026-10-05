@@ -4,7 +4,6 @@ Value resolution, block serialisation, a generic ``blockMeshDict`` and the commi
 """
 from __future__ import annotations
 
-import datetime
 import hashlib
 import re
 from collections.abc import Mapping
@@ -247,7 +246,7 @@ def write_documents(
     keep_existing: frozenset[str] = frozenset(),
 ) -> CaseWriteRecord:
     """Commit ``documents`` (case-relative path to text) into ``case_dir`` as
-    one journaled transaction. A path in ``keep_existing`` that already exists
+    one commit. A path in ``keep_existing`` that already exists
     is left alone; one in ``executable`` is written ``0o755``."""
     case_dir.mkdir(parents=True, exist_ok=True)
     files: list[RenderedFile] = []
@@ -270,7 +269,6 @@ def write_documents(
         ),
         files=tuple(files), semantic_owner_id=owner_id,
         stack_identity=identity.capability_digest if identity is not None else "0" * 64,
-        created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         expected_effects=tuple(f"author {file.path}" for file in files),
     )
     return commit_case_write(plan, driver_context=driver_context)

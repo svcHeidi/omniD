@@ -344,7 +344,7 @@ def test_describe_previews_the_cli_request(tmp_path, capsys, monkeypatch):
 
 @pytest.mark.parametrize("argv", [
     ["run", "--run-document", "doc.json", "--parallel"],
-    ["recover", "--case-root", "c", "--output-dir", "o", "--parallel"],
+    ["env", "--plugin", "p", "--parallel"],
 ])
 def test_the_flag_is_refused_where_nothing_is_planned(argv, capsys):
     assert "--parallel" in refusal(capsys, argv)

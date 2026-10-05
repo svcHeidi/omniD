@@ -543,7 +543,7 @@ def build_case(
     return {
         "status": "failed" if any(item.level == "error" for item in found) else "ok",
         "case_dir": str(case_dir),
-        "files": [entry["path"] for entry in record.committed],
+        "files": list(record.committed),
         "diagnostics": [
             {"level": item.level, "code": item.code, "field": item.field, "message": item.message} for item in found
         ],

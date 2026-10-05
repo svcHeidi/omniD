@@ -251,25 +251,6 @@ def test_remove_still_checks_value_kind_is_known():
         _assignment(operation="remove", value=None, value_kind="banana")
 
 
-def test_remove_round_trips_through_json():
-    assignment = _assignment(operation="remove", value=None)
-    payload = assignment.to_json()
-    assert payload["operation"] == "remove"
-    assert payload["value"] is None
-    restored = case_write.ParameterAssignment.from_json(payload)
-    assert restored == assignment
-
-
-def test_operation_changes_the_assignment_digest():
-    """Two assignments differing only in `operation` must serialize differently -- otherwise a plan could not distinguish "set this key" from "remove this key" once digested."""
-    set_assignment = _assignment(operation="set")
-    ensure_assignment = _assignment(operation="ensure")
-    assert (
-        case_write.canonical_json(set_assignment.to_json())
-        != case_write.canonical_json(ensure_assignment.to_json())
-    )
-
-
 def test_a_clone_and_patch_request_accepts_a_remove_operation():
     """The request-level construction path -- not just the bare dataclass -- accepts a `remove` assignment."""
     request = case_write.CaseMutationRequest(

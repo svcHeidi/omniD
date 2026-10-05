@@ -1,4 +1,4 @@
-"""Commit is core's, and it is recoverable."""
+"""Commit is core's, and a refused commit leaves the case as it was."""
 import os
 from pathlib import Path
 
@@ -30,7 +30,6 @@ def _plan(case_root: Path, files):
     return case_write.CaseWritePlan(
         request=request, files=tuple(files),
         semantic_owner_id="org.a", stack_identity="0" * 64,
-        created_at="2026-09-22T00:00:00Z",
     )
 
 
@@ -51,8 +50,8 @@ def test_a_plan_writes_every_file_and_records_their_digests(tmp_path):
     )
     assert (tmp_path / "constant" / "a").read_bytes() == b"one\n"
     assert (tmp_path / "system" / "b").read_bytes() == b"two\n"
-    assert record.status == "committed"
-    assert {entry["path"] for entry in record.committed} == {"constant/a", "system/b"}
+    assert record.committed == ("constant/a", "system/b")
+    assert record.parameters == plan.request.parameters
 
 
 @_root_makes_chmod_tests_meaningless
@@ -162,11 +161,8 @@ def test_case_lease_held_reuses_the_callers_own_lease(tmp_path):
             plan, driver_context=object(),
             case_lease_held=True,
         )
-    assert record.status == "committed"
+    assert record.committed == ("constant/a",)
     assert (tmp_path / "constant" / "a").read_bytes() == b"one\n"
-    # The caller's lease is untouched -- released only when the caller's own
-    # `with` block exits, not early by this commit.
-    assert not case_transaction.pending_transaction(tmp_path)
 
 
 def test_case_lease_held_refuses_an_unverified_claim(tmp_path):
@@ -178,12 +174,6 @@ def test_case_lease_held_refuses_an_unverified_claim(tmp_path):
             case_lease_held=True,
         )
     assert not (tmp_path / "constant" / "a").exists()
-
-
-def test_the_journal_is_removed_after_a_clean_commit(tmp_path):
-    plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
-    case_transaction.commit_case_write(plan, driver_context=object())
-    assert not case_transaction.pending_transaction(tmp_path)
 
 
 # --------------------------------------------------------------------------
@@ -278,5 +268,63 @@ def test_a_verify_that_refuses_rolls_the_commit_back_and_raises_as_it_is(tmp_pat
 
     assert existing.read_bytes() == b"original\n"
     assert not (tmp_path / "constant" / "new").exists()
-    assert case_transaction.pending_transaction(tmp_path) is None
-    assert not (tmp_path / ".omnidriver" / "case-transactions").exists()
+
+
+def test_a_commit_leaves_nothing_but_the_files_it_wrote(tmp_path):
+    plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
+    case_transaction.commit_case_write(plan, driver_context=object())
+    assert sorted(path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*")) == [
+        "constant", "constant/a",
+    ]
+
+
+def test_an_interrupt_during_a_commit_restores_the_case(tmp_path, monkeypatch):
+    (tmp_path / "constant").mkdir()
+    existing = tmp_path / "constant" / "a"
+    existing.write_bytes(b"original\n")
+    before = case_write._digest_bytes(b"original\n")
+    real = case_transaction.atomic_write_bytes
+
+    def _interrupted_on_the_second_file(target, content, **kwargs):
+        if target.name == "b":
+            raise KeyboardInterrupt("simulated interruption")
+        return real(target, content, **kwargs)
+
+    monkeypatch.setattr(case_transaction, "atomic_write_bytes", _interrupted_on_the_second_file)
+    plan = _plan(tmp_path, [
+        _rendered("constant/a", b"new\n", exists_before=True, before_digest=before),
+        _rendered("constant/b", b"two\n"),
+    ])
+    with pytest.raises(KeyboardInterrupt):
+        case_transaction.commit_case_write(plan, driver_context=object())
+
+    assert existing.read_bytes() == b"original\n"
+    assert not (tmp_path / "constant" / "b").exists()
+
+
+@_root_makes_chmod_tests_meaningless
+def test_a_rollback_that_itself_fails_names_the_path_and_says_to_plan_again(tmp_path, monkeypatch):
+    (tmp_path / "constant").mkdir()
+    (tmp_path / "constant" / "a").write_bytes(b"original\n")
+    before = case_write._digest_bytes(b"original\n")
+    real = case_transaction.atomic_write_bytes
+
+    def _cannot_restore(target, content, **kwargs):
+        if content == b"original\n":
+            raise OSError("restore failed")
+        return real(target, content, **kwargs)
+
+    monkeypatch.setattr(case_transaction, "atomic_write_bytes", _cannot_restore)
+    plan = _plan(tmp_path, [
+        _rendered("constant/a", b"new\n", exists_before=True, before_digest=before),
+        _rendered("constant/unwritable/b", b"two\n"),
+    ])
+    (tmp_path / "constant" / "unwritable").mkdir()
+    (tmp_path / "constant" / "unwritable").chmod(0o500)
+    try:
+        with pytest.raises(case_transaction.CaseTransactionError, match="rollback failed") as excinfo:
+            case_transaction.commit_case_write(plan, driver_context=object())
+    finally:
+        (tmp_path / "constant" / "unwritable").chmod(0o700)
+    assert "constant/a" in str(excinfo.value)
+    assert "plan again" in str(excinfo.value)

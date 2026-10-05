@@ -1,7 +1,5 @@
 """A reviewed plan contains everything that will happen, and nothing that has."""
 
-import dataclasses
-import json
 from pathlib import Path
 
 import pytest
@@ -45,26 +43,9 @@ def _plan(**overrides):
         files=(_file(),),
         semantic_owner_id="org.cardiacfoam",
         stack_identity="deadbeef" * 8,
-        created_at="2026-09-22T00:00:00Z",
     )
     fields.update(overrides)
     return case_write.CaseWritePlan(**fields)
-
-
-def test_the_serialized_plan_contains_every_value_that_will_be_written():
-    payload = _plan().to_json()
-    parameter = payload["request"]["parameters"][0]
-    assert parameter["value"] == "TT06"
-    assert parameter["expanded_key_path"] == ["ionicModel"]
-    rendered = payload["files"][0]
-    assert rendered["content_digest"]
-    assert rendered["path"] == "constant/electroProperties"
-    assert rendered["format"] == "openfoam_dictionary"
-
-
-def test_a_plan_round_trips_through_json_unchanged():
-    plan = _plan()
-    assert case_write.CaseWritePlan.from_json(plan.to_json()).plan_digest == plan.plan_digest
 
 
 def test_a_frozen_plan_has_no_mutable_interior():
@@ -97,57 +78,8 @@ def test_a_plan_carries_no_before_image():
     }
     assert "before" not in rendered_fields
     # A digest of the prior content is evidence and belongs here; the bytes
-    # themselves are recovery state and do not.
+    # themselves are rollback state and do not.
     assert "before_digest" in rendered_fields
-
-
-def test_the_digest_is_stable_across_processes():
-    """The digest is what a stale-plan check compares."""
-    import subprocess
-    import sys
-    import textwrap
-
-    probe = textwrap.dedent(
-        """
-        from pathlib import Path
-        from omnidriver.core import case_write
-        request = case_write.CaseMutationRequest(
-            mode="clone_and_patch", case_root=Path("/tmp/case"),
-            adapter_id="org.a", workflow="w", source_artifacts=(),
-            parameters=(
-                case_write.ParameterAssignment(
-                    qualified_id="$E.coeffs", owner="org.a",
-                    document="constant/electroProperties", key_path=("coeffs",),
-                    value={
-                        "value": (3.0, 1.0, 2.0), "dimensions": (0, 0, 0, 0, 0, 0, 0),
-                    },
-                    value_kind="dimensioned_tensor", source="template",
-                ),
-            ),
-            requested_by="probe",
-        )
-        plan = case_write.CaseWritePlan(
-            request=request,
-            files=(case_write.RenderedFile(
-                path="constant/electroProperties", content=b"x",
-                mode=None, exists_before=False, before_digest=None,
-                renderer_id="org.openfoam", format="openfoam_dictionary",
-            ),),
-            semantic_owner_id="org.a",
-            stack_identity="0" * 64,
-            created_at="2026-09-22T00:00:00Z",
-        )
-        print(plan.plan_digest)
-        """
-    )
-    digests = set()
-    for seed in ("0", "1", "2", "3"):
-        result = subprocess.run(
-            [sys.executable, "-c", probe], capture_output=True, text=True, check=True,
-            env={"PYTHONHASHSEED": seed, "PATH": "/usr/bin:/bin"},
-        )
-        digests.add(result.stdout.strip())
-    assert len(digests) == 1, digests
 
 
 def test_a_rendered_file_outside_the_case_is_refused():
@@ -160,27 +92,6 @@ def test_a_rendered_file_outside_the_case_is_refused():
 def test_two_rendered_files_at_one_path_are_refused():
     with pytest.raises(ValueError, match="written twice"):
         _plan(files=(_file(), _file(content=b"other\n")))
-
-
-def test_a_schema_version_mismatch_is_refused_with_the_versions_named():
-    payload = _plan().to_json()
-    payload["schema_version"] = 999
-    with pytest.raises(ValueError, match="999"):
-        case_write.CaseWritePlan.from_json(payload)
-
-
-def test_a_record_is_separate_from_its_plan():
-    """The committed result is not a field of the plan."""
-    plan = _plan()
-    record = case_write.CaseWriteRecord(
-        transaction_id="t1", plan_id=plan.plan_id, plan_digest=plan.plan_digest,
-        committed=({"path": "constant/electroProperties", "digest": "b" * 64},),
-        evidence=(), status="committed",
-    )
-    assert record.plan_digest == plan.plan_digest
-    assert "committed" not in {
-        field.name for field in case_write.CaseWritePlan.__dataclass_fields__.values()
-    }
 
 
 # A list passed for a declared `tuple[...]` field must be coerced, not stored
@@ -228,56 +139,6 @@ def test_a_list_passed_as_key_path_cannot_retroactively_change_the_slot():
     assert assignment.slot() == "constant/electroProperties::ionicModel"
 
 
-def test_a_committed_entry_is_frozen_not_a_live_dict():
-    plan = _plan()
-    record = case_write.CaseWriteRecord(
-        transaction_id="t1", plan_id=plan.plan_id, plan_digest=plan.plan_digest,
-        committed=({"path": "constant/electroProperties", "digest": "b" * 64},),
-        evidence=({"source": "runtime"},), status="committed",
-    )
-    with pytest.raises(TypeError):
-        record.committed[0]["digest"] = "9" * 64
-    with pytest.raises(TypeError):
-        record.evidence[0]["source"] = "tampered"
-
-
-def test_a_plans_expected_effects_round_trips_through_json():
-    """`to_json`/`from_json` must carry `expected_effects`, the same as every other field."""
-    plan = _plan()
-    with_effects = dataclasses.replace(
-        plan, expected_effects=("set 'x' in y", "remove 'z' in y"),
-    )
-    restored = case_write.CaseWritePlan.from_json(with_effects.to_json())
-    assert restored.expected_effects == with_effects.expected_effects
-    assert restored.plan_digest == with_effects.plan_digest
-
-
-def test_expected_effects_order_does_not_change_the_digest():
-    """`expected_effects` is positionally aligned with construction-time target order, not a keyed structure -- like `files`/`request.parameters`."""
-    plan = _plan()
-    forward = dataclasses.replace(plan, expected_effects=("a", "b"))
-    reversed_effects = dataclasses.replace(plan, expected_effects=("b", "a"))
-    assert forward.plan_digest == reversed_effects.plan_digest
-
-
-def test_a_case_write_record_carries_its_committed_parameters_and_expected_effects():
-    """`commit_case_write` copies `expected_effects`, and the plan's own validated `ParameterAssignment`s, onto the returned record."""
-    plan = _plan()
-    record = case_write.CaseWriteRecord(
-        transaction_id="t1", plan_id=plan.plan_id, plan_digest=plan.plan_digest,
-        committed=(), evidence=(), status="committed",
-        parameters=tuple(p.to_json() for p in plan.request.parameters),
-        expected_effects=("set 'ionicModel' in constant/electroProperties",),
-    )
-    assert record.parameters[0]["qualified_id"] == plan.request.parameters[0].qualified_id
-    assert record.expected_effects == ("set 'ionicModel' in constant/electroProperties",)
-    # Round-trips through JSON without a nested-mappingproxy serialization failure.
-    payload = json.loads(json.dumps(record.to_json()))
-    assert payload["parameters"][0]["qualified_id"] == plan.request.parameters[0].qualified_id
-    with pytest.raises(TypeError):
-        record.parameters[0]["qualified_id"] = "tampered"
-
-
 def test_a_resolved_mutation_target_is_frozen_not_a_live_dict():
     resolved = case_write.ResolvedMutation(
         request=_request(), targets=({"format": "openfoam_dictionary", "path": "x"},),
@@ -287,42 +148,7 @@ def test_a_resolved_mutation_target_is_frozen_not_a_live_dict():
         resolved.targets[0]["path"] = "y"
 
 
-def test_a_mapping_payload_must_use_string_keys():
-    """JSON has no other key type."""
-    with pytest.raises(TypeError, match="string"):
-        case_write.CaseWriteRecord(
-            transaction_id="t1", plan_id="p", plan_digest="d" * 16,
-            committed=({1: "a"},), evidence=(), status="committed",
-        )
-
-
-def test_a_mapping_payload_rejects_a_non_finite_float():
-    with pytest.raises(ValueError, match="non-finite"):
-        case_write.CaseWriteRecord(
-            transaction_id="t1", plan_id="p", plan_digest="d" * 16,
-            committed=({"magnitude": float("nan")},), evidence=(), status="committed",
-        )
-
-
-def test_a_mapping_payload_rejects_an_arbitrary_object():
-    """`_freeze` must refuse an unrecognised type, not return it unchanged and silently break the "JSON-shaped and immutable" promise."""
-
-    class _Opaque:
-        pass
-
-    with pytest.raises(TypeError, match="JSON-shaped"):
-        case_write.CaseWriteRecord(
-            transaction_id="t1", plan_id="p", plan_digest="d" * 16,
-            committed=({"thing": _Opaque()},), evidence=(), status="committed",
-        )
-
-
 # --- Cheap correctness items. ---
-
-
-def test_a_bad_schema_version_is_refused_at_construction_not_only_from_json():
-    with pytest.raises(ValueError, match="99"):
-        _plan(schema_version=99)
 
 
 def test_a_plan_with_zero_files_is_refused():
@@ -330,40 +156,30 @@ def test_a_plan_with_zero_files_is_refused():
         _plan(files=())
 
 
-def test_from_json_catches_a_tampered_content_digest():
-    """`from_json` compares the stored content_digest against the one recomputed from the decoded bytes; a tampered digest is caught, not silently discarded."""
-    payload = _file().to_json()
-    payload["content_digest"] = "0" * 64
-    with pytest.raises(ValueError, match="does not match"):
-        case_write.RenderedFile.from_json(payload)
-
-
-def test_plan_digest_is_insensitive_to_file_and_parameter_order():
-    """`files` and `request.parameters` cannot hold two entries at the same path/slot, so their as-authored order carries no meaning; the digest must not hash them as-given."""
-    first_file = _file(path="constant/electroProperties")
-    second_file = _file(path="constant/electroConductivity", content=b"df 0.1;\n")
-    first_param = case_write.ParameterAssignment(
-        qualified_id="$E.a", owner="org.a", document="constant/electroProperties",
-        key_path=("a",), value="x", value_kind="word", source="case",
-    )
-    second_param = case_write.ParameterAssignment(
-        qualified_id="$E.b", owner="org.a", document="constant/electroProperties",
-        key_path=("b",), value="y", value_kind="word", source="case",
+def _opaque_target(value):
+    return case_write.ResolvedMutation(
+        request=_request(), targets=({"thing": value},), expected_effects=(), semantic_owner_id="org.a",
     )
 
-    def _request_with(*params):
-        return case_write.CaseMutationRequest(
-            mode="clone_and_patch", case_root=Path("/tmp/case"),
-            adapter_id="org.a", workflow="w", source_artifacts=(),
-            parameters=params, requested_by="test",
+
+def test_a_target_must_use_string_keys():
+    """JSON has no other key type."""
+    with pytest.raises(TypeError, match="string"):
+        case_write.ResolvedMutation(
+            request=_request(), targets=({1: "a"},), expected_effects=(), semantic_owner_id="org.a",
         )
 
-    forward = _plan(
-        request=_request_with(first_param, second_param),
-        files=(first_file, second_file),
-    )
-    reversed_plan = _plan(
-        request=_request_with(second_param, first_param),
-        files=(second_file, first_file),
-    )
-    assert forward.plan_digest == reversed_plan.plan_digest
+
+def test_a_target_rejects_a_non_finite_float():
+    with pytest.raises(ValueError, match="non-finite"):
+        _opaque_target(float("nan"))
+
+
+def test_a_target_rejects_an_arbitrary_object():
+    """`_freeze` must refuse an unrecognised type, not return it unchanged and silently break the "JSON-shaped and immutable" promise."""
+
+    class _Opaque:
+        pass
+
+    with pytest.raises(TypeError, match="JSON-shaped"):
+        _opaque_target(_Opaque())

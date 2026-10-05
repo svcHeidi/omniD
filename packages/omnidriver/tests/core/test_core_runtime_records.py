@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omnidriver.core.case_transaction import _JOURNAL_RELATIVE_PATH
 from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.attempt_lease import (
@@ -31,9 +30,7 @@ def test_core_names_every_file_it_writes_into_a_case():
         STATE_FILENAME, RUN_DOCUMENT_FILENAME, SWEEP_MANIFEST_FILENAME, CASE_RECORD_FILENAME,
         ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME,
     }
-    assert set(CORE_RUNTIME_RECORDS.generated_directory_names) == {
-        WORKFLOW_LOGS_DIRNAME, _JOURNAL_RELATIVE_PATH.parts[0],
-    }
+    assert set(CORE_RUNTIME_RECORDS.generated_directory_names) == {WORKFLOW_LOGS_DIRNAME}
 
 
 def test_a_stack_that_declares_nothing_still_knows_cores_records():

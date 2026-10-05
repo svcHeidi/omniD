@@ -555,7 +555,7 @@ class TestBuildCase(unittest.TestCase):
         from omnidriver.cardiacfoam.case_builder import build_case
         from omnidriver.core import case_transaction
 
-        real = case_transaction._write_one
+        real = case_transaction.atomic_write_bytes
         calls = []
 
         def die_on_third(*args, **kwargs):
@@ -566,7 +566,7 @@ class TestBuildCase(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp:
             case_dir = Path(temp) / "case"
-            with mock.patch.object(case_transaction, "_write_one", die_on_third):
+            with mock.patch.object(case_transaction, "atomic_write_bytes", die_on_third):
                 with self.assertRaises(case_transaction.CaseTransactionError):
                     build_case(_SINGLE_CELL, case_dir=case_dir, driver_context=_CTX)
             self.assertFalse((case_dir / "constant" / "electroProperties").exists())

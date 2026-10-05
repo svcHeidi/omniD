@@ -1,4 +1,4 @@
-"""Atomic write-with-fsync primitives for the case transaction."""
+"""Atomic write-with-fsync primitives."""
 from __future__ import annotations
 
 import json

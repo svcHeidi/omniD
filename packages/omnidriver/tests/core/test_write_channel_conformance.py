@@ -16,17 +16,14 @@ from omnidriver.core.runtime.launch_readiness import is_launchable
 #: Every case the write channel must handle. A name here with no test is a visible
 #: gap; a case not listed is one nobody decided to leave out.
 CHANNEL_CONFORMANCE_CASES = (
-    "complete_plan_serialization_and_identity",
     "no_hidden_mutable_payloads",
     "format_specific_patching",
     "repeated_edits_to_one_file",
     "new_files",
     "file_modes",
     "rollback_after_injected_failure",
-    "interrupted_recovery",
     "rollback_failure",
     "stale_build",
-    "replay_after_an_uncertain_result",
     "competing_attempts",
     "path_escape_and_symlinks",
     "duplicate_ownership",
@@ -79,7 +76,6 @@ def _plan(case_root: Path, files, **overrides):
     return case_write.CaseWritePlan(
         request=request, files=tuple(files),
         semantic_owner_id="org.a", stack_identity="0" * 64,
-        created_at="2026-09-22T00:00:00Z",
     )
 
 
@@ -103,49 +99,6 @@ def _context(*providers):
     from types import SimpleNamespace
 
     return SimpleNamespace(stack=provider_stack.ProviderStack(provider_stack.order_providers(providers)))
-
-
-# --------------------------------------------------------------------------
-# 1: complete plan serialization and identity
-# --------------------------------------------------------------------------
-
-
-def test_complete_plan_serialization_and_identity(tmp_path):
-    """The serialized plan must contain every value that will be written, and its digest must be stable and order-insensitive (files and parameters are sorted canonically before hashing, per `plan_digest`'s `_digest_payload`)."""
-    two_params = (
-        _parameter(qualified_id="$TEST.a", document="constant/a", key_path=("a",)),
-        _parameter(qualified_id="$TEST.b", document="constant/b", key_path=("b",)),
-    )
-    files_forward = [_rendered("constant/a", b"one\n"), _rendered("constant/b", b"two\n")]
-
-    def _request(parameters):
-        return case_write.CaseMutationRequest(
-            mode="clone_and_patch", case_root=tmp_path, adapter_id="org.a",
-            workflow="w", source_artifacts=(), parameters=parameters,
-            requested_by="test",
-        )
-
-    forward = case_write.CaseWritePlan(
-        request=_request(two_params), files=tuple(files_forward),
-        semantic_owner_id="org.a", stack_identity="0" * 64,
-        created_at="2026-09-22T00:00:00Z",
-    )
-    payload = forward.to_json()
-    values = {p["expanded_key_path"][0]: p["value"] for p in payload["request"]["parameters"]}
-    assert values == {"a": 1.0, "b": 1.0}
-    assert all(f["content_base64"] for f in payload["files"])
-
-    reordered = case_write.CaseWritePlan(
-        request=_request(tuple(reversed(two_params))),
-        files=tuple(reversed(files_forward)),
-        semantic_owner_id="org.a", stack_identity="0" * 64,
-        created_at="2026-09-22T00:00:00Z",
-    )
-    assert forward.to_json() != reordered.to_json()  # to_json preserves review order
-    assert forward.plan_digest == reordered.plan_digest  # the digest does not
-
-    restored = case_write.CaseWritePlan.from_json(forward.to_json())
-    assert restored.plan_digest == forward.plan_digest
 
 
 # --------------------------------------------------------------------------
@@ -222,7 +175,7 @@ def test_format_specific_patching(tmp_path):
     )
     assert (tmp_path / "constant" / "a").read_bytes() == b"alpha\n"
     assert (tmp_path / "system" / "b").read_bytes() == b"beta\n"
-    assert record.status == "committed"
+    assert record.committed
 
 
 # --------------------------------------------------------------------------
@@ -296,7 +249,7 @@ def test_new_files(tmp_path):
         plan, driver_context=object(),
     )
     assert (tmp_path / "constant" / "brand_new").read_bytes() == b"hello\n"
-    assert record.status == "committed"
+    assert record.committed
 
 
 # --------------------------------------------------------------------------
@@ -364,39 +317,6 @@ def test_rollback_after_injected_failure(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# 9: interrupted recovery
-# --------------------------------------------------------------------------
-
-
-def test_interrupted_recovery(tmp_path, monkeypatch):
-    (tmp_path / "constant").mkdir()
-    (tmp_path / "constant" / "a").write_bytes(b"original\n")
-    before = case_write._digest_bytes(b"original\n")
-    calls = {"n": 0}
-    real = case_transaction._write_one
-
-    def _die_after_first(*args, **kwargs):
-        calls["n"] += 1
-        if calls["n"] == 2:
-            raise KeyboardInterrupt("simulated interruption")
-        return real(*args, **kwargs)
-
-    monkeypatch.setattr(case_transaction, "_write_one", _die_after_first)
-    plan = _plan(tmp_path, [
-        _rendered("constant/a", b"new\n", exists_before=True, before_digest=before),
-        _rendered("constant/b", b"two\n"),
-    ])
-    with pytest.raises(KeyboardInterrupt):
-        case_transaction.commit_case_write(plan, driver_context=object())
-    assert case_transaction.pending_transaction(tmp_path)
-
-    record = case_transaction.recover_case_transaction(tmp_path)
-    assert record.status == "rolled_back"
-    assert (tmp_path / "constant" / "a").read_bytes() == b"original\n"
-    assert not case_transaction.pending_transaction(tmp_path)
-
-
-# --------------------------------------------------------------------------
 # 10: rollback failure
 # --------------------------------------------------------------------------
 
@@ -406,10 +326,14 @@ def test_rollback_failure(tmp_path, monkeypatch):
     (tmp_path / "constant").mkdir()
     (tmp_path / "constant" / "a").write_bytes(b"original\n")
     before = case_write._digest_bytes(b"original\n")
-    monkeypatch.setattr(
-        case_transaction, "_restore_one",
-        lambda *a, **k: (_ for _ in ()).throw(OSError("restore failed")),
-    )
+    real = case_transaction.atomic_write_bytes
+
+    def _cannot_restore(target, content, **kwargs):
+        if content == b"original\n":
+            raise OSError("restore failed")
+        return real(target, content, **kwargs)
+
+    monkeypatch.setattr(case_transaction, "atomic_write_bytes", _cannot_restore)
     plan = _plan(tmp_path, [
         _rendered("constant/a", b"new\n", exists_before=True, before_digest=before),
         _rendered("constant/unwritable/b", b"two\n"),
@@ -421,7 +345,6 @@ def test_rollback_failure(tmp_path, monkeypatch):
             case_transaction.commit_case_write(
                 plan, driver_context=object(),
             )
-        assert case_transaction.pending_transaction(tmp_path)
     finally:
         (tmp_path / "constant" / "unwritable").chmod(0o700)
 
@@ -488,7 +411,6 @@ def test_stale_build(tmp_path):
     plan = case_write.CaseWritePlan(
         request=plan.request, files=plan.files,
         semantic_owner_id="org.a", stack_identity=current.capability_digest,
-        created_at=plan.created_at,
     )
 
     class _Context:
@@ -523,25 +445,6 @@ def test_the_stack_digest_does_not_yet_bind_renderer_content(tmp_path):
 # --------------------------------------------------------------------------
 # 13: changed indirect dependency
 # --------------------------------------------------------------------------
-
-
-# --------------------------------------------------------------------------
-# 14: replay after an uncertain result
-# --------------------------------------------------------------------------
-
-
-def test_replay_after_an_uncertain_result(tmp_path):
-    plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
-    first = case_transaction.commit_case_write(
-        plan, driver_context=object(), transaction_id="t-1",
-    )
-    (tmp_path / "constant" / "a").write_bytes(b"someone else edited this\n")
-    second = case_transaction.commit_case_write(
-        plan, driver_context=object(), transaction_id="t-1",
-    )
-    assert second.transaction_id == first.transaction_id
-    assert second.status == "committed"
-    assert (tmp_path / "constant" / "a").read_bytes() == b"someone else edited this\n"
 
 
 # --------------------------------------------------------------------------
@@ -645,7 +548,7 @@ def test_post_write_evidence_unavailable(tmp_path):
     record = case_transaction.commit_case_write(
         plan, driver_context=object(),
     )
-    assert record.status == "committed"
+    assert record.committed
     assert (tmp_path / "constant" / "a").exists()
 
     readiness = is_launchable(

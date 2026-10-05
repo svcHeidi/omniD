@@ -565,7 +565,7 @@ omnidriver step --run-document <scratch>/records/singleCell/run_document.json --
 Each patch goes through the record's own key validator and typed comparison,
 so a key the catalogue lacks is accepted exactly when the C++ reads it, a
 patch that changes nothing is reported `unchanged` and writes nothing, and the
-whole set commits in one journaled `commit_case_write` that rolls back its own
+whole set commits in one `commit_case_write` that rolls back its own
 failure, an edit after which the stack's rules refuse the case and one whose
 replan changes the workflow. When every patch is `unchanged` a step that has
 run is not rerun and no attempt is spent: the output's `status` is `unchanged`
@@ -573,9 +573,8 @@ and the exit code is non-zero, the step still being failed. A step that never
 ran is run. A name that is not a `document:key` (an axis or reserved name)
 changes the plan, so it is refused: plan again with it. The step then reruns
 (`attempt++`), the JSON carries `applied_patches` and `artifact_reconciliation`, and one record per attempt is
-appended to `remediation_history.jsonl` under the output directory. If the
-process dies mid-edit, the next `step`/`run` refuses until
-`omnidriver recover --case-root <case>` restores the before-images.
+appended to `remediation_history.jsonl` under the output directory. The case is
+a scratch copy: if the process dies mid-edit, plan again to restage it.
 
 **Derived constants are not overridable.** Some models expose constants that are
 *computed* from other (user-facing) constants at `initConsts` — e.g. the
@@ -1066,7 +1065,7 @@ omnidriver run --strict --plugin cardiacfoam --case <dir> --scratch-dir <scratch
 - `--option`: `dx` (metres, isotropic cell size), `deltaT`, `endTime`.
   `--overwrite` replaces the dictionaries of an existing case; without it a case that already holds `electroProperties` is refused, and one that holds only `system/` files keeps its `controlDict`, `fvSchemes` and `fvSolution`.
 
-The command commits one journaled write: `constant/electroProperties` and
+The command commits one write: `constant/electroProperties` and
 `physicsProperties`, `system/fvSchemes`, `fvSolution`, `controlDict`, a
 `system/blockMeshDict` and an executable `Allrun` (`blockMesh`, then
 `cardiacFoam`). It then holds the written case to the pre-run rules a record's

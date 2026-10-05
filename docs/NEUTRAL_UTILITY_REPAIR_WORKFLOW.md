@@ -43,12 +43,12 @@ an agent callback.
 3. Propose a finite set of `document:key` patches, the same a study takes, and
    run `omnidriver step --run-document ... --apply patches.json`.
 4. The executor acquires case/output leases, commits the patches through the
-   case writer (one journaled `commit_case_write`), replans, and only then
+   case writer (one `commit_case_write`), replans, and only then
    dispatches the utility step. Each attempt is appended to
    `remediation_history.jsonl`.
 5. The result lists `applied_patches`. A commit that fails rolls back to the
-   original bytes; one interrupted by a crash blocks the case until
-   `omnidriver recover` restores it.
+   original bytes; a crash mid-commit is repaired by planning again, which
+   restages the case.
 
 The plugin's record validator accepts or refuses each key by name, and its
 renderer may reject an invalid value by raising `ValueError`: a refusal at

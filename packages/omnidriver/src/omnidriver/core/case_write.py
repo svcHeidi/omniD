@@ -1,14 +1,12 @@
-"""What a framework-authored case mutation is, before anything is written: types, canonical serialization,
+"""What a framework-authored case mutation is, before anything is written: its types,
 and the two calls (:func:`resolve_mutation`, :func:`render_mutation`) that ask the stack to resolve and render.
 Core knows no dictionary syntax; a format owner turns a mutation into bytes and core commits them."""
 
 from __future__ import annotations
 
-import base64
 import hashlib
-import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Any, Mapping
@@ -19,12 +17,6 @@ class CaseKeyNotFound(KeyError):
     """A writer was asked to edit a key or block its document does not hold. The one ``KeyError`` a
     tutorial record's case write turns into a refusal by name; any other is a defect and propagates."""
 
-
-#: Bumped whenever a field is added, removed or reinterpreted. A plan
-#: serialized under one version is not readable under another: a reader that
-#: accepted an older payload would fill a missing field with a default nobody
-#: reviewed.
-PLAN_SCHEMA_VERSION = 2
 
 #: ``clone_and_patch`` edits an existing case in place or into a clone;
 #: ``synthesize`` builds a case from a catalog and requires explicit source
@@ -171,42 +163,6 @@ class ParameterAssignment:
     def expanded_key_path(self) -> tuple[str, ...]:
         return self.key_path
 
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "qualified_id": self.qualified_id,
-            "owner": self.owner,
-            "document": self.document,
-            "key_path": list(self.key_path),
-            "expanded_key_path": list(self.expanded_key_path()),
-            "value": _json_value(self.value),
-            "value_kind": self.value_kind,
-            "source": self.source,
-            "operation": self.operation,
-            "validated": self.validated,
-        }
-
-    @classmethod
-    def from_json(cls, payload: Mapping[str, Any]) -> "ParameterAssignment":
-        return cls(
-            qualified_id=payload["qualified_id"],
-            owner=payload["owner"],
-            document=payload["document"],
-            key_path=tuple(payload["key_path"]),
-            value=payload["value"],
-            value_kind=payload["value_kind"],
-            source=payload["source"],
-            operation=payload["operation"],
-            validated=payload["validated"],
-        )
-
-
-def _json_value(value: Any) -> Any:
-    if isinstance(value, Mapping):
-        return {key: _json_value(item) for key, item in sorted(value.items())}
-    if isinstance(value, tuple):
-        return [_json_value(item) for item in value]
-    return value
-
 
 @dataclass(frozen=True)
 class CaseMutationRequest:
@@ -277,43 +233,6 @@ class CaseMutationRequest:
                 )
             seen[slot] = parameter.qualified_id
 
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "mode": self.mode,
-            "case_root": str(self.case_root),
-            "adapter_id": self.adapter_id,
-            "workflow": self.workflow,
-            "source_artifacts": list(self.source_artifacts),
-            "parameters": [parameter.to_json() for parameter in self.parameters],
-            "requested_by": self.requested_by,
-        }
-
-    @classmethod
-    def from_json(cls, payload: Mapping[str, Any]) -> "CaseMutationRequest":
-        return cls(
-            mode=payload["mode"],
-            case_root=Path(payload["case_root"]),
-            adapter_id=payload["adapter_id"],
-            workflow=payload["workflow"],
-            source_artifacts=tuple(payload["source_artifacts"]),
-            parameters=tuple(
-                ParameterAssignment.from_json(item) for item in payload["parameters"]
-            ),
-            requested_by=payload["requested_by"],
-        )
-
-
-def canonical_json(payload: Any) -> str:
-    """The one serialization a digest is taken over.
-
-    ``sort_keys`` and fixed separators, so dict iteration order cannot enter a
-    digest. ``allow_nan=False``, because ``NaN`` is not JSON and a payload
-    carrying one round-trips into something a reader cannot parse.
-    """
-    return json.dumps(
-        payload, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=False,
-    )
-
 
 def _digest_bytes(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
@@ -323,9 +242,8 @@ def _digest_bytes(content: bytes) -> str:
 class RenderedFile:
     """One file's complete proposed content, as its format owner rendered it.
 
-    ``content`` is embedded in the plan whole, base64-encoded: a rendered
-    dictionary is small, and a reviewer or recovery reader needs the bytes,
-    not a hash of them. ``content_digest`` is the derived integrity check.
+    ``content`` is the whole file: a rendered dictionary is small, and a
+    reviewer needs the bytes, not a hash of them.
     """
 
     path: str
@@ -355,77 +273,25 @@ class RenderedFile:
                 f"a before-digest"
             )
 
-    @property
-    def content_digest(self) -> str:
-        return _digest_bytes(self.content)
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "path": self.path,
-            "content_digest": self.content_digest,
-            "content_bytes": len(self.content),
-            "content_base64": base64.b64encode(self.content).decode("ascii"),
-            "mode": self.mode,
-            "exists_before": self.exists_before,
-            "before_digest": self.before_digest,
-            "renderer_id": self.renderer_id,
-            "format": self.format,
-        }
-
-    @classmethod
-    def from_json(cls, payload: Mapping[str, Any]) -> "RenderedFile":
-        content = base64.b64decode(payload["content_base64"])
-        stored_digest = payload["content_digest"]
-        computed_digest = _digest_bytes(content)
-        if stored_digest != computed_digest:
-            raise ValueError(
-                f"{payload['path']!r} content_digest {stored_digest!r} does "
-                f"not match the decoded bytes (which hash to "
-                f"{computed_digest!r}); the payload was tampered with or "
-                f"corrupted"
-            )
-        return cls(
-            path=payload["path"],
-            content=content,
-            mode=payload["mode"],
-            exists_before=payload["exists_before"],
-            before_digest=payload["before_digest"],
-            renderer_id=payload["renderer_id"],
-            format=payload["format"],
-        )
-
 
 @dataclass(frozen=True)
 class CaseWritePlan:
-    """Everything that will happen, reviewable before any of it does.
+    """Everything that will be written, reviewable before any of it is.
 
-    The plan holds no execution state. Before-images live in the journal
-    (:mod:`omnidriver.core.case_transaction`); before-digests live here,
-    because a conflict check is part of what a reviewer approves.
-    ``expected_effects`` comes from the ``ResolvedMutation`` and is copied
-    onto the committed ``CaseWriteRecord``.
+    The plan holds no execution state. ``expected_effects`` comes from the
+    ``ResolvedMutation`` and is copied onto the committed ``CaseWriteRecord``.
     """
 
     request: CaseMutationRequest
     files: tuple[RenderedFile, ...]
     semantic_owner_id: str
     stack_identity: str
-    created_at: str
-    schema_version: int = PLAN_SCHEMA_VERSION
     expected_effects: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        # A list could be appended to after the duplicate-path check below,
-        # changing `plan_digest` after review.
+        # A list could be appended to after the duplicate-path check below.
         object.__setattr__(self, "files", tuple(self.files))
         object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
-        # Checked here, not only in `from_json`, so a directly constructed
-        # plan cannot skirt either check.
-        if self.schema_version != PLAN_SCHEMA_VERSION:
-            raise ValueError(
-                f"plan schema version {self.schema_version!r} is not "
-                f"{PLAN_SCHEMA_VERSION}"
-            )
         if not self.files:
             raise ValueError(
                 "a plan must render at least one file; a plan with nothing "
@@ -440,93 +306,14 @@ class CaseWritePlan:
                 )
             seen.add(rendered.path)
 
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "schema_version": self.schema_version,
-            "request": self.request.to_json(),
-            "files": [rendered.to_json() for rendered in self.files],
-            "semantic_owner_id": self.semantic_owner_id,
-            "stack_identity": self.stack_identity,
-            "created_at": self.created_at,
-            "expected_effects": list(self.expected_effects),
-        }
-
-    @property
-    def plan_digest(self) -> str:
-        return hashlib.sha256(canonical_json(self._digest_payload()).encode()).hexdigest()
-
-    def _digest_payload(self) -> dict[str, Any]:
-        """``to_json()`` with order-irrelevant lists sorted, so only the digest is canonical and a reviewer sees authoring order."""
-        payload = self.to_json()
-        payload["files"] = sorted(payload["files"], key=lambda f: f["path"])
-        payload["request"]["parameters"] = sorted(
-            payload["request"]["parameters"],
-            key=lambda p: f"{p['document']}::{'.'.join(p['expanded_key_path'])}",
-        )
-        payload["expected_effects"] = sorted(payload["expected_effects"])
-        return payload
-
-    @property
-    def plan_id(self) -> str:
-        return self.plan_digest[:16]
-
-    @classmethod
-    def from_json(cls, payload: Mapping[str, Any]) -> "CaseWritePlan":
-        version = payload.get("schema_version")
-        if version != PLAN_SCHEMA_VERSION:
-            raise ValueError(
-                f"plan schema version {version!r} is not {PLAN_SCHEMA_VERSION}; "
-                f"reading it would mean filling fields nobody reviewed"
-            )
-        return cls(
-            request=CaseMutationRequest.from_json(payload["request"]),
-            files=tuple(RenderedFile.from_json(item) for item in payload["files"]),
-            semantic_owner_id=payload["semantic_owner_id"],
-            stack_identity=payload["stack_identity"],
-            created_at=payload["created_at"],
-            schema_version=version,
-            expected_effects=tuple(payload["expected_effects"]),
-        )
-
 
 @dataclass(frozen=True)
 class CaseWriteRecord:
-    """What a committed transaction actually did. Not part of the plan.
+    """What a commit wrote: the case-relative paths, and the plan's parameters and expected effects."""
 
-    ``parameters`` and ``expected_effects`` are copied from the committed plan
-    by ``commit_case_write``; ``describe`` reads them off a staged clone to say
-    what a step will change.
-    """
-
-    transaction_id: str
-    plan_id: str
-    plan_digest: str
-    committed: tuple[Mapping[str, Any], ...]
-    evidence: tuple[Mapping[str, Any], ...]
-    status: str
-    parameters: tuple[Mapping[str, Any], ...] = ()
+    committed: tuple[str, ...]
+    parameters: tuple[ParameterAssignment, ...] = ()
     expected_effects: tuple[str, ...] = ()
-
-    def __post_init__(self) -> None:
-        # The entries are plain dicts inside a tuple, so freeze them.
-        object.__setattr__(self, "committed", tuple(_freeze(entry) for entry in self.committed))
-        object.__setattr__(self, "evidence", tuple(_freeze(entry) for entry in self.evidence))
-        object.__setattr__(self, "parameters", tuple(_freeze(entry) for entry in self.parameters))
-        object.__setattr__(self, "expected_effects", tuple(self.expected_effects))
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "transaction_id": self.transaction_id,
-            "plan_id": self.plan_id,
-            "plan_digest": self.plan_digest,
-            "committed": [dict(entry) for entry in self.committed],
-            "evidence": [dict(entry) for entry in self.evidence],
-            "status": self.status,
-            # `dict(entry)` unwraps only the outermost proxy; a parameter's
-            # nested mappings need `_json_value` to serialize.
-            "parameters": [_json_value(entry) for entry in self.parameters],
-            "expected_effects": list(self.expected_effects),
-        }
 
 
 @dataclass(frozen=True)

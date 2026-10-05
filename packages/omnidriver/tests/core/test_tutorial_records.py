@@ -807,7 +807,7 @@ def test_split_unchanged_treats_an_undeterminable_patch_as_changed():
 
 
 # ---------------------------------------------------------------------------
-# The validated flag: round trip into ParameterAssignment / CaseWriteRecord
+# The validated flag: carried into ParameterAssignment and the commit's record
 # ---------------------------------------------------------------------------
 
 
@@ -820,34 +820,22 @@ def test_patches_to_parameters_carries_the_validated_flag_through():
     assert isinstance(parameters[0], ParameterAssignment)
     assert parameters[0].validated is True
     assert parameters[1].validated is False
-    payload = [p.to_json() for p in parameters]
-    assert payload[0]["validated"] is True
-    assert payload[1]["validated"] is False
 
 
-def test_parameter_assignment_validated_defaults_none_and_round_trips_json():
-    """`validated` is tri-state -- `None` means "not stated", distinct from `False` ("checked, and found unvalidated")."""
-    assignment = ParameterAssignment(
+def test_parameter_assignment_validated_is_tri_state():
+    """`None` means "not stated", distinct from `False` ("checked, and found unvalidated")."""
+    def assignment(validated):
+        return ParameterAssignment(
+            qualified_id="q", owner="org.a", document="constant/a", key_path=("k",),
+            value=1.0, value_kind="scalar", source="case", validated=validated,
+        )
+
+    assert ParameterAssignment(
         qualified_id="q", owner="org.a", document="constant/a", key_path=("k",),
         value=1.0, value_kind="scalar", source="case",
-    )
-    assert assignment.validated is None
-    restored = ParameterAssignment.from_json(assignment.to_json())
-    assert restored.validated is None
-
-    unvalidated = ParameterAssignment(
-        qualified_id="q2", owner="org.a", document="constant/a", key_path=("k2",),
-        value=1.0, value_kind="scalar", source="case", validated=False,
-    )
-    assert ParameterAssignment.from_json(unvalidated.to_json()).validated is False
-
-    validated = ParameterAssignment(
-        qualified_id="q3", owner="org.a", document="constant/a", key_path=("k3",),
-        value=1.0, value_kind="scalar", source="case", validated=True,
-    )
-    assert ParameterAssignment.from_json(validated.to_json()).validated is True
-
-
+    ).validated is None
+    assert assignment(False).validated is False
+    assert assignment(True).validated is True
 
 
 def test_parameter_assignment_refuses_a_string_for_validated():
@@ -1312,13 +1300,12 @@ def test_commit_record_case_writes_one_case_with_validated_flags_in_the_record(t
     assert result.unchanged == ()
     write_record = result.write_record
     assert write_record is not None
-    assert write_record.status == "committed"
-    by_qualified_id = {p["qualified_id"]: p for p in write_record.parameters}
-    assert by_qualified_id["constant/physics.json::modelName"]["validated"] is True
-    assert by_qualified_id["system/unowned.json::endTime"]["validated"] is False
+    by_qualified_id = {p.qualified_id: p for p in write_record.parameters}
+    assert by_qualified_id["constant/physics.json::modelName"].validated is True
+    assert by_qualified_id["system/unowned.json::endTime"].validated is False
     # The owner is the provider that resolves the stack's mutations.
     assert (
-        by_qualified_id["constant/physics.json::modelName"]["owner"]
+        by_qualified_id["constant/physics.json::modelName"].owner
         == context.identity.resolutions["resolve_case_mutation"]
     )
     written = json.loads((tmp_path / "staged" / "constant" / "physics.json").read_text())
@@ -1614,7 +1601,7 @@ def test_a_sweep_over_a_record_entry_produces_one_commit_per_case(tmp_path):
         assert result.write_record is not None
         committed.append(result.write_record)
 
-    assert len({r.transaction_id for r in committed}) == 2
+    assert all(r.committed for r in committed)
     cells_by_case = {
         case.case_id: json.loads(
             (tmp_path / "sweep_cases" / case.case_id / "constant" / "mesh.json").read_text()

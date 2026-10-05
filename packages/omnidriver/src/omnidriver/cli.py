@@ -23,7 +23,6 @@ from .core.runtime.case_records import (
     write_case_record,
 )
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
-from .core.case_transaction import CaseTransactionError, pending_transaction, recover_case_transaction
 from .core.environment_connection import load_environment
 from .core.refusal import Refusal, RefusingParser, print_refusal
 from .core.plugin_discovery import discover_plugins
@@ -565,18 +564,6 @@ def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
                     "error": fresh_error,
                 }, indent=2))
                 return 1
-        pending = pending_transaction(context.case_root)
-        if pending is not None:
-            print(json.dumps({
-                "status": "failed",
-                "entry": context.entry_label,
-                "action": args.action,
-                "error": (
-                    f"case transaction {pending.get('transaction_id')} was interrupted; "
-                    f"run `omnidriver recover --case-root {context.case_root}` first"
-                ),
-            }, indent=2))
-            return 1
         if args.action == "step":
             return _execute_step(
                 entry_label=context.entry_label,
@@ -614,28 +601,6 @@ def _run_document_dispatch(args, driver_context) -> int:
     if context is None:
         return 1
     return _dispatch_context(args, context)
-
-
-def _recover(args) -> int:
-    """Restore the before-images of an interrupted case transaction."""
-    case_root = Path(args.case_root).resolve()
-    try:
-        recovered = recover_case_transaction(case_root)
-    except CaseTransactionError as exc:
-        print(json.dumps({
-            "status": "failed",
-            "action": "recover",
-            "case_root": str(case_root),
-            "error": str(exc),
-        }, indent=2))
-        return 1
-    print(json.dumps({
-        "status": "ok",
-        "action": "recover",
-        "case_root": str(case_root),
-        "transaction_id": recovered.transaction_id if recovered else None,
-    }, indent=2))
-    return 0
 
 
 def _compare_quantities(args) -> int:
@@ -689,8 +654,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "action",
         choices=[
-            "describe", "catalog", "env", "scan", "check", "plan", "step", "run", "recover", "sweep-plan",
-            "sweep-run", "compare",
+            "describe", "catalog", "env", "scan", "check", "plan", "step", "run", "sweep-plan", "sweep-run", "compare",
         ],
         help="Pipeline stage to execute",
     )
@@ -837,10 +801,6 @@ def build_parser() -> argparse.ArgumentParser:
             "Path to the tutorials folder. Defaults to $OMNIDRIVER_CASES_ROOT; "
             "with neither, and no --repo, a command that needs one is refused."
         ),
-    )
-    parser.add_argument(
-        "--case-root",
-        help="For action=recover: the case directory whose interrupted transaction to restore.",
     )
     parser.add_argument(
         "--spec",
@@ -1042,8 +1002,8 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--run-document is only valid with action=run or action=step")
     if args.repo and args.cases_root:
         parser.error("--repo supplies the cases root (its tutorials folder); --cases-root is not valid with it")
-    if args.repo and args.action in {"recover", "compare"}:
-        parser.error(f"--repo is not valid with action={args.action}")
+    if args.repo and args.action == "compare":
+        parser.error("--repo is not valid with action=compare")
     if args.entry and args.case:
         parser.error("--entry and --case are mutually exclusive")
     if args.run_document and (args.entry or args.case):
@@ -1083,18 +1043,6 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--max-cases is only valid with action=sweep-plan or action=sweep-run")
     if args.action not in {"sweep-plan", "sweep-run"} and (args.spec or args.output_dir):
         parser.error("--spec/--output-dir are only valid with action=sweep-plan or action=sweep-run")
-    if args.action == "recover":
-        if not args.case_root:
-            parser.error("action=recover requires --case-root")
-        if any((args.entry, args.case, args.run_document, args.cases_root, args.spec, args.output_dir)):
-            parser.error(
-                "--entry/--case/--run-document/--cases-root/--spec/--output-dir are not valid "
-                "with action=recover"
-            )
-    elif args.case_root:
-        parser.error("--case-root is only valid with action=recover")
-    if args.action == "recover" and args.scratch_dir:
-        parser.error("--scratch-dir is not valid with action=recover")
     if args.action == "compare":
         if not args.comparison_request or not args.report:
             parser.error("action=compare requires --comparison-request and --report")
@@ -1117,7 +1065,7 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
     if args.action == "describe" and not args.entry and not args.case and (args.parallel is not None or args.inputs):
         parser.error("--parallel/--input preview a record: pass --entry or --case, or omit them to list the stack")
     if not args.run_document and not args.entry and not args.case and not (args.uncatalogued or args.unread or args.named) and args.action not in {
-        "recover", "sweep-plan", "sweep-run", "compare", "env", "scan", "check", "describe",
+        "sweep-plan", "sweep-run", "compare", "env", "scan", "check", "describe",
     }:
         parser.error("--entry or --case is required (or use --run-document with action=run/step)")
 
@@ -1244,7 +1192,7 @@ def _select_stack(parser: argparse.ArgumentParser, args):
     try:
         if args.repo:
             repository = read_repository(Path(args.repo).expanduser())
-        elif args.action not in {"recover", "compare"}:
+        elif args.action != "compare":
             supplied = args.cases_root or os.environ.get("OMNIDRIVER_CASES_ROOT")
             if supplied:
                 repository = repository_of_cases_root(Path(supplied))
@@ -1307,7 +1255,7 @@ def main(argv: list[str] | None = None) -> int:
         _validate_args(parser, args)
         if args.action in {"step", "run", "sweep-run", "check"}:
             previous_handlers = install_signal_handlers()
-        if args.scratch_dir and args.action != "recover":
+        if args.scratch_dir:
             # The one supplied scratch root, for the layers that cache a scan there.
             os.environ[SCRATCH_ENV_VAR] = str(Path(args.scratch_dir).expanduser())
         return _dispatch(parser, args)
@@ -1324,9 +1272,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _dispatch(parser: argparse.ArgumentParser, args) -> int:
-    if args.action == "recover":
-        return _recover(args)
-
     if args.action == "compare":
         return _compare_quantities(args)
 

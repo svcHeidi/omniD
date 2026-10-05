@@ -141,34 +141,24 @@ def test_apply_needs_a_staged_case_so_it_refuses_entry(tmp_path, capsys):
     )
 
 
-def test_an_interrupted_edit_blocks_the_case_until_recover_restores_it(case, monkeypatch):
-    original = case_transaction._write_one
+def test_an_interrupted_edit_is_rolled_back_and_the_case_still_runs(case, monkeypatch):
+    original = case_transaction.atomic_write_bytes
+    interrupted = []
 
-    def write_then_die(target, rendered):
-        original(target, rendered)
-        raise KeyboardInterrupt
+    def write_then_die(target, content, **kwargs):
+        original(target, content, **kwargs)
+        if not interrupted:
+            interrupted.append(target)
+            raise KeyboardInterrupt
 
-    monkeypatch.setattr(case_transaction, "_write_one", write_then_die)
+    monkeypatch.setattr(case_transaction, "atomic_write_bytes", write_then_die)
     with pytest.raises(KeyboardInterrupt):
         case.apply({"constant/mesh.json:cells": 7})
     monkeypatch.undo()
-    assert case.cells() == "7"
-
-    code, payload = case.step()
-    assert code == 1 and "recover" in payload["error"]
-
-    code, payload = _cli("recover", "--case-root", str(case.root))
-    assert code == 0 and payload["transaction_id"]
     assert case.cells() == "1"
 
     code, payload = case.step()
     assert code == 0 and payload["status"] == "ok"
-
-
-def test_recover_with_nothing_interrupted_says_so(case):
-    code, payload = _cli("recover", "--case-root", str(case.root))
-
-    assert code == 0 and payload["transaction_id"] is None
 
 
 def test_an_edit_that_breaks_a_rule_is_rolled_back_and_the_case_still_takes_a_valid_edit(tmp_path):
@@ -180,7 +170,7 @@ def test_an_edit_that_breaks_a_rule_is_rolled_back_and_the_case_still_takes_a_va
     assert code == 1 and "12 cells exceed 10" in payload["error"] and "as it was" in payload["error"]
     assert case.cells() == "1"
     assert "applied_patches" not in payload
-    assert not (case.root / ".omnidriver" / "case-transaction.json").exists()
+    assert not (case.root / ".omnidriver").exists()
 
     code, payload = case.apply({"constant/mesh.json:cells": 7})
     assert code == 0 and payload["status"] == "ok", payload

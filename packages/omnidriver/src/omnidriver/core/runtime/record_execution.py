@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import contextlib
 import copy
-import datetime
 import os
 import shutil
 from dataclasses import dataclass
@@ -427,7 +426,6 @@ def _commit_patches(
     plan = CaseWritePlan(
         request=request, files=tuple(rendered),
         semantic_owner_id=resolved.semantic_owner_id, stack_identity=identity.capability_digest,
-        created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         expected_effects=resolved.expected_effects,
     )
     return commit_case_write(
