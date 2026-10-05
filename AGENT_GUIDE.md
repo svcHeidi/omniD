@@ -574,8 +574,10 @@ and the exit code is non-zero, the step still being failed. A step that never
 ran is run. A name that is not a `document:key` (an axis or reserved name)
 changes the plan, so it is refused: plan again with it. The step then reruns
 (`attempt++`), the JSON carries `applied_patches` and `artifact_reconciliation`, and one record per attempt is
-appended to `remediation_history.jsonl` under the output directory. The case is
-a scratch copy: if the process dies mid-edit, plan again to restage it.
+appended to `remediation_history.jsonl` under the output directory. If the
+process is killed mid-edit, the next `step`/`run` of that case is refused
+("an edit of this case was interrupted (<paths>); plan again"): plan again,
+which restages the case.
 
 **Derived constants are not overridable.** Some models expose constants that are
 *computed* from other (user-facing) constants at `initConsts` — e.g. the

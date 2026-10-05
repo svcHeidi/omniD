@@ -47,8 +47,9 @@ an agent callback.
    dispatches the utility step. Each attempt is appended to
    `remediation_history.jsonl`.
 5. The result lists `applied_patches`. A commit that fails rolls back to the
-   original bytes; a crash mid-commit is repaired by planning again, which
-   restages the case.
+   original bytes; a kill mid-commit makes the next `step`/`run` refuse ("an edit of
+   this case was interrupted ...; plan again"), and planning again restages
+   the case.
 
 The plugin's record validator accepts or refuses each key by name, and its
 renderer may reject an invalid value by raising `ValueError`: a refusal at
