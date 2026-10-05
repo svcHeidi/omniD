@@ -116,6 +116,9 @@ def list_elements(text: str) -> list[str]:
             if depth < 0:
                 raise ValueError(f"{shown} has an unbalanced ')'")
             current.append(char)
+            if depth == 0:
+                tokens.append("".join(current))
+                current = []
         elif char.isspace() and depth == 0:
             if current:
                 tokens.append("".join(current))

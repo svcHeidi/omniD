@@ -53,6 +53,11 @@ def test_a_counted_list_reads_as_its_elements():
     assert parse_vector3_list_literal("1((1 0 0))") == ((1.0, 0.0, 0.0),)
 
 
+def test_list_elements_need_no_space_between_them():
+    assert list_elements("((0 1 1 1)(1 2 1 1))") == ["(0 1 1 1)", "(1 2 1 1)"]
+    assert list_elements("2(4(0 1 1 1)4(1 2 1 1))") == ["4(0 1 1 1)", "4(1 2 1 1)"]
+
+
 def test_a_count_that_is_not_the_number_of_elements_is_refused():
     with pytest.raises(ValueError, match="counts 3 elements but holds 2"):
         list_elements("3(1 2)")
