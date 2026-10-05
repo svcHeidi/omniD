@@ -406,8 +406,12 @@ def test_a_second_signal_during_the_rollback_waits_for_it_to_finish(tmp_path, mo
     def refuse():
         raise ValueError("the case breaks a rule")
 
-    with pytest.raises(KeyboardInterrupt):
-        case_transaction.commit_case_write(plan, driver_context=object(), verify=refuse)
+    previous = signal.signal(signal.SIGINT, signal.default_int_handler)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            case_transaction.commit_case_write(plan, driver_context=object(), verify=refuse)
+    finally:
+        signal.signal(signal.SIGINT, previous)
 
     assert existing.read_bytes() == b"original\n"
     assert case_transaction.interrupted_commit(tmp_path) is None
