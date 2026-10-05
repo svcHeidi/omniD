@@ -132,8 +132,9 @@ check it; the refusals it names are the record's own.
   positive length or of negative conductance, a node index with a fraction, a
   `pvjResistances` or `rPvj` not above 0, a `rootStimulus.node` past the
   graph's last node, and a `pvjLocations` more than `pvjRadius` outside the
-  mesh's bounding box. A location more than `pvjRadius` from its node's
-  `points` position is a warning. The mesh is read where `constant/polyMesh`
+  mesh's bounding box (a graph in other units than its mesh). A junction with
+  no cell in its sphere is coupled to its nearest cell, as a tree grown on the
+  endocardial surface needs; omniD leaves that to the solver. The mesh is read where `constant/polyMesh`
   exists when the case is judged, so a plan of a case that has yet to make its
   mesh does not judge the locations, and `step` does once the mesh step has run.
   With `pvjCouplingScheme explicit`, a junction resistance below the bound set by

@@ -206,8 +206,7 @@ only normalises them inside `restitutionEikonalSolver1D`.
 | G9 | min, median and max of \|`pvjLocations[i]` − `points[pvjNodes[i]]`\|, and of edge lengths and conductances, over the human and pig `idealizedHeart` graphs, `purkinjeRestitution2D`, and every `monodomain1D3D` graph | the offset is 0 for every junction of every graph; lengths 7.8e-6 to 3.4e-4 m (idealizedHeart), 0.00625 to 0.5 (monodomain1D3D, a unit cube); every conductance 1; no edge of length 0; no node index with a fraction | a check that a location sits at its node's position, a length above 0, and a conductance of 0 or more refuses no native data |
 | G10 | `plan --strict --case` of each native graph case materialized as its `Allrun` does (human and pig × monodomain, eikonal and hybrid; `conductionBlock` lbbb and rbbb; `ionicPathology` brugada and ischemia; `purkinjeRestitution2D` three variants; `monodomain1D3D` and its six graphs), on `main` and with the checks | all 20 `ok` on both, the same diagnostics; human `idealizedHeart` 3.6 s on both | no native case is newly refused, and the check is not felt in a plan |
 | G11 | the same, `rootStimulus.node 50000` | refused: "rootStimulus.node is 50000, outside the nodes 0 to 44499 of constant/purkinjeGraph" | the C++ gives no message |
-| G12 | `monodomain1D3D` with `pvjLocations` in millimetres against its metre mesh: `plan --strict --entry`, then `step --step mesh`, then `step --step solve`; then `run` | `plan` is `ok` with the `pvj_location_off_node` warning; `step --step solve` refuses with the bounding-box error before `cardiacFoam` starts; `run` completes `ok` | a plan cannot see a mesh the case has yet to make (`polyMesh` is a generated directory and is not staged), and `run` validates once, before its first step; the bounding-box check fires wherever the mesh exists when the case is judged |
-
+| G12 | `monodomain1D3D` with `pvjLocations` in millimetres against its metre mesh: `plan --strict --entry`, then `step --step mesh`, then `step --step solve`; then `run` | `plan` is `ok`; `step --step solve` refuses with the bounding-box error before `cardiacFoam` starts; `run` completes `ok` | a plan cannot see a mesh the case has yet to make (`polyMesh` is a generated directory and is not staged), and `run` validates once, before its first step; the bounding-box check fires wherever the mesh exists when the case is judged |
 
 ## Units, settled
 
@@ -247,12 +246,13 @@ below.
    the override from `readRootStimulus` goes straight into
    `appliedCurrent[rootNode_]`. omniD refuses a node past the graph's last.
 3. **`pvjLocations` against `points[pvjNodes]`.** They are never compared, so a
-   junction can couple away from its node's position. Is that intended, for
-   example a junction placed inside the wall? Every native graph, the pig
-   tree's transmural junctions included, writes the two equal (G9), so omniD
-   warns of a location more than the coupling's `pvjRadius` from its node's
-   position. It refuses a location more than `pvjRadius` outside the mesh's
-   bounding box, which `pvjMapper` would couple to its nearest cell, however far.
+   junction can couple away from its node's position; every native graph, the
+   pig tree's transmural junctions included, writes the two equal (G9). The
+   owner settled it: a tree is grown on the endocardial surface, and coupling a
+   junction with no cell in its sphere to the nearest cell is how it meets the
+   mesh, so omniD judges neither. It refuses only a location more than
+   `pvjRadius` outside the mesh's bounding box, which no surface-grown junction
+   is: a graph in other units than its mesh.
 4. **`eikonalMonodomainPvjCoupler` requires `rPvj`** even when the graph lists
    `pvjResistances`, and then never uses it.
 5. **`torsoSurface`.** Its only reader is `ecgModelIO::loadSurface`

@@ -579,7 +579,6 @@ class _Graph(NamedTuple):
     breaks: tuple[tuple[str, str, str], ...]
     nodes: int | None
     locations: tuple[tuple[float, float, float], ...] | None
-    offsets: tuple[float, ...] | None
 
 
 @lru_cache(maxsize=8)
@@ -739,15 +738,7 @@ def _parse_graph(raw: dict[str, str]) -> _Graph:
     if values is not None and (bad := [(i, v) for i, v in enumerate(values) if not (math.isfinite(v) and v > 0)]):
         invalid("pvjResistances", "junction", "whose resistance is not above 0, which a junction current is divided by", bad)
     located = positions("pvjLocations", locations) if locations is not None else None
-    offsets = None
-    if (
-        located is not None and pvj_nodes is not None and points is not None and nodes is not None
-        and len(points) == nodes and len(located) == len(pvj_nodes) and all(0 <= node < nodes for node in pvj_nodes)
-    ):
-        junctions = positions("points", [points[node] for node in pvj_nodes])
-        if junctions is not None:
-            offsets = tuple(math.dist(here, there) for here, there in zip(located, junctions))
-    return _Graph(raw, tuple(breaks), nodes, tuple(located) if located is not None else None, offsets)
+    return _Graph(raw, tuple(breaks), nodes, tuple(located) if located is not None else None)
 
 
 def _evaluate_conduction_graphs(graphs: dict[str, tuple[str, _Graph]]) -> list["StrictDiagnostic"]:
@@ -864,11 +855,9 @@ def _evaluate_graph_placement(
 
     ``rootStimulus.node`` past the graph's last node is an error: ``conductionSystemDomain::readRootStimulus``
     range-checks only the graph's own ``rootNode``, and the stimulus is then added past the end of the applied-current
-    buffer. A junction whose location lies more than the coupling's ``pvjRadius`` beyond the mesh's bounding box has
-    no cell centre within its sphere, and ``pvjMapper`` silently couples it to the nearest cell, however far: an
-    error. A location more than ``pvjRadius`` from its node's ``points`` position is a warning, since the C++ couples
-    at the location and compares the two nowhere, but a junction drawn beyond its own sphere is a graph that
-    disagrees with itself."""
+    buffer. ``pvjMapper`` couples a junction with no cell centre in its sphere to the nearest cell, which is how a
+    tree grown on the endocardial surface meets the mesh; only a location more than ``pvjRadius`` beyond the mesh's
+    bounding box, which no surface-grown junction is, is an error (a graph in other units than its mesh)."""
     from omnidriver.openfoam.mesh_points import points_bounds
 
     from .record_key_validation import _ELECTRO_ENTRIES_BY_PATH
@@ -897,17 +886,6 @@ def _evaluate_graph_placement(
         if isinstance(radius, bool) or not isinstance(radius, (int, float)):
             continue
         relpath, graph = graphs[network]
-        far = [(i, d) for i, d in enumerate(graph.offsets or ()) if d > radius]
-        if far:
-            i, distance = far[0]
-            found.append(diagnostic(
-                "warning", "pvj_location_off_node",
-                f"{relpath}: {len(far)} of {len(graph.offsets)} pvjLocations lie more than {block}'s pvjRadius "
-                f"({radius:g} m) from their pvjNodes' positions in points; junction {i} is {distance:g} m away. The "
-                "solver couples the tissue at the location and writes the node at its position, and compares "
-                "them nowhere.",
-                source=relpath, field="pvjLocations",
-            ))
         if graph.locations is None:
             continue
         if extent is None and not unreadable:
