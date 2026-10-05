@@ -15,7 +15,7 @@ from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.core.runtime.attempt_lease import AttemptLeaseError, acquire_case_lease
 from omnidriver.core.runtime.process_control import run_child
-from omnidriver.core.runtime.sweep_runner import _stage_entry_case, sweep_plan, sweep_run
+from omnidriver.core.runtime.sweep_runner import SweepStopped, _stage_entry_case, sweep_plan, sweep_run
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError
 from omnidriver.core.tutorial_records import (
     AxisContract,
@@ -876,3 +876,45 @@ def test_the_childs_own_record_write_finds_the_sweeps_record_already_in_the_case
     _run_toy_sweep(tmp_path, child)
 
     assert seen == [("2", 2), ("3", 3)]
+
+
+def _stopped_by_sigterm(cmd, **kwargs):
+    run_doc = json.loads(Path(cmd[cmd.index("--run-document") + 1]).read_text())
+    Path(run_doc["launch"]["outputDir"], "workflow_state.json").write_text(json.dumps({"status": "failed"}))
+    raise SystemExit(143)
+
+
+def test_a_sweep_stopped_by_a_signal_marks_its_running_case_and_reports(tmp_path):
+    cases_root = _native_toy_case(tmp_path)
+    (tmp_path / "sweep.json").write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(2, 3, 4))))
+
+    with mock.patch("omnidriver.core.runtime.sweep_runner.run_child", side_effect=_stopped_by_sigterm):
+        with pytest.raises(SweepStopped) as stopped:
+            sweep_run(tmp_path / "sweep.json", output_dir=tmp_path / "out", driver_context=_record_driver_context())
+
+    assert stopped.value.code == 143
+    report = stopped.value.report
+    assert (report["case_count"], report["failed_count"], report["skipped_count"]) == (3, 1, 2)
+    assert report["cases"][0]["stopped_by_signal"] == 15
+    manifest = json.loads((tmp_path / "out" / "sweep_manifest.json").read_text())
+    assert [(c["case_id"], c["sweep_outcome"]) for c in manifest["cases"]] == [("2", "stopped")]
+    assert manifest["cases"][0]["failure"]["stopped_by_signal"] == 15
+
+
+def test_the_cli_prints_the_report_of_a_sweep_a_signal_stopped(tmp_path, capsys):
+    from omnidriver.cli import main
+    from plugins.toy import QUANTITY_TOY_PLUGIN, write_quantity_toy_case
+
+    write_quantity_toy_case(tmp_path / "native", "A 0.0015 0 0 0.007\n")
+    spec = {"base": {"entry": "toyQuantities", "cases_root": str(tmp_path / "native")},
+            "sweep": {"mode": "cross_product", "independent": {"number_cells": [2, 3]}}}
+    (tmp_path / "sweep.json").write_text(json.dumps(spec))
+
+    with mock.patch("omnidriver.core.runtime.sweep_runner.run_child", side_effect=_stopped_by_sigterm):
+        code = main([
+            "sweep-run", "--plugin", QUANTITY_TOY_PLUGIN, "--spec", str(tmp_path / "sweep.json"),
+            "--output-dir", str(tmp_path / "out"), "--scratch-dir", str(tmp_path / "scratch"),
+        ])
+
+    printed = json.loads(capsys.readouterr().out)
+    assert code == 143 and printed["status"] == "failed" and printed["skipped_count"] == 1

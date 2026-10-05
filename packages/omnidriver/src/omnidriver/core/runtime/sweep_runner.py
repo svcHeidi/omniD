@@ -17,7 +17,7 @@ from omnidriver.core.tutorial_records import TutorialRecordError, lookup_record,
 from .failure_context import why_a_child_stopped
 from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
-from .case_records import CASE_RECORD_FILENAME, sweep_case_record, write_case_record
+from .case_records import CASE_RECORD_FILENAME, sweep_case_record, workflow_status, write_case_record
 from .record_execution import (
     commit_and_build_record_spec,
     record_case_members,
@@ -75,6 +75,14 @@ def _manifest_failure(failure: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(context, dict):
         return dict(failure)
     return {**failure, "failure_context": {k: context[k] for k in _MANIFEST_FAILURE_CONTEXT_KEYS if k in context}}
+
+
+class SweepStopped(SystemExit):
+    """A signal ended a sweep-run; ``report`` is the sweep's JSON report up to that point."""
+
+    def __init__(self, code: int, report: dict[str, Any]) -> None:
+        super().__init__(code)
+        self.report = report
 
 
 def _load_spec(spec_path: str | Path) -> dict[str, Any]:
@@ -227,6 +235,15 @@ def _record_sweep_run(
     failed_count = 0
     case_summaries: list[dict[str, Any]] = []
 
+    def sweep_report() -> dict[str, Any]:
+        return {
+            "case_count": len(resolved_cases),
+            "completed_count": completed_count,
+            "failed_count": failed_count,
+            "skipped_count": len(resolved_cases) - len(case_summaries),
+            "cases": case_summaries,
+        }
+
     for case in resolved_cases:
         # One folder per case: the staged case, its run document, workflow state and record.
         case_root = output_dir / "cases" / case.case_id
@@ -256,6 +273,7 @@ def _record_sweep_run(
         commit_status = None
         unchanged_patches: list[dict[str, Any]] = []
         artifact_reconciliation = None
+        stopped: SystemExit | None = None
         try:
             commit_result, spec = commit_and_build_record_spec(
                 record, case_id=case.case_id, cases_root=cases_root,
@@ -298,6 +316,10 @@ def _record_sweep_run(
                     status = "failed"
                 else:
                     status = "pending"
+        except SystemExit as stop:
+            stopped = stop
+            status = workflow_status(workflow_state_path) or "failed"
+            failure["stopped_by_signal"] = int(stop.code) - 128 if isinstance(stop.code, int) else None
         except subprocess.TimeoutExpired as exc:
             failure["timeout_error"] = (
                 f"case exceeded timeout of {case_timeout_s}s and was terminated: {exc}"
@@ -330,7 +352,7 @@ def _record_sweep_run(
         case_summary.update(failure)
         case_summaries.append(case_summary)
 
-        entry.sweep_outcome = status
+        entry.sweep_outcome = "stopped" if stopped is not None else status
         entry.workflow_state_path = case_summary["workflow_state_path"]
         entry.updated_at = utc_now()
         entry.unchanged_patches = tuple(unchanged_patches)
@@ -339,13 +361,10 @@ def _record_sweep_run(
         write_manifest(manifest_path, manifest)
         write_case_record(case_record_path, sweep_case_record(entry, output_dir))
 
-    return {
-        "case_count": len(resolved_cases),
-        "completed_count": completed_count,
-        "failed_count": failed_count,
-        "skipped_count": 0,
-        "cases": case_summaries,
-    }
+        if stopped is not None:
+            raise SweepStopped(stopped.code, sweep_report())
+
+    return sweep_report()
 
 
 def _relative_or_absolute(path: Path, base: Path) -> str:

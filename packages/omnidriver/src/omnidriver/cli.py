@@ -27,7 +27,7 @@ from .core.case_transaction import CaseTransactionError, pending_transaction, re
 from .core.environment_connection import load_environment
 from .core.refusal import Refusal, RefusingParser, print_refusal
 from .core.plugin_discovery import discover_plugins
-from .core.runtime.sweep_runner import sweep_plan, sweep_run
+from .core.runtime.sweep_runner import SweepStopped, sweep_plan, sweep_run
 from omnidriver.core.introspection import describe_entry, describe_stack, named_catalog
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.provider_identity import stack_identity_mismatch
@@ -1511,6 +1511,9 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             )
         except (SweepValidationError, TutorialRecordError) as exc:
             return _sweep_refusal(args, exc)
+        except SweepStopped as stop:
+            print(json.dumps({"status": "failed", **stop.report}, indent=2))
+            return stop.code
         failed = result["failed_count"] > 0
         print(json.dumps({"status": "failed" if failed else "ok", **result}, indent=2))
         return 1 if failed else 0
