@@ -607,7 +607,7 @@ One job is one `campaign.sh oblique <scheme> <variant> <dx-mm> <N>`: a sweep of
 the three time steps at one Δx, into `runs/oblique/<scheme>/<variant>/dx<mm>/`
 (`case_0001` to `case_0003` are Δt 0.05, 0.01, 0.005 ms). A fifth argument
 `[dt-ms]` runs one time step into `dx<mm>_dt<ms>/`, as the smoke run does.
-End times: 200 ms at Δx 0.5, 80 ms at 0.2, 65 ms at 0.1.
+End times: 200 ms at Δx 0.5, 80 ms at 0.2, 75 ms at 0.1.
 
 | # | scheme | variant | Δx (mm) | cells | ranks | command | Slurm task | est. wall |
 |---|---|---|---|---|---|---|---|---|
@@ -725,7 +725,7 @@ rsync -a --prune-empty-dirs --exclude='processor*' \
   --include='cases/case_*/postProcessing/Niedererlines/0/activationTime' \
   --include='cases/case_*/0.2/activationTime' --include='cases/case_*/0.2/Vm' \
   --include='cases/case_*/0.08/activationTime' --include='cases/case_*/0.08/Vm' \
-  --include='cases/case_*/0.065/activationTime' --include='cases/case_*/0.065/Vm' \
+  --include='cases/case_*/0.075/activationTime' --include='cases/case_*/0.075/Vm' \
   --include='cardiacfoam_obliqueWall_*.json' --exclude='*' \
   oblique studies <destination>/
 ```
@@ -734,7 +734,7 @@ That is, per sweep `sweep_manifest.json`; per case `workflow_state.json`,
 `run_document.json`, `case_record.json`, `constant/electroProperties*` and
 `physicsProperties`, `system/*`, `workflow_logs/*`, the two
 `postProcessing/.../activationTime` files, and `activationTime` and `Vm` of the
-end time (`0.2`, `0.08` or `0.065`); and the level studies
+end time (`0.2`, `0.08` or `0.075`); and the level studies
 `studies/cardiacfoam_obliqueWall_*.json`. Also copy the `summary.md`, the
 recorded hashes (native commit, omniD commit, `wheels/SHA256SUMS`, the
 cardiacFoam binary and `libelectroModels` digests), and the job logs.
