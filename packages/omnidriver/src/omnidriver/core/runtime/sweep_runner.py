@@ -268,6 +268,7 @@ def _record_sweep_run(
                 run_document_path.write_text(json.dumps(run_document, indent=2))
                 if workflow_state_path.exists():
                     workflow_state_path.unlink()
+                write_case_record(case_record_path, sweep_case_record(entry, output_dir))
                 result = run_child(
                     omnidriver_run_command(driver_context, "--run-document", str(run_document_path)),
                     env=execution_environment,

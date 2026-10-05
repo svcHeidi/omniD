@@ -829,3 +829,17 @@ def test_a_plan_that_cannot_run_says_why_in_plan_error(tmp_path):
     case = result["cases"][0]
     assert case["status"] == "failed"
     assert case["plan_error"] == "launcher_mismatch: wrong MPI first on PATH"
+
+
+def test_the_childs_own_record_write_finds_the_sweeps_record_already_in_the_case_folder(tmp_path):
+    seen = []
+
+    def child(cmd, **kwargs):
+        folder = Path(cmd[cmd.index("--run-document") + 1]).parent
+        record = json.loads((folder / "case_record.json").read_text())
+        seen.append((record["case_id"], record["resolved_axis_values"]["number_cells"]))
+        return _completing_child(cmd, **kwargs)
+
+    _run_toy_sweep(tmp_path, child)
+
+    assert seen == [("2", 2), ("3", 3)]
