@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from .case_transaction import COMMIT_MARKER_FILENAME
 from .plugin_interface import CaseRuntimeConventions
 from .runtime.attempt_lease import ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME
 from .runtime.case_records import CASE_RECORD_FILENAME
@@ -21,7 +22,7 @@ CORE_RUNTIME_RECORDS = CaseRuntimeConventions(
     generated_directory_names=(WORKFLOW_LOGS_DIRNAME,),
     generated_file_names=(
         STATE_FILENAME, RUN_DOCUMENT_FILENAME, SWEEP_MANIFEST_FILENAME, CASE_RECORD_FILENAME,
-        ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME,
+        ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME, COMMIT_MARKER_FILENAME,
     ),
     generated_case_markers=(STATE_FILENAME, WORKFLOW_LOGS_DIRNAME, RUN_DOCUMENT_FILENAME),
 )

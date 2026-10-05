@@ -23,6 +23,7 @@ from .core.runtime.case_records import (
     write_case_record,
 )
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
+from .core.case_transaction import interrupted_commit
 from .core.environment_connection import load_environment
 from .core.refusal import Refusal, RefusingParser, print_refusal
 from .core.plugin_discovery import discover_plugins
@@ -564,6 +565,15 @@ def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
                     "error": fresh_error,
                 }, indent=2))
                 return 1
+        interrupted = interrupted_commit(context.case_root)
+        if interrupted is not None:
+            print(json.dumps({
+                "status": "failed",
+                "entry": context.entry_label,
+                "action": args.action,
+                "error": f"an edit of this case was interrupted ({', '.join(interrupted)}); plan again",
+            }, indent=2))
+            return 1
         if args.action == "step":
             return _execute_step(
                 entry_label=context.entry_label,

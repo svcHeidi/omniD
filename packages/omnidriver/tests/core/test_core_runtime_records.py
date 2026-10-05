@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from omnidriver.core.case_transaction import COMMIT_MARKER_FILENAME
 from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime.attempt_lease import (
@@ -28,7 +29,7 @@ def test_core_names_every_file_it_writes_into_a_case():
     """Every expected name is imported from its owning module's constant, so a rename there is what this test catches."""
     assert set(CORE_RUNTIME_RECORDS.generated_file_names) == {
         STATE_FILENAME, RUN_DOCUMENT_FILENAME, SWEEP_MANIFEST_FILENAME, CASE_RECORD_FILENAME,
-        ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME,
+        ATTEMPT_LOCK_FILENAME, ATTEMPT_LOCK_GUARD_FILENAME, COMMIT_MARKER_FILENAME,
     }
     assert set(CORE_RUNTIME_RECORDS.generated_directory_names) == {WORKFLOW_LOGS_DIRNAME}
 

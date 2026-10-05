@@ -1,13 +1,15 @@
 """Commit a reviewed plan's bytes: every file replaced atomically, and the commit undone when a write or ``verify`` refuses.
 
 The only module that writes a framework-authored case input; it moves bytes and knows no dictionary syntax.
-A case is a scratch copy a plan re-stages whole, so a commit a crash cut short is repaired by planning again,
-not journaled. Not guaranteed: several files becoming visible together to an outside reader, or control over
+A case is a scratch copy a plan re-stages whole, so a commit a kill cut short is not journaled: a marker
+file beside the case's inputs says an edit began and did not end, and the next run of that case is refused
+until a plan restages it. Not guaranteed: several files becoming visible together to an outside reader, or control over
 writers outside the framework. A symlinked write target is refused outright.
 """
 
 from __future__ import annotations
 
+import json
 from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -15,6 +17,11 @@ from typing import Any, Callable, Mapping
 from .case_write import CaseWritePlan, CaseWriteRecord, RenderedFile
 from .runtime.attempt_lease import AttemptLeaseError, acquire_case_lease, case_lease_is_held
 from .runtime.transaction_mechanics import atomic_write_bytes, fsync_directory
+
+
+#: Written before the first file is replaced and removed once the commit ends or is fully rolled back;
+#: one that remains means an edit of the case was cut short.
+COMMIT_MARKER_FILENAME = ".omnidriver-commit"
 
 
 class CaseTransactionError(RuntimeError):
@@ -112,6 +119,17 @@ def _rollback(
             pass
 
 
+def interrupted_commit(case_root: Path) -> tuple[str, ...] | None:
+    """The paths of an edit this case's commit marker says was cut short, or ``None`` when there is none."""
+    marker = Path(case_root) / COMMIT_MARKER_FILENAME
+    if not marker.exists():
+        return None
+    try:
+        return tuple(json.loads(marker.read_text())["paths"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return ()
+
+
 def _check_stack_freshness(plan: CaseWritePlan, driver_context: Any) -> None:
     """Refuse a plan bound to a stack that is no longer the composed one."""
     # Applies only when the context carries a StackIdentity. Most contract
@@ -175,7 +193,9 @@ def commit_case_write(
         before = {targets[rendered.path]: _before_image(rendered, targets[rendered.path]) for rendered in plan.files}
         created_dirs = _missing_ancestors(case_root, list(before))
 
+        marker = case_root / COMMIT_MARKER_FILENAME
         try:
+            atomic_write_bytes(marker, json.dumps({"paths": [rendered.path for rendered in plan.files]}).encode())
             try:
                 for rendered in plan.files:
                     atomic_write_bytes(targets[rendered.path], rendered.content, mode=rendered.mode)
@@ -185,7 +205,9 @@ def commit_case_write(
                 verify()
         except BaseException:
             _rollback(case_root, before, created_dirs)
+            marker.unlink(missing_ok=True)
             raise
+        marker.unlink(missing_ok=True)
 
     return CaseWriteRecord(
         committed=tuple(rendered.path for rendered in plan.files),

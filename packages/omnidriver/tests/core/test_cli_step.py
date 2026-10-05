@@ -141,13 +141,28 @@ def test_apply_needs_a_staged_case_so_it_refuses_entry(tmp_path, capsys):
     )
 
 
+def test_a_case_whose_edit_a_kill_cut_short_is_refused_until_planned_again(case):
+    (case.root / case_transaction.COMMIT_MARKER_FILENAME).write_text(
+        json.dumps({"paths": ["constant/mesh.json", "system/controlDict"]}),
+    )
+
+    code, payload = case.step()
+    assert code == 1 and payload["status"] == "failed"
+    assert "an edit of this case was interrupted (constant/mesh.json, system/controlDict); plan again" in payload["error"]
+    assert not (case.root / "solved.marker").exists()
+
+    code, payload = _cli("run", "--plugin", case.plugin, "--run-document", str(case.run_document))
+    assert code == 1 and "plan again" in payload["error"]
+    assert not (case.root / "solved.marker").exists()
+
+
 def test_an_interrupted_edit_is_rolled_back_and_the_case_still_runs(case, monkeypatch):
     original = case_transaction.atomic_write_bytes
     interrupted = []
 
     def write_then_die(target, content, **kwargs):
         original(target, content, **kwargs)
-        if not interrupted:
+        if target.name == "mesh.json" and not interrupted:
             interrupted.append(target)
             raise KeyboardInterrupt
 

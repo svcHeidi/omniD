@@ -270,6 +270,61 @@ def test_a_verify_that_refuses_rolls_the_commit_back_and_raises_as_it_is(tmp_pat
     assert not (tmp_path / "constant" / "new").exists()
 
 
+def test_the_commit_marker_names_the_edit_while_it_runs_and_is_gone_once_it_ends(tmp_path):
+    plan = _plan(tmp_path, [_rendered("constant/a", b"one\n"), _rendered("system/b", b"two\n")])
+    seen = []
+    case_transaction.commit_case_write(
+        plan, driver_context=object(), verify=lambda: seen.append(case_transaction.interrupted_commit(tmp_path)),
+    )
+    assert seen == [("constant/a", "system/b")]
+    assert case_transaction.interrupted_commit(tmp_path) is None
+
+
+def test_a_commit_a_kill_cut_short_leaves_its_marker(tmp_path):
+    import subprocess
+    import sys
+    import textwrap
+
+    (tmp_path / "constant").mkdir()
+    (tmp_path / "constant" / "a").write_bytes(b"original\n")
+    probe = textwrap.dedent(
+        f"""
+        import os, signal
+        from pathlib import Path
+        from omnidriver.core import case_transaction, case_write
+
+        real = case_transaction.atomic_write_bytes
+        written = []
+
+        def die_after_the_first_file(target, content, **kwargs):
+            real(target, content, **kwargs)
+            written.append(target)
+            if len(written) == 2:
+                os.kill(os.getpid(), signal.SIGKILL)
+
+        case_transaction.atomic_write_bytes = die_after_the_first_file
+        root = Path({str(tmp_path)!r})
+        files = (
+            case_write.RenderedFile(
+                path="constant/a", content=b"new\\n", mode=None, exists_before=True,
+                before_digest=case_write._digest_bytes(b"original\\n"), renderer_id="r", format="f"),
+            case_write.RenderedFile(
+                path="constant/b", content=b"two\\n", mode=None, exists_before=False,
+                before_digest=None, renderer_id="r", format="f"),
+        )
+        request = case_write.CaseMutationRequest(
+            mode="clone_and_patch", case_root=root, adapter_id="a", workflow="w", source_artifacts=("x",),
+            parameters=(), requested_by="t")
+        plan = case_write.CaseWritePlan(request=request, files=files, semantic_owner_id="a", stack_identity="0" * 64)
+        case_transaction.commit_case_write(plan, driver_context=object())
+        """
+    )
+    result = subprocess.run([sys.executable, "-c", probe])
+    assert result.returncode == -9
+    assert (tmp_path / "constant" / "a").read_bytes() == b"new\n"
+    assert case_transaction.interrupted_commit(tmp_path) == ("constant/a", "constant/b")
+
+
 def test_a_commit_leaves_nothing_but_the_files_it_wrote(tmp_path):
     plan = _plan(tmp_path, [_rendered("constant/a", b"one\n")])
     case_transaction.commit_case_write(plan, driver_context=object())
@@ -328,3 +383,4 @@ def test_a_rollback_that_itself_fails_names_the_path_and_says_to_plan_again(tmp_
         (tmp_path / "constant" / "unwritable").chmod(0o700)
     assert "constant/a" in str(excinfo.value)
     assert "plan again" in str(excinfo.value)
+    assert case_transaction.interrupted_commit(tmp_path) == ("constant/a", "constant/unwritable/b")
