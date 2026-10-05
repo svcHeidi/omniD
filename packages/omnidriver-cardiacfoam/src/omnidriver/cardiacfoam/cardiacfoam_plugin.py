@@ -10,6 +10,8 @@ from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_G
 from omnidriver.cardiacfoam.common_dict_entries import (
     PHYSICS_PROPERTY_ENTRIES,
     PRE_PACING_PROPERTY_ENTRIES,
+    PURKINJE_GRAPH_DOCUMENT,
+    PURKINJE_GRAPH_ENTRIES,
 )
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.openfoam.control_dict import CONTROL_DICT_ENTRIES
@@ -71,6 +73,7 @@ class CardiacFoamPlugin:
         entries: list[DictEntry] = list(PHYSICS_PROPERTY_ENTRIES)
         entries.extend(CONTROL_DICT_ENTRIES)
         entries.extend(PRE_PACING_PROPERTY_ENTRIES)
+        entries.extend(PURKINJE_GRAPH_ENTRIES)
         for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
             entries.extend(group)
         return tuple(entries)
@@ -86,6 +89,7 @@ class CardiacFoamPlugin:
             "physicsProperties": PHYSICS_PROPERTY_ENTRIES,
             "controlDict": CONTROL_DICT_ENTRIES,
             "prePacingProperties": PRE_PACING_PROPERTY_ENTRIES,
+            PURKINJE_GRAPH_DOCUMENT: PURKINJE_GRAPH_ENTRIES,
         })
 
     def resolve_case_models(self, case_root: Path) -> dict:

@@ -1,0 +1,214 @@
+/*---------------------------------------------------------------------------*\
+License
+    This file is part of cardiacFoam.
+
+    cardiacFoam is free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by the
+    Free Software Foundation, either version 3 of the License, or (at your
+    option) any later version.
+
+    cardiacFoam is distributed in the hope that it will be useful, but
+    WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with cardiacFoam.  If not, see <http://www.gnu.org/licenses/>.
+
+Class
+    conductionGraph
+
+Description
+    Value type holding 1D graph topology for a conduction network.
+
+Author
+    Simao Nieto de Castro. All rights reserved.
+\*---------------------------------------------------------------------------*/
+
+#ifndef conductionGraph_H
+#define conductionGraph_H
+
+#include "scalarField.H"
+#include "labelList.H"
+#include "dictionary.H"
+#include "DynamicList.H"
+#include "boolList.H"
+#include <queue>
+
+namespace Foam
+{
+
+struct conductionGraph
+{
+    label       nNodes;
+    label       nEdges;
+    labelList   edgeNodeA;
+    labelList   edgeNodeB;
+    scalarField edgeLengths;
+    scalarField edgeConductances;
+    scalarField pvjResistances;
+
+    labelList   parentList;
+    labelList   orderList;
+    labelList   reverseOrder;
+
+    labelList   adjOffsets;
+    labelList   adjNeighbours;
+    labelList   adjEdges;
+
+    conductionGraph()
+    :
+        nNodes(0),
+        nEdges(0)
+    {}
+
+    void readFromDict(const dictionary& dict)
+    {
+        const List<scalarList> edgeEntries
+        (
+            dict.get<List<scalarList>>("conductionEdges")
+        );
+        nEdges = edgeEntries.size();
+
+        edgeNodeA.setSize(nEdges);
+        edgeNodeB.setSize(nEdges);
+        edgeLengths.setSize(nEdges);
+        edgeConductances.setSize(nEdges);
+
+        label maxNode = 0;
+        forAll(edgeEntries, eI)
+        {
+            const scalarList& e = edgeEntries[eI];
+            if (e.size() != 4)
+            {
+                FatalErrorInFunction
+                    << "Each entry in 'conductionEdges' must have 4 values: "
+                    << "(nodeA nodeB length conductance). Entry " << eI
+                    << " has " << e.size() << " values."
+                    << exit(FatalError);
+            }
+            edgeNodeA[eI]        = static_cast<label>(e[0]);
+            edgeNodeB[eI]        = static_cast<label>(e[1]);
+            edgeLengths[eI]      = e[2];
+            edgeConductances[eI] = e[3];
+            maxNode = max(maxNode, max(edgeNodeA[eI], edgeNodeB[eI]));
+        }
+
+        nNodes = maxNode + 1;
+
+        if (dict.found("pvjResistances"))
+        {
+            pvjResistances = scalarField(dict.lookup("pvjResistances"));
+        }
+
+        buildAdjacency();
+
+        buildTreeTopology();
+    }
+
+private:
+
+    void buildAdjacency()
+    {
+        adjOffsets.setSize(nNodes + 1, 0);
+
+        forAll(edgeNodeA, eI)
+        {
+            ++adjOffsets[edgeNodeA[eI] + 1];
+            ++adjOffsets[edgeNodeB[eI] + 1];
+        }
+
+        for (label i = 0; i < nNodes; ++i)
+        {
+            adjOffsets[i + 1] += adjOffsets[i];
+        }
+
+        adjNeighbours.setSize(2*nEdges);
+        adjEdges.setSize(2*nEdges);
+
+        labelList cursor(adjOffsets);
+
+        forAll(edgeNodeA, eI)
+        {
+            const label a = edgeNodeA[eI];
+            const label b = edgeNodeB[eI];
+
+            adjNeighbours[cursor[a]] = b;
+            adjEdges[cursor[a]] = eI;
+            ++cursor[a];
+
+            adjNeighbours[cursor[b]] = a;
+            adjEdges[cursor[b]] = eI;
+            ++cursor[b];
+        }
+    }
+
+    void buildTreeTopology()
+    {
+        if (nNodes == 0) return;
+
+        if (nEdges != nNodes - 1)
+        {
+            FatalErrorInFunction
+                << "Conduction graph has " << nNodes << " nodes but "
+                << nEdges << " edges. A tree requires exactly N-1 = "
+                << (nNodes - 1) << " edges. "
+                << "Hines algorithm requires an acyclic (tree) topology."
+                << exit(FatalError);
+        }
+
+        List<DynamicList<label>> adj(nNodes);
+        forAll(edgeNodeA, eI)
+        {
+            adj[edgeNodeA[eI]].append(edgeNodeB[eI]);
+            adj[edgeNodeB[eI]].append(edgeNodeA[eI]);
+        }
+
+        parentList.setSize(nNodes, -1);
+        orderList.setSize(nNodes);
+        boolList visited(nNodes, false);
+
+        std::queue<label> q;
+        q.push(0);
+        visited[0] = true;
+        label orderIdx = 0;
+
+        while (!q.empty())
+        {
+            label node = q.front(); q.pop();
+            orderList[orderIdx++] = node;
+
+            forAll(adj[node], nbrI)
+            {
+                label nbr = adj[node][nbrI];
+                if (!visited[nbr])
+                {
+                    visited[nbr] = true;
+                    parentList[nbr] = node;
+                    q.push(nbr);
+                }
+            }
+        }
+
+        if (orderIdx != nNodes)
+        {
+            FatalErrorInFunction
+                << "Conduction graph is not connected: BFS from node 0 "
+                << "reached " << orderIdx << " of " << nNodes << " nodes."
+                << exit(FatalError);
+        }
+
+        reverseOrder.setSize(nNodes);
+        forAll(orderList, i)
+        {
+            reverseOrder[i] = orderList[nNodes - 1 - i];
+        }
+
+    }
+};
+
+} // End namespace Foam
+
+#endif
+
+// ************************************************************************* //

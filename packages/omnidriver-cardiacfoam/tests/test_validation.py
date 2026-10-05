@@ -4,11 +4,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from omnidriver.dict_entries import DictEntry
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
-from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
+from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES, PURKINJE_GRAPH_ENTRIES
 from omnidriver.openfoam.control_dict import CONTROL_DICT_ENTRIES
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
@@ -25,8 +27,11 @@ def _validate(config, *, entries=None, driver_context):
     """The catalogue relations over the flat context the per-phase slices make."""
     context = {key: val for slice_ in config.values() for key, val in slice_.items() if val not in (None, "")}
     if entries is None:
-        # controlDict is a document of its own, judged by its own rules.
-        entries = [e for e in driver_context.stack.call("get_dict_entries") if e not in CONTROL_DICT_ENTRIES]
+        # controlDict and the Purkinje graph are documents of their own, judged by their own rules.
+        entries = [
+            e for e in driver_context.stack.call("get_dict_entries")
+            if e not in CONTROL_DICT_ENTRIES and e not in PURKINJE_GRAPH_ENTRIES
+        ]
     return tuple(rule_diagnostics(entries, context, document="constant/electroProperties"))
 
 _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
@@ -822,6 +827,8 @@ Fixture-to-solver mapping (derived from each spec's defaults.ELECTRO_PROPERTIES_
 """
 
 
+from pathlib import Path
+
 import pytest
 
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
@@ -973,6 +980,13 @@ def test_representative_run_has_no_validator_errors(spec_label: str, run: dict):
 # a FatalError when absent. The check needs the materialized graph, so it
 # runs from case_diagnostics, which reads the case's files.
 
+#: The 11-node graph cardiacFOAM's monodomain1D3D tutorial ships, verbatim.
+_NATIVE_GRAPH = (
+    Path(__file__).parent / "fixtures" / "tutorials" / "manufacturedSolutions" / "monodomain1D3D"
+    / "constant" / "purkinjeGraph.nodes011"
+)
+
+
 def _pvj_diagnostics(case_root):
     from omnidriver.cardiacfoam.validation import case_diagnostics
 
@@ -1028,15 +1042,9 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
     electro_path.write_text(text)
 
     if graph_present:
-        graph_text = (
-            "FoamFile\n{\n    version 2.0;\n    format ascii;\n"
-            "    class dictionary;\n    object purkinjeGraph;\n}\n\n"
-            "conductionEdges\n(\n    (0 1 1.0 2.0)\n);\n"
-            "pvjNodes (1);\npoints ((0 0 0) (1 0 0));\n"
-            "pvjLocations ((1 0 0));\n"
-        )
+        graph_text = _NATIVE_GRAPH.read_text()
         if graph_has_resistances:
-            graph_text += "pvjResistances (150.0);\n"
+            graph_text += "pvjResistances (150.0 150.0);\n"
         (tmp_path / "constant" / "purkinjeGraph").write_text(graph_text)
 
     return electro_path
@@ -1086,6 +1094,58 @@ def test_pvj_resistance_irrelevant_for_a_different_coupler(tmp_path):
     )
     diagnostics = _pvj_diagnostics(tmp_path)
     assert diagnostics == ()
+
+
+# -------- the graph file a conduction network names --------
+#
+# conductionGraph::readFromDict and conductionSystemDomain::readGraphFile stop
+# the solver on each of these breaks; case_diagnostics names them before it runs.
+
+def _graph_diagnostics(tmp_path, graph_text):
+    from omnidriver.cardiacfoam.validation import case_diagnostics
+
+    _build_pvj_case(tmp_path, set_rpvj=True)
+    (tmp_path / "constant" / "purkinjeGraph").write_text(graph_text)
+    return [
+        (item.code, item.field, item.message) for item in case_diagnostics(tmp_path)
+        if item.source == "constant/purkinjeGraph"
+    ]
+
+
+def test_the_native_graph_passes(tmp_path):
+    assert _graph_diagnostics(tmp_path, _NATIVE_GRAPH.read_text()) == []
+
+
+@pytest.mark.parametrize("old,new,field,reason", [
+    ("(9 10 0.1 1)", "(9 10 0.1)", "conductionEdges", "entry 9 has 3 values"),
+    ("(9 10 0.1 1)", "(9 10 0.1 1)\n    (10 0 0.1 1)", "conductionEdges", "11 edges over 11 nodes"),
+    ("(4 5 0.1 1)", "(5 5 0.1 1)", "conductionEdges", "node 0 reaches 10 of 11 nodes"),
+    ("rootNode\n0;", "rootNode\n11;", "rootNode", "rootNode 11 is outside"),
+    ("(5 10);", "(5 11);", "pvjNodes", "[11] are outside"),
+    ("    (1 0.166666666667 0.333333333333)\n);\n\nconductionEdges", ");\n\nconductionEdges", "pvjLocations", "1 values for 2"),
+    ("    (0.9 0.166666666667 0.333333333333)\n", "", "points", "10 positions for 11 nodes"),
+    ("rootNode\n0;", "rootNode\n0;\npvjResistances (150);", "pvjResistances", "1 values for 2"),
+])
+def test_a_graph_break_the_solver_stops_on_is_named(tmp_path, old, new, field, reason):
+    text = _NATIVE_GRAPH.read_text()
+    assert old in text
+    found = _graph_diagnostics(tmp_path, text.replace(old, new, 1))
+    assert [(code, name) for code, name, _ in found] == [("conduction_graph_invalid", field)]
+    assert reason in found[0][2]
+
+
+def test_a_graph_without_a_key_the_solver_reads_is_refused(tmp_path):
+    text = _NATIVE_GRAPH.read_text().replace("rootNode\n0;\n", "")
+    assert _graph_diagnostics(tmp_path, text) == [
+        ("catalog_rule", "rootNode", "rootNode is required."),
+    ]
+
+
+def test_a_graph_in_counted_list_form_is_read(tmp_path):
+    """1DgraphToFoam writes every list with its element count first."""
+    text = _NATIVE_GRAPH.read_text().replace("pvjNodes\n(5 10);", "pvjNodes\n2(5 10);")
+    text = text.replace("conductionEdges\n(", "conductionEdges\n10\n(").replace("(0 1 0.1 1)", "4(0 1 0.1 1)")
+    assert _graph_diagnostics(tmp_path, text) == []
 
 
 def test_a_block_the_case_holds_turns_on_the_rules_gated_on_its_presence():

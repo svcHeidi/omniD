@@ -546,28 +546,138 @@ def _evaluate_ecg_anisotropic_consistency(context: dict[str, Any]) -> list["Stri
 
 
 _RPVJ_COUPLER = "reactionDiffusionPvjCoupler"
+_GRAPH_FILE_SUFFIX = ".purkinjeGraphModelCoeffs.graphFile"
 
 
-def _graph_has_terminal_resistances(graph_path: Any) -> bool:
-    """Whether the Purkinje graph file holds a non-empty ``pvjResistances`` list; foamlib does not evaluate ``#calc``/``#codeStream``."""
-    from foamlib import FoamFile
+def _materialized_graphs(case_root: Path, context: dict[str, Any]) -> dict[str, tuple[str, dict[str, str]]]:
+    """Each conduction network whose ``graphFile`` names a file the case holds, with its case-relative path and the
+    raw text of each catalogued key the file sets. A graph a later step writes is not judged. The read is lexical:
+    foamlib takes minutes over a graph of a thousand edges."""
+    from omnidriver.openfoam.mutators import read_foam_entry
 
-    try:
-        resistances = FoamFile(graph_path).get("pvjResistances")
-    except (OSError, ValueError):
-        return False
-    if resistances is None:
-        return False
-    try:
-        return len(resistances) > 0
-    except TypeError:
-        return bool(resistances)
+    from .common_dict_entries import PURKINJE_GRAPH_ENTRIES
+
+    graphs: dict[str, tuple[str, dict[str, str]]] = {}
+    for key, name in context.items():
+        if not (key.startswith(_CONDUCTION_NET_PREFIX) and key.endswith(_GRAPH_FILE_SUFFIX)):
+            continue
+        relpath = f"constant/{name}"
+        if not (case_root / relpath).is_file():
+            continue
+        graphs[key[len(_CONDUCTION_NET_PREFIX):-len(_GRAPH_FILE_SUFFIX)]] = (relpath, {
+            entry.driver_path: raw for entry in PURKINJE_GRAPH_ENTRIES
+            if (raw := read_foam_entry(case_root / relpath, entry.driver_path)) is not None
+        })
+    return graphs
+
+
+def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str]]:
+    """``(key, reason)`` for each way a graph's text breaks what ``conductionGraph::readFromDict`` and
+    ``conductionSystemDomain::readGraphFile`` require; a key the file lacks is the catalogue's to report."""
+    from omnidriver.openfoam.literals import list_elements, parse_scalar_list_literal
+
+    breaks: list[tuple[str, str]] = []
+
+    def elements(key: str) -> list[str] | None:
+        try:
+            return list_elements(raw[key]) if key in raw else None
+        except ValueError as exc:
+            breaks.append((key, f"{key} is not an OpenFOAM list: {exc}"))
+            return None
+
+    def labels(key: str, values: list[str]) -> list[int] | None:
+        try:
+            return [int(value) for value in values]
+        except ValueError:
+            breaks.append((key, f"{key} holds a value that is not a node index"))
+            return None
+
+    nodes = None
+    edges = elements("conductionEdges")
+    if edges is not None:
+        pairs = []
+        for index, text in enumerate(edges):
+            try:
+                values = parse_scalar_list_literal(text)
+            except ValueError as exc:
+                breaks.append(("conductionEdges", f"conductionEdges entry {index} is not a list of numbers: {exc}"))
+                break
+            if len(values) != 4:
+                breaks.append((
+                    "conductionEdges",
+                    f"conductionEdges entry {index} has {len(values)} values, not (nodeA nodeB length conductance)",
+                ))
+                break
+            pairs.append((int(values[0]), int(values[1])))
+        else:
+            if any(node < 0 for pair in pairs for node in pair):
+                breaks.append(("conductionEdges", "conductionEdges names a negative node index; nodes count from 0"))
+            else:
+                nodes = max([0, *(node for pair in pairs for node in pair)]) + 1
+                if len(pairs) != nodes - 1:
+                    breaks.append((
+                        "conductionEdges",
+                        f"conductionEdges has {len(pairs)} edges over {nodes} nodes; the tree "
+                        f"conductionGraph::buildTreeTopology requires has {nodes - 1}",
+                    ))
+                else:
+                    neighbours: dict[int, list[int]] = {}
+                    for a, b in pairs:
+                        neighbours.setdefault(a, []).append(b)
+                        neighbours.setdefault(b, []).append(a)
+                    reached, frontier = {0}, [0]
+                    while frontier:
+                        for neighbour in neighbours.get(frontier.pop(), ()):
+                            if neighbour not in reached:
+                                reached.add(neighbour)
+                                frontier.append(neighbour)
+                    if len(reached) != nodes:
+                        breaks.append((
+                            "conductionEdges",
+                            f"conductionEdges is not connected: node 0 reaches {len(reached)} of {nodes} nodes",
+                        ))
+    pvj = elements("pvjNodes")
+    pvj_nodes = labels("pvjNodes", pvj) if pvj is not None else None
+    if nodes is not None:
+        root = labels("rootNode", [raw["rootNode"]]) if "rootNode" in raw else None
+        if root is not None and not 0 <= root[0] < nodes:
+            breaks.append(("rootNode", f"rootNode {root[0]} is outside the graph's nodes 0 to {nodes - 1}"))
+        outside = [node for node in pvj_nodes or () if not 0 <= node < nodes]
+        if outside:
+            breaks.append(("pvjNodes", f"pvjNodes {outside[:5]} are outside the graph's nodes 0 to {nodes - 1}"))
+        points = elements("points")
+        if points is not None and len(points) != nodes:
+            breaks.append(("points", f"points holds {len(points)} positions for {nodes} nodes"))
+    if pvj_nodes is not None:
+        # An empty pvjResistances is no list at all to the couplers (terminalResistances).
+        for key, listed in (("pvjLocations", elements("pvjLocations")), ("pvjResistances", elements("pvjResistances") or None)):
+            if listed is not None and len(listed) != len(pvj_nodes):
+                breaks.append((key, f"{key} holds {len(listed)} values for {len(pvj_nodes)} pvjNodes"))
+    return breaks
+
+
+def _evaluate_conduction_graphs(graphs: dict[str, tuple[str, dict[str, str]]]) -> list["StrictDiagnostic"]:
+    """The catalogue's rules and the tree the C++ requires, over each network's graph file."""
+    from omnidriver.openfoam.case_rules import rule_diagnostics
+
+    from .common_dict_entries import PURKINJE_GRAPH_ENTRIES
+
+    found: list["StrictDiagnostic"] = []
+    for relpath, raw in graphs.values():
+        found += rule_diagnostics(PURKINJE_GRAPH_ENTRIES, raw, document=relpath)
+        found += [
+            diagnostic("error", "conduction_graph_invalid", f"{relpath}: {reason}.", source=relpath, field=key)
+            for key, reason in _graph_breaks(raw)
+        ]
+    return found
 
 
 def _evaluate_pvj_resistance_requirement(
-    case_root: Path, context: dict[str, Any], electro_path: Path,
+    context: dict[str, Any], graphs: dict[str, tuple[str, dict[str, str]]], electro_path: Path,
 ) -> list["StrictDiagnostic"]:
     """``rPvj`` is required only when the materialized graph has no ``pvjResistances``, which a ``required_when`` cannot see; an absent graph defers."""
+    from omnidriver.openfoam.literals import list_elements
+
     found: list["StrictDiagnostic"] = []
     for key, coupler in context.items():
         if not (key.startswith(_DOMAIN_COUPLINGS_PREFIX) and key.endswith(_COUPLER_SUFFIX)) or coupler != _RPVJ_COUPLER:
@@ -575,22 +685,20 @@ def _evaluate_pvj_resistance_requirement(
         block = key[: -len(_COUPLER_SUFFIX)]
         network = context.get(block + _NETWORK_REF_SUFFIX)
         rpvj_key = f"{block}.rPvj"
-        if network is None or rpvj_key in context:
+        if network is None or rpvj_key in context or network not in graphs:
             continue
-        graph_name = context.get(
-            f"{_CONDUCTION_NET_PREFIX}{network}.purkinjeGraphModelCoeffs.graphFile"
-        )
-        if graph_name is None:
-            continue
-        graph_path = case_root / "constant" / str(graph_name)
-        if not graph_path.exists() or _graph_has_terminal_resistances(graph_path):
+        relpath, raw = graphs[network]
+        try:
+            if "pvjResistances" in raw and list_elements(raw["pvjResistances"]):
+                continue
+        except ValueError:
             continue
         found.append(diagnostic(
             "error", "missing_rpvj",
             (
                 f"conductionNetworkDomains.{network} is coupled via {_RPVJ_COUPLER} ({block}) "
                 f"but neither rPvj nor a graph-provided pvjResistances list is available: the "
-                f"materialized graph file {graph_name!r} has no pvjResistances, and rPvj is not "
+                f"materialized graph file {relpath!r} has no pvjResistances, and rPvj is not "
                 f"set. reactionDiffusionPvjCoupler.C will FatalError on dict.get<scalar>(\"rPvj\")."
             ),
             source=str(electro_path), field=rpvj_key,
@@ -614,9 +722,9 @@ def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]
 
 def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDiagnostic", ...]:
     """Every rule the resolved case at ``case_root`` violates: the catalogue's
-    relations over its ``electroProperties``, ``prePacingProperties`` and
-    ``controlDict``, the keys the supplied C++ (``mapping``) requires, and
-    cardiacFOAM's cross-field rules. A case with no ``electroProperties``
+    relations over its ``electroProperties``, ``prePacingProperties``,
+    ``controlDict`` and the Purkinje graph each conduction network names, the
+    keys the supplied C++ (``mapping``) requires, and cardiacFOAM's cross-field rules. A case with no ``electroProperties``
     violates none. ``physicsProperties``' one key is judged by ``physics_layout``."""
     from foamlib import FoamFile
 
@@ -664,8 +772,10 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDi
                 catalogue.entries_for("prePacingProperties"), pacing,
                 document=relative, mapping=mapping, catalogue=catalogue,
             )
+    graphs = _materialized_graphs(case_root, context)
     return tuple(
         found
         + cross_field_diagnostics(context)
-        + _evaluate_pvj_resistance_requirement(case_root, context, electro_path)
+        + _evaluate_conduction_graphs(graphs)
+        + _evaluate_pvj_resistance_requirement(context, graphs, electro_path)
     )
