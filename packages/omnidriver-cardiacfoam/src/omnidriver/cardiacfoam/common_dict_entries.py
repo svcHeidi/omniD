@@ -183,7 +183,8 @@ PURKINJE_GRAPH_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "count from 0, and the graph has one node more than the largest index. length is the edge length "
             "in metres: monodomain1DSolver couples the two nodes by sigma/length and gives each node half of "
             "every incident length as its control length, and the eikonal solvers take length over the "
-            "conduction velocity as the edge's travel time. conductance times purkinjeConductivity is the "
+            "conduction velocity as the edge's travel time. conductance is a dimensionless factor (0 blocks the "
+            "edge; every native graph writes 1) that multiplies purkinjeConductivity (in S/m), and the product is the "
             "edge conductivity sigma of the cable equation, in S/m; restitutionEikonalSolver1D scales the "
             "edge's velocity by the square root of it over referenceConductance, and eikonalSolver1D ignores it."
         ),
@@ -245,12 +246,13 @@ PURKINJE_GRAPH_ENTRIES: Final[tuple[DictEntry, ...]] = (
         ),
     ),
     DictEntry(
-        driver_path="pvjResistances", phases=frozenset({"physics"}), value_kind="scalar_list",
+        driver_path="pvjResistances", phases=frozenset({"physics"}), value_kind="scalar_list", unit="Ω",
         description=(
-            "Resistance of each PVJ, in pvjNodes order, in place of the coupling's single rPvj: the junction "
-            "current is (Vm of the network node - Vm of the junction tissue) / resistance. With it, "
-            "reactionDiffusionPvjCoupler never reads rPvj; eikonalMonodomainPvjCoupler still requires rPvj and "
-            "then uses these. It has rPvj's unit, which is not settled (see rPvj). An empty list counts as absent."
+            "Resistance [Ω] of each PVJ, in pvjNodes order, in place of the coupling's single rPvj: the junction "
+            "current is (Vm of the network node - Vm of the junction tissue) / resistance, in A on the tissue side. "
+            "With it, reactionDiffusionPvjCoupler never reads rPvj; eikonalMonodomainPvjCoupler still requires "
+            "rPvj and then uses these. An empty list counts as absent. The network side of "
+            "reactionDiffusionPvjCoupler applies the current without a node volume (see rPvj)."
         ),
         source_refs=(
             _GRAPH_TOPOLOGY, _DOMAIN + "conductionSystemDomain.H",

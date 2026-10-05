@@ -225,14 +225,11 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    it has a place in `electroProperties`. The Purkinje graph file is
    catalogued as the `purkinjeGraph` document, and a case's graph is judged
    before it runs (`docs/solver-learning/cardiacfoam-conduction-graph.md`).
-   The owner still has to settle the questions that document lists under
-   "Needs owner confirmation":
-   - which factor of `conductance × purkinjeConductivity` carries the S/m;
-   - the junction current on the network side, used as A/m³ where the tissue
-     takes it as A. Until this is settled, `rPvj` and `pvjResistances` have no
-     unit;
-   - whether the native code should check the length of `pvjResistances` and
-     the range of `rootStimulus.node`;
+   `purkinjeConductivity` is S/m with a dimensionless per-edge conductance, and
+   `rPvj` and `pvjResistances` are Ω. The owner still has to settle the
+   questions that document lists under "Needs owner confirmation", among them
+   whether the native code should check the length of `pvjResistances` and the
+   range of `rootStimulus.node`;
 
 4. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the

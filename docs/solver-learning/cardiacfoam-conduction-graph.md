@@ -22,15 +22,16 @@ the 3D myocardium does declare with OpenFOAM dimension sets.
 | applied current, `rootStimulus.intensity` | `conductionSystemDomain::assembleAppliedCurrent` | A/m³ | `rhs += dt*Iapp/(chi*Cm)` must be a voltage: A/m³ ÷ F/m³ × s = V |
 | edge `length` (3rd value of `conductionEdges`) | `conductionGraph::readFromDict` | m | `1DgraphToFoam` writes `mag(points[b] - points[a])` in mesh coordinates; `eikonalSolver1D` adds `length/purkinjeCV` (m ÷ m/s) to a time |
 | edge conductivity `sigma_e` = 4th value × `purkinjeConductivity` | `readGraphFile` multiplies, `monodomain1DSolver` uses | S/m, given `chi` [1/m] and `cm` [F/m²] | see the derivation below |
-| `purkinjeConductivity` | `readGraphFile` | the product's unit is S/m; see "needs owner confirmation" 1 | the C++ prints it as a "multiplier" (default 1.0); native graphs give every edge conductance 1, so in every native case it carries the S/m |
+| edge conductance (4th value of `conductionEdges`) | `conductionGraph::readFromDict` | dimensionless factor; 0 blocks the edge | it multiplies `purkinjeConductivity`, which carries the S/m; every native graph writes 1 |
+| `purkinjeConductivity` | `readGraphFile` | S/m | the product `sigma_e` is a conductivity, the graph's factor is 1 in every native graph, and every native case gives it in S/m (0.4, and 0.111453302, the 3D tissue's `sigma_xx`); the C++ prints it as a "multiplier" (default 1.0) |
 | `referenceConductance` | `restitutionEikonalSolver1D` | S/m | it divides `G.edgeConductances`, which hold `sigma_e` after the multiplication |
 | `purkinjeCV` | `eikonalSolver1D` | m/s | dimensioned `[0 1 -1 0 0 0 0]` |
 | `points`, `pvjLocations` | `readGraphFile` | m | `pvjMapper` compares `pvjLocations` with `mesh.C()`; native graphs are in metres (idealizedHeart edges of 0.29 mm) |
 | `pvjRadius` | `pvjCoupler` | m | `pvjMapper` compares it with `cbrt(cell volume)` |
 | junction current `I_pvj` (`terminalCurrent`) | `reactionDiffusionPvjCoupler::couplingCurrentAtPvjs` | A on the tissue side | `pvjMapper::volumetricSource` divides it by the kernel-weighted sphere volume and adds it to `externalStimulusCurrent`, dimensioned `dimCurrent/dimVolume` |
-| `rPvj`, `pvjResistances` | the couplers; `conductionGraph` | Ω on the tissue side | `I = ΔV/R` with `I` in A; and the implicit scheme's coefficient `1/(R*V_sphere)` lands in `implicitSourceCoeff`, dimensioned `dimCurrent/(dimVolume*dimVoltage)`, so `R` is V/A |
+| `rPvj`, `pvjResistances` | the couplers; `conductionGraph` | Ω | the tissue side divides a voltage difference by `R` to get `I` in A, spread over the kernel-weighted junction volume; and the implicit scheme's coefficient `1/(R*V_sphere)` lands in `implicitSourceCoeff`, dimensioned `dimCurrent/(dimVolume*dimVoltage)`, so `R` is V/A. The network side applies `I` without a node volume (below) |
 | junction source `IcouplingSource` | output only | A/m³ | the column is `pvj<i>_IcouplingSource_Am3` |
-| `I_pvj` on the network side | `assembleAppliedCurrent` | used as A/m³ | `appliedCurrent[pvjNode] -= terminalCurrent[i]`, then divided by `chi*Cm` only; see "needs owner confirmation" 2 |
+| `I_pvj` on the network side | `assembleAppliedCurrent` | used as A/m³ | `appliedCurrent[pvjNode] -= terminalCurrent[i]`, then divided by `chi*Cm` only, with no cross-section or control length; the network side of a `bidirectional` junction is therefore not a current in A ([`cardiacfoam-pvj-coupling.md`](cardiacfoam-pvj-coupling.md)) |
 
 **The edge conductivity.** `monodomain1DSolver::advance` states its own
 discretisation:
@@ -135,20 +136,17 @@ A coupling is `domainCouplings.<name>` with `electroDomainCoupler` and
 - `reactionDiffusionPvjCoupler` (monodomain network to monodomain or bidomain
   tissue): `I_pvj = (Vm_network - Vm_tissue)/R_pvj` at each junction. The
   tissue receives it explicitly, or with `pvjCouplingScheme implicit` as a
-  source `w*Vm_network/(R*V_sphere)` plus a coefficient `w/(R*V_sphere)` on the
-  cell's own `Vm`. The coefficient is on the `Vm` matrix diagonal only when the
-  myocardium's `solutionAlgorithm` is `implicit`; with `explicit` it multiplies
-  the old `Vm` on the right-hand side. In `bidirectional` mode the network
-  node loses the same number (`appliedCurrent[pvjNode] -= I_pvj`), used as
-  A/m³ without a node volume; in `unidirectional` mode the buffers are cleared
+  source `w*Vm_network/(R*V_sphere)` plus an implicit coefficient
+  `w/(R*V_sphere)` on the cell's own `Vm`. In `bidirectional` mode the network
+  node loses the same number (`appliedCurrent[pvjNode] -= I_pvj`), used as A/m³
+  without a node volume; in `unidirectional` mode the buffers are cleared
   before the network advances.
   This is the coupler the 1D-3D manufactured solution exercises.
 - `eikonalMonodomainPvjCoupler` (eikonal network to monodomain tissue): the
   network's activation time drives a voltage template at each junction, offset
   to the tissue's resting potential, and the same `(V - Vm_tissue)/R` current
-  enters the tissue explicitly (it does not read `pvjCouplingScheme`); in
-  `bidirectional` mode the tissue's activation times are returned to the
-  junction nodes.
+  enters the tissue; in `bidirectional` mode the tissue's activation times are
+  returned to the junction nodes.
 - `eikonalPvjCoupler` (eikonal to eikonal): copies junction activation times
   into the tissue's activation-time field; `bidirectional` returns the tissue's.
   It reads no resistance.
@@ -211,45 +209,52 @@ only normalises them inside `restitutionEikonalSolver1D`.
 | G12 | `monodomain1D3D` with `pvjLocations` in millimetres against its metre mesh: `plan --strict --entry`, then `step --step mesh`, then `step --step solve`; then `run` | `plan` is `ok` with the `pvj_location_off_node` warning; `step --step solve` refuses with the bounding-box error before `cardiacFoam` starts; `run` completes `ok` | a plan cannot see a mesh the case has yet to make (`polyMesh` is a generated directory and is not staged), and `run` validates once, before its first step; the bounding-box check fires wherever the mesh exists when the case is judged |
 
 
+## Units, settled
+
+The owner settled the two unit questions the C++ leaves open, from the evidence
+below.
+
+- **`purkinjeConductivity` is S/m**, and the per-edge conductance in
+  `conductionEdges` is a dimensionless factor (0 blocks the edge). The product
+  enters the cable update as a conductivity, given the catalogue's 1D `chi` in
+  1/m and `cm` in F/m² (the derivation above); every native graph writes
+  conductance 1, and the native cases give `purkinjeConductivity` in S/m (0.4,
+  and 0.111453302, the 3D tissue's `sigma_xx`). `readGraphFile` prints it as a
+  "multiplier" and `1DgraphToFoam` fills the conductance from a VTK field named
+  `conductance`, `conductivity`, `D` or `sigma`; a `D` there would be a
+  diffusivity (m²/s), not a factor.
+- **`rPvj` and `pvjResistances` are Ω.** The tissue side divides a voltage
+  difference by `R` to get the junction current in A, distributed over the
+  kernel-weighted junction volume. The network side of
+  `reactionDiffusionPvjCoupler` applies the same number without a node volume
+  (`appliedCurrent[terminalNodes_[i]] -= terminalCurrent_[i];`, then
+  `dt*appliedCurrentBuffer_[i]/chiCm`), so in the current C++ a `bidirectional`
+  junction barely moves the network. The native
+  `electroModels/ARCHITECTURE.md` labels the current `[A/m²]`, which neither
+  side uses. [`cardiacfoam-pvj-coupling.md`](cardiacfoam-pvj-coupling.md) holds
+  the measurements.
+
 ## Needs owner confirmation
 
-1. **Which factor carries S/m.** The product `conductance × purkinjeConductivity`
-   is S/m. `readGraphFile` calls `purkinjeConductivity` a multiplier:
-   `Info<< "Purkinje edge conductance multiplier: " << purkinjeConductivity`,
-   default `1.0`. Every native graph writes conductance 1, and the native cases
-   give `purkinjeConductivity` in S/m (0.4, and 0.111453302, the 3D tissue's
-   `sigma_xx`). `1DgraphToFoam` fills the conductance from a VTK field named
-   `conductance`, `conductivity`, `D` or `sigma`. `D` usually names a
-   diffusivity (m²/s). The catalogue states the product's unit and leaves
-   both factors without one.
-2. **The network side of the junction current.** The tissue side makes
-   `I_pvj` a current in A and `R` a resistance in Ω (see the table). The network
-   side uses the same number as a current density:
-   `appliedCurrent[terminalNodes_[i]] -= terminalCurrent_[i];` and then
-   `dt*appliedCurrentBuffer_[i]/chiCm`, with no division by a node volume
-   (cross-section × control length). The native `electroModels/ARCHITECTURE.md`
-   labels it `I_pvj = (Vm_1D − Vm_3D) / R_pvj [A/m²]`, which neither side uses.
-   This only matters with `couplingMode bidirectional`. The catalogue keeps
-   `rPvj` and `pvjResistances` without a unit until this is settled.
-3. **`pvjResistances` length.** `couplingCurrentAtPvjs` indexes
+1. **`pvjResistances` length.** `couplingCurrentAtPvjs` indexes
    `R_pvj_[i]` for each junction, and only the implicit scheme
    (`pvjMapper::depositImplicitCoupling`) checks the size. With the explicit
    scheme, a short list reads past its end. omniD refuses a list whose length
    is not the number of `pvjNodes`, and a value that is not above 0 (the
    current is divided by it); likewise an `rPvj` that is not above 0.
-4. **`rootStimulus.node` is not range-checked.** The graph's `rootNode` is, but
+2. **`rootStimulus.node` is not range-checked.** The graph's `rootNode` is, but
    the override from `readRootStimulus` goes straight into
    `appliedCurrent[rootNode_]`. omniD refuses a node past the graph's last.
-5. **`pvjLocations` against `points[pvjNodes]`.** They are never compared, so a
+3. **`pvjLocations` against `points[pvjNodes]`.** They are never compared, so a
    junction can couple away from its node's position. Is that intended, for
    example a junction placed inside the wall? Every native graph, the pig
    tree's transmural junctions included, writes the two equal (G9), so omniD
    warns of a location more than the coupling's `pvjRadius` from its node's
    position. It refuses a location more than `pvjRadius` outside the mesh's
    bounding box, which `pvjMapper` would couple to its nearest cell, however far.
-6. **`eikonalMonodomainPvjCoupler` requires `rPvj`** even when the graph lists
+4. **`eikonalMonodomainPvjCoupler` requires `rPvj`** even when the graph lists
    `pvjResistances`, and then never uses it.
-7. **`torsoSurface`.** The only reader is `ecgModelIO::loadSurface`
+5. **`torsoSurface`.** The only reader is `ecgModelIO::loadSurface`
    (`dict.get<fileName>("torsoSurface")`, opened as `runTime.path()/stlPath`, so
    the path is relative to the case directory). Nothing in `src/` or
    `applications/` calls it, and no native commit since it was added
