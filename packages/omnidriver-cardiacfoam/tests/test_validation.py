@@ -1148,6 +1148,21 @@ def test_a_graph_in_counted_list_form_is_read(tmp_path):
     assert _graph_diagnostics(tmp_path, text) == []
 
 
+def test_a_uniform_resistance_list_stands_in_for_rpvj(tmp_path):
+    """OpenFOAM's N{value} is a list of N copies, so the coupler has its resistances and never reads rPvj."""
+    _build_pvj_case(tmp_path, set_rpvj=False, graph_present=True)
+    graph = tmp_path / "constant" / "purkinjeGraph"
+    graph.write_text(graph.read_text() + "pvjResistances 2{100};\n")
+    assert _pvj_diagnostics(tmp_path) == ()
+
+
+def test_a_graph_key_omnid_cannot_read_is_left_to_the_solver(tmp_path):
+    text = _NATIVE_GRAPH.read_text().replace("(5 10);", "(5 $junction);")
+    assert [(code, field) for code, field, _ in _graph_diagnostics(tmp_path, text)] == [
+        ("conduction_graph_unjudged", "pvjNodes"),
+    ]
+
+
 def test_a_block_the_case_holds_turns_on_the_rules_gated_on_its_presence():
     from omnidriver.cardiacfoam.record_key_validation import _ELECTRO_ENTRIES_BY_PATH
     from omnidriver.cardiacfoam.validation import infer_virtual_presence

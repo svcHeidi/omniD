@@ -91,13 +91,21 @@ def format_vector3_literal(value: Sequence[Any]) -> str:
 
 #: The element count OpenFOAM may write before a list's opening parenthesis (``3(a b c)``).
 _LIST_COUNT_RE = re.compile(r"^(\d+)\s*(?=\()")
+#: OpenFOAM's uniform list, ``N{value}``: N copies of one value.
+_UNIFORM_LIST_RE = re.compile(r"^(\d+)\s*\{(.*)\}$", re.S)
 
 
 def list_elements(text: str) -> list[str]:
-    """The top-level elements of the list ``"(a b c)"`` or its counted form ``"3(a b c)"``, each as written, so a
-    nested ``"(x y z)"`` or ``"4(a b c d)"`` element is one; a count that is not the number of elements is refused."""
+    """The top-level elements of the list ``"(a b c)"``, its counted form ``"3(a b c)"`` or its uniform form
+    ``"3{a}"``, each as written, so a nested ``"(x y z)"`` or ``"4(a b c d)"`` element is one; a count that is
+    not the number of elements is refused."""
     shown = repr(text) if len(text) <= 80 else repr(text[:80]) + "..."
     stripped = text.strip()
+    uniform = _UNIFORM_LIST_RE.match(stripped)
+    if uniform is not None:
+        if not uniform.group(2).strip():
+            raise ValueError(f"{shown} is a uniform list with no value")
+        return [uniform.group(2).strip()] * int(uniform.group(1))
     count = _LIST_COUNT_RE.match(stripped)
     if count is not None:
         stripped = stripped[count.end():]

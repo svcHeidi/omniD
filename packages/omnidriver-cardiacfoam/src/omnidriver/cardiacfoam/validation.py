@@ -551,7 +551,7 @@ _GRAPH_FILE_SUFFIX = ".purkinjeGraphModelCoeffs.graphFile"
 
 
 @lru_cache(maxsize=8)
-def _read_graph(path: str, stamp: tuple[int, int]) -> tuple[dict[str, str], tuple[tuple[str, str], ...]]:
+def _read_graph(path: str, stamp: tuple[int, int]) -> tuple[dict[str, str], tuple[tuple[str, str, str], ...]]:
     """A graph file's catalogued keys and its breaks, once per file version: a plan judges the case twice."""
     from omnidriver.openfoam.mutators import read_foam_entries
 
@@ -578,25 +578,29 @@ def _materialized_graphs(case_root: Path, context: dict[str, Any]) -> dict[str, 
     return graphs
 
 
-def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str]]:
-    """``(key, reason)`` for each way a graph's text breaks what ``conductionGraph::readFromDict`` and
-    ``conductionSystemDomain::readGraphFile`` require; a key the file lacks is the catalogue's to report."""
+def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str, str]]:
+    """``(level, key, reason)`` for each way a graph's text breaks what ``conductionGraph::readFromDict`` and
+    ``conductionSystemDomain::readGraphFile`` require, an error, and each key it sets that omniD cannot read, a
+    note that leaves it to the solver; a key the file lacks is the catalogue's to report."""
     from omnidriver.openfoam.literals import list_elements, parse_scalar_list_literal
 
-    breaks: list[tuple[str, str]] = []
+    breaks: list[tuple[str, str, str]] = []
+
+    def unread(key: str, why: str) -> None:
+        breaks.append(("info", key, f"{key} is not judged, since omniD cannot read it ({why}); the solver will"))
 
     def elements(key: str) -> list[str] | None:
         try:
             return list_elements(raw[key]) if key in raw else None
         except ValueError as exc:
-            breaks.append((key, f"{key} is not an OpenFOAM list: {exc}"))
+            unread(key, str(exc))
             return None
 
     def labels(key: str, values: list[str]) -> list[int] | None:
         try:
             return [int(value) for value in values]
         except ValueError:
-            breaks.append((key, f"{key} holds a value that is not a node index"))
+            unread(key, "a value is not a node index")
             return None
 
     nodes = None
@@ -607,23 +611,23 @@ def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str]]:
             try:
                 values = parse_scalar_list_literal(text)
             except ValueError as exc:
-                breaks.append(("conductionEdges", f"conductionEdges entry {index} is not a list of numbers: {exc}"))
+                unread("conductionEdges", f"entry {index}: {exc}")
                 break
             if len(values) != 4:
                 breaks.append((
-                    "conductionEdges",
+                    "error", "conductionEdges",
                     f"conductionEdges entry {index} has {len(values)} values, not (nodeA nodeB length conductance)",
                 ))
                 break
             pairs.append((int(values[0]), int(values[1])))
         else:
             if any(node < 0 for pair in pairs for node in pair):
-                breaks.append(("conductionEdges", "conductionEdges names a negative node index; nodes count from 0"))
+                breaks.append(("error", "conductionEdges", "conductionEdges names a negative node index; nodes count from 0"))
             else:
                 nodes = max([0, *(node for pair in pairs for node in pair)]) + 1
                 if len(pairs) != nodes - 1:
                     breaks.append((
-                        "conductionEdges",
+                        "error", "conductionEdges",
                         f"conductionEdges has {len(pairs)} edges over {nodes} nodes; the tree "
                         f"conductionGraph::buildTreeTopology requires has {nodes - 1}",
                     ))
@@ -640,7 +644,7 @@ def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str]]:
                                 frontier.append(neighbour)
                     if len(reached) != nodes:
                         breaks.append((
-                            "conductionEdges",
+                            "error", "conductionEdges",
                             f"conductionEdges is not connected: node 0 reaches {len(reached)} of {nodes} nodes",
                         ))
     pvj = elements("pvjNodes")
@@ -648,18 +652,18 @@ def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str]]:
     if nodes is not None:
         root = labels("rootNode", [raw["rootNode"]]) if "rootNode" in raw else None
         if root is not None and not 0 <= root[0] < nodes:
-            breaks.append(("rootNode", f"rootNode {root[0]} is outside the graph's nodes 0 to {nodes - 1}"))
+            breaks.append(("error", "rootNode", f"rootNode {root[0]} is outside the graph's nodes 0 to {nodes - 1}"))
         outside = [node for node in pvj_nodes or () if not 0 <= node < nodes]
         if outside:
-            breaks.append(("pvjNodes", f"pvjNodes {outside[:5]} are outside the graph's nodes 0 to {nodes - 1}"))
+            breaks.append(("error", "pvjNodes", f"pvjNodes {outside[:5]} are outside the graph's nodes 0 to {nodes - 1}"))
         points = elements("points")
         if points is not None and len(points) != nodes:
-            breaks.append(("points", f"points holds {len(points)} positions for {nodes} nodes"))
+            breaks.append(("error", "points", f"points holds {len(points)} positions for {nodes} nodes"))
     if pvj_nodes is not None:
         # An empty pvjResistances is no list at all to the couplers (terminalResistances).
         for key, listed in (("pvjLocations", elements("pvjLocations")), ("pvjResistances", elements("pvjResistances") or None)):
             if listed is not None and len(listed) != len(pvj_nodes):
-                breaks.append((key, f"{key} holds {len(listed)} values for {len(pvj_nodes)} pvjNodes"))
+                breaks.append(("error", key, f"{key} holds {len(listed)} values for {len(pvj_nodes)} pvjNodes"))
     return breaks
 
 
@@ -673,8 +677,11 @@ def _evaluate_conduction_graphs(graphs: dict[str, tuple[str, dict[str, str], tup
     for relpath, raw, breaks in graphs.values():
         found += rule_diagnostics(PURKINJE_GRAPH_ENTRIES, raw, document=relpath)
         found += [
-            diagnostic("error", "conduction_graph_invalid", f"{relpath}: {reason}.", source=relpath, field=key)
-            for key, reason in breaks
+            diagnostic(
+                level, "conduction_graph_invalid" if level == "error" else "conduction_graph_unjudged",
+                f"{relpath}: {reason}.", source=relpath, field=key,
+            )
+            for level, key, reason in breaks
         ]
     return found
 
