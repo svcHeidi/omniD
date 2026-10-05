@@ -14,6 +14,7 @@ from omnidriver import cli
 from omnidriver.cli import main
 from cli_refusal import refusal
 from omnidriver.core import case_transaction
+from omnidriver.core.runtime.attempt_lease import acquire_case_lease
 from plugins.toy import (
     EXPLAINING_PLUGIN, FAILS_UNTIL_SEVEN_CELLS_PLUGIN, ORDERED_SOLVER_LOGS_PLUGIN, RULE_CHECKING_PLUGIN,
     SOLVER_LOG_EXPLAINING_PLUGIN, STALE_SOLVER_LOG_PLUGIN, TWO_STEP_PLUGIN, write_toy_native_case,
@@ -138,6 +139,16 @@ def test_apply_needs_a_staged_case_so_it_refuses_entry(tmp_path, capsys):
     assert "--run-document" in refusal(
         capsys, ["step", "--plugin", PLUGIN, "--entry", "toyTutorial", "--step", "solve", "--apply", "p.json"],
     )
+
+
+def test_a_plan_that_loses_the_race_for_a_case_is_refused_as_json(case, tmp_path, capsys):
+    with acquire_case_lease(case.root):
+        code, payload = _cli(
+            "plan", "--strict", "--plugin", PLUGIN, "--entry", "toyTutorial",
+            "--cases-root", str(tmp_path / "native"), "--scratch-dir", str(tmp_path / "scratch"),
+        )
+    assert code == 1 and payload["status"] == "failed"
+    assert "case root is already owned" in payload["error"]
 
 
 def test_a_case_whose_edit_a_kill_cut_short_is_refused_until_planned_again(case):

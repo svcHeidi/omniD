@@ -472,7 +472,7 @@ def _context_from_entry(
 
     try:
         report = plan()
-    except TutorialRecordError as exc:
+    except (TutorialRecordError, AttemptLeaseError) as exc:
         print(json.dumps({
             "status": "failed",
             "entry": label,
@@ -1396,7 +1396,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
                 inputs=cli_inputs,
                 driver_context=driver_context,
             )
-        except TutorialRecordError as exc:
+        except (TutorialRecordError, AttemptLeaseError) as exc:
             print(json.dumps({
                 "status": "failed",
                 "entry": entry_label,
@@ -1441,7 +1441,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
                 inputs=cli_inputs,
                 driver_context=driver_context,
             )
-        except (SweepValidationError, TutorialRecordError) as exc:
+        except (SweepValidationError, TutorialRecordError, AttemptLeaseError) as exc:
             return _sweep_refusal(args, exc)
         # A spec that could not be read yields zero cases, so "no case
         # failed" would otherwise read as success.
@@ -1464,7 +1464,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
                 inputs=cli_inputs,
                 driver_context=driver_context,
             )
-        except (SweepValidationError, TutorialRecordError) as exc:
+        except (SweepValidationError, TutorialRecordError, AttemptLeaseError) as exc:
             return _sweep_refusal(args, exc)
         except SweepStopped as stop:
             print(json.dumps({"status": "failed", **stop.report}, indent=2))
