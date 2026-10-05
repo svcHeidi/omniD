@@ -289,6 +289,44 @@ def read_foam_entry(
     return None
 
 
+#: A quoted string, kept, or a comment or ``#`` directive line, blanked: one regex pass, not a character loop.
+_STRING_OR_COMMENT = re.compile(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/|^[ \t]*#[^\n]*', re.S | re.M)
+#: A uniform list ``N{value}``, whose braces open no sub-dictionary.
+_UNIFORM_LIST = re.compile(r"(?<![\w.])\d+\s*\{[^{}]*\}")
+
+
+def _blank(match: re.Match[str]) -> str:
+    return re.sub(r"[^\n]", " ", match.group())
+
+
+def read_foam_entries(file_path: Path, keys: "tuple[str, ...] | list[str]") -> dict[str, str]:
+    """The raw value text of each of ``keys`` that ``file_path`` sets at its top level, from one pass over the file.
+
+    For a large data dictionary, such as a Purkinje graph of tens of thousands of edges, which
+    :func:`read_foam_entry` scans line by line for each key. A value keeps its spelling without the
+    trailing semicolon; a sub-dictionary is no value, and an ``#include`` is not followed."""
+    if not file_path.exists():
+        return {}
+    text = _STRING_OR_COMMENT.sub(lambda match: match.group() if match.group().startswith('"') else _blank(match), file_path.read_text())
+    structure = _STRING_OR_COMMENT.sub(_blank, _UNIFORM_LIST.sub(lambda match: match.group().replace("{", " ").replace("}", " "), text))
+    wanted = set(keys)
+    found: dict[str, str] = {}
+    depth, start = 0, 0
+    for match in re.finditer(r"[{};]", structure):
+        at = match.start()
+        if match.group() == "{":
+            depth += 1
+        elif match.group() == "}":
+            depth -= 1
+            start = at + 1 if depth == 0 else start
+        elif depth == 0:
+            parts = text[start:at].split(None, 1)
+            start = at + 1
+            if len(parts) == 2 and parts[0] in wanted:
+                found[parts[0]] = parts[1].strip()
+    return found
+
+
 def splice_raw_entry_text(
     file_path: Path,
     key: str,

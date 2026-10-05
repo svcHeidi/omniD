@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -549,25 +550,31 @@ _RPVJ_COUPLER = "reactionDiffusionPvjCoupler"
 _GRAPH_FILE_SUFFIX = ".purkinjeGraphModelCoeffs.graphFile"
 
 
-def _materialized_graphs(case_root: Path, context: dict[str, Any]) -> dict[str, tuple[str, dict[str, str]]]:
-    """Each conduction network whose ``graphFile`` names a file the case holds, with its case-relative path and the
-    raw text of each catalogued key the file sets. A graph a later step writes is not judged. The read is lexical:
-    foamlib takes minutes over a graph of a thousand edges."""
-    from omnidriver.openfoam.mutators import read_foam_entry
+@lru_cache(maxsize=8)
+def _read_graph(path: str, stamp: tuple[int, int]) -> tuple[dict[str, str], tuple[tuple[str, str], ...]]:
+    """A graph file's catalogued keys and its breaks, once per file version: a plan judges the case twice."""
+    from omnidriver.openfoam.mutators import read_foam_entries
 
     from .common_dict_entries import PURKINJE_GRAPH_ENTRIES
 
-    graphs: dict[str, tuple[str, dict[str, str]]] = {}
+    raw = read_foam_entries(Path(path), [entry.driver_path for entry in PURKINJE_GRAPH_ENTRIES])
+    return raw, tuple(_graph_breaks(raw))
+
+
+def _materialized_graphs(case_root: Path, context: dict[str, Any]) -> dict[str, tuple[str, dict[str, str], tuple]]:
+    """Each network's graph file the case holds: its case-relative path, catalogued keys and breaks."""
+    graphs: dict[str, tuple[str, dict[str, str], tuple]] = {}
     for key, name in context.items():
         if not (key.startswith(_CONDUCTION_NET_PREFIX) and key.endswith(_GRAPH_FILE_SUFFIX)):
             continue
         relpath = f"constant/{name}"
-        if not (case_root / relpath).is_file():
+        path = case_root / relpath
+        if not path.is_file():
             continue
-        graphs[key[len(_CONDUCTION_NET_PREFIX):-len(_GRAPH_FILE_SUFFIX)]] = (relpath, {
-            entry.driver_path: raw for entry in PURKINJE_GRAPH_ENTRIES
-            if (raw := read_foam_entry(case_root / relpath, entry.driver_path)) is not None
-        })
+        status = path.stat()
+        graphs[key[len(_CONDUCTION_NET_PREFIX):-len(_GRAPH_FILE_SUFFIX)]] = (
+            relpath, *_read_graph(str(path.resolve()), (status.st_mtime_ns, status.st_size)),
+        )
     return graphs
 
 
@@ -656,24 +663,24 @@ def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str]]:
     return breaks
 
 
-def _evaluate_conduction_graphs(graphs: dict[str, tuple[str, dict[str, str]]]) -> list["StrictDiagnostic"]:
+def _evaluate_conduction_graphs(graphs: dict[str, tuple[str, dict[str, str], tuple]]) -> list["StrictDiagnostic"]:
     """The catalogue's rules and the tree the C++ requires, over each network's graph file."""
     from omnidriver.openfoam.case_rules import rule_diagnostics
 
     from .common_dict_entries import PURKINJE_GRAPH_ENTRIES
 
     found: list["StrictDiagnostic"] = []
-    for relpath, raw in graphs.values():
+    for relpath, raw, breaks in graphs.values():
         found += rule_diagnostics(PURKINJE_GRAPH_ENTRIES, raw, document=relpath)
         found += [
             diagnostic("error", "conduction_graph_invalid", f"{relpath}: {reason}.", source=relpath, field=key)
-            for key, reason in _graph_breaks(raw)
+            for key, reason in breaks
         ]
     return found
 
 
 def _evaluate_pvj_resistance_requirement(
-    context: dict[str, Any], graphs: dict[str, tuple[str, dict[str, str]]], electro_path: Path,
+    context: dict[str, Any], graphs: dict[str, tuple[str, dict[str, str], tuple]], electro_path: Path,
 ) -> list["StrictDiagnostic"]:
     """``rPvj`` is required only when the materialized graph has no ``pvjResistances``, which a ``required_when`` cannot see; an absent graph defers."""
     from omnidriver.openfoam.literals import list_elements
@@ -687,7 +694,7 @@ def _evaluate_pvj_resistance_requirement(
         rpvj_key = f"{block}.rPvj"
         if network is None or rpvj_key in context or network not in graphs:
             continue
-        relpath, raw = graphs[network]
+        relpath, raw, _breaks = graphs[network]
         try:
             if "pvjResistances" in raw and list_elements(raw["pvjResistances"]):
                 continue

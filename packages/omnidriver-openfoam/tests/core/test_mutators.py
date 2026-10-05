@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from omnidriver.openfoam.mutators import (
+    read_foam_entries,
     read_foam_entry,
     remove_foam_dict,
     update_foam_entry,
@@ -663,3 +664,25 @@ class TestReadFoamEntry(unittest.TestCase):
     def test_nonexistent_file_returns_none(self) -> None:
         result = read_foam_entry(Path("/no/such/file"), "key")
         self.assertIsNone(result)
+
+
+def test_read_foam_entries_takes_every_top_level_key_in_one_pass(tmp_path):
+    """A sub-dictionary's keys, comments, a directive and a uniform list's braces do not count as top-level entries."""
+    path = tmp_path / "graph"
+    path.write_text(
+        "FoamFile { version 2.0; object graph; }\n"
+        "#include \"other\"\n"
+        "rootNode\n0;\n"
+        "// pvjNodes (9);\n"
+        "pvjNodes /* the junctions */ (5 10);\n"
+        "pvjResistances 2{100};\n"
+        "pointFields { label { rootNode 7; } }\n"
+        "conductionEdges\n2\n(\n4(0 1 0.1 1)\n4(1 2 0.1 1)\n);\n"
+    )
+    found = read_foam_entries(path, ("rootNode", "pvjNodes", "pvjResistances", "conductionEdges", "points", "pointFields"))
+    assert {key: " ".join(value.split()) for key, value in found.items()} == {
+        "rootNode": "0", "pvjNodes": "(5 10)", "pvjResistances": "2{100}",
+        "conductionEdges": "2 ( 4(0 1 0.1 1) 4(1 2 0.1 1) )",
+    }
+    for key in ("rootNode", "pvjNodes", "conductionEdges"):
+        assert read_foam_entry(path, key).split() == found[key].split()
