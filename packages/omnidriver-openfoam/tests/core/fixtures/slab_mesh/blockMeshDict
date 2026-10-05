@@ -1,0 +1,47 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+
+// A 4 mm x 4 mm x 0.1 mm slab of 12 x 12 x 1 cells (0.333 mm cells), the cell geometry of
+// purkinjeRestitution2D.
+scale 1e-3;
+
+vertices
+(
+    (0 0 0)
+    (4 0 0)
+    (4 4 0)
+    (0 4 0)
+    (0 0 0.1)
+    (4 0 0.1)
+    (4 4 0.1)
+    (0 4 0.1)
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7) (12 12 1) simpleGrading (1 1 1)
+);
+
+edges ();
+
+boundary
+(
+    walls
+    {
+        type wall;
+        faces
+        (
+            (0 4 7 3)
+            (1 2 6 5)
+            (0 1 5 4)
+            (3 7 6 2)
+            (0 3 2 1)
+            (4 5 6 7)
+        );
+    }
+);

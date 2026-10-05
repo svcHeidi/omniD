@@ -938,6 +938,140 @@ def _evaluate_graph_placement(
     return found
 
 
+#: The largest ``rate * deltaT`` for which the ``ddtSchemes`` operator stays stable when a linear decay ``rate`` acts
+#: on the old time level: Euler's ``|1 - a| < 1``, and backward's ``3z^2 + (2a - 4)z + 1 = 0`` with ``|z| < 1``.
+_DDT_STABILITY_LIMIT = {"Euler": 2.0, "backward": 4.0}
+
+
+def _scalar(value: Any) -> float | None:
+    try:
+        return float(getattr(value, "value", value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _sphere(geometry: Any, location: tuple[float, ...], radius: float, kernel: str) -> list[tuple[float, float]]:
+    """``(weight, volume)`` of the cells ``pvjMapper`` gathers for a junction: those with a centre within ``radius``,
+    weighted by the kernel, or the nearest cell alone with weight 1 when none is."""
+    cells = geometry.near(location, radius)
+    if not cells:
+        nearest = geometry.nearest(location, radius)
+        return [(1.0, nearest[1])] if nearest is not None else []
+    if kernel == "gaussian":
+        return [(math.exp(-4.5 * d * d / (radius * radius)), v) for d, v in cells]
+    if kernel == "linear":
+        return [(1.0 - d / radius, v) for d, v in cells]
+    return [(1.0, v) for _, v in cells]
+
+
+def _evaluate_pvj_stability(
+    context: dict[str, Any], graphs: dict[str, tuple[str, _Graph]], case_root: Path, electro_path: Path,
+) -> list["StrictDiagnostic"]:
+    """A junction resistance below the bound under which the tissue's Vm near the junction alternates in sign and grows.
+
+    ``pvjCouplingScheme explicit`` spreads ``w (Vn - <V>) / (R V_s)`` over the junction's cells, ``<V>`` being the
+    old mean of their Vm: a rank-one operator whose one nonzero decay rate is
+    ``k = sum(w^2 V) / (R chi cm V_s^2)``, ``V_s = sum(w V)`` over the cells. The tissue's ``ddtSchemes`` operator
+    keeps it stable while ``k dt`` stays below 2 (``Euler``) or 4 (``backward``). The inputs are ``deltaT``,
+    ``ddtSchemes``, the tissue's ``chi`` and ``cm``, the resistance and the weights and volumes of the cells
+    ``pvjMapper`` gathers. Each junction is judged alone, whatever cells it shares. The cells need the mesh, so a
+    case without one is reported as not judged."""
+    from foamlib import FoamFile
+
+    from omnidriver.openfoam.literals import list_elements
+    from omnidriver.openfoam.mesh_cells import cell_geometry
+
+    from .record_key_validation import _ELECTRO_ENTRIES_BY_PATH
+
+    blocks = [
+        (key[: -len(_COUPLER_SUFFIX)], context.get(key[: -len(_COUPLER_SUFFIX)] + _NETWORK_REF_SUFFIX))
+        for key, coupler in context.items()
+        if key.startswith(_DOMAIN_COUPLINGS_PREFIX) and key.endswith(_COUPLER_SUFFIX) and coupler == _RPVJ_COUPLER
+        and context.get(key[: -len(_COUPLER_SUFFIX)] + ".pvjCouplingScheme", "explicit") == "explicit"
+    ]
+    blocks = [(block, network) for block, network in blocks if network in graphs]
+    if not blocks or context.get("myocardiumSolver") not in ("monodomainSolver", "bidomainSolver") or any(
+        key.startswith("bathPotentialDomain.") for key in context
+    ):
+        return []
+    try:
+        dt = _scalar(FoamFile(case_root / "system" / "controlDict")["deltaT"])
+        ddt = FoamFile(case_root / "system" / "fvSchemes")["ddtSchemes"]
+        scheme = str(ddt.get("ddt(Vm)", ddt["default"]))
+    except (OSError, ValueError, KeyError):
+        return []
+    chi, cm = _scalar(context.get("chi")), _scalar(context.get("cm"))
+    if dt is None or chi is None or cm is None or not (dt > 0 and chi * cm > 0):
+        return []
+    document = electro_path.relative_to(case_root).as_posix()
+    if scheme not in _DDT_STABILITY_LIMIT:
+        return [diagnostic(
+            "info", "pvj_stability_unjudged",
+            f"{document}: the junction resistance is not judged against a stability bound, since ddtSchemes {scheme!r} "
+            f"is not one whose limit omniD knows ({', '.join(_DDT_STABILITY_LIMIT)}).",
+            source=document, field="ddtSchemes",
+        )]
+    limit = _DDT_STABILITY_LIMIT[scheme]
+    scale = dt / (chi * cm * limit)
+    geometry, why = None, "before the mesh exists"
+    try:
+        geometry = cell_geometry(electro_path.parent / "polyMesh")
+    except OSError:
+        pass
+    except ValueError as exc:
+        why = f"since omniD cannot read the mesh ({exc})"
+    default_radius = float(_ELECTRO_ENTRIES_BY_PATH[_PVJ_RADIUS_PATH].default)
+    form = f"dt*sum(w^2 V)/(chi*cm*sum(w V)^2*A) with A = {limit:g} (ddtSchemes {scheme})"
+    found: list["StrictDiagnostic"] = []
+    for block, network in blocks:
+        graph = graphs[network][1]
+        junctions = len(graph.locations or ())
+        try:
+            listed = [float(item) for item in list_elements(graph.raw["pvjResistances"])] if "pvjResistances" in graph.raw else []
+        except ValueError:
+            continue
+        rpvj = _scalar(context.get(block + ".rPvj"))
+        resistances = listed if len(listed) >= junctions > 0 else [rpvj] * junctions
+        if junctions == 0 or None in resistances:
+            continue
+        if geometry is None:
+            found.append(diagnostic(
+                "info", "pvj_stability_unjudged",
+                f"{document}: {block}'s junction resistance is not judged against a stability bound {why}. "
+                f"pvjCouplingScheme explicit is stable only above R = {form}, the sums over the junction's cells "
+                f"(w the kernel weight, V the cell volume); dt/(chi*cm*A) is {scale:.4g} ohm m^3 "
+                f"(dt {dt:g} s, chi*cm {chi * cm:g} F/m^3).",
+                source=document, field=block + ".rPvj",
+            ))
+            continue
+        radius = _scalar(context.get(block + ".pvjRadius", default_radius))
+        kernel = str(context.get(block + ".pvjKernel", "uniform"))
+        if radius is None or not radius > 0:
+            continue
+        low: list[tuple[float, int, float, int]] = []
+        for i, (location, resistance) in enumerate(zip(graph.locations or (), resistances)):
+            cells = _sphere(geometry, location, radius, kernel)
+            if not cells:
+                continue
+            volume = sum(w * v for w, v in cells)
+            bound = scale * sum(w * w * v for w, v in cells) / volume ** 2
+            if resistance < bound:
+                low.append((bound / resistance, i, bound, len(cells)))
+        if low:
+            _, worst, bound, cells = max(low)
+            found.append(diagnostic(
+                "error", "pvj_resistance_below_stability_bound",
+                f"{document}: {len(low)} of {junctions} junctions of {block} have a resistance below the bound under "
+                f"which the tissue's Vm near the junction alternates in sign and grows. With pvjCouplingScheme "
+                f"explicit the bound is R = {form}, dt {dt:g} s, chi*cm {chi * cm:g} F/m^3, over the cells within "
+                f"pvjRadius {radius:g} m. The worst, junction {worst}, has a resistance of {resistances[worst]:g} "
+                f"ohm against a bound of {bound:.4g} ohm over {cells} cells. Raise the resistance, shorten deltaT, "
+                "or use pvjCouplingScheme implicit.",
+                source=document, field=block + ".rPvj",
+            ))
+    return found
+
+
 def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]:
     """The rules between values that no single catalogue entry states.
     ``context`` is the active ``<solver>Coeffs`` block's leaves, keyed by
@@ -1014,4 +1148,5 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDi
         + _evaluate_pvj_resistance_lengths(context, graphs)
         + _evaluate_pvj_resistance_requirement(context, graphs, electro_path)
         + _evaluate_graph_placement(context, graphs, case_root, electro_path)
+        + _evaluate_pvj_stability(context, graphs, case_root, electro_path)
     )

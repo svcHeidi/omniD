@@ -136,3 +136,7 @@ check it; the refusals it names are the record's own.
   `points` position is a warning. The mesh is read where `constant/polyMesh`
   exists when the case is judged, so a plan of a case that has yet to make its
   mesh does not judge the locations, and `step` does once the mesh step has run.
+  With `pvjCouplingScheme explicit`, a junction resistance below the bound set by
+  `deltaT`, `ddtSchemes`, the tissue's `chi` and `cm` and the junction's cells
+  (the tissue's Vm then alternates in sign and grows) is refused the same way; a
+  plan before the mesh exists reports the bound it can compute as a note.

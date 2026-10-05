@@ -1,4 +1,4 @@
-"""The extent of an OpenFOAM mesh, read from its ``points`` file."""
+"""The points of an OpenFOAM mesh and their extent, read from its ``points`` file."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import re
 import sys
 from array import array
 from functools import lru_cache
+from collections.abc import Sequence
 from pathlib import Path
 
 Corner = tuple[float, float, float]
@@ -30,7 +31,7 @@ def _binary_axes(path: str, header: str, data: bytes, count: int) -> list[array]
 
 
 @lru_cache(maxsize=4)
-def _bounds(path: str, stamp: tuple[int, int]) -> tuple[Corner, Corner]:
+def _axes(path: str, stamp: tuple[int, int]) -> tuple[Sequence[float], Sequence[float], Sequence[float]]:
     data = Path(path).read_bytes()
     header_end = data.find(b"}")
     header = data[:header_end + 1].decode("latin-1")
@@ -40,16 +41,19 @@ def _bounds(path: str, stamp: tuple[int, int]) -> tuple[Corner, Corner]:
         raise ValueError(f"{path} is no ascii or binary list of points")
     count = int(start.group(1))
     if layout.group(1) == "binary":
-        axes = _binary_axes(path, header, data[start.end():], count)
-    else:
-        numbers = _NUMBER.findall(data[start.end():].decode("latin-1"))
-        if len(numbers) != 3 * count:
-            raise ValueError(f"{path} counts {count} points but holds {len(numbers)} numbers")
-        axes = [[float(value) for value in numbers[axis::3]] for axis in range(3)]
-    return (
-        (min(axes[0]), min(axes[1]), min(axes[2])),
-        (max(axes[0]), max(axes[1]), max(axes[2])),
-    )
+        x, y, z = _binary_axes(path, header, data[start.end():], count)
+        return x, y, z
+    numbers = _NUMBER.findall(data[start.end():].decode("latin-1"))
+    if len(numbers) != 3 * count:
+        raise ValueError(f"{path} counts {count} points but holds {len(numbers)} numbers")
+    return tuple(array("d", map(float, numbers[axis::3])) for axis in range(3))
+
+
+def point_axes(points_file: Path) -> tuple[Sequence[float], Sequence[float], Sequence[float]]:
+    """The x, y and z coordinates of the points in a ``polyMesh/points`` file, ascii or binary, read once per file
+    version. Raises ``ValueError`` for a file that is no counted list of points."""
+    status = points_file.stat()
+    return _axes(str(points_file.resolve()), (status.st_mtime_ns, status.st_size))
 
 
 def points_bounds(points_file: Path) -> tuple[Corner, Corner] | None:
@@ -58,5 +62,5 @@ def points_bounds(points_file: Path) -> tuple[Corner, Corner] | None:
     of points."""
     if not points_file.is_file():
         return None
-    status = points_file.stat()
-    return _bounds(str(points_file.resolve()), (status.st_mtime_ns, status.st_size))
+    x, y, z = point_axes(points_file)
+    return (min(x), min(y), min(z)), (max(x), max(y), max(z))
