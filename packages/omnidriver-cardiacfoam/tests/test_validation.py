@@ -997,7 +997,7 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
                      myocardium_solver="monodomainSolver",
                      conduction_solver="monodomain1DSolver",
                      set_rpvj=False, graph_present=None, graph_has_resistances=False,
-                     graph_file_key=True):
+                     graph_file_key=True, scheme=None):
     from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
     prefix = (
@@ -1027,6 +1027,8 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
         overrides["$ELECTRO_MODEL_COEFFS.stimulusLocationMax"] = "(1e6 1e6 1e6)"
     if graph_file_key:
         overrides[f"{prefix}.graphFile"] = "purkinjeGraph"
+    if scheme is not None:
+        overrides["$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.pvjCouplingScheme"] = scheme
     if set_rpvj:
         # rPvj lives on the coupler's own block (domainCouplings.<name>.rPvj),
         # not on the network's purkinjeGraphModelCoeffs.
@@ -1101,10 +1103,10 @@ def test_pvj_resistance_irrelevant_for_a_different_coupler(tmp_path):
 # conductionGraph::readFromDict and conductionSystemDomain::readGraphFile stop
 # the solver on each of these breaks; case_diagnostics names them before it runs.
 
-def _graph_diagnostics(tmp_path, graph_text):
+def _graph_diagnostics(tmp_path, graph_text, **case):
     from omnidriver.cardiacfoam.validation import case_diagnostics
 
-    _build_pvj_case(tmp_path, set_rpvj=True)
+    _build_pvj_case(tmp_path, set_rpvj=True, **case)
     (tmp_path / "constant" / "purkinjeGraph").write_text(graph_text)
     return [
         (item.code, item.field, item.message) for item in case_diagnostics(tmp_path)
@@ -1126,7 +1128,6 @@ def test_the_native_graph_passes(tmp_path):
     ("(5 10);", "(5 11);", "pvjNodes", "[11] are outside"),
     ("    (1 0.166666666667 0.333333333333)\n);\n\nconductionEdges", ");\n\nconductionEdges", "pvjLocations", "1 values for 2"),
     ("    (0.9 0.166666666667 0.333333333333)\n", "", "points", "10 positions for 11 nodes"),
-    ("rootNode\n0;", "rootNode\n0;\npvjResistances (150);", "pvjResistances", "1 values for 2"),
 ])
 def test_a_graph_break_the_solver_stops_on_is_named(tmp_path, old, new, field, reason):
     text = _NATIVE_GRAPH.read_text()
@@ -1134,6 +1135,20 @@ def test_a_graph_break_the_solver_stops_on_is_named(tmp_path, old, new, field, r
     found = _graph_diagnostics(tmp_path, text.replace(old, new, 1))
     assert [(code, name) for code, name, _ in found] == [("conduction_graph_invalid", field)]
     assert reason in found[0][2]
+
+
+@pytest.mark.parametrize("resistances,case,refused", [
+    ("(150)", {}, True),
+    ("(150 150 150)", {}, False),
+    ("(150 150 150)", {"scheme": "implicit"}, True),
+    ("(150)", {"coupler": "eikonalMonodomainPvjCoupler", "conduction_solver": "restitutionEikonalSolver1D"}, True),
+    ("(150 150 150)", {"coupler": "eikonalMonodomainPvjCoupler", "conduction_solver": "restitutionEikonalSolver1D"}, False),
+    ("(150)", {"coupler": "eikonalPvjCoupler", "myocardium_solver": "eikonalSolver", "conduction_solver": "eikonalSolver1D"}, False),
+])
+def test_a_resistance_list_of_the_wrong_length_is_refused_where_a_coupler_reads_past_it(tmp_path, resistances, case, refused):
+    text = _NATIVE_GRAPH.read_text() + f"pvjResistances {resistances};\n"
+    found = [(code, field) for code, field, _ in _graph_diagnostics(tmp_path, text, **case)]
+    assert found == ([("conduction_graph_invalid", "pvjResistances")] if refused else [])
 
 
 def test_a_graph_without_a_key_the_solver_reads_is_refused(tmp_path):

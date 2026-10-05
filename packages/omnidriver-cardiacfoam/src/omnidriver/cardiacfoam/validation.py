@@ -663,11 +663,9 @@ def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str, str]]:
         points = elements("points")
         if points is not None and len(points) != nodes:
             breaks.append(("error", "points", f"points holds {len(points)} positions for {nodes} nodes"))
-    if pvj_nodes is not None:
-        # An empty pvjResistances is no list at all to the couplers (terminalResistances).
-        for key, listed in (("pvjLocations", elements("pvjLocations")), ("pvjResistances", elements("pvjResistances") or None)):
-            if listed is not None and len(listed) != len(pvj_nodes):
-                breaks.append(("error", key, f"{key} holds {len(listed)} values for {len(pvj_nodes)} pvjNodes"))
+    locations = elements("pvjLocations")
+    if pvj_nodes is not None and locations is not None and len(locations) != len(pvj_nodes):
+        breaks.append(("error", "pvjLocations", f"pvjLocations holds {len(locations)} values for {len(pvj_nodes)} pvjNodes"))
     return breaks
 
 
@@ -687,6 +685,46 @@ def _evaluate_conduction_graphs(graphs: dict[str, tuple[str, dict[str, str], tup
             )
             for level, key, reason in breaks
         ]
+    return found
+
+
+_RESISTANCE_READERS = (_RPVJ_COUPLER, "eikonalMonodomainPvjCoupler")
+
+
+def _evaluate_pvj_resistance_lengths(
+    context: dict[str, Any], graphs: dict[str, tuple[str, dict[str, str], tuple]],
+) -> list["StrictDiagnostic"]:
+    """A graph's ``pvjResistances`` of the wrong length, where a coupling of its network reads it: the implicit
+    scheme stops on any other length than one per junction (``pvjMapper::depositImplicitCoupling``), and the
+    explicit couplers index one per junction, past the end of a shorter list. A longer one is harmless there."""
+    from omnidriver.openfoam.literals import list_elements
+
+    found: list["StrictDiagnostic"] = []
+    for key, coupler in context.items():
+        if not (key.startswith(_DOMAIN_COUPLINGS_PREFIX) and key.endswith(_COUPLER_SUFFIX)) or coupler not in _RESISTANCE_READERS:
+            continue
+        block = key[: -len(_COUPLER_SUFFIX)]
+        network = context.get(block + _NETWORK_REF_SUFFIX)
+        if network not in graphs or "pvjResistances" not in graphs[network][1]:
+            continue
+        relpath, raw, _breaks = graphs[network]
+        try:
+            resistances, junctions = len(list_elements(raw["pvjResistances"])), len(list_elements(raw["pvjNodes"]))
+        except (KeyError, ValueError):
+            continue
+        implicit = coupler == _RPVJ_COUPLER and context.get(block + ".pvjCouplingScheme") == "implicit"
+        if resistances == 0 or resistances == junctions or (resistances > junctions and not implicit):
+            continue
+        reader = (
+            "the implicit scheme (pvjMapper::depositImplicitCoupling) stops on any other length" if implicit
+            else f"{coupler} reads one per junction, past the list's end"
+        )
+        found.append(diagnostic(
+            "error", "conduction_graph_invalid",
+            f"{relpath}: pvjResistances holds {resistances} values for {junctions} pvjNodes, and {block} "
+            f"couples the network; {reader}.",
+            source=relpath, field="pvjResistances",
+        ))
     return found
 
 
@@ -795,5 +833,6 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDi
         found
         + cross_field_diagnostics(context)
         + _evaluate_conduction_graphs(graphs)
+        + _evaluate_pvj_resistance_lengths(context, graphs)
         + _evaluate_pvj_resistance_requirement(context, graphs, electro_path)
     )
