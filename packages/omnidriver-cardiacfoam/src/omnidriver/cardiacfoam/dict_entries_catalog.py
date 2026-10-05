@@ -1129,6 +1129,17 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             applicable_when={"$ecgDomains_present": True},
         ),
         DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.torsoSurface',
+            phases=frozenset({'physics'}),
+            description="Optional STL surface of the torso, as a path relative to the case directory, in the mesh's units (metres). The centres of its faces become the ECG evaluation points, and the ECG potential on the surface is written as VTK under postProcessing/ECG. When absent, no surface is loaded.",
+            source_refs=('src/genericWriter/ecgModelIO.C', 'src/genericWriter/ecgModelIO.H', 'src/electroModels/electroDomains/ecgDomain/ecgDomain.C'),
+            notes="Read by ecgModelIO::loadSurface from the dictionary it is given. The ECG domain's block is placed here because it is the dictionary ecgDomain::readElectrodes and ecgSolver::New receive.",
+            value_kind='string',
+            allowed_bindings={"<name>": None},
+            constraints=('Only applicable when ecgDomains block is present in electroProperties.',),
+            applicable_when={"$ecgDomains_present": True},
+        ),
+        DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.coupling.electroDomainCoupler',
             phases=frozenset({'physics'}),
             description='Optional ECG-domain coupling selector dispatched through electroDomainCoupler.',

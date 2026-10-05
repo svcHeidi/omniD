@@ -254,14 +254,13 @@ below.
    bounding box, which `pvjMapper` would couple to its nearest cell, however far.
 4. **`eikonalMonodomainPvjCoupler` requires `rPvj`** even when the graph lists
    `pvjResistances`, and then never uses it.
-5. **`torsoSurface`.** The only reader is `ecgModelIO::loadSurface`
+5. **`torsoSurface`.** Its only reader is `ecgModelIO::loadSurface`
    (`dict.get<fileName>("torsoSurface")`, opened as `runTime.path()/stlPath`, so
-   the path is relative to the case directory). Nothing in `src/` or
-   `applications/` calls it, and no native commit since it was added
-   (2026-03-10) has a caller. No ECG model block reaches it: `torsoECG` samples
-   `phiE` at the electrode positions, and `pseudoECG` and `eikonalECG` use the
-   electrode positions only. Its face centres would be ECG evaluation points
-   in the same frame as the electrodes, so the STL would have to be in mesh
-   units (metres). It stays uncatalogued until it has a place in
-   `electroProperties`. Owner, 2026-10-05: it is wired with the bath-heart
-   case, on a branch that lands soon.
+   the path is relative to the case directory). The function takes a
+   `const dictionary&`, as `ecgDomain::readElectrodes` and `ecgSolver::New`
+   do, and those receive the `ecgDomains.<name>` block, so the catalogue places
+   the key there; the owner wires the call with the bath-heart case, on a
+   branch, and confirms the placement. Its face centres are the ECG evaluation
+   points, in the frame of the electrodes, so the STL is in mesh units
+   (metres); `ecgModelIO::writeSurfaceVtk` writes the potential on its faces
+   under `postProcessing/ECG`.

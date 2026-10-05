@@ -69,6 +69,8 @@ class TestDictEntryCatalog(unittest.TestCase):
         )
 
         ecg_entries = {entry.driver_path: entry for entry in ELECTRO_PROPERTY_ENTRY_GROUPS["ecg"]}
+        torso = ecg_entries["$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.torsoSurface"]
+        self.assertEqual((torso.value_kind, torso.required), ("string", False))
         self.assertTrue(
             ecg_entries[
                 "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.electrodePositions.<electrode>"

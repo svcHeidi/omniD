@@ -218,11 +218,11 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - *After `step --apply` changes a swept key,* the case record still shows the
      sweep's axis values.
 3. **Uncatalogued cardiacFOAM keys:** 12 for electromechanics (they wait for
-   it), `offsetField` (a field-file key that no
-   catalogued document holds) and `torsoSurface`, read only by
-   `ecgModelIO::loadSurface`, which nothing calls yet: the owner wires it with
-   the bath-heart case (on a branch, landing soon), and it is catalogued once
-   it has a place in `electroProperties`. The Purkinje graph file is
+   it) and `offsetField` (a field-file key that no catalogued document holds).
+   `torsoSurface`, read by `ecgModelIO::loadSurface`, is catalogued at
+   `ecgDomains.<name>.torsoSurface`, the block that function's dictionary
+   argument matches; the owner wires the call with the bath-heart case (on a
+   branch, landing soon) and confirms the placement. The Purkinje graph file is
    catalogued as the `purkinjeGraph` document, and a case's graph is judged
    before it runs (`docs/solver-learning/cardiacfoam-conduction-graph.md`).
    `purkinjeConductivity` is S/m with a dimensionless per-edge conductance, and
