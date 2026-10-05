@@ -217,11 +217,25 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      spec. Every staged `humanSlab` copies its 333 MB anatomy bundle.
    - *After `step --apply` changes a swept key,* the case record still shows the
      sweep's axis values.
-3. **Uncatalogued cardiacFOAM keys** awaiting descriptions: 12 for
-   electromechanics (they wait for it), two `couplingSignal` literals, and
-   `conductionEdges`, `pvjResistances` (in `constant/purkinjeGraph`) and
-   `torsoSurface`, which wait for the owner's descriptions, and `offsetField`, a
-   field-file key that no catalogued document holds.
+3. **Uncatalogued cardiacFOAM keys:** 12 for electromechanics (they wait for
+   it), two `couplingSignal` literals, `offsetField` (a field-file key that no
+   catalogued document holds) and `torsoSurface`. The Purkinje graph file is
+   catalogued as the `purkinjeGraph` document, and a case's graph is judged
+   before it runs (`docs/solver-learning/cardiacfoam-conduction-graph.md`).
+   The owner still has to settle the questions that document lists under
+   "Needs owner confirmation":
+   - which factor of `conductance × purkinjeConductivity` carries the S/m;
+   - the junction current on the network side, used as A/m³ where the tissue
+     takes it as A. Until this is settled, `rPvj` and `pvjResistances` have no
+     unit;
+   - whether the native code should check the length of `pvjResistances` and
+     the range of `rootStimulus.node`;
+   - `torsoSurface`, read only by `ecgModelIO::loadSurface`, which nothing
+     calls: delete it or wire it to an ECG model.
+
+   The catalogue has no value kind for a list of lists, so `conductionEdges`
+   is declared `scalar_list` with its element shape in `constraints`. No study
+   writes the graph, so no shape check runs on it.
 4. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the
    solver changed.
