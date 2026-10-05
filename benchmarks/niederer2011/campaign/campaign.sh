@@ -17,11 +17,7 @@
 #   campaign.sh compare [request-stem ...]         every request whose cases have completed, or those named
 #   campaign.sh summary                            tables from the runs and reports
 #   campaign.sh proof                              the dx 0.5 mm level end to end, with N = 1 and 2 (README, "The proof")
-#   campaign.sh oblique <scheme> <variant> <dx-mm> [N] [dt-ms]
-#                                                  the oblique-wall study (README, "Oblique-wall study (hex)"): one
-#                                                  job, the dx's three time steps or only dt-ms, on N ranks
-#   campaign.sh oblique-summary                    tables from runs/oblique
-# <solver> is cardiacfoam or opencarp; N = 1 runs serial. <scheme> is godunov or sbdf2; <variant> is 0, A or AB.
+# <solver> is cardiacfoam or opencarp; N = 1 runs serial.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -151,20 +147,5 @@ EOF
       temporal_cardiacfoam_dx0.5_dt0.05_vs_dt0.01 temporal_cardiacfoam_dx0.5_dt0.01_vs_dt0.005
     "$0" summary
     ;;
-  oblique)
-    [ $# -ge 4 ] && [ $# -le 6 ] || die "usage: oblique <scheme> <variant> <dx-mm> [N] [dt-ms]"
-    scheme=$2 variant=$3 dx=$4 n=${5:-1} dt=${6:-}
-    need OMNIDRIVER_NATIVE_TUTORIALS
-    NATIVE_STUDY=NiedererEtAl2011verification/setup/studies/obliqueWall/sweep_hex_oblique_${scheme}_${variant}.json
-    [ -f "$OMNIDRIVER_NATIVE_TUTORIALS/$NATIVE_STUDY" ] || die "no study for scheme $scheme, variant $variant ($NATIVE_STUDY)"
-    wheres=("dx=$(dx_value cardiacfoam "$dx")"); level=dx$dx
-    if [ -n "$dt" ]; then wheres+=("$(dt_where cardiacfoam "$dt")"); level=dx${dx}_dt$dt; fi
-    spec="$RUNS/studies/cardiacfoam_obliqueWall_${scheme}_${variant}_${level}_np${n}.json"
-    level_spec cardiacfoam "$spec" "$n" "${wheres[@]}"
-    sweep_run cardiacfoam "$spec" "$RUNS/oblique/$scheme/$variant/$level" "$n"
-    ;;
-  oblique-summary)
-    "$PYTHON" "$HERE/oblique_summarize.py" --runs "$RUNS/oblique"
-    ;;
-  *) sed -n '2,/^set -euo/{/^set -euo/!p;}' "$0"; exit 2;;
+  *) sed -n '2,18p' "$0"; exit 2;;
 esac
