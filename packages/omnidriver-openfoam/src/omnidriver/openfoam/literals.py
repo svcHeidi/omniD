@@ -89,11 +89,20 @@ def format_vector3_literal(value: Sequence[Any]) -> str:
     return "(" + " ".join(_format_number(component) for component in value) + ")"
 
 
-def _split_top_level_tokens(text: str) -> list[str]:
-    """Split ``"(a b c)"`` into top-level tokens, keeping a nested ``"(x y z)"`` element (``vector3_list``) as one token."""
+#: The element count OpenFOAM may write before a list's opening parenthesis (``3(a b c)``).
+_LIST_COUNT_RE = re.compile(r"^(\d+)\s*(?=\()")
+
+
+def list_elements(text: str) -> list[str]:
+    """The top-level elements of the list ``"(a b c)"`` or its counted form ``"3(a b c)"``, each as written, so a
+    nested ``"(x y z)"`` or ``"4(a b c d)"`` element is one; a count that is not the number of elements is refused."""
+    shown = repr(text) if len(text) <= 80 else repr(text[:80]) + "..."
     stripped = text.strip()
+    count = _LIST_COUNT_RE.match(stripped)
+    if count is not None:
+        stripped = stripped[count.end():]
     if not (stripped.startswith("(") and stripped.endswith(")")):
-        raise ValueError(f"{text!r} is not a parenthesised OpenFOAM list")
+        raise ValueError(f"{shown} is not a parenthesised OpenFOAM list")
     inner = stripped[1:-1]
     tokens: list[str] = []
     current: list[str] = []
@@ -105,7 +114,7 @@ def _split_top_level_tokens(text: str) -> list[str]:
         elif char == ")":
             depth -= 1
             if depth < 0:
-                raise ValueError(f"{text!r} has an unbalanced ')'")
+                raise ValueError(f"{shown} has an unbalanced ')'")
             current.append(char)
         elif char.isspace() and depth == 0:
             if current:
@@ -114,9 +123,11 @@ def _split_top_level_tokens(text: str) -> list[str]:
         else:
             current.append(char)
     if depth != 0:
-        raise ValueError(f"{text!r} has an unbalanced '('")
+        raise ValueError(f"{shown} has an unbalanced '('")
     if current:
         tokens.append("".join(current))
+    if count is not None and int(count.group(1)) != len(tokens):
+        raise ValueError(f"{shown} counts {count.group(1)} elements but holds {len(tokens)}")
     return tokens
 
 
@@ -128,7 +139,7 @@ def parse_scalar_list_literal(text: str) -> tuple[float, ...]:
     """Parse ``"(1 2.5 3)"`` into ``(1.0, 2.5, 3.0)``."""
     return tuple(
         _parse_number(token, what="scalar list element", original=text)
-        for token in _split_top_level_tokens(text)
+        for token in list_elements(text)
     )
 
 
@@ -142,7 +153,7 @@ def format_integer_list_literal(value: Sequence[Any]) -> str:
 
 def parse_vector3_list_literal(text: str) -> tuple[tuple[float, float, float], ...]:
     """Parse ``"((1 0 0) (0 1 0))"`` into a tuple of vector3 tuples."""
-    return tuple(parse_vector3_literal(token) for token in _split_top_level_tokens(text))
+    return tuple(parse_vector3_literal(token) for token in list_elements(text))
 
 
 def format_vector3_list_literal(value: Sequence[Sequence[Any]]) -> str:

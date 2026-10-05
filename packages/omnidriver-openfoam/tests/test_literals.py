@@ -10,6 +10,7 @@ from omnidriver.openfoam.literals import (
     format_scalar_list_literal,
     format_vector3_list_literal,
     format_vector3_literal,
+    list_elements,
     parse_scalar_list_literal,
     parse_vector3_list_literal,
     parse_vector3_literal,
@@ -43,6 +44,18 @@ def test_scalar_and_vector3_list_literals_round_trip_byte_for_byte():
     assert format_scalar_list_literal(parse_scalar_list_literal("(1 2 3)")) == "(1 2 3)"
     text = "((1 0 0) (0 1 0))"
     assert format_vector3_list_literal(parse_vector3_list_literal(text)) == text
+
+
+def test_a_counted_list_reads_as_its_elements():
+    """OpenFOAM writes a list with its element count first, as 1DgraphToFoam writes a graph's edges."""
+    assert list_elements("2\n(\n4(0 1 0.5 1)\n4(1 2 0.5 1)\n)") == ["4(0 1 0.5 1)", "4(1 2 0.5 1)"]
+    assert parse_scalar_list_literal("4(0 1 0.5 1)") == (0.0, 1.0, 0.5, 1.0)
+    assert parse_vector3_list_literal("1((1 0 0))") == ((1.0, 0.0, 0.0),)
+
+
+def test_a_count_that_is_not_the_number_of_elements_is_refused():
+    with pytest.raises(ValueError, match="counts 3 elements but holds 2"):
+        list_elements("3(1 2)")
 
 
 def test_a_malformed_list_literal_is_refused():
