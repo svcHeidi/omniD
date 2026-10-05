@@ -88,11 +88,11 @@ def test_a_probe_of_the_record_reports_beside_the_checks_and_a_drifted_one_fails
 
     code, report = _check(tmp_path / "all", capsys, "--record", "toyTutorial", plugin=PROBING_PLUGIN)
     (record,) = report["records"]
-    probes = {name: (item["passed"], item["detail"]) for name, item in record["probes"].items()}
+    probes = {name: (item["status"], item["detail"]) for name, item in record["probes"].items()}
     assert code == 0 and probes == {
-        "matches": (True, "3 models match"),
-        "drifted": (False, "model A has a constant the solver lacks"),
-        "unreadable": (False, "OSError: the utility is not built"),
+        "matches": ("passed", "3 models match"),
+        "drifted": ("failed", "model A has a constant the solver lacks"),
+        "unreadable": ("failed", "OSError: the utility is not built"),
     }
     assert all(item["status"] != "failed" for item in record["checks"]) and record["status"] == "failed"
 

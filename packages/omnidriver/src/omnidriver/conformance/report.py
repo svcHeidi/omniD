@@ -62,7 +62,7 @@ def _probe(probe: Any, env: Mapping[str, str]) -> dict[str, Any]:
         passed, detail = probe(env)
     except Exception as exc:
         passed, detail = False, f"{type(exc).__name__}: {exc}"
-    return {"passed": passed, "detail": detail, "seconds": round(time.monotonic() - started, 1)}
+    return {"status": "passed" if passed else "failed", "detail": detail, "seconds": round(time.monotonic() - started, 1)}
 
 
 def _target(
@@ -137,7 +137,7 @@ def check_report(
         if not check_ids and record.conformance.probes:
             env = load_environment(driver_context, None)
             entry["probes"] = {name: _probe(probe, env) for name, probe in record.conformance.probes.items()}
-            passed = passed and all(item["passed"] for item in entry["probes"].values())
+            passed = passed and all(item["status"] == "passed" for item in entry["probes"].values())
         entry["status"] = "passed" if passed else "failed"
         if regression:
             native_case = cases_root / record.native_case_relpath
