@@ -48,6 +48,7 @@ def _all_electro_entries() -> list[DictEntry]:
     ordered_keys = [
         "top_level",
         "common_model_coeffs",
+        "sealed_wall",
         "monodomain",
         "bidomain",
         "bath_potential_domain",

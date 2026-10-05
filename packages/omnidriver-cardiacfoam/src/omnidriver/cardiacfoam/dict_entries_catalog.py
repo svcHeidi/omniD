@@ -179,6 +179,56 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         ),
         ),
     ),
+    "sealed_wall": build_group(
+        defaults={
+            "phases": frozenset({'physics'}),
+            "applicable_when": {"myocardiumSolver": ("monodomainSolver", "bidomainSolver", "eikonalSolver")},
+        },
+        entries=(
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.sealedHeartBoundary',
+            description='Whether the heart wall is insulated: when true, the face conductivity of the diffusion operator is zero on every patch of the solved field that is zeroGradient or conormalZeroFlux and not coupled, so no current crosses the wall; when false, the tensor face flux keeps its tangential term on the wall.',
+            source_refs=(
+                'src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C',
+                'src/electroModels/myocardiumModels/bidomainSolver/bidomainSolver.C',
+                'src/electroModels/electroDomains/myocardiumDomain/eikonalMyocardiumDomain.C',
+                'src/electroModels/electroDomains/myocardiumDomain/sealedWall/insulatedFaceConductivity.C',
+            ),
+            notes='Read with get<Switch>, so a missing key is a native FatalError. insulatedFaceConductivity zeroes the wall face of Gi (monodomain, bidomain Vm), of Gi+Ge (bidomain phiE) and of the eikonal tensor. A bidomainSolver bound to a bathPotentialDomain (bindExternalPhiE) refuses true. The tutorial insulatedWall cases compare false (zeroGradient wall), true (zero wall face conductivity) and true with sealedWallTrace conormal.',
+            value_kind='boolean',
+            required=True,
+            typical_value='false',
+            required_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver", "eikonalSolver")},
+            constraints=('Required when myocardiumSolver is monodomainSolver, bidomainSolver or eikonalSolver.', 'Must be false for a bidomainSolver with a bathPotentialDomain: the solver stops when it binds the bath potential.'),
+        ),
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.sealedWallTrace',
+            description='Boundary condition of the solved field (Vm, and phiE for bidomain; the activation time for eikonal) on every non-constraint patch that the case does not set otherwise. zeroGradient gives zero normal gradient; conormal gives conormalZeroFlux, the wall value whose conormal flux n.G.grad(psi) vanishes, which is nonzero normal gradient when the conductivity is oblique to the wall.',
+            source_refs=(
+                'src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C',
+                'src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C',
+                'src/electroModels/myocardiumModels/bidomainSolver/bidomainSolver.C',
+                'src/electroModels/electroDomains/myocardiumDomain/eikonalMyocardiumDomain.C',
+            ),
+            notes='conormalWallPatchTypes refuses any word but zeroGradient and conormal; a constraint patch keeps its own type. The eikonal domain replaces the activationTime patches that are zeroGradient only, so a patch the 0/activationTime file sets to another type keeps it. conormalZeroFlux reads the conductivity the solver names (Gi or Ge, Gi with phiE as offset for Vm in bidomain) and needs n.G.n > 0 on the patch. A bidomainSolver bound to a bathPotentialDomain refuses conormal.',
+            value_kind='enum',
+            enum_values=('zeroGradient', 'conormal'),
+            required=True,
+            typical_value='zeroGradient',
+            required_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver", "eikonalSolver")},
+            constraints=('Required when myocardiumSolver is monodomainSolver, bidomainSolver or eikonalSolver.', 'Must be zeroGradient for a bidomainSolver with a bathPotentialDomain: the solver stops when it binds the bath potential.'),
+        ),
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.exposedFacesPatch',
+            phases=frozenset({'anatomy'}),
+            description='Name of the support-mesh patch that receives the faces a myocardium cellZone exposes. When omitted, the first patch that is neither empty nor coupled.',
+            source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomainInterface.C',),
+            notes='Read only when cellZone is set, from the same <solver>Coeffs block. OpenFOAM\'s own default for exposed faces is an empty patch, which gradients and Laplacian corrections skip; the solver stops when the named patch is absent, empty or coupled, or when the mesh has no patch that is neither.',
+            value_kind='word',
+            constraints=('Only read when cellZone is set.',),
+        ),
+        ),
+    ),
     "ionic_heterogeneity": build_group(
         defaults={"phases": frozenset({'physics'}), "applicable_when": {"$ionicHeterogeneity_supported": True}},
         entries=(
@@ -689,6 +739,15 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             source_refs=('src/verificationModels/eikonalVerification/manufacturedEikonalVerifier.C',),
             value_kind='boolean',
             typical_value='false',
+            applicable_when={"$ELECTRO_MODEL_COEFFS.verificationModel.type": ("manufacturedEikonalVerifier",)},
+        ),
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.verificationModel.productionPatches',
+            phases=frozenset({'solver'}),
+            description="Patches the manufactured eikonal verifier leaves to the solver's own wall treatment; the verifier writes the exact activation time on every patch not listed. Each name may be a regular expression. Empty when omitted, so the exact solution is imposed on every patch.",
+            source_refs=('src/verificationModels/eikonalVerification/manufacturedEikonalVerifier.C', 'src/verificationModels/eikonalVerification/manufacturedEikonalVerifier.H'),
+            notes='The verifier stops when n.(M k) is not zero on a listed patch, where M is the eikonal conductivity tensor and k the manufactured wave vector: a listed patch must be one the exact solution crosses with no flux. The wall treatment itself is set by sealedHeartBoundary and sealedWallTrace.',
+            value_kind='word_list',
             applicable_when={"$ELECTRO_MODEL_COEFFS.verificationModel.type": ("manufacturedEikonalVerifier",)},
         ),
         DictEntry(
