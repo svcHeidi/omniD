@@ -210,9 +210,9 @@ PURKINJE_GRAPH_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="rootNode", phases=frozenset({"anatomy"}), value_kind="integer", minimum=0, required=True,
         description=(
-            "The graph node rootStimulus drives, unless rootStimulus.node names another. The eikonal solvers "
-            "start the activation there at the earliest rootStimulus start time; monodomain1DSolver orders the "
-            "tree from node 0 whatever the root."
+            "The network's root: the node rootStimulus drives, and where the eikonal solvers start the "
+            "activation at the earliest rootStimulus start time. rootStimulus.node, when given, replaces it. "
+            "monodomain1DSolver orders the tree from node 0 whatever the root."
         ),
         source_refs=(_GRAPH_READER, _GRAPH_TOPOLOGY, _SOLVERS + "eikonalSolver1D/eikonalSolver1D.C", _GRAPH_WRITER),
         constraints=("A node index of conductionEdges.",),
