@@ -120,7 +120,7 @@ study values; `sweep-plan` previews one.
 valid but its `environment_diagnostics` hold an error, as when the solver's shell
 is not sourced; or `failed`), `entry`,
 `resolved_entry`, `readiness_score` over the `simulation_audit` stages,
-`workflow_diagnostics`, `artifact_diagnostics`, `environment_diagnostics`,
+`workflow_diagnostics`, `command_diagnostics`, `environment_diagnostics`,
 `plugin_diagnostics`, `workflow_dag`, `workflow_state`, `expected_artifacts`,
 `launch`, `run_document` and `capability_manifest`. `plugin_diagnostics` is
 the stack's own check (`get_plan_diagnostics`): errors fail the plan, warnings

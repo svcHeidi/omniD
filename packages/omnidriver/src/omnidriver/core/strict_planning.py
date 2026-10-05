@@ -47,7 +47,7 @@ class StrictPlanReport:
     readiness_score: dict[str, Any] = field(default_factory=dict)
     simulation_audit: tuple[SimulationAuditItem, ...] = ()
     workflow_diagnostics: tuple[StrictDiagnostic, ...] = ()
-    artifact_diagnostics: tuple[StrictDiagnostic, ...] = ()
+    command_diagnostics: tuple[StrictDiagnostic, ...] = ()
     environment_diagnostics: tuple[StrictDiagnostic, ...] = ()
     plugin_diagnostics: tuple[StrictDiagnostic, ...] = ()
     launch: dict[str, Any] = field(default_factory=dict)
@@ -66,7 +66,7 @@ class StrictPlanReport:
         return [
             f"{d.code}: {d.message}"
             for group in (
-                self.workflow_diagnostics, self.artifact_diagnostics, self.environment_diagnostics,
+                self.workflow_diagnostics, self.command_diagnostics, self.environment_diagnostics,
                 self.plugin_diagnostics, self.configuration_diagnostics,
             )
             for d in group
@@ -81,7 +81,7 @@ class StrictPlanReport:
             "readiness_score": self.readiness_score,
             "simulation_audit": [asdict(item) for item in self.simulation_audit],
             "workflow_diagnostics": [asdict(d) for d in self.workflow_diagnostics],
-            "artifact_diagnostics": [asdict(d) for d in self.artifact_diagnostics],
+            "command_diagnostics": [asdict(d) for d in self.command_diagnostics],
             "environment_diagnostics": [asdict(d) for d in self.environment_diagnostics],
             "plugin_diagnostics": [asdict(d) for d in self.plugin_diagnostics],
             "launch": self.launch,
@@ -334,7 +334,7 @@ def _strict_plan_for_spec(
         expected_artifacts=artifacts,
         driver_context=driver_context,
     )
-    artifact_diagnostics = _workflow_command_diagnostics(workflow_dag, driver_context)
+    command_diagnostics = _workflow_command_diagnostics(workflow_dag, driver_context)
     env_diagnostics = driver_context.stack.call(
         "get_environment_diagnostics",
         workflow_dag,
@@ -363,12 +363,12 @@ def _strict_plan_for_spec(
         workflow_dag=workflow_dag,
         artifacts=artifacts,
         workflow_diagnostics=workflow_diagnostics,
-        artifact_diagnostics=artifact_diagnostics,
+        command_diagnostics=command_diagnostics,
         environment_diagnostics=env_diagnostics,
     )
     plan_diagnostics = (
         workflow_diagnostics
-        + artifact_diagnostics
+        + command_diagnostics
         + plugin_diagnostics
         + configuration_diagnostics
     )
@@ -403,7 +403,7 @@ def _strict_plan_for_spec(
         readiness_score=readiness_score,
         simulation_audit=simulation_audit,
         workflow_diagnostics=workflow_diagnostics,
-        artifact_diagnostics=artifact_diagnostics,
+        command_diagnostics=command_diagnostics,
         environment_diagnostics=env_diagnostics,
         plugin_diagnostics=plugin_diagnostics,
         launch=launch,

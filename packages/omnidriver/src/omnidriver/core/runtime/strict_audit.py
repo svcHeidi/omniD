@@ -64,7 +64,7 @@ def _build_simulation_audit(
     workflow_dag: dict[str, Any] | None,
     artifacts: tuple[DataArtifact, ...],
     workflow_diagnostics: tuple[StrictDiagnostic, ...],
-    artifact_diagnostics: tuple[StrictDiagnostic, ...],
+    command_diagnostics: tuple[StrictDiagnostic, ...],
     environment_diagnostics: tuple[StrictDiagnostic, ...],
 ) -> tuple[tuple[SimulationAuditItem, ...], dict[str, Any]]:
     items = [
@@ -83,7 +83,7 @@ def _build_simulation_audit(
         ),
         _score_from_diagnostics(
             stage="artifact_prediction",
-            diagnostics=artifact_diagnostics,
+            diagnostics=command_diagnostics,
             success_summary="The planner predicts raw data artifacts and links them to workflow steps.",
             warning_summary="Artifacts are predicted, but coverage warnings remain.",
             error_summary="The planner cannot reliably predict this run's data artifacts.",

@@ -8,7 +8,9 @@ def test_report_carries_one_plugin_diagnostics_family() -> None:
     assert payload["plugin_diagnostics"] == []
     assert payload["readiness_score"] == {}
     assert payload["simulation_audit"] == []
+    assert payload["command_diagnostics"] == []
     for retired in (
+        "artifact_diagnostics",
         "mesh_geometry_diagnostics", "function_object_diagnostics",
         "case_dict_key_diagnostics", "catalog_coverage_errors", "validation_diagnostics",
     ):
