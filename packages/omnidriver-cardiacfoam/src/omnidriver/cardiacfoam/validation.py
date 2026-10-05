@@ -858,7 +858,7 @@ def _evaluate_graph_placement(
     buffer. ``pvjMapper`` couples a junction with no cell centre in its sphere to the nearest cell, which is how a
     tree grown on the endocardial surface meets the mesh; only a location more than ``pvjRadius`` beyond the mesh's
     bounding box, which no surface-grown junction is, is an error (a graph in other units than its mesh)."""
-    from omnidriver.openfoam.mesh_points import points_bounds
+    from omnidriver.openfoam.polymesh import points_bounds
 
     from .record_key_validation import _ELECTRO_ENTRIES_BY_PATH
 
@@ -928,18 +928,16 @@ def _scalar(value: Any) -> float | None:
         return None
 
 
-def _sphere(geometry: Any, location: tuple[float, ...], radius: float, kernel: str) -> list[tuple[float, float]]:
+def _sphere(around: Any, radius: float, kernel: str) -> list[tuple[float, float]]:
     """``(weight, volume)`` of the cells ``pvjMapper`` gathers for a junction: those with a centre within ``radius``,
     weighted by the kernel, or the nearest cell alone with weight 1 when none is."""
-    cells = geometry.near(location, radius)
-    if not cells:
-        nearest = geometry.nearest(location, radius)
-        return [(1.0, nearest[1])] if nearest is not None else []
+    if not around.within:
+        return [(1.0, around.nearest.volume)] if around.nearest is not None else []
     if kernel == "gaussian":
-        return [(math.exp(-4.5 * d * d / (radius * radius)), v) for d, v in cells]
+        return [(math.exp(-4.5 * c.distance ** 2 / (radius * radius)), c.volume) for c in around.within]
     if kernel == "linear":
-        return [(1.0 - d / radius, v) for d, v in cells]
-    return [(1.0, v) for _, v in cells]
+        return [(1.0 - c.distance / radius, c.volume) for c in around.within]
+    return [(1.0, c.volume) for c in around.within]
 
 
 def _evaluate_pvj_stability(
@@ -957,7 +955,7 @@ def _evaluate_pvj_stability(
     from foamlib import FoamFile
 
     from omnidriver.openfoam.literals import list_elements
-    from omnidriver.openfoam.mesh_cells import cell_geometry
+    from omnidriver.openfoam.polymesh import cells_around
 
     from .record_key_validation import _ELECTRO_ENTRIES_BY_PATH
 
@@ -991,13 +989,6 @@ def _evaluate_pvj_stability(
         )]
     limit = _DDT_STABILITY_LIMIT[scheme]
     scale = dt / (chi * cm * limit)
-    geometry, why = None, "before the mesh exists"
-    try:
-        geometry = cell_geometry(electro_path.parent / "polyMesh")
-    except OSError:
-        pass
-    except ValueError as exc:
-        why = f"since omniD cannot read the mesh ({exc})"
     default_radius = float(_ELECTRO_ENTRIES_BY_PATH[_PVJ_RADIUS_PATH].default)
     form = f"dt*sum(w^2 V)/(chi*cm*sum(w V)^2*A) with A = {limit:g} (ddtSchemes {scheme})"
     found: list["StrictDiagnostic"] = []
@@ -1012,7 +1003,18 @@ def _evaluate_pvj_stability(
         resistances = listed if len(listed) >= junctions > 0 else [rpvj] * junctions
         if junctions == 0 or None in resistances:
             continue
-        if geometry is None:
+        radius = _scalar(context.get(block + ".pvjRadius", default_radius))
+        kernel = str(context.get(block + ".pvjKernel", "uniform"))
+        if radius is None or not radius > 0:
+            continue
+        surroundings, why = None, "before the mesh exists"
+        try:
+            surroundings = cells_around(electro_path.parent / "polyMesh", graph.locations or (), radius)
+        except FileNotFoundError:
+            pass
+        except ValueError as exc:
+            why = f"since omniD cannot read the mesh ({exc})"
+        if surroundings is None:
             found.append(diagnostic(
                 "info", "pvj_stability_unjudged",
                 f"{document}: {block}'s junction resistance is not judged against a stability bound {why}. "
@@ -1022,13 +1024,9 @@ def _evaluate_pvj_stability(
                 source=document, field=block + ".rPvj",
             ))
             continue
-        radius = _scalar(context.get(block + ".pvjRadius", default_radius))
-        kernel = str(context.get(block + ".pvjKernel", "uniform"))
-        if radius is None or not radius > 0:
-            continue
         low: list[tuple[float, int, float, int]] = []
-        for i, (location, resistance) in enumerate(zip(graph.locations or (), resistances)):
-            cells = _sphere(geometry, location, radius, kernel)
+        for i, resistance in enumerate(resistances):
+            cells = _sphere(surroundings[i], radius, kernel)
             if not cells:
                 continue
             volume = sum(w * v for w, v in cells)
