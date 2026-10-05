@@ -420,9 +420,8 @@ monodomainSolverCoeffs
             rPvj      500.0;   // [Ω]
             pvjRadius  6e-4;    // [m]
 
-            // unidirectional | bidirectional. reactionDiffusionPvjCoupler applies
-            // the bidirectional junction current to the network without a node
-            // volume; the eikonal couplers return the tissue's activation times.
+            // unidirectional | bidirectional. In bidirectional coupling the eikonal
+            // couplers return the tissue's activation times to the junction nodes.
             couplingMode unidirectional;
             // pvjKernel    uniform;    // uniform | gaussian | linear
             // debugCoupling false;

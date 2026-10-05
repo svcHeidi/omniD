@@ -251,8 +251,7 @@ PURKINJE_GRAPH_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "Resistance [Ω] of each PVJ, in pvjNodes order, in place of the coupling's single rPvj: the junction "
             "current is (Vm of the network node - Vm of the junction tissue) / resistance, in A on the tissue side. "
             "With it, reactionDiffusionPvjCoupler never reads rPvj; eikonalMonodomainPvjCoupler still requires "
-            "rPvj and then uses these. An empty list counts as absent. The network side of "
-            "reactionDiffusionPvjCoupler applies the current without a node volume (see rPvj)."
+            "rPvj and then uses these. An empty list counts as absent."
         ),
         source_refs=(
             _GRAPH_TOPOLOGY, _DOMAIN + "conductionSystemDomain.H",
