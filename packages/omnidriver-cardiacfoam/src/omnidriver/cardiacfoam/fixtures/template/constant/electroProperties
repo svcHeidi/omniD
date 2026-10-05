@@ -707,7 +707,6 @@ bidomainSolverCoeffs
         bodySurfaceBathECG
         {
             ecgSolver              torsoECG;   // RTS type — reads phiE from bath
-            // torsoSurface           "constant/triSurface/torso.stl"; // needed by torsoECG
 
             // Optional per-domain override of the shared electrodePositions:
             // electrodePositions { v6 ( 0.05 -0.05 0.0 ); }
@@ -728,7 +727,8 @@ bidomainSolverCoeffs
 // ─────────────────────────────────────────────────────────────────────────────
 /*
 When using conductionNetworkDomains, the 'graphFile' key references a separate
-dictionary in constant/ directory. Example constant/purkinjeGraph:
+dictionary in constant/ directory, catalogued as the purkinjeGraph document.
+Example constant/purkinjeGraph:
 
     FoamFile
     {
@@ -739,9 +739,10 @@ dictionary in constant/ directory. Example constant/purkinjeGraph:
         object      purkinjeGraph;
     }
 
-    // Edge list: ( nodeA  nodeB  length[m]  conductance[S/m] )
-    // A tree on N nodes requires exactly N-1 edges.
-    edges
+    // Edge list: ( nodeA  nodeB  length[m]  conductance ); conductance times
+    // purkinjeConductivity is the edge conductivity [S/m].
+    // A tree on N nodes requires exactly N-1 edges, all reached from node 0.
+    conductionEdges
     (
         ( 0  1  0.003  3.0 )
         ( 1  2  0.005  3.0 )
