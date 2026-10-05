@@ -782,11 +782,15 @@ def test_the_manifest_stamps_a_case_before_its_child_starts_and_records_the_base
     assert manifest["cli_study"] == {}
 
 
-def test_a_failed_case_carries_the_childs_reasons_into_its_summary_and_the_manifest(tmp_path):
+def test_a_failed_case_carries_the_childs_reasons_into_its_summary_and_the_manifest_without_the_log_text(tmp_path):
     refusal = {
         "status": "failed", "error": "Execution environment preflight failed.",
         "environment_diagnostics": [{"level": "error", "code": "launcher_mismatch", "message": "wrong MPI"}],
-        "failure_context": {"step_id": "solve", "diagnostics": [{"code": "solver_entry_missing"}]},
+        "failure_context": {
+            "step_id": "solve", "attempt": 1, "exit_code": 2, "stdout_log": "logs/solve.out", "stderr_log": "logs/solve.err",
+            "diagnostics": [{"code": "solver_entry_missing"}], "stdout_tail": "LONG TAIL", "stderr_tail": "LONG TAIL",
+            "stdout_truncated": False, "candidate_remediations": [],
+        },
     }
 
     def child(cmd, **kwargs):
@@ -798,7 +802,13 @@ def test_a_failed_case_carries_the_childs_reasons_into_its_summary_and_the_manif
     for case, entry in zip(result["cases"], manifest["cases"]):
         assert case["status"] == "failed"
         for key in ("error", "environment_diagnostics", "failure_context"):
-            assert case[key] == refusal[key] == entry["failure"][key]
+            assert case[key] == refusal[key]
+        assert entry["failure"]["error"] == refusal["error"]
+        assert entry["failure"]["environment_diagnostics"] == refusal["environment_diagnostics"]
+        assert entry["failure"]["failure_context"] == {
+            k: refusal["failure_context"][k]
+            for k in ("step_id", "attempt", "exit_code", "diagnostics", "stdout_log", "stderr_log")
+        }
 
 
 def test_a_child_that_dies_without_a_report_leaves_its_stderr_tail(tmp_path):
@@ -809,6 +819,28 @@ def test_a_child_that_dies_without_a_report_leaves_its_stderr_tail(tmp_path):
 
     assert "exited 3 without a report" in result["cases"][0]["error"]
     assert "SomeError: boom" in result["cases"][0]["error"]
+
+
+def test_the_stderr_fallback_of_a_case_is_redacted_with_the_stacks_patterns(tmp_path):
+    class Redacting(_RecordSweepWriterPlugin):
+        def get_log_redaction_patterns(self):
+            return frozenset({r"hunter\d"})
+
+    def child(cmd, **kwargs):
+        return mock.Mock(returncode=3, stdout="", stderr="password=hunter2 failed")
+
+    cases_root = _native_toy_case(tmp_path)
+    (tmp_path / "sweep.json").write_text(json.dumps(_record_sweep_spec(cases_root=cases_root, values=(2,))))
+    plugin = Redacting(
+        solver_commands=frozenset({"touch"}), tutorial_records={"toyTutorial": _toy_record()},
+        record_key_validator=_record_known_catalog_validator,
+    )
+    with mock.patch("omnidriver.core.runtime.sweep_runner.run_child", side_effect=child):
+        result = sweep_run(
+            tmp_path / "sweep.json", output_dir=tmp_path / "out", driver_context=_driver_context(plugin, source="test:redact"),
+        )
+
+    assert "hunter2" not in result["cases"][0]["error"] and "password=[REDACTED] failed" in result["cases"][0]["error"]
 
 
 def test_a_plan_that_cannot_run_says_why_in_plan_error(tmp_path):

@@ -6,10 +6,12 @@ also get a deliberately broken plugin, to prove the check bites.
 from __future__ import annotations
 
 import dataclasses
+import json
 
 import pytest
 
 from omnidriver.conformance import CHECKS, run_check
+from omnidriver.core.runtime.failure_context import OUTPUT_TAIL_CHARS, why_a_child_stopped
 from plugins.toy import (
     ACCEPTING_PLUGIN, BROKEN_RULE_PLUGIN,
     DEFAULT_ARGUMENT_MARKER, DEFAULT_ARGUMENT_PLUGIN, DEFAULT_ROUTE_MARKER, DEFAULT_ROUTE_PLUGIN, DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NAMED_KEY_PLUGIN,
@@ -248,7 +250,7 @@ _RECONCILIATION_WITH_AN_ABSENT_OPTIONAL = {
 _CANNED_CHILD_OUTPUT = {
     "C6": {"status": "ok", "artifact_reconciliation": _RECONCILIATION_WITH_AN_ABSENT_OPTIONAL},
     "C7": {"completed_count": 2, "failed_count": 0, "cases": [
-        {"case_id": case_id, "artifact_reconciliation": _RECONCILIATION_WITH_AN_ABSENT_OPTIONAL}
+        {"case_id": case_id, "status": "completed", "artifact_reconciliation": _RECONCILIATION_WITH_AN_ABSENT_OPTIONAL}
         for case_id in ("a", "b")
     ]},
 }
@@ -604,19 +606,48 @@ def test_c5_bites_a_stack_whose_rule_refuses_the_native_case(tmp_path):
     assert verdict.status == "failed" and "this toy's rule refuses every case" in verdict.detail
 
 
-def test_a_refusal_printed_on_stdout_is_quoted_when_stderr_is_empty():
+def test_a_refusal_printed_on_stdout_is_quoted_by_its_error_and_diagnostics_not_as_raw_json():
+    refusal = json.dumps({
+        "status": "failed", "error": "Execution environment preflight failed.",
+        "environment_diagnostics": [
+            {"level": "error", "code": "launcher_mismatch", "message": "wrong MPI"},
+            {"level": "warning", "code": "noise", "message": "ignored"},
+        ],
+    })
+
+    said = why_a_child_stopped(refusal, "", ())
+
+    assert said == "Execution environment preflight failed.; launcher_mismatch: wrong MPI"
+
+
+def test_a_child_with_no_report_is_quoted_by_stderr_then_stdout_and_redacted():
+    assert why_a_child_stopped("not json", "token=SECRET1 Traceback", (r"SECRET\d",)) == "token=[REDACTED] Traceback"
+    assert why_a_child_stopped("only stdout", "", ()) == "only stdout"
+    assert len(why_a_child_stopped("", "x" * 5000, ())) == OUTPUT_TAIL_CHARS
+
+
+def test_a_failed_case_of_a_sweep_is_quoted_with_its_reason_and_its_workflow_state(tmp_path):
     from types import SimpleNamespace
 
-    from omnidriver.conformance.checks import _output_tail
+    from omnidriver.conformance.checks import _failed_cases
 
-    refusal = '{"status": "failed", "error": "Execution environment preflight failed."}'
-    assert "preflight failed" in _output_tail(SimpleNamespace(stdout=refusal, stderr=""))
-    assert _output_tail(SimpleNamespace(stdout=refusal, stderr="Traceback")) == "Traceback"
+    state = tmp_path / "cases" / "a" / "workflow_state.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({"steps": [{"step_id": "solve", "status": "failed", "diagnostics": [
+        {"level": "error", "code": "solver_entry_missing", "message": "key is required"}]}]}))
+    ctx = SimpleNamespace(stack=SimpleNamespace(call=lambda member: frozenset({r"SECRET\d"})))
+    payload = {"cases": [
+        {"case_id": "a", "status": "failed", "error": "exited with SECRET1", "workflow_state_path": "cases/a/workflow_state.json"},
+        {"case_id": "b", "status": "completed"},
+    ]}
+
+    (problem, recorded) = _failed_cases(ctx, payload, tmp_path)
+
+    assert problem == "case a is failed: exited with [REDACTED]"
+    assert recorded == "its workflow state recorded: step 'solve': solver_entry_missing: key is required"
 
 
 def test_a_failed_step_diagnostic_in_the_workflow_state_is_quoted(tmp_path):
-    import json
-
     from omnidriver.conformance.checks import _with_recorded_failure
 
     state = tmp_path / "workflow_state.json"

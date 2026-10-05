@@ -7,13 +7,14 @@ import shutil
 import subprocess
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Sequence
 
 from omnidriver.core.plugin_profile import is_replica_directory_name, replica_directory_globs
 from omnidriver.core.strict_planning import _strict_plan_for_spec
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
 from omnidriver.core.tutorial_records import TutorialRecordError, lookup_record, sort_study_name
+from .failure_context import why_a_child_stopped
 from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
 from .case_records import CASE_RECORD_FILENAME, sweep_case_record, write_case_record
@@ -44,7 +45,8 @@ if TYPE_CHECKING:
 
 #: What a child ``run --run-document`` says about why it did not complete.
 _CHILD_FAILURE_KEYS = ("error", "blocking_reason", "diagnostics", "environment_diagnostics", "failure_context")
-_STDERR_TAIL_CHARS = 800
+#: What of a failed step the manifest keeps: where it failed and why, and the logs' paths, never their text.
+_MANIFEST_FAILURE_CONTEXT_KEYS = ("step_id", "attempt", "exit_code", "diagnostics", "stdout_log", "stderr_log")
 
 
 def _child_payload(stdout: str) -> dict[str, Any]:
@@ -56,13 +58,23 @@ def _child_payload(stdout: str) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _child_failure(result: subprocess.CompletedProcess[str], payload: Mapping[str, Any]) -> dict[str, Any]:
-    """The reasons a child reported, whole; a child that failed without a report gets its stderr tail."""
+def _child_failure(
+    result: subprocess.CompletedProcess[str], payload: Mapping[str, Any], *, redaction_patterns: Iterable[str],
+) -> dict[str, Any]:
+    """The reasons a child reported, whole; a child that failed without a report gets its output's tail, redacted."""
     failure = {key: payload[key] for key in _CHILD_FAILURE_KEYS if key in payload}
     if not failure and result.returncode != 0:
-        tail = (result.stderr or "").strip()[-_STDERR_TAIL_CHARS:]
-        failure["error"] = f"the run exited {result.returncode} without a report" + (f"; stderr tail: {tail}" if tail else "")
+        tail = why_a_child_stopped(result.stdout, result.stderr, redaction_patterns)
+        failure["error"] = f"the run exited {result.returncode} without a report" + (f"; {tail}" if tail else "")
     return failure
+
+
+def _manifest_failure(failure: Mapping[str, Any]) -> dict[str, Any]:
+    """``failure`` for the manifest: its failure context cut to the diagnostics and the log paths."""
+    context = failure.get("failure_context")
+    if not isinstance(context, dict):
+        return dict(failure)
+    return {**failure, "failure_context": {k: context[k] for k in _MANIFEST_FAILURE_CONTEXT_KEYS if k in context}}
 
 
 def _load_spec(spec_path: str | Path) -> dict[str, Any]:
@@ -277,7 +289,9 @@ def _record_sweep_run(
                 )
                 child = _child_payload(result.stdout)
                 artifact_reconciliation = child.get("artifact_reconciliation")
-                failure.update(_child_failure(result, child))
+                failure.update(_child_failure(
+                    result, child, redaction_patterns=driver_context.stack.call("get_log_redaction_patterns"),
+                ))
                 if workflow_state_path.exists():
                     status = json.loads(workflow_state_path.read_text()).get("status", "pending")
                 elif result.returncode != 0:
@@ -320,7 +334,7 @@ def _record_sweep_run(
         entry.workflow_state_path = case_summary["workflow_state_path"]
         entry.updated_at = utc_now()
         entry.unchanged_patches = tuple(unchanged_patches)
-        entry.failure = failure
+        entry.failure = _manifest_failure(failure)
         manifest.updated_at = entry.updated_at
         write_manifest(manifest_path, manifest)
         write_case_record(case_record_path, sweep_case_record(entry, output_dir))

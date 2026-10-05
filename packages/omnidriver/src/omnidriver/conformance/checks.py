@@ -24,6 +24,7 @@ from omnidriver.core.quantities import (
 )
 from omnidriver.core.runtime import mpi
 from omnidriver.core.runtime.artifacts import DRIVER_PRODUCED_BY
+from omnidriver.core.runtime.failure_context import OUTPUT_TAIL_CHARS, redact_text, why_a_child_stopped
 from omnidriver.core.runtime.models import data_artifact_from_json
 from omnidriver.core.runtime.process_control import run_child
 from omnidriver.core.runtime.case_records import build_sweep_context
@@ -50,11 +51,6 @@ def _not_applicable(check_id: str, detail: str) -> CheckVerdict:
     return CheckVerdict(check_id=check_id, status="not_applicable", detail=detail)
 
 
-def _output_tail(proc: subprocess.CompletedProcess) -> str:
-    """The tail of what a child printed: its stderr, or its stdout when stderr is empty (a refusal is JSON on stdout)."""
-    return (proc.stderr.strip() or proc.stdout.strip())[-800:]
-
-
 def _recorded_failure(state_path: Path) -> str | None:
     """The error diagnostics the failed steps of a case's ``workflow_state.json`` recorded, or ``None``."""
     try:
@@ -72,6 +68,28 @@ def _recorded_failure(state_path: Path) -> str | None:
 def _with_recorded_failure(problems: list[str], state_path: Path, subject: str) -> list[str]:
     reason = _recorded_failure(state_path)
     return [*problems, f"{subject} recorded: {reason}"] if reason else problems
+
+
+def _why_a_run_stopped(ctx, proc: subprocess.CompletedProcess, state_path: Path) -> str:
+    """What a run that did not complete said (redacted), and what the failed step recorded in its workflow state."""
+    said = why_a_child_stopped(proc.stdout, proc.stderr, ctx.stack.call("get_log_redaction_patterns"))
+    return "; ".join(_with_recorded_failure([said], state_path, "the workflow state"))
+
+
+_CASE_REASON_KEYS = ("plan_error", "materialization_error", "timeout_error", "error")
+
+
+def _failed_cases(ctx, payload: Mapping[str, Any], out: Path) -> list[str]:
+    """One problem for each case of a sweep report that did not complete: its reason (redacted) and its workflow state's."""
+    patterns = ctx.stack.call("get_log_redaction_patterns")
+    problems = []
+    for case in payload.get("cases", ()):
+        if case.get("status") == "completed":
+            continue
+        reason = next((str(case[key]) for key in _CASE_REASON_KEYS if case.get(key)), "no reason reported")
+        said = f"case {case.get('case_id')} is {case.get('status')}: {redact_text(reason, patterns)[-OUTPUT_TAIL_CHARS:]}"
+        problems += _with_recorded_failure([said], out / case.get("workflow_state_path", ""), "its workflow state")
+    return problems
 
 
 def _context(target: ConformanceTarget):
@@ -269,7 +287,8 @@ def check_run(target: ConformanceTarget) -> CheckVerdict:
     except subprocess.TimeoutExpired:
         return _verdict("C6", False, f"run timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     if payload is None:
-        return _verdict("C6", False, f"run printed no JSON (rc={proc.returncode}); output tail: {_output_tail(proc)}")
+        stopped = _why_a_run_stopped(ctx, proc, Path(report.launch["workflow_state_path"]))
+        return _verdict("C6", False, f"run printed no JSON (rc={proc.returncode}); {stopped}")
     reconciliation = payload.get("artifact_reconciliation") or {}
     artifacts = reconciliation.get("artifacts", ())
     declared = [a for a in artifacts if a["artifact_id"].startswith("record.")]
@@ -315,19 +334,17 @@ def check_sweep(target: ConformanceTarget) -> CheckVerdict:
     except subprocess.TimeoutExpired:
         return _verdict("C7", False, f"sweep timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     if payload is None:
-        return _verdict("C7", False, f"sweep printed no JSON (rc={proc.returncode}); output tail: {_output_tail(proc)}")
+        return _verdict("C7", False, f"sweep printed no JSON (rc={proc.returncode}); {_why_a_run_stopped(ctx, proc, work)}")
     problems = []
     if payload.get("completed_count") != 2 or payload.get("failed_count"):
         problems.append(f"completed {payload.get('completed_count')}, failed {payload.get('failed_count')}")
+    problems += _failed_cases(ctx, payload, work / "out")
     for case in payload.get("cases", ()):
         rec = case.get("artifact_reconciliation")
         if rec is None:
             problems.append(f"case {case.get('case_id')} has no artifact reconciliation")
         elif missing := _missing_required(rec):
             problems.append(f"case {case.get('case_id')} is missing artifacts {missing}")
-        problems = _with_recorded_failure(
-            problems, work / "out" / case.get("workflow_state_path", ""), f"case {case.get('case_id')}'s workflow state",
-        )
     if _tree_digest(native) != before:
         problems.append(f"the native case {native} changed")
     return _verdict("C7", not problems, "; ".join(problems) or "2 cases completed and reconciled; native tree unchanged")
@@ -514,7 +531,8 @@ def check_restage_is_clean(target: ConformanceTarget) -> CheckVerdict:
     except subprocess.TimeoutExpired:
         return _verdict("C11", False, f"the first run timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     if payload is None or payload.get("status") != "ok":
-        return _verdict("C11", False, f"cannot check: the first run did not complete (rc={proc.returncode}); output tail: {_output_tail(proc)}")
+        stopped = _why_a_run_stopped(ctx, proc, Path(report.launch["workflow_state_path"]))
+        return _verdict("C11", False, f"cannot check: the first run did not complete (rc={proc.returncode}); {stopped}")
     work = target.scratch_root / "conformance" / "C11"
     if work.exists():
         shutil.rmtree(work)
@@ -632,7 +650,8 @@ def _run_for_quantities(
     except subprocess.TimeoutExpired:
         return f"the {label} run timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)"
     if payload is None or payload.get("status") != "ok":
-        return f"the {label} run did not complete (rc={proc.returncode}); output tail: {_output_tail(proc)}"
+        stopped = _why_a_run_stopped(ctx, proc, Path(report.launch["workflow_state_path"]))
+        return f"the {label} run did not complete (rc={proc.returncode}); {stopped}"
     document, quantities = _artifact_and_quantities(target, ctx, report)
     logs = [Path(step[key]) for step in payload["workflow_state"]["steps"] for key in ("stdout_log", "stderr_log") if step.get(key)]
     return document, quantities, Path(report.launch["case_root"]), logs
@@ -704,7 +723,8 @@ def check_quantity_across_sweep(target: ConformanceTarget) -> CheckVerdict:
     never that the values agree.
 
     A target that declares no quantity is not applicable."""
-    _record(_context(target), target.record)
+    ctx = _context(target)
+    _record(ctx, target.record)
     declared = target.quantity
     if declared is None:
         return _not_applicable("C14", "the target declares no quantity, so there is nothing to compare")
@@ -723,7 +743,11 @@ def check_quantity_across_sweep(target: ConformanceTarget) -> CheckVerdict:
     except subprocess.TimeoutExpired:
         return _verdict("C14", False, f"sweep timed out after {target.timeout_s}s (ConformanceTarget.timeout_s)")
     if payload is None or payload.get("completed_count") != 2 or payload.get("failed_count"):
-        return _verdict("C14", False, f"cannot compare: the sweep did not complete both cases (rc={proc.returncode}); output tail: {_output_tail(proc)}")
+        reasons = _failed_cases(ctx, payload, work / "out") if payload else [_why_a_run_stopped(ctx, proc, work)]
+        return _verdict(
+            "C14", False,
+            f"cannot compare: the sweep did not complete both cases (rc={proc.returncode}); " + ("; ".join(reasons) or "no case reported why"),
+        )
     output = work / "out"
     cases = build_sweep_context(output).cases
     runs = {}
