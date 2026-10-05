@@ -39,9 +39,6 @@ class ActiveTensionModelEntry:
     aliases: tuple[str, ...] = ()
     """Alternative names for this model."""
 
-    coupling_signal: str = ""
-    """The one signal the model's ``couplingSignal`` key accepts, as the C++ names it; empty for a model that does not read the key."""
-
 
 ACTIVE_TENSION_MODEL_CATALOG: Final[dict[str, ActiveTensionModelEntry]] = {
     "NashPanfilov": ActiveTensionModelEntry(
@@ -52,7 +49,6 @@ ACTIVE_TENSION_MODEL_CATALOG: Final[dict[str, ActiveTensionModelEntry]] = {
         recommended_exports=("Ta",),
         description="Nash-Panfilov active tension model (2004).",
         aliases=("Nash-Panfilov", "phenomenological active stress"),
-        coupling_signal="Vm",
     ),
     "NashPanfilovBatched": ActiveTensionModelEntry(
         states=("Ta",),
@@ -62,7 +58,6 @@ ACTIVE_TENSION_MODEL_CATALOG: Final[dict[str, ActiveTensionModelEntry]] = {
         recommended_exports=("Ta",),
         description="Nash-Panfilov active tension model (2004) - GPU batched implementation.",
         aliases=("Nash-Panfilov GPU",),
-        coupling_signal="Vm",
     ),
     "LandNiederer": ActiveTensionModelEntry(
         states=("Ca_TRPN", "TmBlocked", "XW", "XS", "ZETAS", "ZETAW"),
@@ -121,7 +116,6 @@ ACTIVE_TENSION_MODEL_CATALOG: Final[dict[str, ActiveTensionModelEntry]] = {
             "also accepts 'preconditioningTime' (default 1000 ms)."
         ),
         aliases=("Land-Niederer GPU", "Land2017 GPU"),
-        coupling_signal="Cai",
     ),
     "LandNiedererTWorld": ActiveTensionModelEntry(
         states=("Ca_TRPN", "TmBlocked", "XW", "XS", "ZETAS", "ZETAW"),
@@ -176,7 +170,6 @@ ACTIVE_TENSION_MODEL_CATALOG: Final[dict[str, ActiveTensionModelEntry]] = {
             "preconditioningTime defaults to 1000 ms."
         ),
         aliases=("Land-Niederer TWorld GPU", "TWorld contraction subsystem GPU"),
-        coupling_signal="Cai",
     ),
     "ManufacturedElectromechanics": ActiveTensionModelEntry(
         states=("Ta",),

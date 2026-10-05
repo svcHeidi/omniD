@@ -97,7 +97,7 @@ class TestDictEntryCatalog(unittest.TestCase):
         self.assertEqual(signal.enum_values, ("Vm", "vm", "Cai", "cai"))
         self.assertEqual(
             set(signal.applicable_when["activeTensionModel"]),
-            {name for name, model in ACTIVE_TENSION_MODEL_CATALOG.items() if model.coupling_signal},
+            {"NashPanfilov", "NashPanfilovBatched", "LandNiedererBatched", "LandNiedererTWorldBatched"},
         )
 
 

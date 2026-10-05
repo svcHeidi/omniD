@@ -424,27 +424,6 @@ def _evaluate_tissue_compatibility(context: dict[str, Any]) -> list["StrictDiagn
     return errors
 
 
-def _evaluate_coupling_signal(context: dict[str, Any]) -> list["StrictDiagnostic"]:
-    """``couplingSignal`` against the one signal the selected active-tension model accepts, in either spelling."""
-    from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
-
-    model, signal = context.get("activeTensionModel"), context.get("couplingSignal")
-    entry = ACTIVE_TENSION_MODEL_CATALOG.get(model) if isinstance(model, str) else None
-    if entry is None or not entry.coupling_signal or signal is None:
-        return []
-    if str(signal) in (entry.coupling_signal, entry.coupling_signal.lower()):
-        return []
-    return [_diagnostic_from_phase(
-        phase="physics",
-        field="$ELECTRO_MODEL_COEFFS.couplingSignal",
-        message=(
-            f"couplingSignal {signal!r} is not one of the values {model} accepts: "
-            f"{entry.coupling_signal!r} or {entry.coupling_signal.lower()!r}; it stops on any other."
-        ),
-        level="error",
-    )]
-
-
 _ECG_DOMAIN_PREFIX = "ecgDomains."
 _PERSONALIZED_TEMPLATES_SUFFIX = ".personalizedTemplates."
 
@@ -1129,7 +1108,6 @@ def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]
         + _evaluate_heterogeneity(context)
         + _evaluate_personalized_templates(context)
         + _evaluate_tissue_compatibility(context)
-        + _evaluate_coupling_signal(context)
         + _evaluate_ecg_anisotropic_consistency(context)
     )
 
