@@ -1120,6 +1120,8 @@ def test_the_native_graph_passes(tmp_path):
     ("(9 10 0.1 1)", "(9 10 0.1)", "conductionEdges", "entry 9 has 3 values"),
     ("(9 10 0.1 1)", "(9 10 0.1 1)\n    (10 0 0.1 1)", "conductionEdges", "11 edges over 11 nodes"),
     ("(4 5 0.1 1)", "(5 5 0.1 1)", "conductionEdges", "node 0 reaches 10 of 11 nodes"),
+    ("(4 5 0.1 1)", "(4 1e400 0.1 1)", "conductionEdges", "entry 4 names a node that is no number"),
+    ("(4 5 0.1 1)", "(nan 5 0.1 1)", "conductionEdges", "entry 4 names a node that is no number"),
     ("rootNode\n0;", "rootNode\n11;", "rootNode", "rootNode 11 is outside"),
     ("(5 10);", "(5 11);", "pvjNodes", "[11] are outside"),
     ("    (1 0.166666666667 0.333333333333)\n);\n\nconductionEdges", ");\n\nconductionEdges", "pvjLocations", "1 values for 2"),

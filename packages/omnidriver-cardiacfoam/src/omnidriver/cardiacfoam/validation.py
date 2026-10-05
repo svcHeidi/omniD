@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -618,6 +619,9 @@ def _graph_breaks(raw: dict[str, str]) -> list[tuple[str, str, str]]:
                     "error", "conductionEdges",
                     f"conductionEdges entry {index} has {len(values)} values, not (nodeA nodeB length conductance)",
                 ))
+                break
+            if not all(math.isfinite(value) for value in values[:2]):
+                breaks.append(("error", "conductionEdges", f"conductionEdges entry {index} names a node that is no number"))
                 break
             pairs.append((int(values[0]), int(values[1])))
         else:
