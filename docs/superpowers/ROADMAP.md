@@ -231,10 +231,35 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    whether the native code should check the length of `pvjResistances` and the
    range of `rootStimulus.node`;
 
-4. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
+4. **1D-3D PVJ coupling: C++ fixes in progress** (cardiacFOAM PR #53's branch;
+   the measurements are in `docs/solver-learning/cardiacfoam-pvj-coupling.md`).
+   Ranked:
+   - *A conservative bidirectional junction.* The network node receives the
+     junction current over the fibre cross-section and its control length, as a
+     linear term on the Hines diagonal. Tested without the code's own term by two
+     capacitors relaxing (`C_n Vn + C_t <V>` constant, `tau = R C_n C_t / (C_n + C_t)`),
+     a manufactured solution with the flux condition, and a per-step charge ledger.
+   - *`pvjCouplingScheme implicit` implicit for both tissue algorithms,* and
+     `solutionAlgorithm` refused unless `explicit` or `implicit`. Tested by
+     `rPvj` 10 running with an explicit tissue, and `explicit` with `rPvj` 100
+     refused by name before the first step.
+   - *Restart of the network's ionic state,* the coupler's last observation and the
+     time series. Tested by restart equivalence, 0 to 0.06 s against 0 to 0.03 to
+     0.06 s, to round-off.
+   - *A junction must have tissue* (a fatal in `pvjMapper` in place of the
+     nearest-cell fallback), the input ranges of `pvjResistances` and
+     `rootStimulus.node`, and the smaller items in the measurements document.
+
+   Until the first fix lands, results of bidirectional cable coupling
+   (`reactionDiffusionPvjCoupler`, `couplingMode bidirectional`) are not reliable;
+   unidirectional coupling and both eikonal couplers are unaffected. omniD refuses
+   an explicit-scheme `rPvj` below the stability bound once the mesh exists; its
+   inputs are listed in the measurements document, to re-check against the fixed
+   C++.
+5. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the
    solver changed.
-5. **Later:**
+6. **Later:**
    - one run using cardiacCore and cardiacFOAM steps
      (`specs/2026-09-18-cross-adapter-workflow-design.md`);
    - more TOML records;
