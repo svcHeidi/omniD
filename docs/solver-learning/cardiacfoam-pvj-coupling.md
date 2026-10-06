@@ -1,13 +1,14 @@
-# cardiacFOAM's Purkinje-myocardium (PVJ) coupling: what native main did, measured
+# cardiacFOAM's Purkinje-myocardium (PVJ) coupling: what native main did, and what the fixes do
 
-**Method:** [`method.md`](method.md). **State described:** native main `0b1bf13c`,
-before the fixes in progress on cardiacFOAM PR #53's branch. The binary the runs
-used was built from the owner's working tree at `31c5dbea`, whose PVJ sources
-(`pvjMapper`, `pvjCoupler`, `reactionDiffusionPvjCoupler`,
+**Method:** [`method.md`](method.md). **Before the fixes:** native main `0b1bf13c`.
+The binary those runs used was built from the owner's working tree at `31c5dbea`,
+whose PVJ sources (`pvjMapper`, `pvjCoupler`, `reactionDiffusionPvjCoupler`,
 `eikonalMonodomainPvjCoupler`, `conductionSystemDomain`, `monodomain1DSolver`,
 `monodomainSolver`) are byte-identical to `0b1bf13c`. **Date:** 2026-10-05.
-The catalogue describes the intended semantics; this file records the behaviour
-the fixes remove and the numbers they are tested against. Keys and units are in
+**After the fixes:** cardiacFOAM PR #53's branch at `a6f0361d` (1D-3D PVJ coupling
+fixes on top of `18f25c9d`); the evidence is in "After the fixes" below. Every
+section before it, the tables and measurements included, describes native main
+`0b1bf13c`. The catalogue describes the intended semantics. Keys and units are in
 [`cardiacfoam-conduction-graph.md`](cardiacfoam-conduction-graph.md).
 
 The probe case is `electrophysiologyProtocols/purkinjeRestitution2D`, `monodomain`
@@ -42,7 +43,7 @@ error is 7.0e-6 to 7.1e-6 unidirectional, bidirectional and bidirectional-implic
 
 ## Explicit and implicit
 
-Tissue update per combination, with `n` the old and `n+1` the new level, `G = 1/R`,
+At native main `0b1bf13c`, the tissue update per combination, with `n` the old and `n+1` the new level, `G = 1/R`,
 `w` the kernel weight, `<V>` the weighted mean of the tissue Vm over the junction's
 cells, `K` the finite-volume Laplacian and `D_t` the `ddtSchemes` operator:
 
@@ -54,8 +55,10 @@ cells, `K` the finite-volume Laplacian and `D_t` the `ddtSchemes` operator:
 | implicit | implicit | `chi*Cm D_t V + w G V^{n+1}/V_s = K V^{n+1} - chi*Cm Iion + S + w G Vn^{n+1}/V_s`: the coefficient is on the diagonal |
 
 `solutionAlgorithm` is read as `explicit` or else implicit: `Explicit` or a typo ran
-the implicit path without a message. `eikonalMonodomainPvjCoupler` never reads
-`pvjCouplingScheme`. The network advances first with the tissue at level `n`, the
+the implicit path without a message (unchanged by the fixes). At `0b1bf13c`,
+`eikonalMonodomainPvjCoupler` never read `pvjCouplingScheme`, and the two rows with
+the implicit scheme put the coefficient on the old level or the diagonal as the table
+says, for the implicit tissue only. The network advances first with the tissue at level `n`, the
 tissue second with the network at `n+1`; the tissue's ionic current is always lagged,
 and the network's junction term is always lagged.
 
@@ -163,28 +166,108 @@ cells have more than 600000 faces is reported as unreadable, not read for minute
   conduction into the network, electrotonic loading of the Purkinje system by the
   tissue and PVJ block cannot occur at any resistance.
 
-## Target
+## After the fixes
 
-The junction as Vergara and co-workers write it, a flux condition at the fibre end:
-`-pi rho² sigma_p dVp/dl = gamma_j`, with `gamma_j = (Vp - <Vm>)/R` the junction
-current, spread over a ball on the tissue side (Vergara, Lange, Palamara, Lassila,
-Frangi and Quarteroni, J Comput Phys 308:218, 2016,
-[doi:10.1016/j.jcp.2015.12.016](https://doi.org/10.1016/j.jcp.2015.12.016)). The
-network node then sees the current over the fibre cross-section and its control
-length, which needs the term on the Hines diagonal to stay stable at small `R`.
+**Build and probes.** `a6f0361d` built into a scratch install, every library loaded
+from it and none from the owner's tree. Probe case as above unless stated; evidence
+from the fixes log. The unidirectional runs with the explicit scheme (R 115) and the
+eikonal coupler's explicit scheme are byte-identical (time directories and
+`purkinjeNetwork.dat`) to a pristine build of `18f25c9d`.
 
-Tests that do not copy the code's own term:
+**What the C++ now does.**
 
-- *Two capacitors.* A two-node graph with zero edge conductance, a passive membrane,
-  uniform kernel and tissue conductivity 0: `C_n Vn + C_t <V>` is constant and
-  `Vn - <V>` decays as `exp(-t/tau)`, `tau = R C_n C_t / (C_n + C_t)`. It needs a
-  passive ionic model for the test only.
-- *A manufactured solution with the flux condition* taken from the analytic fields,
-  so the verifier holds no copy of `assembleAppliedCurrent`'s term.
-- *A ledger:* per step, the tissue's `sum_c source_c V_c` against the network's
-  capacitance times its Vm rate at the junction.
-- *Restart equivalence:* 0 to 0.06 s against 0 to 0.03 to 0.06 s agrees to round-off
-  and keeps both legs of `purkinjeNetwork.dat`.
-- *Implicit coupling:* `rPvj` 10 with an explicit tissue runs, each junction cell
-  staying between its old Vm and `Vn`; `pvjCouplingScheme explicit` with `rPvj` 100
-  is refused by name before the first step.
+- `pvjCouplingScheme implicit` puts the junction term on the tissue's diagonal
+  (`fvm::Sp`) for both tissue algorithms, in `unidirectional` mode;
+  `eikonalMonodomainPvjCoupler` reads the key and does the same with its template
+  voltage.
+- In `bidirectional` mode `reactionDiffusionPvjCoupler` gives the tissue exactly the
+  current the network solved (an explicit deposit) whatever the scheme. The network
+  loses each junction current from the terminal node's volume `pi rho^2 L`, `rho`
+  the new key `purkinjeFibreRadius` (m, required, read with a plain `get<scalar>`) and
+  `L` half of each incident edge, with `Vn'` on the Hines diagonal and `<V>` the tissue
+  Vm from before the tissue solve. A cell-wise implicit term in this mode saw the
+  network a step late, a spurious capacitance `dt/R` that was 94 times the tissue's
+  `chi*Cm*V_s` at R 10 and froze the junction.
+- The restart writes and reads the network's ionic state, the coupler's last
+  observed tissue activation (`lastObservedTissueActivation.<coupling>`), the
+  restitution network's pending events and the time series.
+- `coupled1D3DMonodomainVerifier` computes `pi rho^2 L` from `purkinjeFibreRadius`
+  and the edge lengths itself.
+
+**Charge ledger** (per step, the network's residual of its own cable equation at the
+terminals times `pi rho^2` against the tissue's `sum_c source_c V_c`, from the written
+binary fields), R 3e5, 7.10 to 9.00 ms, 39 steps: `|I_net - I_tis|` at most 1.4e-22 A
+(relative 4.6e-13), window charge 8.703664e-13 C on both sides. With
+`pvjCouplingScheme implicit` in bidirectional mode: 1.9e-17, 2.7e-18 and 1.4e-22 A per
+step at R 1, 10 and 3e5, window charge equal. Bidirectional implicit runs are
+byte-identical to bidirectional explicit at R 1, 10, 1e4, 3e5, 1e6 and 1e7 (720 files
+each, `.dat` the same).
+
+**Retrograde conduction** (root off, a tissue box on junction 4 at 5 ms, the
+probe slab's 377-node cable network, `rho` 14.29 um):
+
+| `rPvj` | 1, 10, 1e4 | 3e5 | 1e6 | 1e7 |
+|---|---|---|---|---|
+| terminal 4 fires at | 6.35 ms | 6.45 ms | 6.65 ms | never |
+
+The first fixed build, at R 1e4, 1e5 and 3e5, had 253, 253 and 247 of 377 nodes
+active by 30 ms; the unidirectional control at 3e5 activates none. Antegrade
+bidirectional (R 1e4, 3e5): the root fires, the terminals are blocked by the
+source-sink mismatch, 368 and 371 of 377 nodes activate and the tissue is not captured
+by the network. Before the fixes, retrograde activation never occurred (0 of 377 nodes).
+
+**Manufactured solution, which now tells a conservative coupling from a
+non-conservative one** (`monodomain1D3D`, bidirectional, `purkinjeFibreRadius`
+`1/sqrt(pi)` m, L2 errors; rates in brackets):
+
+| N | 10 | 20 | 40 | 80 |
+|---|---|---|---|---|
+| fixed, 3D Vm | 3.9052e-3 | 1.0169e-3 (1.94) | 2.5698e-4 (1.98) | 6.4459e-5 (2.00) |
+| fixed, graph Vm1D | 3.7572e-4 | 9.3378e-5 (2.01) | 2.2877e-5 (2.03) | 5.5901e-6 (2.03) |
+| old coupling, new verifier, 3D | 4.41e-2 | 5.43e-2 | 5.78e-2 | 5.8889e-2 |
+| solver volume halved, 3D | 4.39e-2 | 5.13e-2 | 5.35e-2 | 5.3936e-2 |
+
+At N = 80 the graph error is 2.6061e-1 with the old coupling and 2.3908e-1 with the
+halved volume, against 5.5901e-6 fixed. The implicit scheme gives the fixed numbers;
+unidirectional is unchanged. At native main the same case passed with the code's own
+term (graph error 7.0e-6 to 7.1e-6), which is why the verifier now builds the
+volume from the radius and the edge lengths.
+
+**Unidirectional implicit.** With an explicit tissue and `pvjCouplingScheme implicit`,
+`rPvj` 10, 100, 150 and 1e4 run for 60 ms; the junction sphere's Vm flips sign between
+steps (above 0.1 mV) once at R 10 and R 100, against 131 flips at R 150 at native main.
+Retrograde bidirectional at R 10, which crashed at 1 ms at native main, runs.
+`pvjCouplingScheme explicit` is unchanged and keeps the bracket measured above (R 110
+crashes at 34.9 ms, R 115 runs; byte-identical to the pristine build at R 115).
+The implicit scheme writes, at output times, the current the tissue received,
+`G (Vn' - <V'>)` over `V_s`, which agrees with the deposit reconstructed from the
+fields to 3e-9 relative. `eikonalMonodomainPvjCoupler` with `implicit` activates 7218
+tissue cells, the earliest at 17.95 ms against 17.84 ms explicit.
+
+**Restart** (0 to 0.06 s against 0 to 0.03 to 0.06 s):
+
+- cable (monodomain variant): `purkinjeNetwork.dat` byte-identical to the continuous
+  run, both legs (12 rows). Time-directory fields: the first leg identical, after the
+  restart at most 5e-11 V from the continuous run in the tissue and 1.3e-13 V in the
+  network (the adaptive ODE step sizes are not state). Native main was 11 to 13 mV off
+  from 35 to 45 ms, and the `.dat` held only the second leg.
+- restitution network (`eikonalMonodomainPvjCoupler`, bidirectional), split at 0.015
+  s: the network has 367, 377 and 377 nodes active at 0.0175, 0.02 and 0.03 s and 704
+  tissue cells are activated at 0.03 s, as in the continuous run; `.dat` identical and
+  activation fields byte-identical. The `.vtk.series` has all 12 entries (6 at native
+  main).
+
+**Regressions.** The native regression scripts pass: `purkinjeRestitution2D` 32 of 32
+over its three variants, `electroHeart` 24 of 24 (three variants, two trees),
+`conductionBlock` 4 of 4. The
+only reference that moved is `purkinjeRestitution2D`'s monodomain `IcouplingSource`
+rows, now -6041.88396, -6191.65009, -1028.87739 and -1507.08188 against -6061.67,
+-6218.72, -1030.33 and -1506.77 (-0.33, -0.44, -0.14 and +0.02 %), from the diagonal
+junction term.
+
+**Left in the C++.** A parallel restart of a Purkinje network fails on rank 1, as it
+did before the fixes. `pvjRadius` is still a numerical sphere, not a physical size of
+the junction (the capture delay above still depends on it at fixed `rPvj`). The
+stimulus window is still half-open. The input checks (`pvjResistances` length and
+sign, `rPvj` range, `rootStimulus.node`) and a stability guard in the C++ were taken
+out by the owner's decision; omniD judges the resistance bound before the run.

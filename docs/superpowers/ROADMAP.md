@@ -231,31 +231,26 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    whether the native code should check the length of `pvjResistances` and the
    range of `rootStimulus.node`;
 
-4. **1D-3D PVJ coupling: C++ fixes in progress** (cardiacFOAM PR #53's branch;
-   the measurements are in `docs/solver-learning/cardiacfoam-pvj-coupling.md`).
-   Ranked:
-   - *A conservative bidirectional junction.* The network node receives the
-     junction current over the fibre cross-section and its control length, as a
-     linear term on the Hines diagonal. Tested without the code's own term by two
-     capacitors relaxing (`C_n Vn + C_t <V>` constant, `tau = R C_n C_t / (C_n + C_t)`),
-     a manufactured solution with the flux condition, and a per-step charge ledger.
-   - *`pvjCouplingScheme implicit` implicit for both tissue algorithms,* and
-     `solutionAlgorithm` refused unless `explicit` or `implicit`. Tested by
-     `rPvj` 10 running with an explicit tissue, and `explicit` with `rPvj` 100
-     refused by name before the first step.
-   - *Restart of the network's ionic state,* the coupler's last observation and the
-     time series. Tested by restart equivalence, 0 to 0.06 s against 0 to 0.03 to
-     0.06 s, to round-off.
-   - *The input ranges* of `pvjResistances` and `rootStimulus.node`, and the
-     smaller items in the measurements document.
+4. **1D-3D PVJ coupling: fixed on cardiacFOAM PR #53** (`a6f0361d`, not merged to
+   native main; the measurements, before and after, are in
+   `docs/solver-learning/cardiacfoam-pvj-coupling.md`). The branch has:
+   - a conservative bidirectional junction: the network node loses the junction
+     current from the volume `pi rho^2 L` (`purkinjeFibreRadius`, catalogued, required
+     once a coupling is bidirectional) and the tissue receives the current the
+     network solved, whatever `pvjCouplingScheme`; charge balances every step, and
+     retrograde activation of the network occurs;
+   - `pvjCouplingScheme implicit` on the tissue's diagonal for both tissue
+     algorithms (unidirectional), and `eikonalMonodomainPvjCoupler` reading it;
+   - restart of the network's ionic state, the coupler's last observation, the
+     restitution network's pending events and the time series.
 
-   Until the first fix lands, results of bidirectional cable coupling
-   (`reactionDiffusionPvjCoupler`, `couplingMode bidirectional`) are not reliable;
-   unidirectional coupling and both eikonal couplers are unaffected. omniD refuses
-   an explicit-scheme `rPvj` below the stability bound, judging junctions that share
-   cells together, once the mesh exists; its
-   inputs are listed in the measurements document, to re-check against the fixed
-   C++.
+   omniD refuses an `rPvj` below the stability bound only where the tissue receives
+   the term explicitly: a unidirectional `reactionDiffusionPvjCoupler` or an
+   `eikonalMonodomainPvjCoupler`, with the explicit scheme (or none); junctions that
+   share cells are judged together, once the mesh exists. Open after the fixes:
+   - a parallel restart of a Purkinje network fails on rank 1, as before the fixes;
+   - `pvjRadius` as a physical size of the junction rather than a numerical sphere;
+   - the half-open stimulus window.
 5. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the
    solver changed.

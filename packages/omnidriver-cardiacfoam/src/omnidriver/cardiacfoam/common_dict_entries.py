@@ -249,7 +249,8 @@ PURKINJE_GRAPH_ENTRIES: Final[tuple[DictEntry, ...]] = (
         driver_path="pvjResistances", phases=frozenset({"physics"}), value_kind="scalar_list", unit="Ω",
         description=(
             "Resistance [Ω] of each PVJ, in pvjNodes order, in place of the coupling's single rPvj: the junction "
-            "current is (Vm of the network node - Vm of the junction tissue) / resistance, in A on the tissue side. "
+            "current is (Vm of the network node - Vm of the junction tissue) / resistance, in A, which the tissue "
+            "receives and, in a bidirectional coupling, the network node loses from its volume. "
             "With it, reactionDiffusionPvjCoupler never reads rPvj; eikonalMonodomainPvjCoupler still requires "
             "rPvj and then uses these. An empty list counts as absent."
         ),

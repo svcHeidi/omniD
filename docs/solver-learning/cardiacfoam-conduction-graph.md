@@ -29,9 +29,10 @@ the 3D myocardium does declare with OpenFOAM dimension sets.
 | `points`, `pvjLocations` | `readGraphFile` | m | `pvjMapper` compares `pvjLocations` with `mesh.C()`; native graphs are in metres (idealizedHeart edges of 0.29 mm) |
 | `pvjRadius` | `pvjCoupler` | m | `pvjMapper` compares it with `cbrt(cell volume)` |
 | junction current `I_pvj` (`terminalCurrent`) | `reactionDiffusionPvjCoupler::couplingCurrentAtPvjs` | A on the tissue side | `pvjMapper::volumetricSource` divides it by the kernel-weighted sphere volume and adds it to `externalStimulusCurrent`, dimensioned `dimCurrent/dimVolume` |
-| `rPvj`, `pvjResistances` | the couplers; `conductionGraph` | Ω | the tissue side divides a voltage difference by `R` to get `I` in A, spread over the kernel-weighted junction volume; and the implicit scheme's coefficient `1/(R*V_sphere)` lands in `implicitSourceCoeff`, dimensioned `dimCurrent/(dimVolume*dimVoltage)`, so `R` is V/A. The network side applies `I` without a node volume (below) |
+| `rPvj`, `pvjResistances` | the couplers; `conductionGraph` | Ω | the tissue side divides a voltage difference by `R` to get `I` in A, spread over the kernel-weighted junction volume; and the implicit scheme's coefficient `1/(R*V_sphere)` lands in `implicitSourceCoeff`, dimensioned `dimCurrent/(dimVolume*dimVoltage)`, so `R` is V/A. The network side applies `I` without a node volume at native main `0b1bf13c`, and divides it by the node volume `pi rho^2 L` from PR #53's branch (below) |
 | junction source `IcouplingSource` | output only | A/m³ | the column is `pvj<i>_IcouplingSource_Am3` |
 | `I_pvj` on the network side, native main `0b1bf13c` | `assembleAppliedCurrent` | used as A/m³ | `appliedCurrent[pvjNode] -= terminalCurrent[i]`, then divided by `chi*Cm` only, with no cross-section or control length ([`cardiacfoam-pvj-coupling.md`](cardiacfoam-pvj-coupling.md)) |
+| `I_pvj` on the network side, PR #53's branch (`a6f0361d`) | `conductionSystemDomain::setTerminalConductances`, `monodomain1DSolver` | A, over m³ | in `couplingMode bidirectional` the junction current `G (Vn' - <V>)` in A is divided by the terminal node's volume `pi rho^2 L_k` (A/m³) before the cable's `chi*Cm`, with `Vn'` on the Hines diagonal and `<V>` the tissue Vm from before the tissue solve; `rho` is `purkinjeFibreRadius` (m) and `L_k` half of each incident edge. The tissue receives the same current |
 
 **The edge conductivity.** `monodomain1DSolver::advance` states its own
 discretisation:
@@ -137,15 +138,20 @@ A coupling is `domainCouplings.<name>` with `electroDomainCoupler` and
   tissue): `I_pvj = (Vm_network - Vm_tissue)/R_pvj` at each junction. The
   tissue receives it explicitly, or with `pvjCouplingScheme implicit` as a
   source `w*Vm_network/(R*V_sphere)` plus an implicit coefficient
-  `w/(R*V_sphere)` on the cell's own `Vm`; in `unidirectional` mode the buffers
-  are cleared before the network advances. What the C++ of native main
-  `0b1bf13c` does beyond this, which the owner is fixing, is in
+  `w/(R*V_sphere)` on the cell's own `Vm`, for both tissue algorithms. In
+  `bidirectional` mode the tissue receives exactly the current the network
+  solved, whatever the scheme, and the network loses it from the node volume
+  `pi rho^2 L`, `rho` being `purkinjeFibreRadius`, which that mode requires.
+  Native main `0b1bf13c` applied the current to the network without a volume,
+  and its implicit scheme was explicit for the explicit tissue; the
+  measurements before and after PR #53's fixes are in
   [`cardiacfoam-pvj-coupling.md`](cardiacfoam-pvj-coupling.md).
   This is the coupler the 1D-3D manufactured solution exercises.
 - `eikonalMonodomainPvjCoupler` (eikonal network to monodomain tissue): the
   network's activation time drives a voltage template at each junction, offset
   to the tissue's resting potential, and the same `(V - Vm_tissue)/R` current
-  enters the tissue; in `bidirectional` mode the tissue's activation times are
+  enters the tissue, explicitly or, with `pvjCouplingScheme implicit` (read from
+  PR #53's branch on), on the diagonal; in `bidirectional` mode the tissue's activation times are
   returned to the junction nodes.
 - `eikonalPvjCoupler` (eikonal to eikonal): copies junction activation times
   into the tissue's activation-time field; `bidirectional` returns the tissue's.
@@ -222,14 +228,20 @@ below.
   "multiplier" and `1DgraphToFoam` fills the conductance from a VTK field named
   `conductance`, `conductivity`, `D` or `sigma`; a `D` there would be a
   diffusivity (m²/s), not a factor.
+- **`purkinjeFibreRadius` is m.** The Purkinje fibre's radius `rho` in the
+  network's `purkinjeGraphModelCoeffs`; with the terminal node's control length
+  `L` it gives the node volume `pi rho^2 L` (m³) a bidirectional coupling's
+  junction current is taken from. It is a separate length from the 3D tissue's
+  `chi`, and a plain required `get<scalar>` once the coupling is bidirectional.
 - **`rPvj` and `pvjResistances` are Ω.** The tissue side divides a voltage
   difference by `R` to get the junction current in A, distributed over the
   kernel-weighted junction volume. The network side of
-  `reactionDiffusionPvjCoupler` in native main `0b1bf13c`, before the fix in
-  progress on cardiacFOAM PR #53's branch, applies the same number to the
-  node's applied-current buffer without a node volume
+  `reactionDiffusionPvjCoupler` in native main `0b1bf13c` applied the same
+  number to the node's applied-current buffer without a node volume
   (`appliedCurrent[terminalNodes_[i]] -= terminalCurrent_[i];`, then
-  `dt*appliedCurrentBuffer_[i]/chiCm`). The native
+  `dt*appliedCurrentBuffer_[i]/chiCm`); on cardiacFOAM PR #53's branch
+  (`a6f0361d`) a bidirectional coupling divides it by the node volume
+  `pi rho^2 L`. The native
   `electroModels/ARCHITECTURE.md` labels the current `[A/m²]`, which neither
   side uses. [`cardiacfoam-pvj-coupling.md`](cardiacfoam-pvj-coupling.md) holds
   the measurements.
