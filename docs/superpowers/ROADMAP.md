@@ -250,7 +250,14 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    share cells are judged together, once the mesh exists. Open after the fixes:
    - a parallel restart of a Purkinje network fails on rank 1, as before the fixes;
    - `pvjRadius` as a physical size of the junction rather than a numerical sphere;
-   - the half-open stimulus window.
+   - the half-open stimulus window;
+   - an iterated bidirectional coupling (both sides implicit, the same current),
+     deferred by the owner: an outer loop around today's conservative pass, with
+     the solves made repeatable (about 15 files); the design and its cost are in
+     `.superpowers/sdd/pvj-outer-loop-assessment.md`;
+   - on the bath-bidomain branch only: its reaction/diffusion split skips the
+     SBDF2 `VmRate` and `Iion` refresh that `advance()` does, so bath with SBDF2
+     differs from the normal advance.
 5. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the
    solver changed.
