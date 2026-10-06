@@ -997,7 +997,8 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
                      myocardium_solver="monodomainSolver",
                      conduction_solver="monodomain1DSolver",
                      set_rpvj=False, graph_present=None, graph_has_resistances=False,
-                     graph_file_key=True, scheme=None, root_node="0", rpvj="150.0", pvj_radius=None):
+                     graph_file_key=True, scheme=None, root_node="0", rpvj="150.0", pvj_radius=None,
+                    mode="unidirectional"):
     from omnidriver.cardiacfoam.case_builder import build_electro_properties
 
     prefix = (
@@ -1016,9 +1017,11 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
         f"{prefix}.rootStimulus.intensity": "0.0",
         f"{prefix}.outputVariables.export": "(activationTime)",
         "$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.conductionNetworkDomain": "purkinjeNetwork",
-        "$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.couplingMode": "unidirectional",
+        "$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.couplingMode": mode,
         "$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.electroDomainCoupler": coupler,
     }
+    if mode == "bidirectional" and conduction_solver == "monodomain1DSolver":
+        overrides[f"{prefix}.purkinjeFibreRadius"] = "1.7e-05"
     if conduction_solver == "eikonalSolver1D":
         overrides[f"{prefix}.purkinjeCV"] = "[0 1 -1 0 0 0 0] 4.2"
     if myocardium_solver == "eikonalSolver":
@@ -1352,11 +1355,14 @@ def _bound_factor(*locations):
     return 5e-5 / (1400.0 * 4.0) * largest
 
 
-def _stability_findings(tmp_path, *, rpvj, graph, scheme="explicit", ddt="backward", mesh=True, coupler=None, kernel="linear"):
+def _stability_findings(
+    tmp_path, *, rpvj, graph, scheme="explicit", ddt="backward", mesh=True, coupler=None, kernel="linear",
+    mode="unidirectional",
+):
     from omnidriver.cardiacfoam.validation import case_diagnostics
 
     electro = _build_pvj_case(tmp_path, set_rpvj=True, rpvj=rpvj, scheme=scheme, pvj_radius="0.0006",
-                              coupler=coupler or "reactionDiffusionPvjCoupler",
+                              coupler=coupler or "reactionDiffusionPvjCoupler", mode=mode,
                               conduction_solver="eikonalSolver1D" if coupler == "eikonalMonodomainPvjCoupler" else "monodomain1DSolver")
     electro.write_text(re.sub(r"pvjKernel\s+\w+;", f"pvjKernel {kernel};", electro.read_text()))
     (tmp_path / "constant" / "purkinjeGraph").write_text(graph)
@@ -1428,8 +1434,35 @@ def test_a_resistance_the_graph_lists_stands_in_for_rpvj(tmp_path):
     assert [code for _, code, _ in found] == ["pvj_resistance_below_stability_bound"]
 
 
-def test_an_implicit_junction_is_not_judged(tmp_path):
-    assert _stability_findings(tmp_path, rpvj="1", scheme="implicit", graph=_slab_graph(_CORNER)) == []
+@pytest.mark.parametrize("coupler", ["reactionDiffusionPvjCoupler", "eikonalMonodomainPvjCoupler"])
+def test_an_implicit_junction_is_not_judged(tmp_path, coupler):
+    for mode in ("unidirectional", "bidirectional"):
+        (tmp_path / mode).mkdir()
+        assert _stability_findings(
+            tmp_path / mode, rpvj="1", scheme="implicit", graph=_slab_graph(_CORNER), coupler=coupler, mode=mode,
+        ) == []
+
+
+@pytest.mark.parametrize("rpvj", ["1", "50", "110"])
+@pytest.mark.parametrize("scheme", ["explicit", "implicit"])
+def test_a_bidirectional_junction_of_the_reaction_diffusion_coupler_is_not_judged(tmp_path, rpvj, scheme):
+    """The tissue receives the current the network solved, whatever the scheme: stable from 1 ohm up."""
+    assert _stability_findings(
+        tmp_path, rpvj=rpvj, scheme=scheme, graph=_slab_graph(_CORNER), mode="bidirectional",
+    ) == []
+
+
+def test_a_bidirectional_eikonal_junction_is_judged_as_a_unidirectional_one(tmp_path):
+    """The eikonal coupler deposits its template current explicitly in either mode; bidirectional only returns activation times."""
+    found = _stability_findings(
+        tmp_path, rpvj="50", graph=_slab_graph(_CORNER), coupler="eikonalMonodomainPvjCoupler", mode="bidirectional",
+    )
+    assert [code for _, code, _ in found] == ["pvj_resistance_below_stability_bound"]
+
+
+def test_a_junction_with_no_scheme_is_judged_as_explicit(tmp_path):
+    found = _stability_findings(tmp_path, rpvj="50", scheme=None, graph=_slab_graph(_CORNER))
+    assert [code for _, code, _ in found] == ["pvj_resistance_below_stability_bound"]
 
 
 def test_a_case_without_a_mesh_reports_the_bound_it_can_compute(tmp_path):

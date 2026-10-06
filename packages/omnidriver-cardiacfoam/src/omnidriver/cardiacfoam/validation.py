@@ -976,9 +976,12 @@ def _evaluate_pvj_stability(
 ) -> list["StrictDiagnostic"]:
     """A junction resistance below the bound under which the tissue's Vm near the junction alternates in sign and grows.
 
-    ``pvjCouplingScheme explicit`` (``eikonalMonodomainPvjCoupler`` too, when its scheme is explicit or absent)
-    spreads ``w (Vn - <V>) / (R V_s)`` over each junction's cells, ``<V>`` being the old mean of their Vm,
-    ``V_s = sum(w V)``. That is a rank-one operator per junction, and the junctions whose cells overlap form one
+    A junction term the tissue receives explicitly (``pvjCouplingScheme explicit``, or absent) spreads
+    ``w (Vn - <V>) / (R V_s)`` over each junction's cells, ``<V>`` being the old mean of their Vm, ``V_s = sum(w V)``.
+    ``reactionDiffusionPvjCoupler`` does so only when ``couplingMode`` is ``unidirectional``: in ``bidirectional``
+    mode its tissue receives the current the network solved, whatever the scheme, and is stable at every
+    resistance. ``eikonalMonodomainPvjCoupler`` does so in either mode, its network being a prescribed template.
+    That is a rank-one operator per junction, and the junctions whose cells overlap form one
     operator: its largest decay rate ``k`` is the largest eigenvalue of ``N_lk = sum_j w_lj w_kj V_j / (V_l V_k R_k chi cm)``
     (for a junction alone, ``sum(w^2 V) / (R chi cm V_s^2)``). The tissue's ``ddtSchemes`` operator keeps it stable
     while ``k dt`` stays below 2 (``Euler``) or 4 (``backward``), and decays it with an alternating ripple above
@@ -997,6 +1000,7 @@ def _evaluate_pvj_stability(
         for key, coupler in context.items()
         if key.startswith(_DOMAIN_COUPLINGS_PREFIX) and key.endswith(_COUPLER_SUFFIX) and coupler in _PVJ_COUPLERS
         and context.get(key[: -len(_COUPLER_SUFFIX)] + ".pvjCouplingScheme", "explicit") == "explicit"
+        and (coupler != _RPVJ_COUPLER or context.get(key[: -len(_COUPLER_SUFFIX)] + ".couplingMode") == "unidirectional")
     ]
     blocks = [(block, network) for block, network in blocks if network in graphs]
     if not blocks or context.get("myocardiumSolver") not in ("monodomainSolver", "bidomainSolver") or any(
@@ -1056,7 +1060,7 @@ def _evaluate_pvj_stability(
             found.append(diagnostic(
                 "info", "pvj_stability_unjudged",
                 f"{document}: {block}'s junction resistance is not judged against a stability bound {why}. "
-                f"pvjCouplingScheme explicit is stable only above R = {form}; dt/(chi*cm) is {scale:.4g} ohm m^3/A "
+                f"an explicit junction term is stable only above R = {form}; dt/(chi*cm) is {scale:.4g} ohm m^3/A "
                 f"(dt {dt:g} s, chi*cm {chi * cm:g} F/m^3).",
                 source=document, field=block + ".rPvj",
             ))
@@ -1080,8 +1084,8 @@ def _evaluate_pvj_stability(
                 f"dt {dt:g} s, chi*cm {chi * cm:g} F/m^3, cells within pvjRadius {radius:g} m. The worst group has "
                 f"{len(group)} junctions and a rate times dt of {worst * limit:.4g} against {limit:g}: its lowest "
                 f"resistance, {resistances[lowest]:g} ohm, would have to be {resistances[lowest] * worst:.4g} ohm, "
-                f"with the others raised alike. Raise the resistances, shorten deltaT, or use a coupling solved "
-                f"implicitly (pvjCouplingScheme implicit).{capped}",
+                f"with the others raised alike. Raise the resistances, shorten deltaT, or set pvjCouplingScheme "
+                f"implicit, which puts the junction term on the tissue's matrix diagonal, with no bound.{capped}",
                 source=document, field=block + ".rPvj",
             ))
             continue

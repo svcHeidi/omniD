@@ -92,10 +92,13 @@ ripple without crashing. An implicit tissue with the implicit scheme ran stably 
 `rPvj` 1 and 10; an implicit tissue with the explicit scheme crashed at 1.15 ms at
 `rPvj` 10.
 
-omniD's check (`validation._evaluate_pvj_stability`) judges the explicit scheme of
-`reactionDiffusionPvjCoupler` and of `eikonalMonodomainPvjCoupler`, which adds the same
-explicit term every step (at `0b1bf13c` it has no other; omniD judges it when its
-`pvjCouplingScheme` is explicit or absent, as the fixed C++ reads it). Its inputs are
+omniD's check (`validation._evaluate_pvj_stability`) judges where the tissue receives
+the term explicitly: `reactionDiffusionPvjCoupler` with `couplingMode unidirectional` and
+`pvjCouplingScheme` explicit or absent, and `eikonalMonodomainPvjCoupler` with the same
+scheme in either mode (its deposit does not depend on the mode). It never judges the
+implicit scheme or a bidirectional `reactionDiffusionPvjCoupler`, whose tissue receives
+the network's solved current and ran stably from 1 ohm to 1e7 ohm after the fixes. Its
+inputs are
 `deltaT` (`system/controlDict`), `ddtSchemes` (`ddt(Vm)`, else `default`, in
 `system/fvSchemes`), the tissue's `chi` and `cm`, each junction's resistance (the
 graph's `pvjResistances`, else `rPvj`), and the labels, weights and volumes of the
