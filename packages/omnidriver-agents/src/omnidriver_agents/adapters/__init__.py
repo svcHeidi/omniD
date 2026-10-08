@@ -16,6 +16,8 @@ class AdapterResult:
     usage: dict = field(default_factory=dict)
     is_error: bool = False
     timed_out: bool = False
+    undecodable_lines: int = 0
+    init: dict = field(default_factory=dict)
 
 
 class Adapter(Protocol):
