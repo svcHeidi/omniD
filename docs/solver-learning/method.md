@@ -153,8 +153,33 @@ gate, nothing in between".
     above was checked on the hex route and again on the tet route (Q4)
     before the reader claimed it for both.
 
+**Refined 2026-10-09, while learning TorchCor, a Python-API solver
+([`torchcor.md`](torchcor.md)):** steps 1-13 assume a binary with files.
+For a solver that is a library:
+
+25. **"The binary" is the installed package in its own interpreter.** Its
+    identity is the dist version *and* the commit, because an editable install
+    reports only the version. A first run can depend on ambient state that no
+    flag shows: TorchCor's `torch.compile` cache under the system temp dir.
+    Find such state and record where it lives.
+26. **Self-description has three layers, and `inspect.signature` reads only
+    the first.** The others are instance attributes set in a constructor
+    (initial states, read by instantiating) and string menus that exist only
+    as literals the code compares (the counterpart of the C++ compared-literal
+    scan). Probe whether a misspelt attribute is refused. TorchCor accepts one
+    silently, and refuses a misspelt keyword.
+27. **When an example carries private copies of library code, diff them
+    against the library before choosing which one to drive.** TorchCor's
+    benchmark ships its own simulator class and ionic model. Its ionic model
+    lacked a library fix, and its solver precision differed. Then run both
+    on the same case and attribute every difference to a single cause
+    (precision, model copy, recording convention) before choosing.
+28. **A library writes only what it is asked to write**, so step 13's
+    effective-configuration file does not exist. The runner writes the
+    provenance.
+
 ## What this method produced for openCARP
 
 See [`opencarp.md`](opencarp.md): the evidence log, the noun mapping, and the
-open questions with their state.
+open questions with their state. For TorchCor, see [`torchcor.md`](torchcor.md).
 
