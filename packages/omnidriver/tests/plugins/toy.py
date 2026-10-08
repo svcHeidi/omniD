@@ -940,6 +940,12 @@ class SerialParallelPlugin(ParallelQuantityToyPlugin):
         return (step,)
 
 
+class SerialOnlyQuantityPlugin(QuantityToyPlugin):
+    """``toyQuantities`` declared serial-only: it has a quantity and no parallel form."""
+
+    RECORDS = {"toyQuantities": dataclasses.replace(TOY_QUANTITY_RECORD, serial_only=True)}
+
+
 def write_toy_reference(path: Path, *, quantity_unit: str = "ms") -> Path:
     path.write_text(json.dumps({
         "schema_version": 1, "id": "toy-reference", "version": "1",
@@ -1066,3 +1072,4 @@ PARALLEL_QUANTITY_PLUGIN = _selector("ParallelQuantityToyPlugin")
 REORDERING_PARALLEL_PLUGIN = _selector("ReorderingParallelPlugin")
 SERIAL_PARALLEL_PLUGIN = _selector("SerialParallelPlugin")
 SINGLE_RANK_PLUGIN = _selector("SingleRankPlugin")
+SERIAL_ONLY_QUANTITY_PLUGIN = _selector("SerialOnlyQuantityPlugin")
