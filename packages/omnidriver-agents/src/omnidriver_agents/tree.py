@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import stat
 import subprocess
 import tarfile
 from pathlib import Path
@@ -21,12 +22,13 @@ def export_tree(git_dir: Path, ref: str, dest: Path) -> str:
 
 
 def digest_tree(root: Path) -> str:
-    """SHA-256 over every path under ``root`` and its content; times are ignored."""
+    """SHA-256 over every path under ``root``, its mode bits and its content; times are ignored."""
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*")):
         relpath = path.relative_to(root).as_posix().encode()
         if path.is_symlink():
             digest.update(b"L" + relpath + b"\0" + str(path.readlink()).encode() + b"\0")
         elif path.is_file():
-            digest.update(b"F" + relpath + b"\0" + hashlib.sha256(path.read_bytes()).digest())
+            mode = f"{stat.S_IMODE(path.stat().st_mode):o}".encode()
+            digest.update(b"F" + relpath + b"\0" + mode + b"\0" + hashlib.sha256(path.read_bytes()).digest())
     return digest.hexdigest()

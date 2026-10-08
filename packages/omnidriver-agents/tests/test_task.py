@@ -38,3 +38,7 @@ def test_an_unknown_key_is_refused(tmp_path):
 def test_an_unknown_role_is_refused(tmp_path):
     with pytest.raises(TaskError, match="role"):
         load_task(_write(tmp_path, {**BASE, "role": "pilot"}), {"cases": "/c"})
+
+
+def test_a_task_carries_no_inputs_field(tmp_path):
+    assert not hasattr(load_task(_write(tmp_path, BASE), {"cases": "/c"}), "inputs")

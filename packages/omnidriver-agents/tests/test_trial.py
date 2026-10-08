@@ -13,7 +13,7 @@ print(json.dumps({"status": "passed" if answer.get("P8") == 42 else "failed"}))
 
 def _task(tmp_path):
     (tmp_path / "oracle.py").write_text(ORACLE)
-    return Task(id="t", role="runner", brief="go", inputs={}, programs=("solver",), tree=None, wall_seconds=60,
+    return Task(id="t", role="runner", brief="go", programs=("solver",), tree=None, wall_seconds=60,
                 oracle=Oracle((sys.executable, str(tmp_path / "oracle.py"), "{trial}"), "status", ("passed",)),
                 digest="d" * 64)
 

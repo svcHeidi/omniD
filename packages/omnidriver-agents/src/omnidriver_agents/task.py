@@ -29,7 +29,6 @@ class Task:
     id: str
     role: str
     brief: str
-    inputs: dict[str, str]
     programs: tuple[str, ...]
     tree: dict[str, str] | None
     wall_seconds: int
@@ -58,7 +57,6 @@ def load_task(path: Path, supplied: dict[str, str]) -> Task:
     oracle = data["oracle"]
     return Task(
         id=data["id"], role=data["role"], brief=fill(data["brief"]),
-        inputs={n: supplied[n] for n in data["inputs"]},
         programs=tuple(data.get("programs", ())),
         tree={k: fill(v) for k, v in data["tree"].items()} if data.get("tree") else None,
         wall_seconds=int(data["wall_seconds"]),

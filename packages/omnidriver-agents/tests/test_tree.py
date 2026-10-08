@@ -27,3 +27,11 @@ def test_digest_changes_with_content_and_not_with_mtime(tmp_path):
     assert digest_tree(tmp_path) == before
     (tmp_path / "f").write_text("y")
     assert digest_tree(tmp_path) != before
+
+
+def test_digest_changes_with_the_mode_bits(tmp_path):
+    (tmp_path / "f").write_text("x")
+    (tmp_path / "f").chmod(0o644)
+    before = digest_tree(tmp_path)
+    (tmp_path / "f").chmod(0o755)
+    assert digest_tree(tmp_path) != before
