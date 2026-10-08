@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnidriver-agents"
+version = "0.1.0"
+description = "Runs one task under several LLM agents, with and without omniD, and records each trial."
+requires-python = ">=3.11"
+dependencies = ["PyYAML>=6.0"]
+
+[project.scripts]
+omnidriver-agents = "omnidriver_agents.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = "--import-mode=importlib"
