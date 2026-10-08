@@ -678,12 +678,15 @@ def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
     the parallel run says it asked for those ranks, and the solver's own
     output shows it ran on them (``QuantityTarget.rank_evidence``).
 
-    A target that declares no quantity is not applicable."""
+    A target that declares no quantity, or whose record is serial-only, is
+    not applicable."""
     ctx = _context(target)
-    _record(ctx, target.record)
+    record = _record(ctx, target.record)
     declared = target.quantity
     if declared is None:
         return _not_applicable("C13", "the target declares no quantity, so there is nothing to compare")
+    if record.serial_only:
+        return _not_applicable("C13", "the record is serial-only, so there is no parallel run to compare")
     serial = _run_for_quantities(target, ctx, declared.study, "serial")
     if isinstance(serial, str):
         return _verdict("C13", False, serial)
