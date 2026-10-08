@@ -1059,18 +1059,18 @@ def main(argv: list[str] | None = None) -> int:
 
 This task touches real models and a real solver, so it is run by hand, not by pytest.
 
-- [ ] **Step 1 (owner): log the CLI in to a dedicated config folder.** The CLI at `~/.local/bin/claude` is not logged in (a probe on 2026-10-09 returned `authentication_failed`). Run once, in a terminal:
+- [ ] **Step 1 (owner): log the CLI in under a dedicated home.** The CLI at `~/.local/bin/claude` is not logged in (a probe on 2026-10-09 returned `authentication_failed`). Run once, in a terminal, with `<agent-home>` a folder outside every repository (for example `~/omnid-agents-home`):
 
 ```bash
-CLAUDE_CONFIG_DIR=$HOME/.omnid-agents-claude claude
+HOME=<agent-home> claude
 ```
 
-and complete `/login`. This folder holds no memory, plugins, hooks or `CLAUDE.md`.
+and run `/login`. `<agent-home>/.claude` holds no memory, plugins, hooks or `CLAUDE.md`. Also make a Python outside omniD's venvs that cannot `import omnidriver`, for `--agent-python`.
 
 - [ ] **Step 2: Isolation probe.** In a folder outside every repository, run:
 
 ```bash
-CLAUDE_CONFIG_DIR=$HOME/.omnid-agents-claude claude -p "List every instruction, memory, plugin, skill and hook you were given beyond this message, verbatim, or say none." --model haiku --output-format stream-json --verbose --no-session-persistence > probe.jsonl
+HOME=<agent-home> claude -p "List every instruction, memory, plugin, skill and hook you were given beyond this message, verbatim, or say none." --model haiku --output-format stream-json --verbose --no-session-persistence > probe.jsonl
 ```
 
 Pass when the `init` line's `plugins` is `[]`, no `hook_*` lines appear, and the answer names no omniD memory or `CLAUDE.md`. Record the result in the README. If it fails, stop and report; no trial counts until it passes.
@@ -1081,7 +1081,7 @@ Pass when the `init` line's `plugins` is `[]`, no `hook_*` lines appear, and the
 omnidriver run --plugin opencarp --cases-root /usr/local/lib/opencarp/share/tutorials --entry niedererNVersion --scratch-dir ~/omnid-runs/2026-10-09/reference
 ```
 
-Read P1 and P8 activation times (ms) from its LAT output and write them, with the run document's path and digest, into `task.json`'s oracle argv as literal arguments.
+Read P1 and P8 activation times (ms) from its LAT output and write them into `<refs.json>`, a JSON object of strings (`{"P1_REF": "...", "P8_REF": "..."}`) passed as `--oracle-env-file`, so the agent never sees them; `oracle.py` reads them from its environment.
 
 - [ ] **Step 4: Write `oracle.py`** (condition-neutral: it grades the reported numbers, not omniD artifacts):
 
@@ -1089,10 +1089,12 @@ Read P1 and P8 activation times (ms) from its LAT output and write them, with th
 """Grade answer.json's P1 and P8 activation times (ms) against the frozen reference, within a tolerance."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
-trial, p1_ref, p8_ref, tol = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4])
+trial, tol = sys.argv[1], float(sys.argv[2])
+p1_ref, p8_ref = float(os.environ["P1_REF"]), float(os.environ["P8_REF"])
 try:
     answer = json.loads((Path(trial) / "answer.json").read_text())
     p1, p8 = float(answer["P1"]), float(answer["P8"])
@@ -1103,7 +1105,7 @@ ok = abs(p1 - p1_ref) <= tol and abs(p8 - p8_ref) <= tol
 print(json.dumps({"status": "passed" if ok else "failed", "P1": p1, "P8": p8, "P1_ref": p1_ref, "P8_ref": p8_ref, "tolerance_ms": tol}))
 ```
 
-- [ ] **Step 5: Write `task.json`** (the reference numbers from Step 3 replace `P1_REF` and `P8_REF`; tolerance 1 ms):
+- [ ] **Step 5: Write `task.json`** (the references are not in it; tolerance 1 ms):
 
 ```json
 {
@@ -1113,9 +1115,9 @@ print(json.dumps({"status": "passed" if ok else "failed", "P1": p1, "P8": p8, "P
   "inputs": ["tutorials", "dx_um"],
   "programs": ["openCARP", "mesher", "mpirun"],
   "wall_seconds": 1800,
-  "oracle": {"argv": ["python3", "{task_dir}/oracle.py", "{trial}", "P1_REF", "P8_REF", "1.0"], "pass_field": "status", "pass_values": ["passed"]}
+  "oracle": {"argv": ["python3", "{task_dir}/oracle.py", "{trial}", "1.0"], "pass_field": "status", "pass_values": ["passed"]}
 }
 ```
 
-- [ ] **Step 6: A one-trial smoke run** with Haiku, `omnid` only, `--repeats 1`, `--env CLAUDE_CONFIG_DIR=$HOME/.omnid-agents-claude --env DYLD_LIBRARY_PATH=/opt/homebrew/lib`, `--solver-path /usr/local/bin`. Check the record is complete. Then the experiment: `--model opus --model sonnet --model haiku --condition omnid --condition bare --repeats 3`, and `omnidriver-agents summarize`.
+- [ ] **Step 6: A one-trial smoke run** with Haiku, `omnid` only, `--repeats 1`, `--agent-home <agent-home> --agent-python <python> --env DYLD_LIBRARY_PATH=/opt/homebrew/lib --oracle-env-file <refs.json>`, `--solver-path /usr/local/bin`. Check the record is complete. Then the experiment: `--model opus --model sonnet --model haiku --condition omnid --condition bare --repeats 3`, and `omnidriver-agents summarize`.
 - [ ] **Step 7: README** — the task, the isolation probe result, the commands as run, and the summary table. Commit — `feat(agents): the first task, N-version on openCARP`
