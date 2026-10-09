@@ -77,6 +77,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             source_refs=('src/ionicModels/ionicModel/ionicModel.C',),
             value_kind='enum',
             enum_values=IONIC_MODEL_MENU,
+            notes='<name>compactBatched is the same model as <name>, run by a different execution path: batched integration (batchedIntegrator) instead of the ODESolver, on the CPU, or on a GPU when built with CARDIAC_ENABLE_CUDA.',
             required_when={"myocardiumSolver": ("monodomainSolver", "bidomainSolver", "singleCellSolver")},
             constraints=('Not applicable when myocardiumSolver=eikonalSolver.',),
             forbidden_when={"myocardiumSolver": "eikonalSolver"},
