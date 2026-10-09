@@ -74,7 +74,7 @@
     "fibre": {
       "kind": "vector3",
       "unit": null,
-      "description": "unit fibre direction in the slab's frame, the same for every element (the .lon row)",
+      "description": "fibre direction in the slab's frame, the same for every element (the .lon row); TorchCor normalises it, so any nonzero length gives the same problem",
       "default": null,
       "minimum": null,
       "exclusive_minimum": null,
