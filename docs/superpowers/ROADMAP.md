@@ -292,7 +292,32 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    isolation probe, then the openCARP N-version task: Opus, Sonnet and Haiku,
    `omnid` against `bare`, three trials each. A task such as "compare Niederer
    across the three solvers on one mesh" tests whether the mappings suffice.
-8. **Later:**
+8. **What an agent should know as data: measure first** (owner, 2026-10-09).
+   `docs/solver-learning/cross-solver-variables.md` maps cardiacFOAM and
+   openCARP variables, each verified by perturbation runs, and logs where omniD
+   gave the agent only prose or nothing. Before adding fields, measure with the
+   agent harness. Ask questions whose answers that document settles (for
+   example, openCARP's equivalent of cardiacFOAM `chi 140000`; matching the
+   stimulus), on today's omniD, and add data only where agents fail. Candidate
+   fields, held as notes until a measured failure justifies one:
+   - a concept id per catalogue entry, from a shared vocabulary beside the
+     benchmarks;
+   - `case_value` on each key in `describe` (the case's current value);
+   - `normalised_by` on stimulus strength (cardiacFOAM per tissue volume,
+     openCARP per membrane area, so the conversion carries chi);
+   - `formation` on conductivity (harmonic mean per direction);
+   - missing units: cardiacFOAM `activationThreshold`, `stimulusStartTime`,
+     `stimulusLocationMin/Max`; openCARP `lats[].threshold`;
+   - an openCARP ionic-model catalogue from `bench --list-imps`/`--imp-info`;
+   - cardiacFOAM's `TNNP` catalogue description says 2006 and 21 states beside
+     a 17-state TT2004 state list;
+   - the catalogue note on dimensioned values says "a full literal string",
+     but `sweep-plan` wants `{"value", "dimensions"}`.
+   Native, for the owner: before the stimulus fires, cardiacFOAM's PIMPLE loop
+   runs all 1000 iterations every step. The Vm residual oscillates near 1.16e-3
+   and never reaches 1e-6. A run with the stimulus at 5 ms took 786 s instead
+   of 42 s; the results were unaffected.
+9. **Later:**
    - one run using cardiacCore and cardiacFOAM steps
      (`specs/2026-09-18-cross-adapter-workflow-design.md`);
    - more TOML records;
