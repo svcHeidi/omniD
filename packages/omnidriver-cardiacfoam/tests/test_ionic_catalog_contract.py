@@ -99,3 +99,15 @@ class TestRecommendedExportsExpansion(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_a_batched_model_is_the_same_model_as_its_parent() -> None:
+    from omnidriver.cardiacfoam.ionic_model_catalog import BATCHED_MODELS
+    from omnidriver.cardiacfoam.named_catalogs import named_catalogs
+
+    for batched in BATCHED_MODELS:
+        parent = batched.removesuffix("compactBatched")
+        assert IONIC_MODEL_CATALOG[batched].same_model_as == parent
+        assert IONIC_MODEL_CATALOG[parent].same_model_as is None
+    served = named_catalogs()["ionic_model_catalog"]["ionic_models"]
+    assert served["TNNPcompactBatched"].same_model_as == "TNNP"

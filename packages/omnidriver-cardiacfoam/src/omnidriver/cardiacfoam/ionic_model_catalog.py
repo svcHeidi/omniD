@@ -44,6 +44,10 @@ class IonicModelEntry:
     aliases: tuple[str, ...] = ()
     """Alternative names for this model."""
 
+    same_model_as: str | None = None
+    """The model this entry is, run by another execution path (a batched
+    model names its parent); ``None`` for a model that is its own."""
+
     recommended_ode_step: float = 1e-5
     """Suggested ODE timestep for stable integration. Model-specific:
     stiff full ionic models (TNNP, ORd) need ~1e-5; phenomenological models
@@ -468,6 +472,7 @@ for batched_name in BATCHED_MODELS:
                 f"It runs on the CPU; a build with CARDIAC_ENABLE_CUDA adds a CUDA path."
             ),
             aliases=(f"{parent_name} batched", f"{parent_name} compact batched"),
+            same_model_as=parent_name,
             notes=(
                 f"See {parent_name} for species, cardiac region and recommended parameters. "
                 f"Tissue heterogeneity is wired only for the batched models that list it."
