@@ -1,8 +1,10 @@
 """TorchCor's key catalogue, as the solver repository's runner describes it (``run_case.py --describe``).
 
-The runner reads the installed TorchCor in TorchCor's own interpreter, so the
-catalogue is the solver's, never omniD's. It is cached under the supplied
-scratch root by a digest of the runner and the TorchCor source.
+The runner is the one in the repository the stack was selected from
+(``driver_context.repository``). It reads the installed TorchCor in TorchCor's
+own interpreter, so the catalogue is the solver's, never omniD's. It is cached
+under the supplied scratch root by a digest of the runner and the TorchCor
+source.
 """
 from __future__ import annotations
 
@@ -14,15 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from omnidriver.core.repository import read_repository
+from omnidriver.core.environment_connection import load_environment
 from omnidriver.core.scripts import ScriptError, script_argv
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR
 
-#: The solver repository, as ``--repo`` names it. Core hands the key
-#: validator, the case rules and the key catalogue no repository, so they
-#: find the runner through this supplied variable, read from the environment
-#: as the OpenFOAM layer reads its source root.
-REPOSITORY_VARIABLE = "TORCHCOR_REPOSITORY"
 RUNNER = "run_case.py"
 CASE_DOCUMENT = "case.json"
 
@@ -77,20 +74,13 @@ def describe(runner: Path, source: Path, env: Mapping[str, str], scratch_root: P
     return data
 
 
-def supplied_runner() -> tuple[Path, Path] | None:
-    """The runner and TorchCor source of the supplied repository, or ``None``."""
-    supplied = os.environ.get(REPOSITORY_VARIABLE)
-    if not supplied:
+def repository_catalog(driver_context: Any) -> Catalog | None:
+    """The catalogue of the context's repository's runner, or ``None`` when the stack was selected by ``--plugin`` alone."""
+    repository = driver_context.repository
+    if repository is None:
         return None
-    repository = read_repository(Path(supplied).expanduser())
-    return repository.scripts / RUNNER, repository.source
-
-
-def supplied_catalog() -> Catalog | None:
-    located = supplied_runner()
-    if located is None:
-        return None
-    runner, source = located
+    runner = repository.scripts / RUNNER
     scratch = os.environ.get(SCRATCH_ENV_VAR)
-    data = describe(runner, source, os.environ, Path(scratch).expanduser() if scratch else None)
+    data = describe(runner, repository.source, load_environment(driver_context, None),
+                    Path(scratch).expanduser() if scratch else None)
     return Catalog.from_describe(data, runner=str(runner))

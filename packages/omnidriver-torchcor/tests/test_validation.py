@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from torchcor_testing import context_of, repository_with_runner
 
 from omnidriver.core.tutorial_records import TutorialRecordError
 from omnidriver.torchcor.catalog import Catalog
@@ -91,13 +92,23 @@ def test_without_a_runner_a_key_is_written_unvalidated():
     assert validate_key(None, "case.json", ("chi_per_m",), 140) == ("integer", False)
 
 
-def test_without_a_runner_the_plan_says_so_once_and_judges_nothing(tmp_path, monkeypatch):
-    from omnidriver.torchcor.catalog import REPOSITORY_VARIABLE
+def test_without_a_repository_the_plan_says_so_once_and_judges_nothing(tmp_path):
     from omnidriver.torchcor.plugin import TorchCorPlugin
 
-    monkeypatch.delenv(REPOSITORY_VARIABLE, raising=False)
     (tmp_path / "case.json").write_text(json.dumps({**CASE, "chi_per_m": 140}))
-    plugin = TorchCorPlugin()
-    assert plugin.validate_run_semantics(tmp_path) == ()
-    (note,) = plugin.get_plan_diagnostics(tmp_path, workflow_dag={}, env={}, scratch_root=tmp_path, driver_context=None)
-    assert note.code == "torchcor_runner_not_supplied" and note.level == "info" and REPOSITORY_VARIABLE in note.message
+    plugin, context = TorchCorPlugin(), context_of()
+    assert plugin.validate_run_semantics(tmp_path, driver_context=context) == ()
+    (note,) = plugin.get_plan_diagnostics(tmp_path, workflow_dag={}, env={}, scratch_root=tmp_path, driver_context=context)
+    assert note.code == "torchcor_runner_not_supplied" and note.level == "info" and "--repo" in note.message
+
+
+def test_the_key_validator_judges_by_the_contexts_repository(tmp_path, monkeypatch):
+    from omnidriver.torchcor.plugin import TorchCorPlugin
+
+    monkeypatch.setenv("OMNIDRIVER_SCRATCH_DIR", str(tmp_path / "scratch"))
+    validate = TorchCorPlugin().get_record_key_validator(driver_context=context_of(repository_with_runner(tmp_path)))
+    assert validate("case.json", ("dx_mm",), 0.25) == ("scalar", True)
+    with pytest.raises(TutorialRecordError, match="chi_per_m"):
+        validate("case.json", ("chi_per_m",), 140)
+    unvalidated = TorchCorPlugin().get_record_key_validator(driver_context=context_of())
+    assert unvalidated("case.json", ("chi_per_m",), 140) == ("integer", False)

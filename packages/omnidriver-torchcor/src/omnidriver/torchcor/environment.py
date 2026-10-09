@@ -10,14 +10,12 @@ from typing import Any, Mapping
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
-from .catalog import REPOSITORY_VARIABLE
-
 SOLVER_COMMANDS = frozenset({"python3"})
 BIN_VARIABLE = "TORCHCOR_BIN"
 
 
 def torchcor_environment_diagnostics(
-    workflow_dag: Mapping[str, Any], env: Mapping[str, str], driver_context: Any,
+    workflow_dag: Mapping[str, Any], env: Mapping[str, str],
 ) -> tuple[StrictDiagnostic, ...]:
     commands = sorted({step["command"] for step in (workflow_dag or {}).get("steps", ()) if step.get("command")})
     if not commands:
@@ -40,14 +38,5 @@ def torchcor_environment_diagnostics(
             f"{named} would run under {python}, not the python3 in {BIN_VARIABLE}={venv_bin}; "
             f"put {BIN_VARIABLE} first on PATH (omnidriver env --plugin torchcor prints the prefix)",
             source="environment",
-        ))
-    repository = getattr(driver_context, "repository", None)
-    supplied = env.get(REPOSITORY_VARIABLE)
-    if repository is not None and supplied and Path(supplied).expanduser().resolve() != Path(repository.root).resolve():
-        diagnostics.append(diagnostic(
-            "error", "torchcor_repository_mismatch",
-            f"{REPOSITORY_VARIABLE}={supplied} is not the selected repository {repository.root}; "
-            "the keys would be judged by another runner than the one that runs",
-            source="environment", field=REPOSITORY_VARIABLE,
         ))
     return tuple(diagnostics)

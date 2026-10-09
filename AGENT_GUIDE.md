@@ -1222,7 +1222,7 @@ class MySolver:
     def get_tutorial_records(self):
         return {"demo": DEMO_RECORD}           # core.tutorial_records.TutorialRecord
 
-    def get_record_key_validator(self):
+    def get_record_key_validator(self, *, driver_context):
         return validate_key                    # (document, key_path, value) -> (value_kind, validated)
 
     def get_case_value_comparator(self):
@@ -1235,6 +1235,10 @@ class MySolver:
         return ()
 ```
 
+`get_record_key_validator`, `get_record_key_catalog` and
+`validate_run_semantics` receive the stack's `driver_context` as a keyword,
+as `get_plan_diagnostics` does: a provider that needs the solver repository
+reads `driver_context.repository` (`None` with `--plugin` alone).
 `validate_plugin` refuses a public callable that names no member, so a
 misspelled member fails loudly; keep helpers private (`_name`). For a
 complete plugin outside OpenFOAM, read `OpenCARPPlugin`

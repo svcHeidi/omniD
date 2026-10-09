@@ -51,7 +51,7 @@ def plan_diagnostics(
         unread=[slot_key(item["driver_path"]) for item in (report or {}).get("unread", ())],
     )
     rules = tuple(
-        item for item in driver_context.stack.call("validate_run_semantics", case_root)
+        item for item in driver_context.stack.call("validate_run_semantics", case_root, driver_context=driver_context)
         if item.level != "error"
     )
     return catalog + function_objects + keys + rules

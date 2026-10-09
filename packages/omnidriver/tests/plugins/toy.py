@@ -85,7 +85,7 @@ class ToyProvider:
     def get_tutorial_records(self) -> dict:
         return dict(self._tutorial_records)
 
-    def get_record_key_validator(self):
+    def get_record_key_validator(self, *, driver_context):
         return self._record_key_validator
 
     def get_case_value_comparator(self):
@@ -189,7 +189,7 @@ class ToyStack(ToyProvider):
     def get_supported_mutation_modes(self):
         return frozenset({"clone_and_patch"})
 
-    def get_record_key_catalog(self, case_root):
+    def get_record_key_catalog(self, case_root, *, driver_context):
         return ({"document": "constant/mesh.json", "key": "cells", "value_kind": "integer",
                  "description": "the toy's cell count"},)
 
@@ -591,7 +591,7 @@ class SilentSurfacePlugin(ToyStack):
 
 
 def _catalogue_of(*entries):
-    return lambda self, case_root: tuple(entries)
+    return lambda self, case_root, *, driver_context: tuple(entries)
 
 
 class UnlistedKeyPlugin(ToyStack):
@@ -635,8 +635,8 @@ class ValidatedKindlessPlugin(ToyStack):
 class KindlessKeyPlugin(ToyStack):
     """Lists the target's key, but a second entry has no value kind."""
 
-    def get_record_key_catalog(self, case_root):
-        return (*super().get_record_key_catalog(case_root), {"document": "constant/mesh.json", "key": "label"})
+    def get_record_key_catalog(self, case_root, *, driver_context):
+        return (*super().get_record_key_catalog(case_root, driver_context=driver_context), {"document": "constant/mesh.json", "key": "label"})
 
 
 class DocumentedCasePlugin(ToyStack):
@@ -693,7 +693,7 @@ TOY_CELL_LIMIT = 10
 class RuleCheckingPlugin(ToyStack):
     """Its one rule says a case holds at most ``TOY_CELL_LIMIT`` cells."""
 
-    def validate_run_semantics(self, case_root):
+    def validate_run_semantics(self, case_root, *, driver_context):
         cells = int(json.loads((Path(case_root) / "constant" / "mesh.json").read_text())["cells"])
         if cells <= TOY_CELL_LIMIT:
             return ()
@@ -733,14 +733,32 @@ class TwoStepPlugin(ToyStack):
 class AcceptingAnyKeyPlugin(ToyStack):
     """Its key validator accepts a key nobody declared, so a typo in a study reaches the case."""
 
-    def get_record_key_validator(self):
+    def get_record_key_validator(self, *, driver_context):
         return lambda document, key_path, value: ("integer", False)
+
+
+class ContextRecordingPlugin(ToyStack):
+    """Records the ``driver_context`` each record member receives, and needs it: a call without one raises."""
+
+    seen: list = []
+
+    def get_record_key_validator(self, *, driver_context):
+        self.seen.append(("get_record_key_validator", driver_context))
+        return super().get_record_key_validator(driver_context=driver_context)
+
+    def get_record_key_catalog(self, case_root, *, driver_context):
+        self.seen.append(("get_record_key_catalog", driver_context))
+        return super().get_record_key_catalog(case_root, driver_context=driver_context)
+
+    def validate_run_semantics(self, case_root, *, driver_context):
+        self.seen.append(("validate_run_semantics", driver_context))
+        return ()
 
 
 class AlwaysBrokenCasePlugin(ToyStack):
     """Its rule finds an error in every case, so no plan of it can run."""
 
-    def validate_run_semantics(self, case_root):
+    def validate_run_semantics(self, case_root, *, driver_context):
         return (diagnostic("error", "always_broken", "this toy's rule refuses every case", field="cells"),)
 
 
@@ -1061,6 +1079,7 @@ SLEEPING_PLUGIN = _selector("SleepingPlugin")
 STUBBORN_SLEEPING_PLUGIN = _selector("StubbornSleepingPlugin")
 ACCEPTING_PLUGIN = _selector("AcceptingAnyKeyPlugin")
 BROKEN_RULE_PLUGIN = _selector("AlwaysBrokenCasePlugin")
+CONTEXT_RECORDING_PLUGIN = _selector("ContextRecordingPlugin")
 PARALLEL_TOY_PLUGIN = _selector("ParallelToyPlugin")
 QUANTITY_TOY_PLUGIN = _selector("QuantityToyPlugin")
 DIFFERENT_VERSION_QUANTITY_TOY_PLUGIN = _selector("DifferentVersionQuantityToyPlugin")

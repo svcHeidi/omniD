@@ -70,7 +70,7 @@ def test_a_provider_with_only_its_identity_joins_a_stack_and_every_neutral_membe
     assert stack.call("get_case_runtime_conventions").generated_file_names == ()
     [unavailable] = stack.call("get_environment_diagnostics", None)
     assert unavailable.code == "environment_capability_unavailable"
-    assert stack.call("validate_run_semantics", tmp_path) == ()
+    assert stack.call("validate_run_semantics", tmp_path, driver_context=context) == ()
 
 
 @pytest.mark.parametrize("member", sorted(m for m, (_s, a) in MEMBERS.items() if isinstance(a, Needed)))
@@ -119,13 +119,13 @@ def test_the_stack_hands_back_the_providers_own_callable_and_its_exceptions():
         def get_config_value_reader(self):
             return read
 
-        def validate_run_semantics(self, case_root):
+        def validate_run_semantics(self, case_root, *, driver_context):
             raise RuntimeError("same failure")
 
     stack = driver_context(Reader(), source="test").stack
     assert stack.call("get_config_value_reader") is read
     with pytest.raises(RuntimeError, match="same failure"):
-        stack.call("validate_run_semantics", None)
+        stack.call("validate_run_semantics", None, driver_context=None)
 
 
 def test_identity_records_which_provider_answers_each_member():
@@ -146,3 +146,28 @@ def test_a_driver_context_holds_providers_identity_selector_and_repository_only(
     assert [item.name for item in fields(rebuilt)] == ["providers", "identity", "plugin_selector", "repository"]
     assert rebuilt == context
     assert rebuilt.stack.ids == ("org.test.bare",)
+
+
+def test_every_core_call_of_a_record_member_hands_it_the_context(tmp_path):
+    """The key validator, the case rules and the key catalogue may need what
+    the context carries (the solver repository), so each core call site passes it."""
+    from omnidriver.conformance import run_check
+    from omnidriver.core.catalog_query import catalog_query
+    from omnidriver.core.introspection import describe_entry
+    from omnidriver.core.plugin_interface import load_plugin_context
+    from plugins.toy import CONTEXT_RECORDING_PLUGIN, ContextRecordingPlugin, toy_conformance_target
+
+    ContextRecordingPlugin.seen.clear()
+    target = toy_conformance_target(tmp_path, plugin=CONTEXT_RECORDING_PLUGIN)
+    verdict = run_check("C4", target)
+    assert verdict.status == "passed", verdict.detail
+    context = load_plugin_context(target.plugin)
+    describe_entry(target.record, overrides={"cases_root": str(target.cases_root)}, driver_context=context)
+    catalog_query(target.record, cases_root=target.cases_root, driver_context=context)
+
+    assert {member for member, _ in ContextRecordingPlugin.seen} == {
+        "get_record_key_validator", "get_record_key_catalog", "validate_run_semantics",
+    }
+    for member, received in ContextRecordingPlugin.seen:
+        assert isinstance(received, DriverContext), member
+        assert any(isinstance(p, ContextRecordingPlugin) for p in received.providers), member

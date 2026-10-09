@@ -38,7 +38,7 @@ class OpenCARPPlugin:
     def get_tutorial_records(self):
         return dict(TUTORIAL_RECORDS)
 
-    def get_record_key_validator(self):
+    def get_record_key_validator(self, *, driver_context):
         return record_key_validator
 
     def get_case_value_comparator(self):
@@ -112,7 +112,7 @@ class OpenCARPPlugin:
         return tuple(rendered)
 
     # -- rules
-    def validate_run_semantics(self, case_root):
+    def validate_run_semantics(self, case_root, *, driver_context):
         return tuple(item for item in case_diagnostics(case_root) if item.level == "error")
 
     def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
@@ -141,7 +141,7 @@ class OpenCARPPlugin:
         return REDACTION_PATTERNS     # consumed by core's redact_step_logs
 
     # -- record surface
-    def get_record_key_catalog(self, case_root):
+    def get_record_key_catalog(self, case_root, *, driver_context):
         # Only a document some record step passes with ``+F`` (the only ones
         # openCARP reads), minus the keys a record's command line assigns
         # after it (silently overridden) -- the same facts

@@ -267,11 +267,6 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    call), with TorchCor as a submodule at `b02daee` installed editable into its
    own venv. `omnidriver check` of `nversion` on this Mac (CPU) passes C1-C12
    and C14, C13 `not_applicable`. Open:
-   - core hands the key validator, the case rules and the key catalogue no
-     repository, so they read the runner through the supplied
-     `TORCHCOR_REPOSITORY`, which restates `--repo` (a mismatch is refused in
-     preflight). A repository on the `DriverContext` reaching those members
-     would remove the variable;
    - F2-F5, F7, F8 of `torchcor.md` (float32 against float64 at dx 0.1, thread
      and compile-cache determinism, dx 0.1 wall time, why P8 falls as dx is
      refined, the library TTP's 0.005 ms, mesh portability across gmsh

@@ -17,7 +17,7 @@ _COMPLETE = 'df 0.1; ds 0.05; dn 0.02; fiberField "fiber"; sheetField "sheet";\n
 
 
 def _messages(case_root):
-    return sorted(item.message for item in CardiacCorePlugin().validate_run_semantics(case_root))
+    return sorted(item.message for item in CardiacCorePlugin().validate_run_semantics(case_root, driver_context=None))
 
 
 def test_a_complete_dictionary_breaks_no_relation(tmp_path):

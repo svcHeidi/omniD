@@ -87,7 +87,11 @@ provider's four identity properties are required; every other member is
 optional. `provider_stack.MEMBERS` is the one table of the contract: for each
 member, how a stack composes the providers that implement it, and what the
 stack answers when none does. Core reaches every member through
-`driver_context.stack.call(member, ...)`.
+`driver_context.stack.call(member, ...)`, and hands every member that may
+need what the context carries (the solver repository, the stack itself)
+that context as the keyword `driver_context`: the plan and environment
+diagnostics, step-failure explanation, the loaded environment, the case
+writer, the record-key validator, the key catalogue and the case rules.
 
 | shape | semantics | example member(s) |
 |---|---|---|

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
 
 from omnidriver.torchcor.environment import torchcor_environment_diagnostics
 
@@ -18,9 +17,8 @@ def _bin(root: Path) -> Path:
     return directory
 
 
-def _errors(env, repository=None):
-    context = SimpleNamespace(repository=repository)
-    return [d for d in torchcor_environment_diagnostics(DAG, env, context) if d.level == "error"]
+def _errors(env):
+    return [d for d in torchcor_environment_diagnostics(DAG, env) if d.level == "error"]
 
 
 def test_torchcors_python_first_on_path_is_clean(tmp_path):
@@ -44,11 +42,3 @@ def test_another_python3_first_on_path_is_refused(tmp_path):
     venv, other = _bin(tmp_path / "venv"), _bin(tmp_path / "other")
     (error,) = _errors({"TORCHCOR_BIN": str(venv), "PATH": f"{other}:{venv}"})
     assert error.code == "torchcor_python_not_torchcors" and str(other) in error.message
-
-
-def test_a_supplied_repository_that_is_not_the_selected_one_is_refused(tmp_path):
-    venv = _bin(tmp_path / "venv")
-    env = {"TORCHCOR_BIN": str(venv), "PATH": str(venv), "TORCHCOR_REPOSITORY": str(tmp_path / "a")}
-    (error,) = _errors(env, repository=SimpleNamespace(root=tmp_path / "b"))
-    assert error.code == "torchcor_repository_mismatch"
-    assert _errors({**env, "TORCHCOR_REPOSITORY": str(tmp_path / "b")}, repository=SimpleNamespace(root=tmp_path / "b")) == []

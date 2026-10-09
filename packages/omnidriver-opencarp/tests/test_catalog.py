@@ -77,5 +77,5 @@ def test_the_record_key_catalog_lists_each_parameters_unit(tmp_path):
     from omnidriver.opencarp.plugin import OpenCARPPlugin
 
     (tmp_path / "nversion.par").write_text("")
-    listed = {entry["key"]: entry for entry in OpenCARPPlugin().get_record_key_catalog(tmp_path)}
+    listed = {entry["key"]: entry for entry in OpenCARPPlugin().get_record_key_catalog(tmp_path, driver_context=None)}
     assert (listed["dt"]["unit"], listed["tend"]["unit"], listed["num_stim"]["unit"]) == ("microseconds", "ms", None)

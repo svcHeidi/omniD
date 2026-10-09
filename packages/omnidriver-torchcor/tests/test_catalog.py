@@ -2,29 +2,14 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 
 import pytest
+from torchcor_testing import FIXTURES, context_of, repository_with_runner
 
 from omnidriver.torchcor import catalog
 from omnidriver.torchcor.catalog import Catalog, CatalogError, describe, source_digest
 
-FIXTURES = Path(__file__).parent / "fixtures"
 DESCRIBED = json.loads((FIXTURES / "describe.json").read_text())
-
-
-def _repository(tmp_path: Path) -> Path:
-    """A solver repository whose runner prints the committed --describe output."""
-    root = tmp_path / "torchcor-cases"
-    (root / "scripts").mkdir(parents=True)
-    (root / "torchcor" / "torchcor").mkdir(parents=True)
-    (root / "cases").mkdir()
-    (root / "omnidriver.toml").write_text('plugin = "torchcor"\ntutorials = "cases"\nsource = "torchcor"\nscripts = "scripts"\n')
-    (root / "torchcor" / "torchcor" / "__init__.py").write_text("")
-    (root / "scripts" / "run_case.py").write_text(
-        f"import sys\nsys.stdout.write(open({str(FIXTURES / 'describe.json')!r}).read())\n"
-    )
-    return root
 
 
 def test_the_catalogue_is_built_from_the_runners_describe():
@@ -38,7 +23,7 @@ def test_the_catalogue_is_built_from_the_runners_describe():
 
 
 def test_the_digest_follows_the_bytes_of_the_runner_and_the_source_not_their_mtimes(tmp_path):
-    root = _repository(tmp_path)
+    root = repository_with_runner(tmp_path)
     runner, source = root / "scripts" / "run_case.py", root / "torchcor"
     first = source_digest(runner, source)
     (source / "torchcor" / "__init__.py").touch()
@@ -48,7 +33,7 @@ def test_the_digest_follows_the_bytes_of_the_runner_and_the_source_not_their_mti
 
 
 def test_a_cached_describe_is_reused(tmp_path, monkeypatch):
-    root = _repository(tmp_path)
+    root = repository_with_runner(tmp_path)
     scratch = tmp_path / "scratch"
     runner, source = root / "scripts" / "run_case.py", root / "torchcor"
     first = describe(runner, source, dict(os.environ), scratch)
@@ -64,34 +49,31 @@ def test_a_cached_describe_is_reused(tmp_path, monkeypatch):
 
 
 def test_a_failing_describe_is_refused_naming_the_command_and_its_stderr(tmp_path):
-    root = _repository(tmp_path)
+    root = repository_with_runner(tmp_path)
     (root / "scripts" / "run_case.py").write_text("import sys\nsys.exit('no torchcor here')\n")
     with pytest.raises(CatalogError, match="--describe") as raised:
         describe(root / "scripts" / "run_case.py", root / "torchcor", dict(os.environ), None)
     assert "no torchcor here" in str(raised.value)
 
 
-def test_without_a_supplied_repository_there_is_no_catalogue(monkeypatch):
-    monkeypatch.delenv(catalog.REPOSITORY_VARIABLE, raising=False)
-    assert catalog.supplied_catalog() is None
+def test_without_a_repository_there_is_no_catalogue():
+    assert catalog.repository_catalog(context_of()) is None
 
 
-def test_a_supplied_repository_gives_its_catalogue(tmp_path, monkeypatch):
-    root = _repository(tmp_path)
-    monkeypatch.setenv(catalog.REPOSITORY_VARIABLE, str(root))
+def test_the_contexts_repository_gives_its_catalogue(tmp_path, monkeypatch):
+    root = repository_with_runner(tmp_path)
     monkeypatch.setenv("OMNIDRIVER_SCRATCH_DIR", str(tmp_path / "scratch"))
-    assert catalog.supplied_catalog().keys["dx_mm"]["unit"] == "mm"
+    assert catalog.repository_catalog(context_of(root)).keys["dx_mm"]["unit"] == "mm"
 
 
-def test_the_key_catalogue_lists_every_key_and_the_cases_own_model_fields(tmp_path, monkeypatch):
+def test_the_key_catalogue_lists_every_key_and_the_cases_own_model_fields(tmp_path):
     from omnidriver.torchcor.plugin import TorchCorPlugin
 
-    root = _repository(tmp_path)
+    root = repository_with_runner(tmp_path)
     case = root / "cases" / "nversion"
     case.mkdir()
     (case / "case.json").write_text((FIXTURES / "case.json").read_text())
-    monkeypatch.setenv(catalog.REPOSITORY_VARIABLE, str(root))
-    entries = {e["key"]: e for e in TorchCorPlugin().get_record_key_catalog(case)}
+    entries = {e["key"]: e for e in TorchCorPlugin().get_record_key_catalog(case, driver_context=context_of(root))}
     assert {e["document"] for e in entries.values()} == {"case.json"}
     assert entries["chi_per_mm"]["value_kind"] == "scalar"
     assert entries["ionic_options.cell_type"]["menu"] == ["ENDO", "EPI", "MCELL"]
@@ -99,10 +81,9 @@ def test_the_key_catalogue_lists_every_key_and_the_cases_own_model_fields(tmp_pa
     assert entries["dx_mm"]["source_refs"] == [f"{root / 'scripts' / 'run_case.py'} --describe"]
 
 
-def test_without_a_runner_the_document_is_listed_open(monkeypatch, tmp_path):
+def test_without_a_runner_the_document_is_listed_open(tmp_path):
     from omnidriver.torchcor.plugin import TorchCorPlugin
 
-    monkeypatch.delenv(catalog.REPOSITORY_VARIABLE, raising=False)
     (tmp_path / "case.json").write_text((FIXTURES / "case.json").read_text())
-    (entry,) = TorchCorPlugin().get_record_key_catalog(tmp_path)
+    (entry,) = TorchCorPlugin().get_record_key_catalog(tmp_path, driver_context=context_of())
     assert entry["document"] == "case.json" and entry["key"] == "<any>" and entry["validated"] is False

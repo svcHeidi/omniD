@@ -21,7 +21,7 @@ def _resolve(record_name: str, study: dict, tmp_path):
     record = _CTX.stack.call("get_tutorial_records")[record_name]
     combined, command_arguments = resolve_case_patches(
         record, study_by_source={"base": study}, staged_case_root=tmp_path,
-        direct_key_validator=_CTX.stack.call("get_record_key_validator"),
+        direct_key_validator=_CTX.stack.call("get_record_key_validator", driver_context=_CTX),
     )
     return {sourced.slot(): sourced.patch.value for sourced in combined}, command_arguments
 
@@ -103,7 +103,7 @@ def _resolve_on_route(record_name: str, variant: str, study: dict, tmp_path):
     record = _CTX.stack.call("get_tutorial_records")[record_name]
     return resolve_case_patches(
         record, study_by_source={"base": study}, staged_case_root=tmp_path,
-        direct_key_validator=_CTX.stack.call("get_record_key_validator"),
+        direct_key_validator=_CTX.stack.call("get_record_key_validator", driver_context=_CTX),
         workflow_step_ids=record.workflow_variants[variant],
     )
 

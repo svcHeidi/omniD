@@ -11,7 +11,7 @@ from omnidriver.core.plugin_profile import load_plugin_profile
 
 from .activation_reader import ACTIVATION_FORMAT, NearestNodeReader
 from .case_json import CaseJsonError, patch, read_value, values_agree
-from .catalog import CASE_DOCUMENT, REPOSITORY_VARIABLE, CatalogError, supplied_catalog
+from .catalog import CASE_DOCUMENT, CatalogError, repository_catalog
 from .environment import SOLVER_COMMANDS, torchcor_environment_diagnostics
 from .records import TUTORIAL_RECORDS
 from .validation import case_diagnostics, validate_key
@@ -33,8 +33,8 @@ class TorchCorPlugin:
     def get_tutorial_records(self):
         return dict(TUTORIAL_RECORDS)
 
-    def get_record_key_validator(self):
-        return lambda document, key_path, value: validate_key(supplied_catalog(), document, key_path, value)
+    def get_record_key_validator(self, *, driver_context):
+        return lambda document, key_path, value: validate_key(repository_catalog(driver_context), document, key_path, value)
 
     def get_case_value_comparator(self):
         return values_agree
@@ -46,8 +46,8 @@ class TorchCorPlugin:
 
         return _read
 
-    def get_record_key_catalog(self, case_root):
-        catalog = supplied_catalog()
+    def get_record_key_catalog(self, case_root, *, driver_context):
+        catalog = repository_catalog(driver_context)
         if catalog is None:
             return ({"document": CASE_DOCUMENT, "key": "<any>", "validated": False},)
         source_refs = [f"{catalog.runner} --describe"]
@@ -74,23 +74,20 @@ class TorchCorPlugin:
         return tuple(entries)
 
     # -- rules
-    def validate_run_semantics(self, case_root):
+    def validate_run_semantics(self, case_root, *, driver_context):
         try:
-            catalog = supplied_catalog()
+            catalog = repository_catalog(driver_context)
         except CatalogError as exc:
             return (diagnostic("error", "torchcor_describe_failed", str(exc), source=CASE_DOCUMENT),)
         return () if catalog is None else case_diagnostics(case_root, catalog)
 
     def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
-        del case_root, workflow_dag, env, scratch_root, driver_context
-        try:
-            if supplied_catalog() is not None:
-                return ()
-        except CatalogError:
-            return ()     # validate_run_semantics refuses the case naming why
+        del case_root, workflow_dag, env, scratch_root
+        if driver_context.repository is not None:
+            return ()
         return (diagnostic(
             "info", "torchcor_runner_not_supplied",
-            f"case.json keys are written unvalidated: set {REPOSITORY_VARIABLE} to the solver repository, "
+            "case.json keys are written unvalidated: select the stack with --repo naming the solver repository, "
             "whose runner describes the keys it takes", source=CASE_DOCUMENT,
         ),)
 
@@ -99,8 +96,8 @@ class TorchCorPlugin:
         return SOLVER_COMMANDS
 
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
-        del environment_source
-        return torchcor_environment_diagnostics(workflow_dag, env if env is not None else os.environ, driver_context)
+        del environment_source, driver_context
+        return torchcor_environment_diagnostics(workflow_dag, env if env is not None else os.environ)
 
     def get_agent_guidance(self):
         text = resources.files(__package__).joinpath("guidance.md").read_text()

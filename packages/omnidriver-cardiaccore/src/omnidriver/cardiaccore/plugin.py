@@ -62,7 +62,7 @@ class CardiacCorePlugin:
     def get_owned_documents(self) -> frozenset[str]:
         return frozenset(CATALOG.documents)
 
-    def validate_run_semantics(self, case_root: Path) -> tuple[Any, ...]:
+    def validate_run_semantics(self, case_root: Path, *, driver_context: Any) -> tuple[Any, ...]:
         """The catalogue's relations over each utility dictionary the resolved
         case holds."""
         from .case_rules import case_diagnostics
@@ -107,12 +107,12 @@ class CardiacCorePlugin:
 
         return TUTORIAL_RECORDS
 
-    def get_record_key_validator(self):
+    def get_record_key_validator(self, *, driver_context: Any):
         from .record_key_validation import record_key_validator
 
         return record_key_validator
 
-    def get_record_key_catalog(self, case_root: Path) -> tuple:
+    def get_record_key_catalog(self, case_root: Path, *, driver_context: Any) -> tuple:
         from .record_key_validation import record_key_catalog
 
         return record_key_catalog(case_root)
