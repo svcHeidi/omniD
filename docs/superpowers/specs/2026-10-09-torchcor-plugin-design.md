@@ -8,7 +8,7 @@
 openCARP proved that core is independent of OpenFOAM, but openCARP has
 OpenFOAM's shape: a binary run in a case folder of text documents, parallel
 through `mpirun -np`. TorchCor ([SoftwareX 33, 102521](https://doi.org/10.1016/j.softx.2026.102521),
-`github.com/sagebei/torchcor`, CC BY-NC 4.0) has none of these. It is a
+`github.com/sagebei/torchcor`, MIT) has none of these. It is a
 Python API on PyTorch, runs on one GPU (or the CPU), and has no input file:
 its N-version benchmark (`verification/benchmark.py`) sets every value in
 `__main__`. It is verified against the same Niederer N-version benchmark
@@ -97,16 +97,17 @@ Not done now, because TorchCor does not need them: extensible units (ms and mm
 are in the table) and a declared launcher binding (TorchCor has no launcher; the
 `srun` binding belongs with the cluster Niederer campaign).
 
-## Open questions for the owner
+## Owner decisions, 2026-10-09
 
-1. `omnidriver.toml` requires `source`, which core describes as C++ source. For
-   TorchCor, the honest source is the installed package that runs. Options: a
-   git submodule of TorchCor pinned to the installed version, or relaxing
-   `source` so a repository may omit it. Decided after phase A.
-2. Where `torchcor-cases` is hosted. It starts as a local git repository under
-   `~/torchcor-cases`; a remote is the owner's call.
-3. Licence: TorchCor is CC BY-NC 4.0. omniD only drives it and ships none of its
-   code; the case values cite its benchmark.
+1. `omnidriver.toml`'s `source` is a git submodule of TorchCor pinned at
+   `b02daee`, from which the venv is installed editable, so the code that runs
+   is the code recorded.
+2. `torchcor-cases` starts as a local git repository under `~/torchcor-cases`;
+   a remote is the owner's call.
+3. The N-version case uses `et = 0.24` S/m, the benchmark's value; TorchCor's
+   `verification/benchmark.py` uses 0.2, recorded as a likely upstream typo.
+4. Licence: TorchCor's repository is MIT (the paper's CC BY-NC 4.0 does not
+   apply to the code).
 
 ## Success
 
