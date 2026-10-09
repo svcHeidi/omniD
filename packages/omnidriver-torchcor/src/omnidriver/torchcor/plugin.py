@@ -5,10 +5,12 @@ from importlib import resources
 from pathlib import Path
 
 from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
+from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.plugin_profile import load_plugin_profile
 
 from .case_json import CaseJsonError, patch, read_value, values_agree
-from .catalog import CASE_DOCUMENT, supplied_catalog
+from .catalog import CASE_DOCUMENT, REPOSITORY_VARIABLE, CatalogError, supplied_catalog
+from .validation import case_diagnostics, validate_key
 
 CASE_FORMAT = "torchcor_case_json"
 
@@ -24,6 +26,9 @@ class TorchCorPlugin:
             return load_plugin_profile(path)
 
     # -- records
+    def get_record_key_validator(self):
+        return lambda document, key_path, value: validate_key(supplied_catalog(), document, key_path, value)
+
     def get_case_value_comparator(self):
         return values_agree
 
@@ -60,6 +65,27 @@ class TorchCorPlugin:
                 for name in model["init"]
             ]
         return tuple(entries)
+
+    # -- rules
+    def validate_run_semantics(self, case_root):
+        try:
+            catalog = supplied_catalog()
+        except CatalogError as exc:
+            return (diagnostic("error", "torchcor_describe_failed", str(exc), source=CASE_DOCUMENT),)
+        return () if catalog is None else case_diagnostics(case_root, catalog)
+
+    def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
+        del case_root, workflow_dag, env, scratch_root, driver_context
+        try:
+            if supplied_catalog() is not None:
+                return ()
+        except CatalogError:
+            return ()     # validate_run_semantics refuses the case naming why
+        return (diagnostic(
+            "info", "torchcor_runner_not_supplied",
+            f"case.json keys are written unvalidated: set {REPOSITORY_VARIABLE} to the solver repository, "
+            "whose runner describes the keys it takes", source=CASE_DOCUMENT,
+        ),)
 
     # -- case writer
     def get_supported_mutation_modes(self):
