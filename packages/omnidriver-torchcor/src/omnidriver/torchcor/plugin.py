@@ -1,6 +1,7 @@
 """TorchCorPlugin: TorchCor as one self-contained provider."""
 from __future__ import annotations
 
+import os
 from importlib import resources
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from omnidriver.core.plugin_profile import load_plugin_profile
 from .activation_reader import ACTIVATION_FORMAT, NearestNodeReader
 from .case_json import CaseJsonError, patch, read_value, values_agree
 from .catalog import CASE_DOCUMENT, REPOSITORY_VARIABLE, CatalogError, supplied_catalog
+from .environment import SOLVER_COMMANDS, torchcor_environment_diagnostics
+from .records import TUTORIAL_RECORDS
 from .validation import case_diagnostics, validate_key
 
 CASE_FORMAT = "torchcor_case_json"
@@ -27,6 +30,9 @@ class TorchCorPlugin:
             return load_plugin_profile(path)
 
     # -- records
+    def get_tutorial_records(self):
+        return dict(TUTORIAL_RECORDS)
+
     def get_record_key_validator(self):
         return lambda document, key_path, value: validate_key(supplied_catalog(), document, key_path, value)
 
@@ -87,6 +93,18 @@ class TorchCorPlugin:
             f"case.json keys are written unvalidated: set {REPOSITORY_VARIABLE} to the solver repository, "
             "whose runner describes the keys it takes", source=CASE_DOCUMENT,
         ),)
+
+    # -- commands and environment
+    def get_solver_commands(self):
+        return SOLVER_COMMANDS
+
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
+        del environment_source
+        return torchcor_environment_diagnostics(workflow_dag, env if env is not None else os.environ, driver_context)
+
+    def get_agent_guidance(self):
+        text = resources.files(__package__).joinpath("guidance.md").read_text()
+        return ({"title": "TorchCor: what the runner and the library do that a reader would not guess", "text": text},)
 
     # -- case writer
     def get_supported_mutation_modes(self):

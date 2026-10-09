@@ -32,8 +32,12 @@ OPENCARP_RECORDS_SRC = (
 CARDIACCORE_RECORDS_SRC = (
     REPO_ROOT / "packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/records"
 )
+# TorchCor's record modules: the record is pure data.
+TORCHCOR_RECORDS_SRC = (
+    REPO_ROOT / "packages/omnidriver-torchcor/src/omnidriver/torchcor/records"
+)
 SCANNED_ROOTS: tuple[Path, ...] = (
-    AXES_SRC, RECORDS_SRC, PLANNERS_SRC, OPENCARP_RECORDS_SRC, CARDIACCORE_RECORDS_SRC,
+    AXES_SRC, RECORDS_SRC, PLANNERS_SRC, OPENCARP_RECORDS_SRC, CARDIACCORE_RECORDS_SRC, TORCHCOR_RECORDS_SRC,
 )
 
 # Importing any name from these modules (or a submodule) is a writer import.
@@ -439,7 +443,7 @@ def main() -> int:
     print(
         "Case-write boundaries OK: no writer import or call in "
         "openfoam/axes, cardiacfoam/records, cardiaccore/records, "
-        "opencarp/records or openfoam/case_planning.py."
+        "opencarp/records, torchcor/records or openfoam/case_planning.py."
     )
     return 0
 
