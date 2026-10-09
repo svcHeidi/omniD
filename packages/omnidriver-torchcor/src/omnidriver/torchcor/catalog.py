@@ -5,13 +5,14 @@ The runner is the one in the repository the stack was selected from
 the installed TorchCor in TorchCor's own interpreter, so the keys
 (``--describe``) and the rules a case.json breaks (``--check``) are the
 solver's, never omniD's. The catalogue is cached under the supplied scratch
-root by a digest of the runner and the TorchCor source.
+root by :func:`runner_digest`.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import platform
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,11 +44,41 @@ class Catalog:
         return cls(keys=data["keys"], ionic_models=data["ionic_models"], runner=runner)
 
 
-def source_digest(runner: Path, source: Path) -> str:
+#: The ``torch`` package directory, ``""`` with none, per interpreter path.
+_TORCH: dict[str, str] = {}
+
+
+def _torch_directory(python: str, env: Mapping[str, str]) -> str:
+    """Where ``python`` finds ``torch``, located without importing it."""
+    if python not in _TORCH:
+        found = subprocess.run(
+            (python, "-c", "import importlib.util as u; s = u.find_spec('torch'); print(s.submodule_search_locations[0] if s else '')"),
+            capture_output=True, text=True, env=dict(env), timeout=60,
+        )
+        if found.returncode != 0:
+            raise CatalogError(f"{python} cannot look for torch: {found.stderr.strip()[-600:]}")
+        _TORCH[python] = found.stdout.strip()
+    return _TORCH[python]
+
+
+def runner_digest(runner: Path, source: Path, env: Mapping[str, str]) -> str:
+    """What the runner's answers depend on: its bytes, the TorchCor source, the
+    ``python3`` that runs it (the path on PATH and, since a venv's is a link,
+    the interpreter it resolves to), that interpreter's ``torch/version.py``,
+    and the host, whose devices ``--describe`` lists."""
+    try:
+        python = script_argv(Path(runner), env)[0]
+    except ScriptError as exc:
+        raise CatalogError(str(exc)) from exc
+    torch = _torch_directory(python, env)
+    version = Path(torch) / "version.py" if torch else None
     digest = hashlib.sha256(Path(runner).read_bytes())
     for path in sorted(Path(source).rglob("*.py")):
         digest.update(path.relative_to(source).as_posix().encode())
         digest.update(path.read_bytes())
+    for part in (python, os.path.realpath(python), str(version), platform.node()):
+        digest.update(b"\0" + part.encode())
+    digest.update(b"\0" + (version.read_bytes() if version is not None and version.is_file() else b""))
     return digest.hexdigest()
 
 
@@ -63,8 +94,8 @@ def _run(runner: Path, env: Mapping[str, str], *arguments: str) -> Any:
 
 
 def describe(runner: Path, source: Path, env: Mapping[str, str], scratch_root: Path | None) -> dict[str, Any]:
-    """``runner --describe`` under the ``python3`` on ``env``'s PATH, cached by :func:`source_digest`."""
-    digest = source_digest(runner, source)
+    """``runner --describe`` under the ``python3`` on ``env``'s PATH, cached by :func:`runner_digest`."""
+    digest = runner_digest(runner, source, env)
     if digest in _MEMO:
         return _MEMO[digest]
     cache = Path(scratch_root) / "torchcor-describe" / f"{digest}.json" if scratch_root is not None else None
@@ -83,7 +114,7 @@ def check(runner: Path, source: Path, env: Mapping[str, str], case: Path) -> lis
     """``runner --check case``: each rule the case breaks, as ``{key, rule, message}``.
     Remembered in-process by the runner's digest and the case's bytes: a check takes
     seconds, and a plan, a commit and a run judge the same case."""
-    key = (source_digest(runner, source), hashlib.sha256(Path(case).read_bytes()).hexdigest())
+    key = (runner_digest(runner, source, env), hashlib.sha256(Path(case).read_bytes()).hexdigest())
     if key not in _CHECKED:
         _CHECKED[key] = _run(runner, env, "--check", str(case))["refusals"]
     return _CHECKED[key]

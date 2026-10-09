@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+from pathlib import Path
 
 import pytest
 from torchcor_testing import FIXTURES, context_of, repository_with_runner
 
 from omnidriver.torchcor import catalog
-from omnidriver.torchcor.catalog import Catalog, CatalogError, describe, source_digest
+from omnidriver.torchcor.catalog import Catalog, CatalogError, describe, runner_digest
 
 DESCRIBED = json.loads((FIXTURES / "describe.json").read_text())
 
@@ -21,14 +23,41 @@ def test_the_catalogue_is_built_from_the_runners_describe():
     assert "V_init" in built.ionic_models["TenTusscherPanfilov"]["init"]
 
 
+def _interpreter(directory: Path) -> dict[str, str]:
+    """An environment whose PATH starts with a python3 of its own at ``directory``."""
+    directory.mkdir(parents=True)
+    python = directory / "python3"
+    python.write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    python.chmod(0o755)
+    return {"PATH": f"{directory}:/usr/bin:/bin"}
+
+
 def test_the_digest_follows_the_bytes_of_the_runner_and_the_source_not_their_mtimes(tmp_path):
     root = repository_with_runner(tmp_path)
-    runner, source = root / "scripts" / "run_case.py", root / "torchcor"
-    first = source_digest(runner, source)
+    runner, source, env = root / "scripts" / "run_case.py", root / "torchcor", _interpreter(tmp_path / "bin")
+    first = runner_digest(runner, source, env)
     (source / "torchcor" / "__init__.py").touch()
-    assert source_digest(runner, source) == first
+    assert runner_digest(runner, source, env) == first
     (source / "torchcor" / "__init__.py").write_text("# changed\n")
-    assert source_digest(runner, source) != first
+    assert runner_digest(runner, source, env) != first
+
+
+def test_the_digest_follows_the_interpreter_its_torch_and_the_host(tmp_path, monkeypatch):
+    root = repository_with_runner(tmp_path)
+    runner, source = root / "scripts" / "run_case.py", root / "torchcor"
+    site = tmp_path / "site" / "torch"
+    site.mkdir(parents=True)
+    (site / "__init__.py").write_text("")
+    (site / "version.py").write_text("__version__ = '2.14.1'\n")
+    env = {**_interpreter(tmp_path / "a"), "PYTHONPATH": str(site.parent)}
+    first = runner_digest(runner, source, env)
+    assert runner_digest(runner, source, {**_interpreter(tmp_path / "b"), "PYTHONPATH": str(site.parent)}) != first
+    (site / "version.py").write_text("__version__ = '2.15.0'\n")
+    assert runner_digest(runner, source, env) != first
+    (site / "version.py").write_text("__version__ = '2.14.1'\n")
+    assert runner_digest(runner, source, env) == first
+    monkeypatch.setattr(catalog.platform, "node", lambda: "another-host")
+    assert runner_digest(runner, source, env) != first
 
 
 def test_a_cached_describe_is_reused(tmp_path, monkeypatch):
