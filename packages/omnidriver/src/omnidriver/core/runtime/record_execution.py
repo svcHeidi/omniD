@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import fnmatch
 import os
 import shutil
 from dataclasses import dataclass
@@ -363,6 +364,35 @@ def record_case_members(record: TutorialRecord, driver_context: "DriverContext")
         raise TutorialRecordError(f"tutorial record {record.name!r} cannot run: {exc}") from exc
 
 
+def refuse_a_case_missing_what_it_consumes(
+    record: TutorialRecord, case_root: Path, workflow_step_ids: Sequence[str],
+) -> None:
+    """Refuse the staged case, naming each step and path, when a step of the
+    route consumes a path the case lacks and no earlier step produces."""
+    produced: list[str] = []
+    missing: list[str] = []
+    for step in record.workflow_steps:
+        if step.step_id not in workflow_step_ids:
+            continue
+        lacking = [
+            path for path in step.consumes
+            if not (Path(case_root) / path).exists()
+            and not any(
+                path == made or PurePosixPath(made) in PurePosixPath(path).parents
+                or fnmatch.fnmatchcase(path, made)
+                for made in produced
+            )
+        ]
+        if lacking:
+            missing.append(f"step {step.step_id!r} consumes {lacking}")
+        produced.extend(str(path) for path in step.produces)
+    if missing:
+        raise TutorialRecordError(
+            f"tutorial record {record.name!r}: the staged case lacks what its steps read, "
+            "and no earlier step produces it: " + "; ".join(missing)
+        )
+
+
 def refuse_a_case_that_breaks_a_rule(
     record: TutorialRecord, case_root: Path, driver_context: "DriverContext", *, then: str = "",
 ) -> None:
@@ -473,6 +503,7 @@ def commit_record_case(
             driver_context=driver_context, execution_env=execution_env,
             requested_by=requested_by,
         )
+    refuse_a_case_missing_what_it_consumes(record, staged_case_root, workflow_step_ids)
     refuse_a_case_that_breaks_a_rule(record, staged_case_root, driver_context)
     return RecordCommitResult(
         committed=committed, unchanged=unchanged, command_arguments=command_arguments,

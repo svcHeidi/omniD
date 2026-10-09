@@ -506,7 +506,7 @@ def test_c11_names_an_authored_path_wrongly_dropped(tmp_path):
         "C11", toy_conformance_target(tmp_path, plugin=OVER_GENERATED_CONVENTIONS_PLUGIN),
     )
     assert verdict.status == "failed"
-    assert "mesh.json" in verdict.detail
+    assert "README.md" in verdict.detail
     assert "dropped" in verdict.detail
 
 

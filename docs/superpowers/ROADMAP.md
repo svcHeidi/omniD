@@ -206,8 +206,6 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      the mesh; openCARP's ionic-model menu could come from `bench --list-imps`.
    - *`compare`.* `--scaffold` to write a request, non-sweep runs, and artifacts
      chosen by format or path (the Niederer campaign).
-   - *`--case` on a native cardiacCore case* drops its committed
-     `constant/polyMesh` (an authored mesh versus a generated one).
    - *`build`.* Its grammar and the status of its subcommands.
      `_find_installed_provider` imports every installed plugin to find one `requires:` id, a packaging
      decision.

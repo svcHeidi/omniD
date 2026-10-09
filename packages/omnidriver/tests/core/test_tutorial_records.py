@@ -1390,6 +1390,26 @@ def test_commit_record_case_refuses_when_the_native_case_is_missing(tmp_path):
         )
 
 
+def test_commit_record_case_refuses_a_case_missing_what_a_step_consumes(tmp_path):
+    """Before anything runs: a consumed path the staged case lacks and no earlier step produces is named."""
+    _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
+    record = _record(axes=(), workflow_steps=(
+        WorkflowStep(step_id="mesh", command=("generate-mesh",), produces=("constant/grid",)),
+        WorkflowStep(
+            step_id="solve", command=("solverBinary",),
+            consumes=("constant/grid/points", "constant/physics.json", "constant/absent.json"),
+        ),
+    ))
+    with pytest.raises(TutorialRecordError) as refused:
+        record_execution.commit_record_case(
+            record, cases_root=tmp_path / "cases", staged_case_root=tmp_path / "staged",
+            study_by_source={"base": {}}, driver_context=_context_with_writer(),
+        )
+    message = str(refused.value)
+    assert "step 'solve' consumes ['constant/absent.json']" in message
+    assert "grid" not in message and "physics" not in message
+
+
 def test_commit_record_case_refuses_a_conflict_between_base_and_sweep(tmp_path):
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(axes=())

@@ -48,7 +48,6 @@ class CaseRuntimeConventions:
     generated_file_names: tuple[str, ...] = ()
     generated_file_prefixes: tuple[str, ...] = ()
     generated_file_suffixes: tuple[str, ...] = ()
-    preserved_file_suffixes: tuple[str, ...] = ()
     generated_case_markers: tuple[str, ...] = ()
     case_entrypoints: tuple[str, ...] = ()
     case_script_commands: tuple[str, ...] = ()
