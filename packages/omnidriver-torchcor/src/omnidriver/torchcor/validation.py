@@ -62,6 +62,6 @@ def case_diagnostics(case_root: Path, runner: Path, source: Path, env: dict[str,
     except (CatalogError, OSError, ValueError) as exc:
         return (diagnostic("error", "torchcor_check_failed", str(exc), source=CASE_DOCUMENT),)
     return tuple(
-        diagnostic("error", "torchcor_case_refused", f"{item['key']}: {item['message']}", source=CASE_DOCUMENT, field=item["key"])
+        diagnostic("error", "torchcor_case_refused", item["message"], source=CASE_DOCUMENT, field=item["key"])
         for item in refused
     )

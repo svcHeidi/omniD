@@ -27,7 +27,8 @@ def test_the_case_rules_are_the_runners_check_each_refusal_an_error(tmp_path):
     found = TorchCorPlugin().validate_run_semantics(case, driver_context=context_of(root))
     refused = json.loads((FIXTURES / "check-refused.json").read_text())["refusals"]
     assert [(d.level, d.code, d.field) for d in found] == [("error", "torchcor_case_refused", r["key"]) for r in refused]
-    assert all(r["message"] in d.message for d, r in zip(found, refused))
+    # Core names the field before the message, so the message does not repeat it.
+    assert [d.message for d in found] == [r["message"] for r in refused]
 
 
 def test_a_check_that_cannot_run_refuses_the_case_naming_the_command_and_its_stderr(tmp_path):
