@@ -8,6 +8,7 @@ from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_b
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.plugin_profile import load_plugin_profile
 
+from .activation_reader import ACTIVATION_FORMAT, NearestNodeReader
 from .case_json import CaseJsonError, patch, read_value, values_agree
 from .catalog import CASE_DOCUMENT, REPOSITORY_VARIABLE, CatalogError, supplied_catalog
 from .validation import case_diagnostics, validate_key
@@ -127,3 +128,7 @@ class TorchCorPlugin:
                 renderer_id=self.plugin_id, format=CASE_FORMAT,
             ))
         return tuple(rendered)
+
+    # -- results as quantities
+    def get_artifact_value_reader(self, artifact_format: str):
+        return NearestNodeReader() if artifact_format == ACTIVATION_FORMAT else None
