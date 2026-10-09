@@ -931,14 +931,16 @@ expression of other parameters is a string under its own key
    `record_surface.axes` lists each axis's `value_kind`, `unit` (`null` for a
    name, a count or a mapping), a `description` of what it sets, and its
    `minimum` or `exclusive_minimum` where it declares one; a value outside a
-   bound is refused before the axis runs. `record_surface.quantities` is
-   what the record's conformance study compares (`artifact_format`,
-   `reference` relative to `check --benchmarks`, `at` in `at_unit`, `pairs`,
-   `max_sampling_offset`; `at` and `pairs` are `null` where the reference's
-   own points supply them), and `record_surface.readers` is, for each format a
-   step declares on its output, the reader `compare` uses (`value_unit`,
-   `sampling_rule`, `coordinate_unit`, `takes_points`, `sentinels`) and the
-   steps producing it. A record with neither lists `[]`.
+   bound is refused before the axis runs. `record_surface.conformance_quantity`
+   is the one quantity `omnidriver check` compares for the record (C13, C14), or
+   `null`: its `artifact_format`, the `study` its runs take, its `reference`,
+   and its points (`at`, `pairs`), whose unit `at_unit` is also
+   `max_sampling_offset_unit`. When `points_from` is `reference`, pass
+   `describe --benchmarks <dir>` to read the points and their unit from the
+   reference; without it they are `null`. `record_surface.readers` is, for each
+   format a step declares on its output, the reader `compare` uses
+   (`value_unit`, `sampling_rule`, `coordinate_unit`, `takes_points`,
+   `sentinels`) and the steps producing it, or `[]`.
 3. **What models can I pick?** `describe` lists each named catalog's items by
    name (`plugin_catalogs`: for cardiacFOAM the ionic and active-tension
    models). `omnidriver catalog --plugin P --named ionic_model_catalog` prints

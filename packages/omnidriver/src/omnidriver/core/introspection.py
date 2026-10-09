@@ -96,6 +96,7 @@ def describe_entry(
     overrides: dict[str, Any] | None = None,
     cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, Any] | None = None,
+    benchmarks: Path | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     """Preview one tutorial record without committing anything.
@@ -103,7 +104,8 @@ def describe_entry(
     ``overrides`` supplies ``cases_root`` (where the record's native case
     lives; no ambient default) and the study values to preview. ``cli_study``
     (``--parallel``) and ``inputs`` (``--input NAME=PATH``) are previewed as
-    ``strict_plan`` would plan them.
+    ``strict_plan`` would plan them. ``benchmarks`` (``--benchmarks``) is where the
+    conformance quantity's reference is read from, when supplied.
 
     ``record_surface`` is what an agent may address and should read first, in
     one shape for every solver: the record's axes with their value kinds, the
@@ -140,7 +142,7 @@ def describe_entry(
     )
     surface = record_surface(
         record, native_case_root=cases_root / record.native_case_relpath, driver_context=driver_context,
-        supplied=inputs,
+        supplied=inputs, benchmarks=benchmarks,
     )
     return {
         "entry": {"entry_name": record.name, "entry_path": record.native_case_relpath},

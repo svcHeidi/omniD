@@ -684,20 +684,32 @@ def test_a_failed_step_diagnostic_in_the_workflow_state_is_quoted(tmp_path):
     assert _with_recorded_failure([], tmp_path / "absent.json", "the workflow state") == []
 
 
-def test_describe_lists_a_records_quantities_and_the_readers_of_what_it_produces(tmp_path):
+def test_describe_lists_the_conformance_quantity_and_the_readers_of_what_it_produces(tmp_path):
     from omnidriver.core.introspection import describe_entry
     from omnidriver.core.plugin_interface import load_plugin_context
-    from plugins.toy import VALUES_FORMAT, write_quantity_toy_case
+    from plugins.toy import VALUES_FORMAT, write_quantity_toy_case, write_toy_reference
 
     write_quantity_toy_case(tmp_path, "A 0.0015 0 0 0.007\n")
-    surface = describe_entry(
-        "toyQuantities", overrides={"cases_root": str(tmp_path)},
-        driver_context=load_plugin_context("plugins.toy:DescribedQuantityPlugin"),
-    )["record_surface"]
-    assert surface["quantities"] == [{
-        "artifact_format": VALUES_FORMAT, "reference": "toy/reference.json", "at": {"A": [0.0, 0.0, 0.007]},
-        "at_unit": "m", "pairs": {"A": "A"}, "max_sampling_offset": 0.0,
-    }]
+    context = load_plugin_context("plugins.toy:DescribedQuantityPlugin")
+    surface = describe_entry("toyQuantities", overrides={"cases_root": str(tmp_path)}, driver_context=context)["record_surface"]
+    declared = {
+        "compared_by": "omnidriver check (C13: serial against parallel; C14: across its sweep)",
+        "artifact_format": VALUES_FORMAT, "study": {"number_cells": 2, "constant/mesh.json:label": "long"},
+        "points_from": "reference", "max_sampling_offset": 0.001,
+    }
+    assert surface["conformance_quantity"] == {
+        **declared, "reference": "toy/reference.json", "at": None, "pairs": None,
+        "at_unit": None, "max_sampling_offset_unit": None,
+    }
+    (tmp_path / "benchmarks" / "toy").mkdir(parents=True)
+    reference = write_toy_reference(tmp_path / "benchmarks" / "toy" / "reference.json")
+    resolved = describe_entry(
+        "toyQuantities", overrides={"cases_root": str(tmp_path)}, benchmarks=tmp_path / "benchmarks", driver_context=context,
+    )["record_surface"]["conformance_quantity"]
+    assert resolved == {
+        **declared, "reference": str(reference), "at": {"A": [0, 0, 0.007], "B": [0.02, 0.003, 0]},
+        "pairs": {"A": "A", "B": "B"}, "at_unit": "m", "max_sampling_offset_unit": "m",
+    }
     assert surface["readers"] == [{
         "format": VALUES_FORMAT, "steps": ["solve"], "value_unit": "s", "sampling_rule": "toy-row",
         "coordinate_unit": "m", "takes_points": False, "sentinels": [-1.0],
@@ -713,4 +725,4 @@ def test_a_record_with_no_quantity_or_reader_lists_none(tmp_path):
         target.record, overrides={"cases_root": str(target.cases_root)},
         driver_context=load_plugin_context(target.plugin),
     )["record_surface"]
-    assert (surface["quantities"], surface["readers"]) == ([], [])
+    assert (surface["conformance_quantity"], surface["readers"]) == (None, [])

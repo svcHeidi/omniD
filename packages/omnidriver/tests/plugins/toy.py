@@ -912,15 +912,16 @@ class QuantityToyPlugin(ToyStack):
 
 
 class DescribedQuantityPlugin(QuantityToyPlugin):
-    """``toyQuantities`` declaring the quantity its conformance study compares, so describe can list it."""
+    """``toyQuantities`` declaring the quantity its conformance study compares, its points taken from the
+    reference, so describe can list it."""
 
     RECORDS = {"toyQuantities": dataclasses.replace(TOY_QUANTITY_RECORD, conformance=ConformanceStudy(
-        base_study={}, patch=("constant/mesh.json:cells", 7), untouched=("constant/mesh.json", ("label",)),
+        base_study={"number_cells": 2}, patch=("constant/mesh.json:cells", 7), untouched=("constant/mesh.json", ("label",)),
         sweep_name="number_cells", sweep_values=(2, 3), unknown_name="cell_count",
         quantity=QuantityTarget(
-            artifact_format=VALUES_FORMAT, reference=Path("toy/reference.json"),
-            pairs={"A": "A"}, at={"A": (0.0, 0.0, 0.007)}, at_unit="m", max_sampling_offset=0.0,
-            study={}, sweep_values=(2, 3), tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9,
+            artifact_format=VALUES_FORMAT, reference=Path("toy/reference.json"), at_unit=None, max_sampling_offset=0.001,
+            study={"constant/mesh.json:label": "long"}, sweep_values=(2, 3), tolerance=5.0, tolerance_unit="ms",
+            parallel_tolerance=1e-9,
             rank_evidence=RankEvidence(log_pattern=r"nRanks=(\d+)"),
         ),
     ))}

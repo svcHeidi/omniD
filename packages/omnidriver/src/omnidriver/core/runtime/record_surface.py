@@ -42,19 +42,25 @@ def _listed_points(points: Mapping[str, Any] | None) -> dict[str, list[float]] |
     return None if points is None else {label: list(point) for label, point in points.items()}
 
 
-def record_quantities(record) -> list[dict[str, Any]]:
-    """The quantity the record's conformance study compares, as declared: ``reference`` is a benchmark
-    relative to ``check --benchmarks``, and ``at`` and ``pairs`` are ``null`` where the reference's own
-    points supply them."""
-    quantity = record.conformance.quantity if record.conformance is not None else None
+def conformance_quantity(record, benchmarks: Path | None = None) -> dict[str, Any] | None:
+    """The quantity ``omnidriver check`` compares for the record, or ``None``: the study its runs take, and its
+    points (``at``, in ``at_unit``, which is also ``max_sampling_offset``'s unit). Points the reference supplies
+    are read from it under ``benchmarks`` when that is given, and are ``null`` otherwise."""
+    conformance = record.conformance
+    quantity = conformance.quantity if conformance is not None else None
     if quantity is None:
-        return []
-    return [{
-        "artifact_format": quantity.artifact_format, "reference": str(quantity.reference),
-        "at": _listed_points(quantity.at), "at_unit": quantity.at_unit,
+        return None
+    points_from = "reference" if quantity.at is None else "declared"
+    if benchmarks is not None:
+        quantity = quantity.resolved(benchmarks)
+    return {
+        "compared_by": "omnidriver check (C13: serial against parallel; C14: across its sweep)",
+        "artifact_format": quantity.artifact_format, "study": {**conformance.base_study, **quantity.study},
+        "points_from": points_from, "max_sampling_offset": quantity.max_sampling_offset,
+        "reference": str(quantity.reference), "at": _listed_points(quantity.at),
         "pairs": None if quantity.pairs is None else dict(quantity.pairs),
-        "max_sampling_offset": quantity.max_sampling_offset,
-    }]
+        "at_unit": quantity.at_unit, "max_sampling_offset_unit": quantity.at_unit,
+    }
 
 
 def record_readers(record, stack) -> list[dict[str, Any]]:
@@ -81,7 +87,7 @@ def record_readers(record, stack) -> list[dict[str, Any]]:
 
 def record_surface(
     record, *, native_case_root: Path, driver_context,
-    supplied: Mapping[str, Any] | None = None,
+    supplied: Mapping[str, Any] | None = None, benchmarks: Path | None = None,
 ) -> dict[str, Any]:
     axes = [axis.to_json() for axis in sorted(record.axes, key=lambda axis: axis.name)]
     stack = driver_context.stack
@@ -109,7 +115,7 @@ def record_surface(
             "count": len(listed) - len(keys),
             "why": "their applicable_when rules out this case's own solver; `omnidriver catalog` lists every key",
         }} if len(keys) < len(listed) else {}),
-        "quantities": record_quantities(record),
+        "conformance_quantity": conformance_quantity(record, benchmarks),
         "readers": record_readers(record, stack),
         "guidance": [dict(item) for item in stack.call("get_agent_guidance")],
         "case_documentation": documentation,

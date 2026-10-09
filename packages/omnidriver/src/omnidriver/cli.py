@@ -900,7 +900,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--benchmarks",
         metavar="DIR",
-        help="For action=check: the directory of benchmark references a record's quantity cites (C13, C14).",
+        help=(
+            "For action=check and describe: the directory of benchmark references a record's quantity cites "
+            "(C13, C14; describe reads its points and unit there)."
+        ),
     )
     parser.add_argument(
         "--regression",
@@ -940,8 +943,10 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--item names an entry of the catalog --named selects")
     if args.named and (args.entry or args.case or args.document or args.key or args.uncatalogued or args.unread):
         parser.error("--named prints a catalog of the whole stack; it takes no --entry/--case/--document/--key/--uncatalogued/--unread")
-    if (args.record or args.checks or args.benchmarks or args.regression) and args.action != "check":
-        parser.error("--record/--checks/--benchmarks/--regression are only valid with action=check")
+    if (args.record or args.checks or args.regression) and args.action != "check":
+        parser.error("--record/--checks/--regression are only valid with action=check")
+    if args.benchmarks and args.action not in {"check", "describe"}:
+        parser.error("--benchmarks is only valid with action=check or action=describe")
     if args.action == "check":
         if any((
             args.entry, args.case, args.run_document, args.spec, args.output_dir, args.strict,
@@ -1326,9 +1331,10 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
                 overrides=overrides,
                 cli_study=cli_study,
                 inputs=cli_inputs,
+                benchmarks=Path(args.benchmarks) if args.benchmarks else None,
                 driver_context=driver_context,
             )
-        except TutorialRecordError as exc:
+        except (TutorialRecordError, OSError) as exc:
             print(json.dumps(failure(exc, entry=entry_label, action="describe"), indent=2))
             return 1
         print(json.dumps(description, indent=2))
