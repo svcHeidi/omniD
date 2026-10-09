@@ -16,6 +16,7 @@ SOLVER = "openCARP"
 #: header once per MPI world, then stops for want of a mesh.
 _PROBE_RANKS = 2
 _HEADER_MARK = "GIT tag"
+_HOST_UNRESOLVABLE = "gethostbyname failed"
 
 
 def parallel_steps(step: Mapping[str, Any], *, request: Any, read_value: Any, allocation: Any) -> list[dict]:
@@ -62,5 +63,13 @@ def launcher_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]
                 "built against, and a parallel run would solve the whole problem once per process "
                 "into one output directory (evidence I2). Put that MPI's launcher first on PATH"
             )
-        diagnostics.append(StrictDiagnostic(level="error", code="opencarp_mpi_launcher_mismatch", message=message))
+        code = "opencarp_mpi_launcher_mismatch"
+        if headers == 0 and _HOST_UNRESOLVABLE in proc.stdout + proc.stderr:
+            code = "opencarp_mpi_host_unresolvable"
+            message = (
+                f"{launcher!r} ({found}) is the right launcher, but this host's name does not resolve, "
+                "which MPICH's TCP channel needs ('gethostbyname failed'). Set HYDRA_IFACE to a "
+                "network interface, e.g. lo0 on macOS"
+            )
+        diagnostics.append(StrictDiagnostic(level="error", code=code, message=message))
     return tuple(diagnostics)

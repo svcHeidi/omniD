@@ -11,7 +11,7 @@ from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
-from omnidriver.core.environment_connection import load_environment
+from omnidriver.core.environment_connection import load_environment, solver_environment_diagnostics
 from omnidriver.core.runtime.process_control import run_child
 from omnidriver.core.runtime.repository_staging import copy_repository_scripts, staged_case_path
 
@@ -162,6 +162,7 @@ def check_report(
         "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
         "cases_root": str(cases_root),
         "scratch_root": str(scratch_root),
+        "environment_diagnostics": solver_environment_diagnostics(driver_context, load_environment(driver_context, None)),
         "records": reported,
         "summary": {
             "checks": counts.total(), "passed": counts["passed"], "failed": counts["failed"],

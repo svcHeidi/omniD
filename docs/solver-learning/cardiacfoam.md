@@ -761,3 +761,83 @@ Native tree: `git archive omnid/tutorials-are-pointers` (`eb5897b3`) `tutorials 
 | V1 | `bash -c 'source /Volumes/OpenFOAM-v2412/etc/bashrc; ...'` | `WM_MPLIB=SYSTEMOPENMPI`, `FOAM_MPI=sys-openmpi`, `MPI_ARCH_PATH=/opt/homebrew/Cellar/open-mpi/5.0.9`; `mpirun` is `/opt/homebrew/bin/mpirun`, `mpirun (Open MPI) 5.0.9` | the bashrc does not put an MPI bin on `PATH` for a system Open MPI; `mpirun` is whatever `PATH` finds first. `WM_MPLIB` names the family it must be |
 | V2 | `omnidriver env --plugin cardiacfoam` with `OPENFOAM_BASHRC`, `DYLD_LIBRARY_PATH`, `OMNIDRIVER_NATIVE_TUTORIALS` set | `status: ok`, preflight `[]`, `cardiacFoam` from `$FOAM_USER_APPBIN` | the declared recipe checks clean |
 | V3 | the same with `/usr/local/lib/opencarp/lib/petsc/bin` first on `PATH` | `openfoam_mpi_launcher_mismatch`: "mpirun on PATH (.../petsc/bin/mpirun, 'HYDRA build details:') is not the SYSTEMOPENMPI MPI OpenFOAM was sourced with" | the 2026-09-28 mixing mistake (two parallel tests failed) is now refused by name, by a parallel `plan --strict` too |
+
+## Z. cardiacFOAM on tetrahedral meshes (2026-10-09)
+
+The Niederer N-version case (native tree `a7b8e845`, exported, untouched) on
+three tetrahedral meshes at dx 0.5 mm, to separate the mesh from the method
+behind the hex-versus-FE gap of section Y and `torchcor.md` section H. Every
+native value is kept; only the mesh changes, and `system/controlDict` takes
+the `cartesianConvergence` dx 0.5 row's `deltaT 5e-06`, `endTime 0.2`
+(staged `constant/` and `system/` diffed against native: only those two
+lines). Runs, scripts and logs under
+`/Users/simaocastro/omnid-runs/2026-10-09/tetfoam/`. OpenFOAM v2412, serial,
+the shell `omnidriver env --plugin cardiacfoam` prints; the three runs ran
+concurrently while another agent's cardiacFOAM jobs ran.
+
+Meshes: (A) openCARP `mesher` at 500 µm (`transverse/mesh_mesher`, 5 tets per
+cube) and (B) TorchCor's runner gmsh mesh (`transverse/mesh_gmsh`, the mesh of
+`torchcor.md` G1/H3/H5), converted by `carp2msh.py` (CARP µm → metres,
+x_f = x_c, y_f = z_c, z_f = 7 mm − y_c, det +1); (C) cardiacFOAM's own tet
+route (`niederer2011`, `mesh: tet`, `tetDx 0.0005`).
+
+Probes read from `postProcessing/Niedererpoints/0/activationTime`
+(`interpolationScheme cellPoint`: cell-centred values interpolated to the
+point). Probe order maps to the labels of `benchmarks/niederer2011.json` one to
+one under the frame map: probe 0 (0,0,7) mm → P1 (0,0,0); 1 (0,0,0) → P2
+(0,7,0); 2 (20,0,7) → P3; 3 (20,0,0) → P4 (20,7,0); 4 (0,3,7) → P5 (0,0,3);
+5 (0,3,0) → P6; 6 (20,3,7) → P7; 7 (20,3,0) → P8; 8 (10,1.5,3.5) → P9
+(10,3.5,1.5).
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| Z1 | `carp2msh.py ../transverse/mesh_{mesher,gmsh} slab_{mesher,gmsh}.msh` | mesher 4305 nodes, 16 800 tets, 3536 boundary triangles; gmsh 3675 nodes, 16 062 tets, 4114 triangles. Both: bounding box (0,0,0)-(0.02,0.003,0.007) m, total volume 4.2e-7 m³, no tet changes sign, a node at all eight corners (P1 at (0,0,0.007) m), the stimulus box holds the same nodes in both frames (64 and 42) | the frame map is right; one physical surface `walls`, the native blockMeshDict's only patch |
+| Z2 | `gmshToFoam` + `checkMesh` on each | `Mesh OK` for both. mesher: 16 800 cells, non-orthogonality max 1.2e-6, skewness 0.25, aspect 2.08. gmsh: 16 062 cells, non-orthogonality max 64.8 (average 21.1), skewness 0.79, aspect 8.2. One patch `walls` (`type patch`); the written `Vm` has `walls { type zeroGradient; }` | no warnings. The 5-tet split of a cube is orthogonal for a two-point flux; the gmsh mesh is not, so `Gauss linear corrected` carries a non-orthogonal correction there. The solver applies zeroGradient whatever the patch is called |
+| Z3 | `omnidriver run --case <dir> --plugin cardiacfoam --scratch-dir <tetfoam>/scratch` | `action=run requires --strict or --run-document` | `--case` runs only as `run --strict`, as `AGENT_GUIDE.md` shows |
+| Z4 | the same with `--strict`, the case folder directly in `tetfoam/` | `scratch root .../tetfoam/scratch is inside cases root .../tetfoam` | the case folder's parent counts as the cases root; moved the cases to `tetfoam/cases/` |
+| Z5 | the same, the case's `constant/polyMesh` made beforehand and `blockMesh` removed from `Allrun` | `failed`, diagnostic `solver_fatal_error`: `Cannot find file "points" in directory "polyMesh"`; the staged case has no `constant/polyMesh` and no `slab.msh` | **omniD finding:** staging drops `polyMesh` and every `*.msh` (`openfoam_case_runtime_conventions`: `generated_directory_names`, `generated_file_suffixes`), so a `--case` folder cannot carry an authored mesh, the same defect as ROADMAP §5's cardiacCore item. The failure is reported by the solver, not refused before the run |
+| Z6 | the mesh renamed `slab.gmsh2`, `Allrun` running `gmshToFoam slab.gmsh2` and `checkMesh` in place of `blockMesh`; `run --strict --case` for (A) and (B) | `ok` for both; wall 1135 s and 1150 s (solver ClockTime 1131 s, 1146 s); every cell activated (max 50.4 ms, 50.6 ms) | omniD drives the tet cases end to end once the mesh source has a name staging keeps |
+| Z7 | (C): `level_study.py --study .../tetConvergence/sweep_tet_generic.json --where tetDx=0.0005 --where system/controlDict:deltaT=5e-06`, then `omnidriver sweep-run --plugin cardiacfoam --spec <it> --output-dir native_tet/out --scratch-dir <tetfoam>/scratch` | `ok`, wall 1196 s (ClockTime 1186 s); gmsh 3739 nodes, 16 442 tets; checkMesh `Mesh OK`, non-orthogonality max 69.3 (average 21.0), skewness 0.74, aspect 8.5; every cell activated (max 50.5 ms) | the native tet route runs through omniD unchanged |
+
+**Activation times (ms).** cardiacFOAM hex from Y3. openCARP and TorchCor from
+`torchcor.md`: mesher H2 (TorchCor θ 1) and G4/H4 (openCARP θ 0.5); gmsh H3
+(TorchCor θ 1) and H5 (openCARP). Their P9 is read here from the saved
+activation files at the nearest node: openCARP's `init_acts_vm_act-thresh.dat`
+(a node on mesher; 0.27 mm off on gmsh) and TorchCor's G1
+`activation_times.dat` (gmsh, 0.27 mm off); TorchCor's mesher P9 was not saved.
+
+| point | cF hex | cF (A) mesher | cF (B) gmsh | cF (C) native gmsh | openCARP mesher | TorchCor mesher | openCARP gmsh | TorchCor gmsh |
+|---|---|---|---|---|---|---|---|---|
+| P1 | 1.192 | 1.191 | 1.191 | 1.191 | 1.241 | 0.955 | 1.245 | 0.955 |
+| P2 | 132.193 | 28.529 | 28.090 | 28.579 | 47.354 | 46.100 | 21.900 | 21.375 |
+| P3 | 46.543 | 37.736 | 37.617 | 37.506 | 32.884 | 32.385 | 33.558 | 33.075 |
+| P4 | 142.004 | 49.449 | 48.371 | 48.482 | 57.960 | 56.750 | 38.633 | 38.050 |
+| P5 | 35.900 | 8.338 | 7.830 | 8.065 | 11.506 | 10.650 | 6.962 | 6.425 |
+| P6 | 133.508 | 30.381 | 29.954 | 30.522 | 47.678 | 46.395 | 22.916 | 22.180 |
+| P7 | 55.912 | 39.368 | 38.877 | 38.666 | 33.801 | 33.275 | 34.062 | 33.640 |
+| P8 | 142.914 | 50.424 | 50.441 | 50.301 | 58.051 | 56.830 | 40.908 | 40.325 |
+| P9 | 70.637 | 23.744 | 24.214 | 23.921 | 24.848 | — | 19.723 | 19.220 |
+
+**What they show.**
+- **cardiacFOAM barely sees which tet mesh it is on.** (A), (B) and (C) agree
+  within 1.1 ms at every point, where the two FE solvers move by 17-26 ms
+  at P2, P4, P6 and P8 between the same two meshes (H2, H5). The mesh
+  sensitivity of section H belongs to node-based FE at 0.5 mm, not to the
+  meshes alone.
+- **Hex and tet FV differ far more than any tet result from another.** On tets
+  P8 is 50.4 ms against the hex's 142.9 ms; P2 28.5 against 132.2. The slow
+  transverse conduction of Y is a property of the 0.5 mm hex mesh (six cells
+  across 3 mm, a two-point flux along the axes), not of cardiacFOAM's FV as
+  such.
+- **Against FE on the same mesh,** cardiacFOAM is 4-5 ms slower along the fibre
+  (P3, P7), faster across it on mesher tets (P2 28.5 against 46-47) and slower
+  across it on gmsh tets (P2 28.1 against 21.4-21.9). Its P8 (50.4 ms) falls
+  between FE's two meshes (40.3-40.9 and 56.8-58.1).
+- **Not like for like in unknowns:** FV stores one value per tet (16-17k), FE one
+  per node (3.7-4.3k), so on one mesh FV has about four times the unknowns. The
+  probe value is cell-centred data interpolated to the point (`cellPoint`), and
+  at a corner it comes from the adjacent cells through the zeroGradient wall.
+- **The stimulus** covers 135 cells on (A) (27 cubes × 5) and 141 on (B) and (C);
+  P1 is 1.191 ms on all three, against FE's 0.955 (TorchCor at its 50 µA/cm²,
+  H7) and 1.24 (openCARP).
+- None of this is converged; the paper's P8 is 37.8-48.7 ms at dx 0.1 mm.

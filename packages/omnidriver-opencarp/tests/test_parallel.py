@@ -4,6 +4,7 @@ I, and by test_parallel_native.py; these pin the rules that follow from it."""
 from __future__ import annotations
 
 import stat
+from pathlib import Path
 
 import pytest
 
@@ -103,3 +104,14 @@ def test_preflight_checks_the_launched_solver_as_a_command(tmp_path):
     _script(tmp_path, "mpirun", "exit 0\n")
     messages = [d.message for d in opencarp_environment_diagnostics(PARALLEL_DAG, {"PATH": str(tmp_path)})]
     assert any("'openCARP' is not on PATH" in m for m in messages), messages
+
+
+def test_an_unresolvable_host_name_is_its_own_diagnostic_naming_hydra_iface(tmp_path):
+    """Real stderr of ``mpirun -np 2 openCARP +Default`` on a host whose name
+    does not resolve: the launcher is the right one, the host is the fault."""
+    fixture = Path(__file__).parent / "fixtures" / "mpich_hostname_unresolvable.stderr"
+    _script(tmp_path, "openCARP", "exit 0\n")
+    _script(tmp_path, "mpirun", f"while IFS= read -r line; do echo \"$line\" >&2; done < '{fixture}'\nexit 15\n")
+    (diagnostic,) = launcher_diagnostics(PARALLEL_DAG, {"PATH": str(tmp_path)})
+    assert diagnostic.code == "opencarp_mpi_host_unresolvable"
+    assert "HYDRA_IFACE" in diagnostic.message

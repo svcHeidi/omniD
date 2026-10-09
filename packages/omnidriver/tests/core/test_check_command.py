@@ -7,7 +7,7 @@ import pytest
 
 from omnidriver.cli import main
 from cli_refusal import refusal
-from plugins.toy import PROBING_PLUGIN, TOY_PLUGIN, write_toy_native_case
+from plugins.toy import PROBING_PLUGIN, TOY_PLUGIN, WARNING_PREFLIGHT_PLUGIN, write_toy_native_case
 
 
 def _check(tmp_path, capsys, *extra, prepare=None, plugin=TOY_PLUGIN):
@@ -169,3 +169,9 @@ def test_the_regression_script_is_where_the_stacks_case_file_rule_puts_it(tmp_pa
     context = SimpleNamespace(stack=SimpleNamespace(call=lambda member: profile))
     assert regression_script(context, native) == script
     assert regression_script(context, tmp_path) is None
+
+
+def test_the_environment_warnings_env_prints_are_carried_once_and_gate_nothing(tmp_path, capsys):
+    code, report = _check(tmp_path, capsys, "--checks", "C1", plugin=WARNING_PREFLIGHT_PLUGIN)
+    assert code == 0 and report["summary"]["failed"] == 0
+    assert [(item["level"], item["code"]) for item in report["environment_diagnostics"]] == [("warning", "toy_stale_build")]

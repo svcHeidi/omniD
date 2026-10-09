@@ -1,0 +1,20 @@
+Fatal error in internal_Init_thread: Other MPI error, error stack:
+internal_Init_thread(60)...........: MPI_Init_thread(argc=0x16b6926cc, argv=0x16b6926c0, required=1, provided=0x16b692470) failed
+MPII_Init_thread(209)..............: 
+MPID_Init(77)......................: 
+init_world(192)....................: channel initialization failed
+MPIDI_CH3_Init(84).................: 
+MPID_nem_init(313).................: 
+MPID_nem_tcp_init(175).............: 
+MPID_nem_tcp_get_business_card(397): 
+GetSockInterfaceAddr(370)..........: gethostbyname failed, macbook (errno 0)
+Fatal error in internal_Init_thread: Other MPI error, error stack:
+internal_Init_thread(60)...........: MPI_Init_thread(argc=0x16f4666cc, argv=0x16f4666c0, required=1, provided=0x16f466470) failed
+MPII_Init_thread(209)..............: 
+MPID_Init(77)......................: 
+init_world(192)....................: channel initialization failed
+MPIDI_CH3_Init(84).................: 
+MPID_nem_init(313).................: 
+MPID_nem_tcp_init(175).............: 
+MPID_nem_tcp_get_business_card(397): 
+GetSockInterfaceAddr(370)..........: gethostbyname failed, macbook (errno 0)
