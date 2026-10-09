@@ -234,3 +234,39 @@ P8 (H7): the case's `stimulus.intensity` 50, copied from `benchmark.py`, is
 1.4 times the paper's stimulus, a case value rather than a TorchCor or runner
 defect. A cross-solver comparison at dx 0.5 compares meshes unless both solvers
 read the same mesh.
+
+## I. The fibre as a case key, and the fibre at 45° (2026-10-09)
+
+The runner wrote every `.lon` row as `1 0 0`. Runs under
+`<runs>/2026-10-09/oblique/`; the frame reasoning is in
+`benchmarks/niederer2011/oblique/README.md`. TorchCor at `b02daee`, CPU, float32,
+serial, dt 0.01 ms.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| I1 | read `MeshReader.read_fibres`, `Conductivity.calculate_sigma` | `np.loadtxt(..., dtype=float32, skiprows=1)`; each row divided by its norm when the norm exceeds 1e-10, a zero row left zero; σm = σt I + (σl − σt) f fᵀ with σl, σt the harmonic means of `il`/`el` and `it`/`et` | the fibre is one vector per element; a zero row would run isotropic at σt with no message; a six-column (fibre + sheet) `.lon`, as openCARP's mesher writes with a sheet, would be normalised as one 6-vector (read, not run) |
+| I2 | `run_case.py` gains `fibre` (`kind` `vector3`, required like every key) and a `unit` rule in `--check`; `nversion/case.json` states `[1, 0, 0]` (`torchcor-cases` `20a3e49`). `--check` on the case with `fibre` `[0.7071…, 0, 0.7071…]`, `[1, 0, 1]`, `[0, 0, 0]`, `[1, 0]`, absent (`probes/t1_fibre_key/`) | `[]`; `unit`: "[1, 0, 1] is not a unit vector"; `unit` for zero; `kind`: "[1, 0] is not a vector3"; `required` | the runner refuses what TorchCor would normalise or run isotropic in silence |
+| I3 | the runner on `nversion` as committed (dt 0.005, to 150 ms), `cmp` with G1's `activation_times.dat` (`probes/t2_aligned_identity/`) | byte-identical; `.lon` rows now read `1.0 0.0 0.0` | the key changes nothing for the aligned case |
+| I4 | `--describe` regenerated into `packages/omnidriver-torchcor/tests/fixtures/describe.json`; `--check` of the fixture case with G2's three errors | the only change is the `fibre` entry and `slab_mm`'s description; `check-refused.json` reproduced byte for byte | fixtures from the real runner |
+| I5 | `sweep-run --plugin torchcor --repo ~/torchcor-cases` of `benchmarks/niederer2011/oblique/torchcor_obliqueWall.json`, sliced at dx 0.5 and 0.2 mm, dt 0.01 ms; aligned at the same levels from the case unchanged | `ok`; staged `.lon` rows `0.7071067811865476 0.0 0.7071067811865476`; no node unactivated. Solve 25.1 / 19.7 s (dx 0.5 oblique / aligned), 68.6 / 69.7 s (dx 0.2; runner's own `solve_s` 52.0 for both); aligned dx 0.2 byte-identical to the threeway run | the study needs nothing but its JSON |
+| I6 | review: the `unit` rule refused `[1, 0, 1]`, which TorchCor normalises to the same problem as `[0.7071…, 0, 0.7071…]`; the rule is now `nonzero` (norm² ≤ 1e-20, TorchCor's own 1e-10 cut-off), `torchcor-cases` `fa59981`. `--check` on `[0, 0, 0]`, `[1, 0, 1]`; `--describe` regenerated | `nonzero`: "[0, 0, 0] is a zero vector, which TorchCor cannot normalise"; `[]`; the only change in `describe.json` is the `fibre` description; `--check` of the fixture case with G2's three errors gives `check-refused.json`'s refusals | the runner refuses only what TorchCor would run isotropic in silence |
+
+**P1-P9 (ms), read by `omnidriver compare`** (P9 at the nearest node: 0.27 mm
+off at dx 0.5, 0.04 mm at dx 0.2).
+
+| pt | 0.5 aligned | 0.5 oblique | 0.2 aligned | 0.2 oblique |
+|---|---|---|---|---|
+| P1 | 0.970 | 0.970 | 0.960 | 0.960 |
+| P2 | 21.450 | 20.070 | 20.560 | 20.270 |
+| P3 | 33.270 | 55.220 | 30.780 | 51.850 |
+| P4 | 38.240 | 59.330 | 37.190 | 55.240 |
+| P5 | 6.480 | 5.930 | 6.400 | 5.740 |
+| P6 | 22.250 | 21.440 | 21.100 | 21.130 |
+| P7 | 33.830 | 50.860 | 31.570 | 46.640 |
+| P8 | 40.510 | 54.190 | 37.990 | 50.600 |
+| P9 | 19.310 | 26.540 | 17.850 | 24.630 |
+
+Against openCARP (`opencarp.md` M) at dx 0.2 mm, oblique: P3 0.01 ms, P7
+0.26, P5 0.34, P9 1.8, P4 4.5, P8 4.7, P2 and P6 8 ms apart. Along the fibre
+plane the two FE solvers agree as closely as aligned (P3, P7 within 0.4 ms);
+the gap across the 7 mm is section H's mesh gap, unchanged by the rotation.

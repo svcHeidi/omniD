@@ -64,6 +64,8 @@ records in `out/parameters.par` (F16). `lats[0].all` must stay `0`: with `1`
 there is no per-node file (F17). openCARP's slab is 0–20000 × 0–7000 × 0–3000 µm
 with the stimulus cube at the origin and fibres along x (F3). That is the frame
 of `benchmarks/niederer2011.json`, so its coordinates are written unchanged.
+The axis `fibers.imbrication` tilts the fibre towards +z by
+atan(sin(value)): 90 gives the 45° fibre (1, 0, 1)/√2 (M2).
 
 ## Running in parallel
 

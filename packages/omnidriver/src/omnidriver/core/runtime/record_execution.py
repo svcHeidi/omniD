@@ -47,6 +47,7 @@ class RecordCommitResult:
     committed: tuple[str, ...] | None
     unchanged: tuple[SourcedPatch, ...]
     command_arguments: dict[str, tuple[str, ...]]
+    replacements: dict[str, dict[tuple[str, ...], tuple[str, ...]]]
     #: The ordered step ids this case's workflow actually runs -- the
     #: record's own steps, or one selected variant's, per
     #: `_resolve_workflow_route`. Needed alongside `command_arguments` to
@@ -196,7 +197,8 @@ def _resolve_and_split(
     driver_context: "DriverContext",
 ) -> tuple[
     tuple[SourcedPatch, ...], tuple[SourcedPatch, ...],
-    dict[str, tuple[str, ...]], tuple[str, ...], dict[str, Any] | None, Any,
+    dict[str, tuple[str, ...]], dict[str, dict[tuple[str, ...], tuple[str, ...]]],
+    tuple[str, ...], dict[str, Any] | None, Any,
 ]:
     validator, comparator, read_current_value = record_case_members(record, driver_context)
     study_by_source, reserved_values = _extract_reserved_names(
@@ -204,7 +206,7 @@ def _resolve_and_split(
     )
     workflow_step_ids, workflow_variant = _resolve_workflow_route(record, reserved_values)
     parallel_request = _parallel_request(record, reserved_values)
-    combined, command_arguments = resolve_case_patches(
+    combined, command_arguments, replacements = resolve_case_patches(
         record,
         study_by_source=study_by_source,
         staged_case_root=staged_case_root,
@@ -219,7 +221,7 @@ def _resolve_and_split(
         ),
         values_agree=comparator,
     )
-    return to_write, unchanged, command_arguments, workflow_step_ids, workflow_variant, parallel_request
+    return to_write, unchanged, command_arguments, replacements, workflow_step_ids, workflow_variant, parallel_request
 
 
 def _reader_refusing_as_record_error(
@@ -290,13 +292,14 @@ def preview_record_case(
             driver_context=driver_context, inputs=inputs, strict_inputs=False,
         )
         (
-            to_write, unchanged, command_arguments, workflow_step_ids, workflow_variant, parallel_request,
+            to_write, unchanged, command_arguments, replacements, workflow_step_ids, workflow_variant, parallel_request,
         ) = _resolve_and_split(
             record, study_by_source=study_by_source,
             staged_case_root=staged_case_root, driver_context=driver_context,
         )
         dag = _workflow_dag_for_record(
             record, workflow_step_ids=workflow_step_ids, command_arguments=command_arguments,
+            replacements=replacements,
         )
         dag, parallel = _apply_parallel_request(
             record, dag, request=parallel_request, driver_context=driver_context,
@@ -314,6 +317,10 @@ def preview_record_case(
             "patches": patches,
             "command_arguments": {
                 step: list(args) for step, args in command_arguments.items()
+            },
+            "replacements": {
+                step: {" ".join(key): list(values) for key, values in by_key.items()}
+                for step, by_key in replacements.items()
             },
             "workflow_step_ids": list(workflow_step_ids),
             "workflow_variant": workflow_variant,
@@ -488,7 +495,7 @@ def commit_record_case(
         driver_context=driver_context, inputs=inputs,
     )
     (
-        to_write, unchanged, command_arguments, workflow_step_ids, _variant, parallel_request,
+        to_write, unchanged, command_arguments, replacements, workflow_step_ids, _variant, parallel_request,
     ) = _resolve_and_split(
         record, study_by_source=study_by_source,
         staged_case_root=staged_case_root, driver_context=driver_context,
@@ -503,7 +510,7 @@ def commit_record_case(
     refuse_a_case_missing_what_it_consumes(record, staged_case_root, workflow_step_ids)
     refuse_a_case_that_breaks_a_rule(record, staged_case_root, driver_context)
     return RecordCommitResult(
-        committed=committed, unchanged=unchanged, command_arguments=command_arguments,
+        committed=committed, unchanged=unchanged, command_arguments=command_arguments, replacements=replacements,
         workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,
         resolved_inputs=resolved_inputs,
     )
@@ -569,6 +576,7 @@ def _workflow_dag_for_record(
     *,
     workflow_step_ids: tuple[str, ...],
     command_arguments: Mapping[str, tuple[str, ...]],
+    replacements: Mapping[str, Mapping[tuple[str, ...], tuple[str, ...]]] | None = None,
 ) -> dict[str, Any]:
     """The selected steps as the ``{"steps": [...]}`` DAG, chained in declaration order, with axis arguments in ``WorkflowStep.argv``."""
     steps_by_id = {step.step_id: step for step in record.workflow_steps}
@@ -576,7 +584,7 @@ def _workflow_dag_for_record(
     depends_on: list[str] = []
     for step_id in workflow_step_ids:
         step = steps_by_id[step_id]
-        argv = list(step.argv(command_arguments.get(step_id, ())))
+        argv = list(step.argv(command_arguments.get(step_id, ()), (replacements or {}).get(step_id)))
         step_entry: dict[str, Any] = {
             "id": step_id,
             "command": argv[0],
@@ -802,6 +810,7 @@ def commit_and_build_record_spec(
         record, case_id=case_id, staged_case_root=staged_case_root,
         workflow_step_ids=commit_result.workflow_step_ids,
         command_arguments=commit_result.command_arguments,
+        replacements=commit_result.replacements,
         parallel_request=commit_result.parallel_request,
         resolved_inputs=commit_result.resolved_inputs,
         driver_context=driver_context,
@@ -816,6 +825,7 @@ def record_case_spec(
     staged_case_root: Path,
     workflow_step_ids: tuple[str, ...],
     command_arguments: Mapping[str, tuple[str, ...]],
+    replacements: Mapping[str, Mapping[tuple[str, ...], tuple[str, ...]]] | None = None,
     parallel_request: Any = None,
     resolved_inputs: tuple[ResolvedInput, ...] = (),
     driver_context: "DriverContext | None" = None,
@@ -836,6 +846,7 @@ def record_case_spec(
     case_root = Path(staged_case_root)
     workflow_dag = _workflow_dag_for_record(
         record, workflow_step_ids=workflow_step_ids, command_arguments=command_arguments,
+        replacements=replacements,
     )
     parallel = None
     if parallel_request is not None:

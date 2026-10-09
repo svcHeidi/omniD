@@ -49,10 +49,10 @@ def read_documents(records: Mapping[str, TutorialRecord]) -> dict[str, dict[str,
     truth). openCARP reads only the ``+F`` documents, and reads its
     arguments in order with the last assignment winning silently: a
     ``-<key>`` after ``+F <document>`` overrides that document's value, one
-    before it does not. Arguments an axis appends at resolve time
-    (``AxisResult.command_arguments``) are not visible here; niedererNVersion's
-    one axis (``dx``) appends only to the ``mesh`` step, which reads no
-    document."""
+    before it does not. Arguments an axis passes at resolve time
+    (``AxisResult.command_arguments`` and ``replacements``) are not visible
+    here; niedererNVersion's axes (``dx``, ``fibers.imbrication``) reach only
+    the ``mesh`` step, which reads no document."""
     documents: dict[str, dict[str, CommandLineAssignment]] = {}
     for record in records.values():
         for step in record.workflow_steps:

@@ -63,7 +63,18 @@
     "slab_mm": {
       "kind": "vector3",
       "unit": "mm",
-      "description": "slab extents from the origin, fibres along x",
+      "description": "slab extents from the origin",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "fibre": {
+      "kind": "vector3",
+      "unit": null,
+      "description": "fibre direction in the slab's frame, the same for every element (the .lon row); TorchCor normalises it, so any nonzero length gives the same problem",
       "default": null,
       "minimum": null,
       "exclusive_minimum": null,
