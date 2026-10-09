@@ -1,0 +1,714 @@
+{
+  "keys": {
+    "device": {
+      "kind": "string",
+      "unit": null,
+      "description": "torch device the run uses; only the devices this host can run are offered",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": [
+        "cpu"
+      ],
+      "required": true
+    },
+    "dtype": {
+      "kind": "string",
+      "unit": null,
+      "description": "simulation dtype; TorchCor's CG runs in float64 whatever this is",
+      "default": "float64",
+      "minimum": null,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": [
+        "float32",
+        "float64"
+      ],
+      "required": true
+    },
+    "dt_ms": {
+      "kind": "scalar",
+      "unit": "ms",
+      "description": "time step",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "t_end_ms": {
+      "kind": "scalar",
+      "unit": "ms",
+      "description": "simulated time",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "dx_mm": {
+      "kind": "scalar",
+      "unit": "mm",
+      "description": "pygmsh mesh_size of the generated slab",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "slab_mm": {
+      "kind": "vector3",
+      "unit": "mm",
+      "description": "slab extents from the origin, fibres along x",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "ionic_model": {
+      "kind": "string",
+      "unit": null,
+      "description": "a model torchcor.ionic exports",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": [
+        "AlievPanfilov",
+        "BuenoOrovio",
+        "CourtemancheRamirezNattel",
+        "MitchellSchaeffer",
+        "ModifiedMS2v",
+        "OHaraRudy",
+        "TenTusscherPanfilov",
+        "Tomek19",
+        "Tomek20",
+        "TWorld"
+      ],
+      "required": true
+    },
+    "ionic_options": {
+      "kind": "mapping",
+      "unit": null,
+      "description": "constructor options of the ionic model (ionic_models.<model>.options)",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "ionic_init": {
+      "kind": "mapping",
+      "unit": null,
+      "description": "initial values set on the model instance (ionic_models.<model>.init)",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "conductivity_S_per_m.il": {
+      "kind": "scalar",
+      "unit": "S/m",
+      "description": "intracellular longitudinal conductivity",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "conductivity_S_per_m.it": {
+      "kind": "scalar",
+      "unit": "S/m",
+      "description": "intracellular transverse conductivity",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "conductivity_S_per_m.el": {
+      "kind": "scalar",
+      "unit": "S/m",
+      "description": "extracellular longitudinal conductivity",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "conductivity_S_per_m.et": {
+      "kind": "scalar",
+      "unit": "S/m",
+      "description": "extracellular transverse conductivity",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "chi_per_mm": {
+      "kind": "scalar",
+      "unit": "1/mm",
+      "description": "surface-to-volume ratio (Monodomain.Chi)",
+      "default": 140,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "cm_uF_per_mm2": {
+      "kind": "scalar",
+      "unit": "uF/mm^2",
+      "description": "membrane capacitance (Monodomain.Cm)",
+      "default": 0.01,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "theta": {
+      "kind": "scalar",
+      "unit": null,
+      "description": "time scheme: 1 implicit Euler, 0.5 Crank-Nicolson (Monodomain.theta)",
+      "default": 0.5,
+      "minimum": 0,
+      "exclusive_minimum": null,
+      "maximum": 1,
+      "menu": null,
+      "required": true
+    },
+    "mass_lumping": {
+      "kind": "boolean",
+      "unit": null,
+      "description": "lump the mass matrix; moves P8 by 28 ms at dx 0.5 (D14)",
+      "default": false,
+      "minimum": null,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "stimulus.box_mm": {
+      "kind": "vector3_list",
+      "unit": "mm",
+      "description": "two opposite corners; every node inside, faces included, is stimulated",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "stimulus.start_ms": {
+      "kind": "scalar",
+      "unit": "ms",
+      "description": "stimulus start",
+      "default": null,
+      "minimum": 0,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "stimulus.duration_ms": {
+      "kind": "scalar",
+      "unit": "ms",
+      "description": "stimulus duration",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "stimulus.intensity": {
+      "kind": "scalar",
+      "unit": null,
+      "description": "as add_stimulus takes it; TorchCor divides it by 100",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "cg.a_tol": {
+      "kind": "scalar",
+      "unit": null,
+      "description": "CG absolute tolerance",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "cg.r_tol": {
+      "kind": "scalar",
+      "unit": null,
+      "description": "CG relative tolerance",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": 0,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "cg.max_iter": {
+      "kind": "integer",
+      "unit": null,
+      "description": "CG iterations; a step that needs more is refused",
+      "default": null,
+      "minimum": 1,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    },
+    "activation_threshold_mV": {
+      "kind": "scalar",
+      "unit": "mV",
+      "description": "a node activates at the first step its potential exceeds this",
+      "default": null,
+      "minimum": null,
+      "exclusive_minimum": null,
+      "maximum": null,
+      "menu": null,
+      "required": true
+    }
+  },
+  "ionic_models": {
+    "AlievPanfilov": {
+      "options": {},
+      "init": []
+    },
+    "BuenoOrovio": {
+      "options": {
+        "formulation": {
+          "default": "TRANSFORM",
+          "menu": [
+            "ORIGINAL",
+            "TRANSFORM"
+          ]
+        }
+      },
+      "init": [
+        "V_init",
+        "s_init",
+        "v_init",
+        "w_init"
+      ]
+    },
+    "CourtemancheRamirezNattel": {
+      "options": {},
+      "init": [
+        "Ca_rel_init",
+        "Ca_up_init",
+        "Cai_init",
+        "Ki_init",
+        "V_init",
+        "d_init",
+        "f_Ca_init",
+        "f_init",
+        "h_init",
+        "j_init",
+        "m_init",
+        "oa_init",
+        "oi_init",
+        "u_init",
+        "ua_init",
+        "ui_init",
+        "v_init",
+        "w_init",
+        "xr_init",
+        "xs_init"
+      ]
+    },
+    "MitchellSchaeffer": {
+      "options": {},
+      "init": [
+        "V_init",
+        "h_init"
+      ]
+    },
+    "ModifiedMS2v": {
+      "options": {},
+      "init": []
+    },
+    "OHaraRudy": {
+      "options": {
+        "cell_type": {
+          "default": "ENDO",
+          "menu": [
+            "ENDO",
+            "EPI",
+            "MCELL"
+          ]
+        },
+        "ina": {
+          "default": "ORdINa",
+          "menu": [
+            "ORdINa",
+            "TT2INa"
+          ]
+        },
+        "formulation": {
+          "default": "ORIGINAL",
+          "menu": [
+            "CLERX",
+            "ORIGINAL"
+          ]
+        }
+      },
+      "init": [
+        "CaMKt_init",
+        "Cai_init",
+        "Jrelnp_init",
+        "Jrelp_init",
+        "Ki_init",
+        "Nai_init",
+        "V_init",
+        "a_init",
+        "ap_init",
+        "cajsr_init",
+        "cansr_init",
+        "cass_init",
+        "d_init",
+        "fcaf_init",
+        "fcafp_init",
+        "fcas_init",
+        "ff_init",
+        "ffp_init",
+        "fs_init",
+        "hL_init",
+        "hLp_init",
+        "hTT2_init",
+        "hf_init",
+        "hs_init",
+        "hsp_init",
+        "iF_init",
+        "iFp_init",
+        "iS_init",
+        "iSp_init",
+        "jTT2_init",
+        "j_init",
+        "jca_init",
+        "jp_init",
+        "kss_init",
+        "mL_init",
+        "mORd_init",
+        "mTT2_init",
+        "m_init",
+        "nass_init",
+        "nca_init",
+        "xk1_init",
+        "xrf_init",
+        "xrs_init",
+        "xs1_init",
+        "xs2_init"
+      ]
+    },
+    "TenTusscherPanfilov": {
+      "options": {
+        "cell_type": {
+          "default": "EPI",
+          "menu": [
+            "ENDO",
+            "EPI",
+            "MCELL"
+          ]
+        }
+      },
+      "init": [
+        "CaSR_init",
+        "CaSS_init",
+        "Cai_init",
+        "F2_init",
+        "FCaSS_init",
+        "F_init",
+        "GCaL_init",
+        "GKr_init",
+        "GKs_init",
+        "Gto_init",
+        "H_init",
+        "J_init",
+        "Ki_init",
+        "M_init",
+        "Nai_init",
+        "O_init",
+        "R__init",
+        "R_init",
+        "S_init",
+        "V_init",
+        "Xr1_init",
+        "Xr2_init",
+        "Xs_init",
+        "d_init"
+      ]
+    },
+    "Tomek19": {
+      "options": {
+        "cell_type": {
+          "default": "ENDO",
+          "menu": [
+            "ENDO",
+            "EPI",
+            "MCELL"
+          ]
+        }
+      },
+      "init": [
+        "C1_init",
+        "C2_init",
+        "C3_init",
+        "CaMKt_init",
+        "Cai_init",
+        "Cajsr_init",
+        "Cansr_init",
+        "Cass_init",
+        "I_init",
+        "Jrel_np_init",
+        "Jrel_p_init",
+        "Ki_init",
+        "Kss_init",
+        "Nai_init",
+        "Nass_init",
+        "O_init",
+        "V_init",
+        "a_init",
+        "ap_init",
+        "d_init",
+        "fCaf_init",
+        "fCafp_init",
+        "fCas_init",
+        "ff_init",
+        "ffp_init",
+        "fs_init",
+        "hL_init",
+        "hLp_init",
+        "h_init",
+        "hp_init",
+        "iF_init",
+        "iFp_init",
+        "iS_init",
+        "iSp_init",
+        "jCa_init",
+        "j_init",
+        "jp_init",
+        "mL_init",
+        "m_init",
+        "nCa_i_init",
+        "nCa_ss_init",
+        "xs1_init",
+        "xs2_init"
+      ]
+    },
+    "Tomek20": {
+      "options": {
+        "cell_type": {
+          "default": "ENDO",
+          "menu": [
+            "ENDO",
+            "EPI",
+            "M"
+          ]
+        }
+      },
+      "init": [
+        "C1_init",
+        "C2_init",
+        "C3_init",
+        "CD_init",
+        "CaMKt_init",
+        "Cai_init",
+        "Cai_mM_init",
+        "I_init",
+        "Jrel_np_init",
+        "Jrel_p_init",
+        "Ki_init",
+        "Nai_init",
+        "O_init",
+        "TRPN_init",
+        "TmBlocked_init",
+        "V_init",
+        "XS_init",
+        "XW_init",
+        "ZETAS_init",
+        "ZETAW_init",
+        "aa_init",
+        "ap_init",
+        "cajsr_init",
+        "cansr_init",
+        "cass_init",
+        "cli_init",
+        "clss_init",
+        "d_init",
+        "delta_sl_init",
+        "fcaf_init",
+        "fcafp_init",
+        "fcas_init",
+        "ff_init",
+        "ffp_init",
+        "fs_init",
+        "hL_init",
+        "hLp_init",
+        "h_init",
+        "hp_init",
+        "iF_init",
+        "iFp_init",
+        "iS_init",
+        "iSp_init",
+        "j_init",
+        "jca_init",
+        "jp_init",
+        "kss_init",
+        "length_init",
+        "mL_init",
+        "m_init",
+        "nass_init",
+        "nca_i_init",
+        "nca_ss_init",
+        "stretch_init",
+        "xs1_init",
+        "xs2_init"
+      ]
+    },
+    "TWorld": {
+      "options": {
+        "cell_type": {
+          "default": "ENDO",
+          "menu": [
+            "ENDO",
+            "EPI",
+            "MID"
+          ]
+        },
+        "sex": {
+          "default": "MIX",
+          "menu": [
+            "FEMALE",
+            "MALE",
+            "MIX"
+          ]
+        }
+      },
+      "init": [
+        "C0_init",
+        "C1_init",
+        "C2_init",
+        "Cai_init",
+        "Cli_init",
+        "I_init",
+        "Ki_init",
+        "Nai_init",
+        "O_init",
+        "V_init",
+        "buffers_CaM_init",
+        "buffers_Csqn_init",
+        "buffers_Myosin_ca_init",
+        "buffers_Myosin_mg_init",
+        "buffers_NaBj_init",
+        "buffers_NaBsl_init",
+        "buffers_SLHj_init",
+        "buffers_SLHsl_init",
+        "buffers_SLLj_init",
+        "buffers_SLLsl_init",
+        "buffers_SRB_init",
+        "buffers_TnCHc_init",
+        "buffers_TnCHm_init",
+        "buffers_TnClow_init",
+        "caj_init",
+        "camk_f_ICaL_init",
+        "camk_f_PLB_init",
+        "camk_f_RyR_init",
+        "camk_trap_init",
+        "casig_serca_trap_init",
+        "casl_init",
+        "casr_init",
+        "contraction_Ca_TRPN_init",
+        "contraction_TmBlocked_init",
+        "contraction_XS_init",
+        "contraction_XW_init",
+        "contraction_ZETAS_init",
+        "contraction_ZETAW_init",
+        "d_P_init",
+        "d_init",
+        "fBPf_init",
+        "fcaBPf_init",
+        "fcaf_P_init",
+        "fcaf_init",
+        "fcafp_init",
+        "fcas_P_init",
+        "fcas_init",
+        "ff_P_init",
+        "ff_init",
+        "ffp_init",
+        "fs_P_init",
+        "fs_init",
+        "hL_init",
+        "hLp_init",
+        "h_P_init",
+        "h_init",
+        "hp_P_init",
+        "hp_init",
+        "ical_pureCDI_junc_init",
+        "ical_pureCDI_sl_init",
+        "j_P_init",
+        "j_init",
+        "jca_init",
+        "jp_P_init",
+        "jp_init",
+        "jrel_icaldep_act_init",
+        "jrel_icaldep_f1_init",
+        "jrel_icaldep_f2_init",
+        "mL_init",
+        "m_P_init",
+        "m_init",
+        "naj_init",
+        "nasl_init",
+        "nca_i_init",
+        "nca_init",
+        "ryr_CaRI_init",
+        "ryr_CaRI_p_init",
+        "ryr_I_init",
+        "ryr_I_p_init",
+        "ryr_O_init",
+        "ryr_O_p_init",
+        "ryr_R_init",
+        "ryr_R_p_init",
+        "xs_junc_init",
+        "xs_sl_init",
+        "xtof_init",
+        "xtof_p_init",
+        "xtos_init",
+        "xtos_p_init",
+        "ytof_init",
+        "ytof_p_init",
+        "ytos_init",
+        "ytos_p_init"
+      ]
+    }
+  },
+  "devices": [
+    "cpu"
+  ],
+  "torchcor": {
+    "version": "1.0.6",
+    "commit": "b02daee87d4283888981cbfc3a6b00f57789a820"
+  }
+}

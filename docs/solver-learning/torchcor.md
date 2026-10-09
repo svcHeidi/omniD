@@ -178,3 +178,18 @@ benchmark.py's class.**
 | F7 | does the library TTP's residual 0.005 ms (D11) come from the CaSS fix or from `torch.compile`? | run D11's verification TTP with the one-line CaSS fix applied; then the library TTP with `TORCHDYNAMO_DISABLE=1` |
 | F8 | does `gmsh` produce the same mesh on another machine or gmsh version? | byte-identical here across runs (D6). Settle by generating at dx 0.5 on a second machine or gmsh version and `cmp` the `.pts`. If it differs, the case must ship the mesh files rather than `dx` |
 | F9 | licence | MIT in the repository (A2) versus CC BY-NC 4.0 in the design; owner |
+
+## G. The runner, and omniD driving it
+
+Runs below use `~/torchcor-cases` (the case, the runner
+`scripts/run_case.py`, and TorchCor as the submodule `torchcor` at `b02daee`)
+and the venv `~/torchcor-venv` rebuilt from that submodule. Outputs under
+`/Users/simaocastro/omnid-runs/2026-10-09/torchcor/g<n>_*/`.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| G0 | `uv venv ~/torchcor-venv`; `uv pip install -e ~/torchcor-cases/torchcor`; `python -c "import torchcor; print(torchcor.__file__)"` | `/Users/simaocastro/torchcor-cases/torchcor/torchcor/__init__.py`, torch 2.14.1 | **F1 settled:** the submodule is both `omnidriver.toml`'s `source` and the code that runs |
+| G0b | `g0_describe_probe/probe.py`: each `torchcor.ionic` model built with `dt` only; its `_init` attributes; its constructor | all ten build; `_init` attributes: AlievPanfilov 0, BuenoOrovio 4, CRN 20, MitchellSchaeffer 2, ModifiedMS2v 0, OHaraRudy 45, TTP 24, Tomek19 43, Tomek20 56, TWorld 93. `grep` of the compared literals: OHaraRudy `cell_type` compares `EPI`, `MCELL` (default `ENDO` is the else branch), Tomek19 `MCELL`, Tomek20 `M`, TWorld `MID` and `sex` `MALE`, `FEMALE` (default `MIX`) | **a string option's menu is its compared literals plus its default**, which no comparison names. The mid-myocardial spelling differs per model (`MCELL`, `M`, `MID`), so a menu must be read per model, never shared. TTP's `GKs_init` and `Gto_init` are conductances set from `cell_type`, yet end in `_init` |
+| G0c | `torch.sparse_coo_tensor(..., device="mps").to_sparse_csr()` | `NotImplementedError` for `aten::_to_sparse_csr` on `SparseMPS` | the conversion `Monodomain.assemble` needs (D12) is a one-line probe; the runner offers `mps` only when it succeeds |
+| G1 | `g1_runner_dx05/`: `run_case.py nversion/case.json` on a copy of `cases/nversion` (et 0.24, float32, θ 1, consistent mass, to 150 ms) | exit 0; 3675 nodes, 30 000 steps; setup 0.46 s, **solve 19.1 s**, process 29.2 s. P1 0.955, P2 21.375, P3 33.105, P4 38.050, P5 6.455, P6 22.175, P7 33.660, **P8 40.325** ms; no node unactivated (latest 40.35 ms). Rerun (`rerun/`): `activation_times.dat` and `--describe` byte-identical | the runner reproduces D10's convention (P1 0.955). `et` 0.24 instead of 0.2 moves P8 by -0.06 ms at dx 0.5 (D10: 40.385 ms in float64 at et 0.2). The run is deterministic run to run (D3 again, through the runner) |
+| G2 | `g2_refusals/`: the case with `chi_per_m` added; `ionic_init.V_int`; `cell_type: "EPIC"`; `device: "mps"` | each exits 2 before writing anything, naming the key: `chi_per_m: not a key this runner takes`; `ionic_init.V_int: not an initial value of TenTusscherPanfilov`; `ionic_options.cell_type: 'EPIC' is not one of ['ENDO', 'EPI', 'MCELL']`; `device: 'mps' is not one of ['cpu']` | the runner refuses what TorchCor would accept silently (B4, B6) or fail on late (D12) |
