@@ -21,4 +21,4 @@ def test_every_key_the_graph_reader_reads_is_catalogued(tmp_path):
         catalogue=CardiacFoamPlugin.get_dictionary_catalog(),
     )
     assert [item for item in report.uncatalogued if item.get("key") in _GRAPH_KEYS] == []
-    assert not [item for item in report.disagreements if item["path"] in _GRAPH_KEYS]
+    assert not [line for line in report.disagreements if line.split(":")[0] in _GRAPH_KEYS]

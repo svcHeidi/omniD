@@ -1353,7 +1353,7 @@ class CatalogReport:
 
     digest: str
     resolution: dict[str, object]
-    disagreements: list[dict]
+    disagreements: list[str]
     unread: list[dict]
     uncatalogued: list[dict]
     unresolved: list[dict]
@@ -1445,7 +1445,7 @@ def catalog_report(
     entries = tuple(catalogue.entries)
     guarded = _guards(scan)
 
-    disagreements: list[dict] = []
+    disagreements: list[str] = []
     unread: list[dict] = []
     menus: dict[str, ComparedMenu] = {}
     menu_documents: dict[str, str] = {}
@@ -1477,37 +1477,28 @@ def catalog_report(
             ]
             typed = [read for read in reads if read.type in _KINDS_BY_TYPE]
             if typed and not any(entry.value_kind in _KINDS_BY_TYPE[read.type] for read in typed):
-                disagreements.append(rtst_scanner.disagreement(
-                    entry.driver_path, "value_kind", entry.value_kind, sorted({read.type for read in typed}),
+                disagreements.append(
                     f"{entry.driver_path}: catalogue value_kind {entry.value_kind!r}; the C++ reads "
-                    + ", ".join(sorted({f"{read.type} ({read.file}:{read.line})" for read in typed})),
-                    sources={f"{read.file}:{read.line}" for read in typed},
-                ))
+                    + ", ".join(sorted({f"{read.type} ({read.file}:{read.line})" for read in typed}))
+                )
             if entry.required and reads and all(read.default is not None for read in reads):
-                disagreements.append(rtst_scanner.disagreement(
-                    entry.driver_path, "required", True, False,
+                disagreements.append(
                     f"{entry.driver_path}: catalogue says required; the C++ gives it a default ("
-                    + ", ".join(sorted({f"{read.default} at {read.file}:{read.line}" for read in reads})) + ")",
-                    sources={f"{read.file}:{read.line}" for read in reads},
-                    defaults=sorted({read.default for read in reads}),
-                ))
+                    + ", ".join(sorted({f"{read.default} at {read.file}:{read.line}" for read in reads})) + ")"
+                )
             if (
                 not entry.required and not entry.required_when and reads and entry.driver_path not in caller_guarded
                 and all(_unconditional(read, guarded) for read in reads)
             ):
-                disagreements.append(rtst_scanner.disagreement(
-                    entry.driver_path, "required", False, True,
+                disagreements.append(
                     f"{entry.driver_path}: catalogue says optional; the C++ reads it with no default ("
-                    + ", ".join(sorted({f"{read.file}:{read.line}" for read in reads})) + ")",
-                    sources={f"{read.file}:{read.line}" for read in reads},
-                ))
+                    + ", ".join(sorted({f"{read.file}:{read.line}" for read in reads})) + ")"
+                )
         compared = compared_menus(found[document], document_entries, reviewed)
         menus.update(compared)
         menu_documents.update(dict.fromkeys(compared, document))
     disagreements += [
-        rtst_scanner.disagreement(
-            path, "unseen_reads", None, None, f"unseen_reads names {path}, which the catalogue does not list",
-        )
+        f"unseen_reads names {path}, which the catalogue does not list"
         for path in sorted(set(unseen) - {entry.driver_path for entry in entries})
     ]
 
@@ -1555,12 +1546,10 @@ def catalog_report(
             for value in sorted(menu.values - set(listed))
         ]
         if menu.closed and set(listed) - menu.values:
-            disagreements.append(rtst_scanner.disagreement(
-                path, "menu", sorted(set(listed) - menu.values), sorted(menu.values),
+            disagreements.append(
                 f"{path}: menu lists {sorted(set(listed) - menu.values)}, which the C++ never compares the value "
-                f"against; it fails on any value but {sorted(menu.values)} ({', '.join(menu.sources)})",
-                sources=menu.sources,
-            ))
+                f"against; it fails on any value but {sorted(menu.values)} ({', '.join(menu.sources)})"
+            )
     return CatalogReport(
         digest=scan.digest,
         resolution=scan.resolution(),

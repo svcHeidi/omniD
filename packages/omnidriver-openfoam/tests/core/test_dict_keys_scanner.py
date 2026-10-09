@@ -1018,27 +1018,21 @@ def test_each_catalogue_claim_the_cxx_refutes_is_reported_with_both_sides_and_fa
         _entry("$PURKINJE_SLAB.multiplier", "word", source_refs=cited),
         _entry("$PURKINJE_SLAB.depth", required=True),
     ), **{"setPurkinjeSlab__setPurkinjeSlab.C": SET_PURKINJE_SLAB})
-    (refuted,) = report["disagreements"]
-    assert {key: refuted[key] for key in ("path", "field", "catalogue", "cxx")} == {
-        "path": "$PURKINJE_SLAB.multiplier", "field": "value_kind", "catalogue": "word", "cxx": ["scalar"],
-    }
-    assert "catalogue value_kind 'word'; the C++ reads scalar" in refuted["message"]
+    assert [item.split(":")[0] for item in report["disagreements"]] == ["$PURKINJE_SLAB.multiplier"]
+    assert "catalogue value_kind 'word'; the C++ reads scalar" in report["disagreements"][0]
     (unread,) = report["unread"]
     assert unread["driver_path"] == "$PURKINJE_SLAB.depth" and unread["document"] == "setPurkinjeSlabDict"
     assert unread["note"] == "catalogued; the supplied C++ no longer reads it"
     report = _report(tmp_path, (_entry("$PURKINJE_SLAB.thickness", required=True, source_refs=cited),),
                      **{"setPurkinjeSlab__setPurkinjeSlab.C": SET_PURKINJE_SLAB})
-    (refuted,) = report["disagreements"]
-    assert (refuted["field"], refuted["catalogue"], refuted["cxx"]) == ("required", True, False)
-    assert refuted["defaults"][0].startswith("0.1")
-    assert "the C++ gives it a default (0.1" in refuted["message"]
+    assert "the C++ gives it a default (0.1" in report["disagreements"][0]
 
 
 def test_a_catalogue_that_calls_optional_a_key_the_cxx_requires_is_reported(tmp_path):
     cited = ("src/generatePurkinjeTree.C",)
     entries = (_entry("$PURKINJE_TREE.<ventKey>.seed", "vector3", source_refs=cited),)
     report = _report(tmp_path, entries, document="generatePurkinjeTreeDict", **{"generatePurkinjeTree.C": READ_VENT_PARAMS})
-    assert [item["message"] for item in report["disagreements"]] == [
+    assert report["disagreements"] == [
         "$PURKINJE_TREE.<ventKey>.seed: catalogue says optional; the C++ reads it with no default (generatePurkinjeTree.C:15)",
     ]
 
@@ -1048,7 +1042,7 @@ def test_a_same_named_read_elsewhere_disagrees_with_nothing(tmp_path):
     assert _report(tmp_path, entries)["disagreements"] == []
     nested = (_entry("$CONVENTION.coordinates.transmuralField", "scalar"),)
     report = _report(tmp_path, nested, **{"coordinatesConvention.H": READ_COORDINATES_CONVENTION})
-    assert [item["message"] for item in report["disagreements"]] == [
+    assert report["disagreements"] == [
         "$CONVENTION.coordinates.transmuralField: catalogue value_kind 'scalar'; the C++ reads word "
         "(coordinatesConvention.H:11)",
     ]
@@ -1057,7 +1051,7 @@ def test_a_same_named_read_elsewhere_disagrees_with_nothing(tmp_path):
 def test_an_unseen_read_is_reviewed_and_a_stale_review_is_a_disagreement(tmp_path):
     reviewed = {"unseen_reads": {"read upstream": ["$PURKINJE_SLAB.depth", "$PURKINJE_SLAB.gone"]}}
     report = _report(tmp_path, (_entry("$PURKINJE_SLAB.depth"),), reviewed)
-    assert [item["message"] for item in report["disagreements"]] == [
+    assert report["disagreements"] == [
         "unseen_reads names $PURKINJE_SLAB.gone, which the catalogue does not list",
     ]
     assert report["unread"] == []
@@ -1216,7 +1210,7 @@ def test_a_menu_value_a_closed_chain_never_compares_is_a_disagreement(tmp_path):
     report = _scheme_report(tmp_path, (
         "unweightedHarmonic", "distanceWeightedHarmonic", "conormalHarmonic", "gone",
     ), source_refs=cited)
-    assert [item["message"] for item in report["disagreements"]] == [
+    assert report["disagreements"] == [
         f"{_SCHEME}: menu lists ['gone'], which the C++ never compares the value against; it fails on any "
         "value but ['conormalHarmonic', 'distanceWeightedHarmonic', 'unweightedHarmonic'] "
         "(extracellularPotentialDomain.C:15)",

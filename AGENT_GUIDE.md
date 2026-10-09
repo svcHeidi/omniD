@@ -771,8 +771,7 @@ disappears from the C++ never fails a plan. A plan compares them with the scan:
   ("catalogued; the supplied C++ no longer reads it"), and a case or study that
   sets it gets an `unread_case_dict_key` warning saying it has no effect;
 - a catalogue claim the C++ refutes is a `plugin_catalog_disagreement` warning
-  stating both sides, as `detail` (`path`, `field`, `catalogue`, `cxx`,
-  `sources`) beside the sentence: a type the C++ reads differently, a menu value no table
+  stating both sides: a type the C++ reads differently, a menu value no table
   registers, a required key the C++ gives a default, or an optional key the C++
   requires. A read counts against an entry only when it agrees with the entry
   beyond the final name, or is in a file the entry cites, so a same-named key
