@@ -145,7 +145,9 @@ class DefaultArgument:
     are dropped and the contribution appended. An axis that does not pass the
     key appends, and the default stays. What follows the key is passed as
     given; the record declares only the default, never the values that may
-    replace it.
+    replace it. An axis may instead name the key in its
+    ``AxisResult.replacements``, which composes with other axes' arguments
+    for the same step.
 
     Ambiguity is refused by name. At construction each default's ``key`` must
     occur exactly once as a contiguous run in the step's default command line
@@ -670,10 +672,16 @@ class AxisResult:
     A contribution that passes one of the step's default-argument keys
     replaces that default; anything else is appended
     (:class:`DefaultArgument` states the rule).
+
+    ``replacements`` maps a step id to ``{default-argument key: values}``:
+    each replaces one default the step declares, by its identity. Unlike free
+    ``command_arguments``, replacements of different keys from different axes
+    compose on one step.
     """
 
     patches: tuple[AxisPatch, ...] = ()
     command_arguments: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    replacements: Mapping[str, Mapping[tuple[str, ...], tuple[str, ...]]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "patches", tuple(self.patches))
@@ -681,6 +689,18 @@ class AxisResult:
             self,
             "command_arguments",
             {step: tuple(args) for step, args in dict(self.command_arguments).items()},
+        )
+        object.__setattr__(
+            self,
+            "replacements",
+            {
+                step: {
+                    _string_tokens("a replacement's key", key, allow_empty_tuple=False, allow_empty_token=False):
+                    _string_tokens("a replacement's values", values, allow_empty_tuple=True, allow_empty_token=True)
+                    for key, values in dict(by_key).items()
+                }
+                for step, by_key in dict(self.replacements).items()
+            },
         )
 
 
@@ -920,7 +940,11 @@ def resolve_case_patches(
     have no effect.
 
     Returns ``(combined_patches, command_arguments_by_step)``, the latter the
-    axes' ``AxisResult.command_arguments`` merged by step id.
+    axes' ``AxisResult.command_arguments`` merged by step id, followed by
+    their ``AxisResult.replacements`` in the order the step declares its
+    defaults. Replacements of different keys compose; one key replaced with
+    different values by two axes, a key the step declares no default for, and
+    a free contribution passing a key another axis replaces are refused.
     """
     classified: list[tuple[str, str, DocumentKeyName | AxisMatch, Any]] = []
     for source, values in study_by_source.items():
@@ -951,6 +975,7 @@ def resolve_case_patches(
     steps_by_id = {step.step_id: step for step in record.workflow_steps}
     command_arguments: dict[str, tuple[str, ...]] = {}
     command_argument_source: dict[str, str] = {}
+    replaced: dict[str, dict[tuple[str, ...], tuple[tuple[str, ...], str]]] = {}
     for source, name, sorted_name, value in axis_entries:
         del source  # an axis patch is sourced by the axis's own name, below
         axis = sorted_name.axis
@@ -1018,6 +1043,47 @@ def resolve_case_patches(
                     f"from axis {command_argument_source[step_id]!r} "
                     f"({list(existing_args)}) and axis {name!r} ({list(extra_args)})"
                 )
+        for step_id, by_key in result.replacements.items():
+            if step_id not in known_step_ids:
+                raise TutorialRecordError(
+                    f"axis {name!r} replaces a default argument of step {step_id!r}, which "
+                    f"tutorial record {record.name!r} does not declare (declared steps: {sorted(known_step_ids)})"
+                )
+            if step_id not in route_step_ids and not result.patches:
+                raise TutorialRecordError(
+                    f"axis {name!r} only replaces default arguments of step {step_id!r}, which "
+                    f"the selected route of tutorial record {record.name!r} does not run "
+                    f"(it runs {list(route_step_ids)}); drop {name!r} or select a route that runs {step_id!r}"
+                )
+            declared_keys = [default.key for default in steps_by_id[step_id].default_arguments]
+            for key, values in by_key.items():
+                if key not in declared_keys:
+                    raise TutorialRecordError(
+                        f"axis {name!r} replaces {list(key)!r} on step {step_id!r}, which replaces nothing: "
+                        f"the step declares default arguments {[list(k) for k in declared_keys]}"
+                    )
+                earlier = replaced.setdefault(step_id, {}).get(key)
+                if earlier is not None and earlier[0] != values:
+                    raise TutorialRecordError(
+                        f"step {step_id!r} default argument {list(key)!r} is replaced with {list(earlier[0])} "
+                        f"by axis {earlier[1]!r} and with {list(values)} by axis {name!r}"
+                    )
+                replaced[step_id][key] = (values, name)
+
+    for step_id, by_key in replaced.items():
+        free = command_arguments.get(step_id, ())
+        for key, (_values, axis_name) in by_key.items():
+            if _token_runs(free, key):
+                raise TutorialRecordError(
+                    f"step {step_id!r}: axis {command_argument_source[step_id]!r} passes {list(key)!r} "
+                    f"in its command arguments, which axis {axis_name!r} replaces; one argument has one owner"
+                )
+        tokens = tuple(
+            token
+            for default in steps_by_id[step_id].default_arguments if default.key in by_key
+            for token in default.key + by_key[default.key][0]
+        )
+        command_arguments[step_id] = free + tokens
 
     combined = combine_patches(sourced_patches)
     return combined, dict(command_arguments)

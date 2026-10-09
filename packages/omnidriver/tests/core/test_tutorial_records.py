@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -571,6 +572,73 @@ def _mesh_file_axis(*arguments: str) -> AxisContract:
         return AxisResult(command_arguments={"mesh": arguments})
 
     return AxisContract(name="meshFile", value_kind="word", resolve=resolve)
+
+
+def _record_with_two_defaults(*axes: AxisContract) -> TutorialRecord:
+    return _record(
+        axes=axes,
+        workflow_steps=(
+            WorkflowStep(
+                step_id="mesh", command=("generate-mesh",),
+                default_arguments=(
+                    DefaultArgument(key=("-angle",), values=("0",)),
+                    DefaultArgument(key=("-twist",), values=("0",)),
+                ),
+            ),
+        ),
+    )
+
+
+def _axis(name: str, **result: Any) -> AxisContract:
+    return AxisContract(name=name, value_kind="integer", resolve=lambda value, root: AxisResult(**result))
+
+
+def _arguments(record: TutorialRecord, study: dict[str, Any]) -> dict[str, tuple[str, ...]]:
+    return resolve_case_patches(
+        record, study_by_source={"base": study}, staged_case_root=Path("/nonexistent"),
+        direct_key_validator=_known_catalog_validator,
+    )[1]
+
+
+def test_replacements_of_different_keys_compose_with_a_free_contribution():
+    """Two axes replacing different declared defaults, and a third passing free arguments, all reach one step, the replacements in declared order."""
+    record = _record_with_two_defaults(
+        _axis("size", command_arguments={"mesh": ("-n", "5")}),
+        _axis("twist", replacements={"mesh": {("-twist",): ("30",)}}),
+        _axis("angle", replacements={"mesh": {("-angle",): ("90",)}}),
+    )
+    arguments = _arguments(record, {"size": 1, "twist": 1, "angle": 1})
+    assert arguments == {"mesh": ("-n", "5", "-angle", "90", "-twist", "30")}
+    assert record.workflow_steps[0].argv(arguments["mesh"]) == ("generate-mesh", "-n", "5", "-angle", "90", "-twist", "30")
+
+
+def test_one_default_replaced_with_different_values_by_two_axes_is_refused():
+    record = _record_with_two_defaults(
+        _axis("one", replacements={"mesh": {("-angle",): ("45",)}}),
+        _axis("two", replacements={"mesh": {("-angle",): ("90",)}}),
+    )
+    with pytest.raises(TutorialRecordError, match=r"'-angle'.*'one'.*'two'"):
+        _arguments(record, {"one": 1, "two": 1})
+    agreeing = _record_with_two_defaults(
+        _axis("one", replacements={"mesh": {("-angle",): ("90",)}}),
+        _axis("two", replacements={"mesh": {("-angle",): ("90",)}}),
+    )
+    assert _arguments(agreeing, {"one": 1, "two": 1}) == {"mesh": ("-angle", "90")}
+
+
+def test_a_replacement_of_an_undeclared_default_replaces_nothing():
+    record = _record_with_two_defaults(_axis("rogue", replacements={"mesh": {("-scale",): ("2",)}}))
+    with pytest.raises(TutorialRecordError, match="replaces nothing"):
+        _arguments(record, {"rogue": 1})
+
+
+def test_a_free_contribution_passing_a_replaced_key_is_refused():
+    record = _record_with_two_defaults(
+        _axis("free", command_arguments={"mesh": ("-angle", "45")}),
+        _axis("angle", replacements={"mesh": {("-angle",): ("90",)}}),
+    )
+    with pytest.raises(TutorialRecordError, match="one argument has one owner"):
+        _arguments(record, {"free": 1, "angle": 1})
 
 
 def test_resolve_case_patches_refuses_an_axis_that_passes_a_default_key_twice():
