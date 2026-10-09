@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations, validate_value_shape
+from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations, numeric_bounds, validate_value_shape
 from omnidriver.core.tutorial_records import TutorialRecordError
 from omnidriver.core.runtime.record_surface import ANY_KEY
 
@@ -252,10 +252,9 @@ def make_validator(
             if computed:
                 return kind, True
             reasons = validate_value_shape(kind, value)
-            if not reasons and (broken := bound_violations(entry, value)):
+            if not reasons and (broken := bound_violations(numeric_bounds(entry), value)):
                 raise TutorialRecordError(
-                    f"{document}:{dotted} = {value!r} is outside the catalogue's bounds: "
-                    + "; ".join(bound_reasons(entry, value)),
+                    f"{document}:{dotted} = {value!r} is outside the catalogue's bounds: " + "; ".join(bound_reasons(broken)),
                     code="catalog_rule", rule=broken,
                 )
             if reasons:

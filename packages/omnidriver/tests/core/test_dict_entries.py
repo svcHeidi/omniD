@@ -109,11 +109,20 @@ class TestDictEntryStructuredConstraints(unittest.TestCase):
 def test_a_bound_judges_plain_numbers_only():
     from types import SimpleNamespace
 
-    from omnidriver.core.contracts.dictionary import bound_violations
+    from omnidriver.core.contracts.dictionary import bound_violations, numeric_bounds
 
-    entry = DictEntry(driver_path="chi", description="x", value_kind="scalar", exclusive_minimum=0)
-    assert bound_violations(entry, -1.0) == {"exclusive_minimum": 0}
-    assert bound_violations(entry, SimpleNamespace(value=-1.0, dimensions=(0, -1, 0, 0, 0, 0, 0))) == {}
+    bounds = numeric_bounds(DictEntry(driver_path="chi", description="x", value_kind="scalar", exclusive_minimum=0))
+    assert bound_violations(bounds, -1.0) == {"exclusive_minimum": 0}
+    assert bound_violations(bounds, SimpleNamespace(value=-1.0, dimensions=(0, -1, 0, 0, 0, 0, 0))) == {}
+
+
+def test_an_entry_states_minimum_exclusive_minimum_and_maximum_and_their_reasons_are_formatted_from_the_violations():
+    from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations, numeric_bounds
+
+    entry = DictEntry(driver_path="p", description="x", value_kind="scalar", minimum=0, maximum=1)
+    assert numeric_bounds(entry) == {"minimum": 0, "maximum": 1}
+    assert bound_violations(numeric_bounds(entry), 2) == {"maximum": 1}
+    assert bound_reasons({"maximum": 1, "minimum": 0}) == ("must be at most 1", "must be at least 0")
 
 
 def test_dict_entry_has_phases_field_accepting_a_frozenset():

@@ -494,6 +494,7 @@ def test_an_axis_bounds_only_a_number():
     ({"exclusive_minimum": 0}, 0, "must be more than 0"),
     ({"exclusive_minimum": 0}, -0.5, "must be more than 0"),
     ({"minimum": 2}, 1, "must be at least 2"),
+    ({"maximum": 2}, 3, "must be at most 2"),
 ])
 def test_a_value_outside_an_axis_bound_is_refused_before_the_axis_resolves(bounds, value, reason):
     calls = []

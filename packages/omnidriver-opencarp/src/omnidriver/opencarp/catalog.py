@@ -24,6 +24,12 @@ def number_of(text: str | None) -> float | None:
     return float(text) if text is not None and _NUMBER.fullmatch(text.strip()) else None
 
 
+def numeric_limits(spec: "ParameterSpec") -> dict[str, float]:
+    """The bounds of ``spec`` that +Help gives as plain numbers, by core's bound name; an expression is not one."""
+    limits = {"minimum": number_of(spec.minimum), "maximum": number_of(spec.maximum)}
+    return {name: limit for name, limit in limits.items() if limit is not None}
+
+
 @dataclass(frozen=True)
 class ParameterSpec:
     name: str

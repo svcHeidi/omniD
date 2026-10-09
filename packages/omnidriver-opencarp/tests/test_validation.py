@@ -31,7 +31,7 @@ def test_refusals_name_the_key(document, key_path, value, named, code):
 
 
 @pytest.mark.parametrize(("key_path", "value", "rule"), [
-    (("gregion[0]", "g_il"), -1, {"minimum": "0."}),
+    (("gregion[0]", "g_il"), -1, {"minimum": 0.0}),
     (("bidomain",), 5, {"menu": ["2", "1", "0"]}),
     (("compute_APD",), "no", {"value_kind": "boolean"}),
 ])

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
-from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations
+from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations, numeric_bounds
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
 from .literals import switch_value
@@ -365,9 +365,9 @@ def rule_diagnostics(
                     {"menu": sorted(menu)},
                 )
             number = _magnitude(value)
-            if broken := bound_violations(entry, number):
+            if broken := bound_violations(numeric_bounds(entry), number):
                 violated(
-                    concrete, f"{concrete} is {number!r}, outside the catalogue's bounds: {'; '.join(bound_reasons(entry, number))}.",
+                    concrete, f"{concrete} is {number!r}, outside the catalogue's bounds: {'; '.join(bound_reasons(broken))}.",
                     broken,
                 )
             for sibling in entry.mutually_exclusive_with:

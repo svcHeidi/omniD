@@ -7,10 +7,10 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
-from omnidriver.core.contracts.dictionary import validate_value_shape
+from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations, validate_value_shape
 from omnidriver.core.tutorial_records import TutorialRecord, TutorialRecordError
 
-from .catalog import load_catalog, number_of, template_name
+from .catalog import load_catalog, numeric_limits, template_name
 from .par_format import ParFormatError, parse_par, unquote
 from .records import TUTORIAL_RECORDS
 
@@ -117,12 +117,10 @@ def _catalog_check(document: str, key: str, value: Any) -> tuple[str, bool]:
                 f"{document}:{key} = {value!r} is not one of {list(spec.menu)}", code="catalog_rule",
                 rule={"menu": list(spec.menu)},
             )
-    for bound, label, outside in ((spec.minimum, "minimum", lambda v, b: v < b), (spec.maximum, "maximum", lambda v, b: v > b)):
-        if number_of(bound) is not None and spec.value_kind in ("integer", "scalar"):
-            if outside(float(value), number_of(bound)):
-                raise TutorialRecordError(
-                    f"{document}:{key} = {value!r} is beyond its {label} {bound}", code="catalog_rule", rule={label: bound},
-                )
+    if spec.value_kind in ("integer", "scalar") and (broken := bound_violations(numeric_limits(spec), value)):
+        raise TutorialRecordError(
+            f"{document}:{key} = {value!r} {'; '.join(bound_reasons(broken))}", code="catalog_rule", rule=broken,
+        )
     return spec.value_kind, True
 
 

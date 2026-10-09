@@ -69,10 +69,10 @@ def test_the_dimension_axis_refuses_a_dimension_by_name(tmp_path):
 @pytest.mark.parametrize("value", [0, -3, True])
 def test_the_tet_axis_declares_only_a_positive_cell_count(value):
     """Core refuses what the declaration rules out before ``resolve`` runs."""
-    from omnidriver.core.contracts.dictionary import bound_reasons, validate_value_shape
+    from omnidriver.core.contracts.dictionary import bound_violations, numeric_bounds, validate_value_shape
 
     axis = tet_number_cells_axis("tetNumberCells")
-    assert validate_value_shape(axis.value_kind, value) or bound_reasons(axis, value)
+    assert validate_value_shape(axis.value_kind, value) or bound_violations(numeric_bounds(axis), value)
 
 
 def test_a_record_refuses_an_axis_only_another_record_declares():

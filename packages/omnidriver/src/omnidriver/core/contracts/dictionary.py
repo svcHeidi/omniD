@@ -5,6 +5,7 @@ Core owns the shape and the closed ``value_kind`` vocabulary of value shapes (ho
 from __future__ import annotations
 
 import math
+import operator
 from collections.abc import Mapping as _Mapping, Sequence as _Sequence
 from dataclasses import dataclass, field, replace
 from numbers import Integral, Real
@@ -141,26 +142,29 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
     raise AssertionError(f"unhandled value kind {kind!r}")  # pragma: no cover
 
 
-#: The numeric bounds a declaration (a catalogue entry, an axis) may state on a ``scalar`` or ``integer`` value.
-NUMERIC_BOUNDS = {"minimum": "must be at least {:g}", "exclusive_minimum": "must be more than {:g}"}
+#: The numeric bounds a declaration (a catalogue entry, an axis) may state on a ``scalar`` or ``integer`` value,
+#: and how breaking each reads.
+NUMERIC_BOUNDS = {
+    "minimum": "must be at least {:g}", "exclusive_minimum": "must be more than {:g}", "maximum": "must be at most {:g}",
+}
+_OUTSIDE = {"minimum": operator.lt, "exclusive_minimum": operator.le, "maximum": operator.gt}
 
 
-def bound_violations(declared: Any, value: Any) -> dict[str, float]:
-    """Each of ``declared``'s numeric bounds ``value`` breaks, by field name; empty when it fits, none is declared
-    or the value is no plain number."""
-    if declared.value_kind not in ("scalar", "integer") or isinstance(value, bool) or not isinstance(value, Real):
+def numeric_bounds(declared: Any) -> dict[str, float]:
+    """The :data:`NUMERIC_BOUNDS` ``declared`` states, by field name."""
+    return {name: limit for name in NUMERIC_BOUNDS if (limit := getattr(declared, name)) is not None}
+
+
+def bound_violations(bounds: _Mapping[str, float], value: Any) -> dict[str, float]:
+    """Each of ``bounds`` that ``value`` breaks; empty when it fits or is no plain number."""
+    if isinstance(value, bool) or not isinstance(value, Real):
         return {}
-    broken = {}
-    if declared.minimum is not None and value < declared.minimum:
-        broken["minimum"] = declared.minimum
-    if declared.exclusive_minimum is not None and value <= declared.exclusive_minimum:
-        broken["exclusive_minimum"] = declared.exclusive_minimum
-    return broken
+    return {name: limit for name, limit in bounds.items() if _OUTSIDE[name](value, limit)}
 
 
-def bound_reasons(declared: Any, value: Any) -> tuple[str, ...]:
-    """:func:`bound_violations`, as text."""
-    return tuple(NUMERIC_BOUNDS[name].format(limit) for name, limit in bound_violations(declared, value).items())
+def bound_reasons(broken: _Mapping[str, float]) -> tuple[str, ...]:
+    """The text of each of :func:`bound_violations`' answer."""
+    return tuple(NUMERIC_BOUNDS[name].format(limit) for name, limit in broken.items())
 
 
 @dataclass(frozen=True)
@@ -178,9 +182,10 @@ class DictEntry:
     constraints: tuple[str, ...] = ()
     unit: str = ""
     # Numeric bounds on a ``scalar`` or ``integer`` value: at least
-    # ``minimum``, and strictly more than ``exclusive_minimum``.
+    # ``minimum``, strictly more than ``exclusive_minimum``, at most ``maximum``.
     minimum: float | None = None
     exclusive_minimum: float | None = None
+    maximum: float | None = None
     typical_value: str = ""
     # The value the solver takes when this key is absent. Stated only for a
     # selector whose absence another entry's predicate has to see as that value;
@@ -217,7 +222,7 @@ class DictEntry:
                 f"{self.driver_path!r} declares value_kind {self.value_kind!r}, "
                 f"which is not one of {sorted(VALUE_KINDS)}"
             )
-        if (self.minimum is not None or self.exclusive_minimum is not None) and self.value_kind not in {"scalar", "integer"}:
+        if numeric_bounds(self) and self.value_kind not in {"scalar", "integer"}:
             raise ValueError(
                 f"{self.driver_path!r} declares a numeric bound but its value_kind is {self.value_kind!r}, "
                 "not scalar or integer"
