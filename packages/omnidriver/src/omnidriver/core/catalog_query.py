@@ -117,7 +117,7 @@ def catalog_query(
     cxx = cxx_evidence(driver_context, os.environ)
     values = (cxx or {}).get("selector_values", {})
     entries = []
-    for listed in driver_context.stack.call("get_record_key_catalog", native_case_root):
+    for listed in driver_context.stack.call("get_record_key_catalog", native_case_root, driver_context=driver_context):
         if not _matches(listed, document, key):
             continue
         listed = dict(listed)

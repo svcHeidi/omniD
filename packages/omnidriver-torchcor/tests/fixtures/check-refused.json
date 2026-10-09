@@ -1,0 +1,19 @@
+{
+    "refusals": [
+        {
+            "key": "theta",
+            "rule": "maximum",
+            "message": "1.5 is above its maximum 1"
+        },
+        {
+            "key": "ionic_options.cell_type",
+            "rule": "menu",
+            "message": "'epi' is not one of ['ENDO', 'EPI', 'MCELL']"
+        },
+        {
+            "key": "ionic_init.V_int",
+            "rule": "unknown",
+            "message": "not in TenTusscherPanfilov's ionic_init (['CaSR_init', 'CaSS_init', 'Cai_init', 'F2_init', 'FCaSS_init', 'F_init', 'GCaL_init', 'GKr_init', 'GKs_init', 'Gto_init', 'H_init', 'J_init', 'Ki_init', 'M_init', 'Nai_init', 'O_init', 'R__init', 'R_init', 'S_init', 'V_init', 'Xr1_init', 'Xr2_init', 'Xs_init', 'd_init'])"
+        }
+    ]
+}

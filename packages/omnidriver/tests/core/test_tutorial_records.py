@@ -1202,7 +1202,7 @@ def test_the_refusal_comes_before_a_commit_writes_anything(tmp_path):
 class _RuleCheckingPlugin(_RecordCaseWriterPlugin):
     """A stack whose one rule says a case holds at most 10 cells, and warns above 5."""
 
-    def validate_run_semantics(self, case_root):
+    def validate_run_semantics(self, case_root, *, driver_context):
         cells = json.loads((Path(case_root) / "constant" / "mesh.json").read_text())["cells"]
         found = []
         if int(cells) > 10:

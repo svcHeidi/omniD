@@ -1,0 +1,14 @@
+# TorchCor is its own environment and solver: no requires, no MPI.
+schema_version: 1
+plugin:
+  id: org.omnidriver.torchcor
+  api_version: "3"
+case_profile:
+  dictionaries: []
+environment:
+  supplied:
+    - name: TORCHCOR_BIN
+      required: true
+      why: the bin directory of the venv TorchCor is installed in (from the solver repository's submodule), first on PATH so a record's python3 is TorchCor's (docs/solver-learning/torchcor.md A1, G0)
+  path_prepend:
+    - TORCHCOR_BIN

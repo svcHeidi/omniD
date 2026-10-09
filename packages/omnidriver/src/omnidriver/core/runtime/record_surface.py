@@ -61,7 +61,7 @@ def record_surface(
         }
         for input_ in sorted(record.inputs, key=lambda input_: input_.name)
     ]
-    listed = stack.call("get_record_key_catalog", Path(native_case_root))
+    listed = stack.call("get_record_key_catalog", Path(native_case_root), driver_context=driver_context)
     keys = stack.call("select_applicable_record_keys", listed, Path(native_case_root))
     return {
         "axes": axes,

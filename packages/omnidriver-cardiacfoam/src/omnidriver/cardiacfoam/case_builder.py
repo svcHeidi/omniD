@@ -531,7 +531,7 @@ def build_case(
         executable=frozenset({"Allrun"}),
         keep_existing=_KEPT_UNLESS_OVERWRITTEN if not overwrite else frozenset({"system/blockMeshDict"}),
     )
-    found = list(driver_context.stack.call("validate_run_semantics", case_dir))
+    found = list(driver_context.stack.call("validate_run_semantics", case_dir, driver_context=driver_context))
     found += [diagnostic(
         "info", "plugin_catalog_uncatalogued",
         f"{entry.driver_path} is not in the catalogue; the supplied C++ reads it as {entry.value_kind}, "

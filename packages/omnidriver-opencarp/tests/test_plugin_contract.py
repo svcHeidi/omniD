@@ -21,7 +21,7 @@ def test_record_key_catalog_lists_only_addressable_documents_and_keys_I1(tmp_pat
 
     (tmp_path / "nversion.par").write_text("")
     (tmp_path / "foo.par").write_text("")
-    entries = OpenCARPPlugin().get_record_key_catalog(tmp_path)
+    entries = OpenCARPPlugin().get_record_key_catalog(tmp_path, driver_context=None)
     assert {e["document"] for e in entries} == {"nversion.par"}
     keys = {e["key"] for e in entries}
     assert "gregion[Int].g_il" in keys and "tend" in keys

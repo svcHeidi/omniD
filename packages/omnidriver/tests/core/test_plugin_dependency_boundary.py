@@ -106,6 +106,7 @@ ADAPTER_PACKAGES = (
     "packages/omnidriver-cardiacfoam/src",
     "packages/omnidriver-cardiaccore/src",
     "packages/omnidriver-opencarp/src",
+    "packages/omnidriver-torchcor/src",
 )
 
 

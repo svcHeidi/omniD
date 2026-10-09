@@ -24,6 +24,7 @@ _PACKAGES = (
     "omnidriver-cardiacfoam",
     "omnidriver-cardiaccore",
     "omnidriver-opencarp",
+    "omnidriver-torchcor",
 )
 
 

@@ -355,7 +355,7 @@ def record_case_members(record: TutorialRecord, driver_context: "DriverContext")
     stack = driver_context.stack
     try:
         return (
-            stack.call("get_record_key_validator"),
+            stack.call("get_record_key_validator", driver_context=driver_context),
             stack.call("get_case_value_comparator"),
             stack.call("get_config_value_reader"),
         )
@@ -371,7 +371,7 @@ def refuse_a_case_that_breaks_a_rule(
     an error in it: the one check every plan, run, sweep case, applied edit
     and run document passes before anything executes. ``then`` says what
     stays true after the refusal."""
-    found = driver_context.stack.call("validate_run_semantics", case_root)
+    found = driver_context.stack.call("validate_run_semantics", case_root, driver_context=driver_context)
     broken = [item for item in found if item.level == "error"]
     if broken:
         noted = [item for item in found if item.level != "error"]

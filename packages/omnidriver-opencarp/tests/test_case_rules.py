@@ -58,7 +58,7 @@ def test_a_value_the_case_does_not_set_is_not_judged(tmp_path):
 def test_the_rules_carry_the_errors_and_the_plan_the_notes(tmp_path):
     case = _case(tmp_path, "tend = 150\nspacedt = 1000\nstimulus[0].npls = 3\n")
     plugin = OpenCARPPlugin()
-    assert {item.level for item in plugin.validate_run_semantics(case)} == {"error"}
+    assert {item.level for item in plugin.validate_run_semantics(case, driver_context=None)} == {"error"}
     planned = plugin.get_plan_diagnostics(case, workflow_dag=None, env={}, scratch_root=None, driver_context=None)
     assert planned and all(item.level == "info" for item in planned)
 

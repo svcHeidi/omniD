@@ -15,7 +15,7 @@ CASE = Path(__file__).resolve().parent / "fixtures" / "tutorials" / "electrophys
 
 
 def _catalogue():
-    return CardiacFoamPlugin().get_record_key_catalog(CASE)
+    return CardiacFoamPlugin().get_record_key_catalog(CASE, driver_context=None)
 
 
 def test_the_coeffs_token_is_the_cases_own_solver_scope():
@@ -65,14 +65,14 @@ def test_a_pre_pacing_file_the_case_holds_is_listed_by_the_keys_a_study_may_set(
     case = tmp_path / "case"
     shutil.copytree(CASE, case)
     (case / "constant" / "prePacingProperties").write_text("FoamFile { version 2.0; format ascii; class dictionary; object x; }\n")
-    keys = {e["key"] for e in CardiacFoamPlugin().get_record_key_catalog(case) if e["document"] == "constant/prePacingProperties"}
+    keys = {e["key"] for e in CardiacFoamPlugin().get_record_key_catalog(case, driver_context=None) if e["document"] == "constant/prePacingProperties"}
     assert {"tolerance", "maxBeats", "regions.<region_name>.maxBeats", "singleCellStimulus.stim_start", "regions.<region_name>.singleCellStimulus.stim_start"} <= keys
     assert not [key for key in keys if "$" in key]
 
 
 def test_describe_lists_only_the_keys_the_cases_own_solver_allows():
     plugin = CardiacFoamPlugin()
-    listed = plugin.get_record_key_catalog(CASE)
+    listed = plugin.get_record_key_catalog(CASE, driver_context=None)
     narrowed = plugin.select_applicable_record_keys(listed, CASE)
     kept = {(e["document"], e["key"]) for e in narrowed}
     gone = {(e["document"], e["key"]) for e in listed} - kept

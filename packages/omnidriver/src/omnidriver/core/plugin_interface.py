@@ -150,7 +150,7 @@ class SolverPlugin(Protocol):
         """The commands that run the solve step, the one a parallel run rewrites."""
 
     # -- planning and validation ----------------------------------------------
-    def validate_run_semantics(self, case_root: Path) -> tuple["StrictDiagnostic", ...]:
+    def validate_run_semantics(self, case_root: Path, *, driver_context: Any) -> tuple["StrictDiagnostic", ...]:
         """The rules the resolved case at ``case_root`` breaks; an error
         refuses the record case before anything runs."""
 
@@ -231,7 +231,7 @@ class SolverPlugin(Protocol):
     def get_tutorial_records(self) -> dict[str, Any]:
         """``TutorialRecord`` values by name."""
 
-    def get_record_key_catalog(self, case_root: Path) -> tuple[Mapping[str, Any], ...]:
+    def get_record_key_catalog(self, case_root: Path, *, driver_context: Any) -> tuple[Mapping[str, Any], ...]:
         """Every key a study may name for this case: ``document``, ``key``,
         ``value_kind`` and optionally ``default``, ``description``,
         ``minimum``, ``maximum``, ``menu``. The key grammar (``[Int]``,
@@ -249,7 +249,7 @@ class SolverPlugin(Protocol):
     def get_agent_guidance(self) -> tuple[Mapping[str, str], ...]:
         """Advice an agent reads before writing a study: ``title``, ``text``."""
 
-    def get_record_key_validator(self):
+    def get_record_key_validator(self, *, driver_context: Any):
         """A ``(document, key_path, value) -> (value_kind, validated)``
         callable; it raises for a key it refuses."""
 

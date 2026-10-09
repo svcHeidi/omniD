@@ -421,7 +421,7 @@ def test_record_surface_lists_only_the_keys_a_provider_leaves_applicable_and_cou
     from omnidriver.core.runtime.record_surface import record_surface
 
     class _Narrowing(ToyProvider):
-        def get_record_key_catalog(self, case_root):
+        def get_record_key_catalog(self, case_root, *, driver_context):
             return ({"document": "d", "key": "kept", "value_kind": "word"}, {"document": "d", "key": "dropped", "value_kind": "word"})
 
         def select_applicable_record_keys(self, keys, case_root):

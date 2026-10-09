@@ -165,13 +165,13 @@ class CardiacFoamPlugin:
 
         return named_catalogs()
 
-    def get_record_key_validator(self):
+    def get_record_key_validator(self, *, driver_context):
         """See ``record_key_validation.py`` for the three rules it implements."""
         from omnidriver.cardiacfoam.record_key_validation import record_key_validator
 
         return record_key_validator
 
-    def get_record_key_catalog(self, case_root) -> tuple:
+    def get_record_key_catalog(self, case_root, *, driver_context) -> tuple:
         """Every key a study may name for the case at ``case_root``: the
         same rules ``get_record_key_validator`` refuses by
         (``record_key_validation.record_key_catalog``; conformance C10)."""
@@ -202,7 +202,7 @@ class CardiacFoamPlugin:
 
         return TUTORIAL_RECORDS
 
-    def validate_run_semantics(self, case_root):
+    def validate_run_semantics(self, case_root, *, driver_context):
         """The catalogue's relations and cardiacFOAM's cross-field rules,
         over the resolved case's ``electroProperties``."""
         from omnidriver.cardiacfoam.validation import case_diagnostics

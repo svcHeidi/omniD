@@ -188,7 +188,7 @@ def check_patch_preserves(target: ConformanceTarget) -> CheckVerdict:
     try:
         reader = ctx.stack.call("get_config_value_reader")
         comparator = ctx.stack.call("get_case_value_comparator")
-        validator = ctx.stack.call("get_record_key_validator")
+        validator = ctx.stack.call("get_record_key_validator", driver_context=ctx)
     except MemberAbsent as exc:
         return _verdict("C4", False, str(exc))
     untouched_doc, untouched_key = target.untouched

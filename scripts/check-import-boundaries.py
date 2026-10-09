@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail when a package imports across the layering ARCHITECTURE.md forbids; ``if TYPE_CHECKING:`` imports are exempt.
 
-Core imports no adapter nor foamlib; openfoam no cardiac adapter; opencarp no other adapter nor foamlib, and none imports opencarp.
+Core imports no adapter nor foamlib; openfoam no cardiac adapter; opencarp and torchcor no other adapter nor foamlib, and none imports them.
 """
 
 from __future__ import annotations
@@ -27,6 +27,8 @@ CARDIACFOAM_SRC = REPO_ROOT / "packages/omnidriver-cardiacfoam/src/omnidriver/ca
 # The agent harness measures omniD from outside, through its CLI: importing
 # omniD would let the measurement depend on what it measures.
 AGENTS_SRC = REPO_ROOT / "packages/omnidriver-agents/src/omnidriver_agents"
+# TorchCor is a Python API run in its own venv: it depends on core only.
+TORCHCOR_SRC = REPO_ROOT / "packages/omnidriver-torchcor/src/omnidriver/torchcor"
 
 
 def _adapter_package_roots() -> dict[str, Path]:
@@ -101,10 +103,11 @@ def main() -> int:
     # Each adapter's own rules. Every adapter found on disk must appear here;
     # one that does not is refused below rather than silently exempted.
     adapter_rules: dict[Path, tuple[str, ...]] = {
-        OPENFOAM_SRC: ("omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.opencarp"),
-        CARDIACFOAM_SRC: ("omnidriver.opencarp",),
-        CARDIACCORE_SRC: ("omnidriver.cardiacfoam", "omnidriver.opencarp"),
-        OPENCARP_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore"),
+        OPENFOAM_SRC: ("omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.opencarp", "omnidriver.torchcor"),
+        CARDIACFOAM_SRC: ("omnidriver.opencarp", "omnidriver.torchcor"),
+        CARDIACCORE_SRC: ("omnidriver.cardiacfoam", "omnidriver.opencarp", "omnidriver.torchcor"),
+        OPENCARP_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.torchcor"),
+        TORCHCOR_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.opencarp"),
     }
     unruled = sorted(name for name, root in adapters.items() if root not in adapter_rules)
     if unruled:
@@ -158,8 +161,9 @@ def main() -> int:
         print(
             "\nomnidriver.core must not import foamlib or any adapter package "
             "at runtime. omnidriver.openfoam must not import either cardiac "
-            "package or omnidriver.opencarp; no adapter imports "
-            "omnidriver.opencarp, and it imports no other adapter. "
+            "package, omnidriver.opencarp or omnidriver.torchcor; no adapter "
+            "imports omnidriver.opencarp or omnidriver.torchcor, and neither "
+            "imports another adapter. "
             "omnidriver.cardiaccore must not "
             "import omnidriver.cardiacfoam: the two cardiac adapters are "
             "siblings, and what passes between them is declared, not imported. "

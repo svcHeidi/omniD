@@ -1,11 +1,11 @@
 # OmniDriver architecture
 
-This repository is **OmniDriver**: a solver-agnostic workflow engine in five packages, one per concern.
+This repository is **OmniDriver**: a solver-agnostic workflow engine in six packages, one per concern, and a seventh, `omnidriver-agents`, that measures agents driving it through the CLI and imports none of them.
 
 ## The Grand Vision: Monorepo + Namespace Packages
-The engine orchestrates deterministic continuous simulations (OpenFOAM and openCARP today) and can steer optimization loops through autonomous agents.
+The engine orchestrates deterministic continuous simulations (OpenFOAM, openCARP and TorchCor today) and can steer optimization loops through autonomous agents.
 
-The project is a **Monorepo** paired with Python **Namespace Packages** (PEP 420). All the code lives in one GitHub repository, but it is published as five strictly decoupled `pip` packages.
+The project is a **Monorepo** paired with Python **Namespace Packages** (PEP 420). All the code lives in one GitHub repository, but it is published as six strictly decoupled `pip` packages.
 
 ### Directory Structure & Import Semantics
 Because `src/omnidriver/` will not contain an `__init__.py` file in any of the packages, Python treats it as a namespace. Users can install them independently but import them beautifully:
@@ -32,8 +32,11 @@ omnidriver/ (GitHub Root)
 │   │   └── src/omnidriver/cardiaccore/  <-- Cardiac preprocessing adapter; sibling to
 │   │                                         cardiacfoam, not a dependent of it (Rule 4)
 │   │
-│   └── omnidriver-opencarp/             (import omnidriver.opencarp)
-│       └── src/omnidriver/opencarp/     <-- openCARP adapter; depends on core only (Rule 5)
+│   ├── omnidriver-opencarp/             (import omnidriver.opencarp)
+│   │   └── src/omnidriver/opencarp/     <-- openCARP adapter; depends on core only (Rule 5)
+│   │
+│   └── omnidriver-torchcor/             (import omnidriver.torchcor)
+│       └── src/omnidriver/torchcor/     <-- TorchCor adapter; depends on core only (Rule 5)
 │
 ├── benchmarks/                      <-- Published, solver-neutral reference definitions
 │                                        (e.g. niederer2011.json); scripts/check-benchmark-
@@ -48,10 +51,10 @@ omnidriver/ (GitHub Root)
    openfoam, and MUST NOT import `omnidriver.cardiacfoam` (nor the reverse).
    The two cardiac adapters are siblings; what passes between them is declared
    and mediated, not imported.
-5. **Independent adapter:** `omnidriver.opencarp` depends on core only and
-   MUST NOT import `omnidriver.openfoam` or either cardiac adapter, nor may
-   any of them import it. `scripts/check-import-boundaries.py` enforces all
-   five.
+5. **Independent adapters:** `omnidriver.opencarp` and `omnidriver.torchcor`
+   depend on core only and MUST NOT import `omnidriver.openfoam`, either
+   cardiac adapter or each other, nor may any of them import either.
+   `scripts/check-import-boundaries.py` enforces all five rules.
 
 ## Verification
 
@@ -84,7 +87,11 @@ provider's four identity properties are required; every other member is
 optional. `provider_stack.MEMBERS` is the one table of the contract: for each
 member, how a stack composes the providers that implement it, and what the
 stack answers when none does. Core reaches every member through
-`driver_context.stack.call(member, ...)`.
+`driver_context.stack.call(member, ...)`, and hands every member that may
+need what the context carries (the solver repository, the stack itself)
+that context as the keyword `driver_context`: the plan and environment
+diagnostics, step-failure explanation, the loaded environment, the case
+writer, the record-key validator, the key catalogue and the case rules.
 
 | shape | semantics | example member(s) |
 |---|---|---|

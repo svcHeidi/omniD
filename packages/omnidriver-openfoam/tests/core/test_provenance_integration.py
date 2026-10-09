@@ -165,7 +165,7 @@ class _CollatedLayoutPlugin:
             },
         )
 
-    def validate_run_semantics(self, context):
+    def validate_run_semantics(self, case_root, *, driver_context):
         return ()
 
     def predict_data_artifacts(self, case_root, spec):
