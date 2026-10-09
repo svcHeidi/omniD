@@ -238,7 +238,7 @@ read the same mesh.
 ## I. The fibre as a case key, and the fibre at 45° (2026-10-09)
 
 The runner wrote every `.lon` row as `1 0 0`. Runs under
-`/Users/simaocastro/omnid-runs/2026-10-09/oblique/`; the frame reasoning is in
+`<runs>/2026-10-09/oblique/`; the frame reasoning is in
 `benchmarks/niederer2011/oblique/README.md`. TorchCor at `b02daee`, CPU, float32,
 serial, dt 0.01 ms.
 

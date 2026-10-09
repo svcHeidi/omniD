@@ -9,7 +9,8 @@ TorchCor, on the campaign's grid (Δx 0.5, 0.2, 0.1 mm × Δt 0.05, 0.01,
 |---|---|---|
 | `opencarp_obliqueWall.json` | openCARP `niedererNVersion` | `fibers.imbrication 90` (mesher), `mass_lumping 0` as the campaign |
 | `torchcor_obliqueWall.json` | TorchCor `nversion` (`--repo` the TorchCor cases repository) | `case.json:fibre` (1, 0, 1)/√2 |
-| cardiacFOAM's study | the native `NiedererEtAl2011verification/setup/studies/obliqueWall/sweep_hex_oblique_godunov_0.json`, **not copied** | |
+| cardiacFOAM's like-for-like study | `godunov_AB`: `godunov_0` with `sealedHeartBoundary true`, `sealedWallTrace conormal`, so its walls carry no flux as the FE walls do | |
+| cardiacFOAM's native-wall study | the native `NiedererEtAl2011verification/setup/studies/obliqueWall/sweep_hex_oblique_godunov_0.json`, **not copied** | |
 
 ## The same fibre in each frame
 
@@ -32,18 +33,22 @@ sign matters: (1, 0, −1)/√2 is another problem (`docs/solver-learning/openca
   The record's `fibers.imbrication` axis passes it; no file is rewritten.
 - **TorchCor**'s runner writes the `case.json` key `fibre` as every `.lon` row and
   forms σt I + (σl − σt) f fᵀ from the harmonic means, as openCARP does.
-- **cardiacFOAM** takes the full tensor; `godunov_0` keeps the native walls
-  (`sealedHeartBoundary false`, `zeroGradient`) and the C++ default coupling
-  (`godunov`). Its one other change from the native case is `ddtSchemes Euler`
-  against the native `backward`; at Δx 0.5 mm, Δt 0.01 ms that moves the aligned
-  corners by at most 0.48 ms (`docs/solver-learning/cardiacfoam.md` AA).
+- **cardiacFOAM** takes the full tensor. Compare openCARP and TorchCor against
+  **`godunov_AB`**, the like-for-like study: sealed walls with the `conormal`
+  trace, its counterpart of the FE natural condition. `godunov_0` is the
+  native-wall variant (`sealedHeartBoundary false`, `zeroGradient`, the C++
+  default coupling `godunov`); both change one other thing from the native
+  case, `ddtSchemes Euler` against the native `backward`, which at Δx 0.5 mm,
+  Δt 0.01 ms moves the aligned corners by at most 0.48 ms
+  (`docs/solver-learning/cardiacfoam.md` AA).
 
-**The wall is not the same problem in `0`.** openCARP and TorchCor apply the
-finite-element natural condition, no flux n·σ∇V = 0. `zeroGradient` (n·∇V = 0)
-admits a front uniform across cardiacFOAM's 3 mm, and the runs settle on one:
-P3 = P7 and P4 = P8 to every printed digit. cardiacFOAM's counterpart of the FE
-wall is `godunov_AB` (`sealedHeartBoundary true`, `conormal`); compare against
-it as well (`cardiacfoam.md` AA).
+**The wall is not the same problem in `godunov_0`.** openCARP and TorchCor apply
+the finite-element natural condition, no flux n·σ∇V = 0. `zeroGradient`
+(n·∇V = 0) admits a front uniform across cardiacFOAM's 3 mm, so under oblique
+conductivity `godunov_0` gives P3 = P7 and P4 = P8 exactly (AA3), where
+openCARP and TorchCor keep P7 3.6-5.2 ms ahead of P3. Its agreement at those
+corners is therefore not evidence of anything; read `godunov_AB`, which
+restores the ordering (AA4).
 
 ## Running one level
 

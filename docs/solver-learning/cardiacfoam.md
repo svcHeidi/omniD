@@ -847,8 +847,8 @@ activation files at the nearest node: openCARP's `init_acts_vm_act-thresh.dat`
 Native tree `a7b8e845` (exported, untouched), OpenFOAM v2412, serial, Δt
 0.01 ms, each row sliced from a native study by `level_study.py` and run with
 `omnidriver sweep-run --plugin cardiacfoam`. Runs under
-`/Users/simaocastro/omnid-runs/2026-10-09/oblique/runs/`; read by
-`omnidriver compare` (`.../oblique/reports/`). The FE side is in
+`<runs>/2026-10-09/oblique/runs/`; read by
+`omnidriver compare` (`<runs>/2026-10-09/oblique/reports/`). The FE side is in
 `opencarp.md` M and `torchcor.md` I.
 
 | # | command | observed | conclusion |
@@ -857,7 +857,7 @@ Native tree `a7b8e845` (exported, untouched), OpenFOAM v2412, serial, Δt
 | AA2 | `cartesianConvergence` at dx 0.5 mm, native and with `--set system/fvSchemes:ddtSchemes.default="Euler"` | P1-P9 move by at most 0.48 ms (P8) | the one departure of `godunov_0` is small next to anything below |
 | AA3 | `godunov_0` at dx 0.5 and 0.2 mm; its `activationTime` field at the last time | P3 = P7 and P4 = P8 to every printed digit at both levels; at dx 0.2 every cell of the columns x = 10 and 19.9 mm activates at one time across y (23.274, 48.141 ms) | **with `zeroGradient` walls the front becomes uniform across the 3 mm** (n·∇V = 0 admits V(x − ct) whatever σxy), where openCARP and TorchCor, whose wall is no flux n·σ∇V = 0, keep P7 3.6-5.2 ms ahead of P3 |
 | AA4 | `godunov_A` at dx 0.5; `godunov_AB` at dx 0.5 and 0.2 | A 0.5: P3 76.18, P7 70.94. AB 0.5: P3 80.60, P7 75.12; AB 0.2: P3 59.75, P7 54.53 | the sealed walls restore the FE ordering (P7 before P3, by 5.2-5.5 ms as openCARP's 3.6-4.9). `AB` (`conormal`) is cardiacFOAM's counterpart of the FE wall |
-| AA5 | `godunov_0` at dx 0.5 with σxy negated (a probe, not a native file); `probes/s1_sign/sign.py` on the top cell layer against openCARP's ±90 runs | +σxy: 12.70 → 12.45 ms from z_c 0.25 to 2.75 mm at x 4.25; −σxy: 15.58 → 18.09, as openCARP's +90/−90 | the native tensor is openCARP's `fibers.imbrication 90` |
+| AA5 | `godunov_0` at dx 0.5 with σxy negated (a probe, not a native file); `probes/s1_sign/sign.py` on the top cell layer against openCARP's ±90 runs | +σxy: 12.70 → 12.45 ms from z_c 0.25 to 2.75 mm at x 4.25; −σxy: 15.58 → 18.09, as openCARP's +90/−90 | the native tensor is openCARP's `fibers.imbrication 90`, by the P3/P7 ordering: openCARP +90 has P7 49.51 < P3 53.07, −90 has P7 56.55 > P3 52.97, and `godunov_AB` with +σxy (AA4) has P7 < P3. The z-profile alone does not settle it: `godunov_0`'s +σxy column rises at x = 2.25 mm (4.91 → 6.68 ms) where openCARP's +90 falls, its `zeroGradient` walls being another problem (AA3) |
 | AA6 | the native tet route (`tetConvergence`, `tetDx 0.0005`), aligned and with `godunov_0`'s five patches added by `--set` | `ok`; solve 564 s each (two running at once); oblique P3 49.34, P7 49.38 | the tet mesh with `zeroGradient` also loses the P3/P7 ordering |
 
 **P1-P9 (ms).** Hex `0` is the native study's file; aligned 0.2 is the
