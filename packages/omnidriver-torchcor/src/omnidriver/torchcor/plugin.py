@@ -127,9 +127,12 @@ class TorchCorPlugin:
             before = path.read_bytes() if exists_before else b""
             text = before.decode()
             for key, target in targets.items():
-                # An unvalidated key only replaces one the case holds, so a typo adds nothing.
+                # A key no runner judged ("set", not "ensure") only replaces one the case holds, so a typo adds nothing.
                 if target["operation"] == "set" and read_value(text, key) is None:
-                    raise CaseJsonError(f"{document}:{key} is not in the case, and an unvalidated key is never added")
+                    raise CaseJsonError(
+                        f"{document}:{key} is not in the case, and with no runner to judge keys (--plugin torchcor alone) "
+                        "a key only replaces one the case holds; select the stack with --repo to add it"
+                    )
             rendered.append(RenderedFile(
                 path=document, content=patch(text, {k: t["value"] for k, t in targets.items()}).encode(),
                 mode=None, exists_before=exists_before,

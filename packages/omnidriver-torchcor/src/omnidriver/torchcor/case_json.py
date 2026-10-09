@@ -30,19 +30,16 @@ def read_value(text: str, key: str) -> Any | None:
 
 
 def patch(text: str, values: dict[str, Any]) -> str:
-    """The document with each dotted key set. A field may be added to an
-    existing object, never a top-level key the document lacks, and a list
-    element is not addressable."""
+    """The document with each dotted key set. A key may add a field to an
+    object the document holds; a list element is not addressable."""
     document = _load(text)
     for key, value in values.items():
         *parents, leaf = key.split(".")
-        if parents and parents[0] not in document or not parents and leaf not in document:
-            raise CaseJsonError(f"{key}: case.json has no {(parents or [leaf])[0]!r}, and a patch adds no top-level key")
         node = document
         for part in parents:
-            node = node.get(part) if isinstance(node, dict) else None
+            node = node.get(part)
             if not isinstance(node, dict):
-                raise CaseJsonError(f"{key}: {part!r} is not an object; a list element or scalar has no fields to set")
+                raise CaseJsonError(f"{key}: case.json holds no object {part!r}; a list element or scalar has no fields to set")
         node[leaf] = value
     return json.dumps(document, indent=2) + "\n"
 

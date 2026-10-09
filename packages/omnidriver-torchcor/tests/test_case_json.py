@@ -33,11 +33,6 @@ def test_a_patch_may_add_a_field_to_an_existing_object():
     assert json.loads(patch(CASE, {"ionic_init.Ki_init": 138.3}))["ionic_init"]["Ki_init"] == 138.3
 
 
-def test_a_top_level_key_the_document_lacks_is_refused_by_name():
-    with pytest.raises(CaseJsonError, match="chi_per_m"):
-        patch(CASE, {"chi_per_m": 140})
-
-
 def test_a_list_element_is_refused_by_name():
     with pytest.raises(CaseJsonError, match="slab_mm.0"):
         patch(CASE, {"slab_mm.0": 10})
@@ -66,12 +61,23 @@ def test_the_renderer_writes_the_patched_document_with_the_digest_of_the_bytes_b
     assert json.loads(rendered.content)["dx_mm"] == 0.25
 
 
-def test_an_unvalidated_key_only_replaces_one_the_document_holds(tmp_path):
+def _rendered(tmp_path, key, value, operation):
     from omnidriver.torchcor.plugin import TorchCorPlugin
 
     (tmp_path / "case.json").write_text(CASE)
     resolved = type("Resolved", (), {"targets": (
-        {"document": "case.json", "key": "ionic_init.V_int", "value": -85.0, "operation": "set"},
+        {"document": "case.json", "key": key, "value": value, "operation": operation},
     )})()
-    with pytest.raises(CaseJsonError, match="ionic_init.V_int"):
-        TorchCorPlugin().render_case_files(resolved, snapshot_root=tmp_path, driver_context=None)
+    (rendered,) = TorchCorPlugin().render_case_files(resolved, snapshot_root=tmp_path, driver_context=None)
+    return json.loads(rendered.content)
+
+
+def test_a_validated_key_may_add_a_field_of_the_ionic_model_the_case_rules_then_judge(tmp_path):
+    assert _rendered(tmp_path, "ionic_init.GKs_init", 0.392, "ensure")["ionic_init"]["GKs_init"] == 0.392
+    assert _rendered(tmp_path, "ionic_options.sex", "MALE", "ensure")["ionic_options"]["sex"] == "MALE"
+
+
+def test_an_unvalidated_key_only_replaces_one_the_document_holds(tmp_path):
+    assert _rendered(tmp_path, "ionic_init.V_init", -85.0, "set")["ionic_init"]["V_init"] == -85.0
+    with pytest.raises(CaseJsonError, match=r"ionic_init.V_int.*no runner to judge keys.*--repo"):
+        _rendered(tmp_path, "ionic_init.V_int", -85.0, "set")
