@@ -1102,6 +1102,33 @@ def _evaluate_pvj_stability(
     return found
 
 
+#: The uniform conductivity tensors, and where a tensor's diagonal sits in its six (symmetric) or nine components.
+_CONDUCTIVITY_TENSORS = ("conductivity", "conductivityIntracellular", "conductivityExtracellular")
+_DIAGONAL = {6: (0, 3, 5), 9: (0, 4, 8)}
+
+
+def _evaluate_conductivity_diagonal(context: dict[str, Any]) -> list["StrictDiagnostic"]:
+    """A conductivity is a positive quantity along each axis: every diagonal component of a uniform tensor is more than 0."""
+    errors: list["StrictDiagnostic"] = []
+    for key in _CONDUCTIVITY_TENSORS:
+        value = context.get(key)
+        components = getattr(value, "value", value)
+        try:
+            components = [float(item) for item in components]
+        except (TypeError, ValueError):
+            continue
+        indices = _DIAGONAL.get(len(components))
+        if indices is None:
+            continue
+        diagonal = [components[i] for i in indices]
+        if any(item <= 0 for item in diagonal):
+            errors.append(_diagnostic_from_phase(
+                phase="physics", field=key, level="error",
+                message=f"{key} has diagonal {diagonal}; each diagonal component must be more than 0.",
+            ))
+    return errors
+
+
 def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]:
     """The rules between values that no single catalogue entry states.
     ``context`` is the active ``<solver>Coeffs`` block's leaves, keyed by
@@ -1113,6 +1140,7 @@ def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]
         + _evaluate_personalized_templates(context)
         + _evaluate_tissue_compatibility(context)
         + _evaluate_ecg_anisotropic_consistency(context)
+        + _evaluate_conductivity_diagonal(context)
     )
 
 

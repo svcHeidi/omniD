@@ -1579,3 +1579,23 @@ def test_an_empty_external_stimulus_block_still_needs_its_corners(tmp_path):
     assert "one of externalStimulus.stimulusLocationMin, externalStimulus.stimulusLocationMinList is required." in (
         _external_stimulus_case(tmp_path, "")
     )
+
+
+@pytest.mark.parametrize("key", ["conductivity", "conductivityIntracellular", "conductivityExtracellular"])
+def test_a_uniform_conductivity_tensor_has_a_positive_diagonal(key):
+    from foamlib import Dimensioned, DimensionSet
+
+    from omnidriver.cardiacfoam.validation import _evaluate_conductivity_diagonal
+
+    siemens_per_metre = DimensionSet(mass=-1, length=-3, time=3, current=2)
+    symmetric = Dimensioned([0.1334, 0, 0, 0.0176, 0, 0.0176], siemens_per_metre)
+    assert _evaluate_conductivity_diagonal({key: symmetric}) == []
+    full = Dimensioned([0.1334, 0, 0, 0, 0.0176, 0, 0, 0, 0.0176], siemens_per_metre)
+    assert _evaluate_conductivity_diagonal({key: full}) == []
+    broken = Dimensioned([0.1334, 0, 0, -0.0176, 0, 0.0176], siemens_per_metre)
+    (found,) = _evaluate_conductivity_diagonal({key: broken})
+    assert (found.level, found.field) == ("error", key)
+    assert "diagonal" in found.message and "-0.0176" in found.message
+    assert [item.field for item in cross_field_diagnostics({key: broken})] == [key]
+    zero = Dimensioned([0, 0, 0, 0, 0, 0, 0, 0, 1], siemens_per_metre)
+    assert len(_evaluate_conductivity_diagonal({key: zero})) == 1

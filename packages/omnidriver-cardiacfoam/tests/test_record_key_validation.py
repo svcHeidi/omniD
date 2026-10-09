@@ -175,6 +175,19 @@ def test_a_catalogued_control_dict_key_is_validated_by_kind_and_bounds():
     assert record_key_validator("system/controlDict", ("endTime",), 0.2) == ("scalar", True)
 
 
+@pytest.mark.parametrize("key_path", [
+    ("monodomainSolverCoeffs", "chi"),
+    ("monodomainSolverCoeffs", "cm"),
+    ("monodomainSolverCoeffs", "conductionNetworkDomains", "his", "purkinjeGraphModelCoeffs", "chi"),
+    ("monodomainSolverCoeffs", "conductionNetworkDomains", "his", "purkinjeGraphModelCoeffs", "cm"),
+])
+def test_surface_to_volume_ratio_and_capacitance_are_positive(key_path):
+    assert record_key_validator("constant/electroProperties", key_path, 0.5) == ("scalar", True)
+    for value in (0, -1):
+        with pytest.raises(ValueError, match="must be more than 0"):
+            record_key_validator("constant/electroProperties", key_path, value)
+
+
 def test_a_number_spelled_as_text_is_read_and_a_directive_is_left_to_openfoam():
     assert record_key_validator("system/controlDict", ("deltaT",), "1e-5") == ("scalar", True)
     with pytest.raises(ValueError, match="must be more than 0"):

@@ -45,7 +45,10 @@ def read_leaves(path: Path, scope: tuple[str, ...] = ()) -> dict[str, Any]:
 
 
 def bound_reasons(entry: Any, value: Any) -> tuple[str, ...]:
-    """Reasons a number lies outside the entry's declared bounds; empty when it fits, none is declared or the value is no number."""
+    """Reasons a number lies outside the entry's declared bounds; empty when it fits, none is declared or the value is no number.
+    A dimensioned number is judged by its magnitude."""
+    if getattr(value, "dimensions", None) is not None:
+        value = value.value
     if entry.value_kind not in ("scalar", "integer") or isinstance(value, bool) or not isinstance(value, Real):
         return ()
     reasons = []
