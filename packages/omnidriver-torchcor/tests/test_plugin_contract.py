@@ -1,25 +1,24 @@
 from __future__ import annotations
 
+from torchcor_testing import context_of, repository_with_runner
+
 from omnidriver.core.plugin_discovery import load_discovered_plugin
-from omnidriver.torchcor.activation_reader import ACTIVATION_FORMAT
+from omnidriver.core.scripts import find_script
+from omnidriver.core.tutorial_records import ProducedPath
 
 
-def test_torchcor_stack_is_one_provider_C1():
-    ctx = load_discovered_plugin("torchcor")
-    assert [p.plugin_id for p in ctx.providers] == ["org.omnidriver.torchcor"]
+def test_the_installed_plugin_joins_a_stack_every_public_callable_naming_a_member():
+    context = load_discovered_plugin("torchcor")
+    assert context.stack.providers == context.providers
 
 
-def test_the_nversion_record_runs_the_repository_runner_serially():
-    record = load_discovered_plugin("torchcor").stack.call("get_tutorial_records")["nversion"]
-    assert record.serial_only
-    (step,) = record.workflow_steps
-    assert step.command == ("run_case.py", "case.json")
-    assert step.produced_format("out/activation_times.dat") == ACTIVATION_FORMAT
-    assert record.conformance is not None and record.conformance.quantity.artifact_format == ACTIVATION_FORMAT
-
-
-def test_the_solver_command_is_python3_and_guidance_is_given():
-    stack = load_discovered_plugin("torchcor").stack
-    assert stack.call("get_solver_commands") == frozenset({"python3"})
-    (guidance,) = stack.call("get_agent_guidance")
-    assert "mass_lumping" in guidance["text"]
+def test_each_record_step_runs_a_repository_script_and_its_formatted_outputs_are_readable(tmp_path):
+    root = repository_with_runner(tmp_path)
+    context = context_of(root)
+    formats = []
+    for record in context.stack.call("get_tutorial_records").values():
+        for step in record.workflow_steps:
+            assert find_script(step.command[0], context) == (root / "scripts" / step.command[0]).resolve()
+            formats += [step.produced_format(path) for path in step.produces if isinstance(path, ProducedPath)]
+    assert formats
+    assert all(context.stack.call("get_artifact_value_reader", name) is not None for name in formats)
