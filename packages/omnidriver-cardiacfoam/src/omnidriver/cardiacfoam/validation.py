@@ -1108,7 +1108,8 @@ _DIAGONAL = {6: (0, 3, 5), 9: (0, 4, 8)}
 
 
 def _evaluate_conductivity_diagonal(context: dict[str, Any]) -> list["StrictDiagnostic"]:
-    """A conductivity is a positive quantity along each axis: every diagonal component of a uniform tensor is more than 0."""
+    """A conductivity is never negative along an axis: every diagonal component of a uniform tensor is at least 0
+    (0 along an axis is an insulating direction, as openCARP's g_* minimum 0 allows)."""
     from .record_key_validation import ELECTRO_DOCUMENT
 
     errors: list["StrictDiagnostic"] = []
@@ -1124,10 +1125,10 @@ def _evaluate_conductivity_diagonal(context: dict[str, Any]) -> list["StrictDiag
         if indices is None:
             continue
         diagonal = [components[i] for i in indices]
-        if any(item <= 0 for item in diagonal):
+        if any(item < 0 for item in diagonal):
             errors.append(diagnostic(
-                "error", "run_validation", f"{coeffs}{key} has diagonal {diagonal}; each diagonal component must be more than 0.",
-                source=ELECTRO_DOCUMENT, field=f"{coeffs}{key}", detail={"rule": {"diagonal_exclusive_minimum": 0}},
+                "error", "run_validation", f"{coeffs}{key} has diagonal {diagonal}; each diagonal component must be at least 0.",
+                source=ELECTRO_DOCUMENT, field=f"{coeffs}{key}", detail={"rule": {"diagonal_minimum": 0}},
             ))
     return errors
 

@@ -1582,7 +1582,7 @@ def test_an_empty_external_stimulus_block_still_needs_its_corners(tmp_path):
 
 
 @pytest.mark.parametrize("key", ["conductivity", "conductivityIntracellular", "conductivityExtracellular"])
-def test_a_uniform_conductivity_tensor_has_a_positive_diagonal(key):
+def test_a_uniform_conductivity_tensor_has_no_negative_diagonal_component(key):
     from foamlib import Dimensioned, DimensionSet
 
     siemens_per_metre = DimensionSet(mass=-1, length=-3, time=3, current=2)
@@ -1594,6 +1594,6 @@ def test_a_uniform_conductivity_tensor_has_a_positive_diagonal(key):
     assert judged([0.1334, 0, 0, 0, 0.0176, 0, 0, 0, 0.0176]) == []
     (found,) = judged([0.1334, 0, 0, -0.0176, 0, 0.0176])
     assert (found.level, found.source, found.field) == ("error", "constant/electroProperties", f"monodomainSolverCoeffs.{key}")
-    assert found.detail == {"rule": {"diagonal_exclusive_minimum": 0}}
+    assert found.detail == {"rule": {"diagonal_minimum": 0}}
     assert "diagonal" in found.message and "-0.0176" in found.message
-    assert len(judged([0, 0, 0, 0, 0, 0, 0, 0, 1])) == 1
+    assert judged([0.1, 0, 0, 0, 0, 0]) == []
