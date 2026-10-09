@@ -1293,7 +1293,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
 
         report = environment_report(driver_context)
         print(json.dumps(report, indent=2))
-        return 0 if report["status"] == "ok" else 1
+        return 0 if report["status"] in ("ok", "degraded") else 1
 
     if args.action == "scan" or args.uncatalogued or args.unread:
         return _scan_or_uncatalogued(args, driver_context)

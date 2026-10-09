@@ -118,12 +118,12 @@ def test_the_preflight_runs_on_the_environment_the_prefix_produces(tmp_path):
     assert report["parallel"] == {"ranks": 2, "status": "ok", "diagnostics": []}
 
 
-def test_a_launcher_that_cannot_start_two_ranks_fails_the_parallel_item_not_a_serial_users_environment(tmp_path):
+def test_a_launcher_that_cannot_start_two_ranks_degrades_the_environment_without_failing_it(tmp_path):
     rc = tmp_path / "rc.sh"
     rc.write_text("export TOY_SOURCED=yes\n")
     context, _calls = _context(_connection(), refuse_the_launcher=True)
     report = environment_report(context, {"PATH": os.environ["PATH"], "TOY_RC": str(rc)})
-    assert report["status"] == "ok", report
+    assert report["status"] == "degraded", report
     assert report["parallel"]["status"] == "failed"
     assert [item["code"] for item in report["parallel"]["diagnostics"]] == ["toy_launcher_mismatch"]
     assert report["preflight"] == []

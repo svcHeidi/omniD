@@ -184,8 +184,8 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
     report["status"] = "failed" if any(item["level"] == "error" for item in diagnostics) else "ok"
     if connection.mpi_launcher is not None:
         report["launcher"] = mpi.identity(connection.mpi_launcher, applied)
-        # Reported beside the status, never in it: a serial-only user needs no working launcher.
-        # What the serial preflight already said is not said again.
+        # A failed launcher degrades the status rather than failing it: a serial-only user needs
+        # no working launcher. What the serial preflight already said is not said again.
         parallel = [item for item in preflight([
             mpi.wrap({"id": f"{command}.parallel", "command": command}, _PROBE_RANKS, connection.mpi_launcher)
             for command in solvers
@@ -195,4 +195,6 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
             "status": "failed" if any(item["level"] == "error" for item in parallel) else "ok",
             "diagnostics": parallel,
         }
+        if report["status"] == "ok" and report["parallel"]["status"] == "failed":
+            report["status"] = "degraded"
     return report
