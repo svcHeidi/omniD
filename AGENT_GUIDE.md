@@ -637,7 +637,12 @@ What the request must state, before either run is read:
   step. A reader that takes points (`takes_points`, openCARP's) samples there;
   one that samples where it chooses (cardiacFOAM's) treats them as the
   expected location, checked against the `sampled_at` it reports. Either way
-  `max_sampling_offset` is required, with no default.
+  `max_sampling_offset` is required, with no default, in the unit of `points`.
+  It is one number for every point, or an object giving each point its own
+  bound and naming exactly the points of `points.at` (a missing or extra name
+  is refused before any read); a run whose reader lands off a mesh node at one
+  point can then loosen that point alone. The report's run block records the
+  bound given, converted to the reader's unit.
 - **`both_not_reached`** is `"agree"` or `"fail"`, with no default: it decides
   whether a pair whose sentinel (such as `-1`) resolves on both sides fails
   the report.

@@ -49,8 +49,11 @@
           }
         },
         "max_sampling_offset": {
-          "description": "Required whenever 'points' is given (either meaning above); pre-registered, no default.",
-          "type": "number", "minimum": 0
+          "description": "Required whenever 'points' is given (either meaning above); pre-registered, no default, in the unit of 'points'. A number bounds every point; an object bounds each point on its own and must name exactly the points of 'points.at'.",
+          "oneOf": [
+            {"type": "number", "minimum": 0},
+            {"type": "object", "minProperties": 1, "additionalProperties": {"type": "number", "minimum": 0}}
+          ]
         }
       }
     },

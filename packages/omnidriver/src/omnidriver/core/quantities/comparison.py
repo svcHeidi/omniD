@@ -117,7 +117,7 @@ class _Run:
     artifact: DataArtifact
     reader: Any | None
     points: Mapping[str, Point]
-    max_offset: float | None
+    max_offset: float | Mapping[str, float] | None
     evidence: dict[str, str] | None
 
 
@@ -193,7 +193,7 @@ def _artifact(name: str, document: Mapping[str, Any], artifact_id: str) -> DataA
 
 
 def _points(name: str, raw: Mapping[str, Any], reader: Any, names: tuple[str, ...]) -> tuple[Mapping[str, Point], float | None]:
-    """``points`` is where to sample when ``reader.takes_points``, else an expected location checked against ``sampled_at``; both need ``max_sampling_offset``."""
+    """``points`` is where to sample when ``reader.takes_points``, else an expected location checked against ``sampled_at``; both need ``max_sampling_offset``, one number or one per point."""
     supplied = raw.get("points")
     if reader.takes_points and supplied is None:
         raise QuantityComparisonError(f"run {name!r}: this artifact's reader samples at supplied points; give 'points' for {list(names)}")
@@ -206,10 +206,17 @@ def _points(name: str, raw: Mapping[str, Any], reader: Any, names: tuple[str, ..
         raise QuantityComparisonError(
             f"run {name!r}: 'points' is given without 'max_sampling_offset'; a location check must be pre-registered before any read"
         )
+    if isinstance(offset, Mapping) and set(offset) != set(supplied["at"]):
+        raise QuantityComparisonError(
+            f"run {name!r}: 'max_sampling_offset' is given for {sorted(offset)}, but its points are {sorted(supplied['at'])}; "
+            f"missing {sorted(set(supplied['at']) - set(offset))}, not points {sorted(set(offset) - set(supplied['at']))}"
+        )
     try:
         points = {label: tuple(convert(float(v), supplied["unit"], reader.coordinate_unit) for v in xyz)
                   for label, xyz in supplied["at"].items()}
-        max_offset = convert(float(offset), supplied["unit"], reader.coordinate_unit)
+        bounds = {label: convert(float(b), supplied["unit"], reader.coordinate_unit)
+                  for label, b in (offset if isinstance(offset, Mapping) else {"": offset}).items()}
+        max_offset = bounds if isinstance(offset, Mapping) else bounds[""]
     except QuantityError as exc:
         raise QuantityComparisonError(f"run {name!r}: {exc}") from exc
     return points, max_offset
@@ -350,6 +357,10 @@ def _side(run: _Run, quantity: Quantity, unit: str) -> dict[str, Any]:
     }
 
 
+def _bound(run: _Run, name: str) -> float:
+    return run.max_offset[name] if isinstance(run.max_offset, Mapping) else run.max_offset
+
+
 def _metric(pair: _Pair, runs: Mapping[str, _Run], quantities: Mapping[str, Mapping[str, Quantity]],
             reference: PointReference) -> dict[str, Any]:
     unit = reference.quantity_unit
@@ -357,7 +368,7 @@ def _metric(pair: _Pair, runs: Mapping[str, _Run], quantities: Mapping[str, Mapp
     left_q, right_q = quantities[pair.left_run][pair.left_quantity], quantities[pair.right_run][pair.right_quantity]
     status, difference, bound = compare_pair(left_q, right_q, unit=unit, tolerance=pair.tolerance)
     left, right = _side(left_run, left_q, unit), _side(right_run, right_q, unit)
-    if any(run.max_offset is not None and side["sampling_offset"] is not None and side["sampling_offset"] > run.max_offset
+    if any(side["sampling_offset"] is not None and side["sampling_offset"] > _bound(run, side["quantity"])
            for run, side in ((left_run, left), (right_run, right))):
         status = "sampled_off_point"  # location is checked before value
     return {

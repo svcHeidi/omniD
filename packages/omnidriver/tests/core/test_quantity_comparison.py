@@ -350,6 +350,56 @@ def test_points_are_converted_to_the_reader_unit_and_an_off_point_sample_fails(t
     assert report["runs"]["two"]["max_sampling_offset_unit"] == "mm"
 
 
+GRID_POINTS = {"unit": "m", "at": {"a": [0.0009, 0, 0], "b": [0.0009, 0, 0]}}
+
+
+def _grid_runs(tmp_path, one_offset, two_offset):
+    grid = "0 0 0 1.0\n1 0 0 2.0\n"
+    sweep = write_toy_sweep(tmp_path / "sweep", {"one": grid, "two": grid}, artifact_format=GRID_FORMAT)
+    return {"one": _run(sweep, "one", points=GRID_POINTS, max_sampling_offset=one_offset),
+            "two": _run(sweep, "two", points=GRID_POINTS, max_sampling_offset=two_offset)}
+
+
+def test_a_number_bound_applies_to_every_point(tmp_path):
+    runs = _grid_runs(tmp_path, 0.0002, 0.00005)
+    report = run_quantity_comparison(
+        _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")]), tmp_path / "report.json")
+    assert {m["status"] for m in report["metrics"]} == {"sampled_off_point"}
+    assert report["runs"]["two"]["max_sampling_offset"] == pytest.approx(0.05)
+
+
+def test_a_per_point_bound_applies_to_each_point_on_its_own(tmp_path):
+    runs = _grid_runs(tmp_path, 0.0002, {"a": 0.0002, "b": 0.00005})
+    report = run_quantity_comparison(
+        _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")]), tmp_path / "report.json")
+    by_label = {m["reference_label"]: m for m in report["metrics"]}
+    assert by_label["A"]["status"] == "within_tolerance"
+    assert by_label["B"]["status"] == "sampled_off_point"
+    assert report["runs"]["two"]["max_sampling_offset"] == {"a": pytest.approx(0.2), "b": pytest.approx(0.05)}
+    assert report["runs"]["two"]["max_sampling_offset_unit"] == "mm"
+
+
+@pytest.mark.parametrize(("bound", "match"), [
+    ({"a": 0.001}, "max_sampling_offset.*missing.*'b'"),
+    ({"a": 0.001, "b": 0.001, "c": 0.001}, "max_sampling_offset.*not points.*'c'"),
+])
+def test_a_per_point_bound_must_name_exactly_the_runs_points(tmp_path, bound, match):
+    runs = _grid_runs(tmp_path, 0.001, bound)
+    with pytest.raises(QuantityComparisonError, match=match):
+        run_quantity_comparison(
+            _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+@pytest.mark.parametrize("bound", [-0.001, "0.001", True, {"a": -1, "b": 0.001}, {"a": "x", "b": 0.001}, {}])
+def test_a_bound_that_is_not_a_non_negative_number_is_refused(tmp_path, bound):
+    runs = _grid_runs(tmp_path, 0.001, bound)
+    with pytest.raises(QuantityComparisonError):
+        run_quantity_comparison(
+            _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
 def test_a_points_taking_reader_without_points_is_refused(tmp_path):
     grid = "0 0 0 1.0\n1 0 0 2.0\n"
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": grid, "two": grid}, artifact_format=GRID_FORMAT)
