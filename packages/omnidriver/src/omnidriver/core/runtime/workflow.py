@@ -566,6 +566,11 @@ def validate_workflow_commands(
             message=(
                 f"Workflow command {command!r} is not a declared core, environment, "
                 "plugin, case-script, repository-script, or utility command."
+                + (
+                    "" if getattr(driver_context, "repository", None) is not None else
+                    " No repository was supplied, so no repository script is declared; "
+                    "if it is one, pass --repo <repository>."
+                )
             ),
             field=step_id,
         ))
