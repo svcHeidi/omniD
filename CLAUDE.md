@@ -96,7 +96,7 @@ reads the solver's own output for the rank count (`RankEvidence`: a log pattern,
 and for OpenFOAM the `processor*` directories), so N serial copies cannot pass;
 C14 compares it across a two-case sweep, checking the mechanism (sweep, compare, attach), not
 that the two resolutions agree. A check that verifies nothing for a record (C12 with no step declaring an
-output format, C13 and C14 with no declared quantity)
+output format, C13 and C14 with no declared quantity, C13 for a serial-only record)
 is `not_applicable`, counted apart from `passed` and `failed`. Inside a Slurm allocation,
 `SLURM_NTASKS` must equal 2.
 

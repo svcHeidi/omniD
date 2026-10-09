@@ -21,6 +21,7 @@ from plugins.toy import (
     OVER_GENERATED_CONVENTIONS_PLUGIN, PREDICTED_FORMAT_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN, SILENT_SURFACE_PLUGIN,
     UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN, VALIDATED_KINDLESS_PLUGIN,
     REORDERING_PARALLEL_PLUGIN, SERIAL_PARALLEL_PLUGIN, SINGLE_RANK_PLUGIN,
+    SERIAL_ONLY_QUANTITY_PLUGIN,
     STRAY_NAME, STRAY_ROOT_VARIABLE, quantity_toy_conformance_target, toy_conformance_target,
     toy_conformance_target_with_input,
 )
@@ -547,6 +548,13 @@ def test_a_record_with_declared_quantities_passes_every_check(check_id, tmp_path
 def test_a_target_without_a_quantity_has_nothing_to_compare(check_id, tmp_path):
     verdict = run_check(check_id, toy_conformance_target(tmp_path))
     assert verdict.status == "not_applicable" and "no quantity" in verdict.detail
+
+
+def test_c13_has_nothing_to_compare_for_a_serial_only_record(tmp_path):
+    target = quantity_toy_conformance_target(tmp_path, plugin=SERIAL_ONLY_QUANTITY_PLUGIN)
+    verdict = run_check("C13", target)
+    assert verdict.status == "not_applicable" and "serial-only" in verdict.detail
+    assert run_check("C14", target).status == "passed"
 
 
 def test_c13_bites_a_parallel_run_that_writes_other_values(tmp_path):
