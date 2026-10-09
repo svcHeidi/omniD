@@ -147,9 +147,7 @@ NUMERIC_BOUNDS = {"minimum": "must be at least {:g}", "exclusive_minimum": "must
 
 def bound_violations(declared: Any, value: Any) -> dict[str, float]:
     """Each of ``declared``'s numeric bounds ``value`` breaks, by field name; empty when it fits, none is declared
-    or the value is no number. A dimensioned number is judged by its magnitude."""
-    if getattr(value, "dimensions", None) is not None:
-        value = value.value
+    or the value is no plain number."""
     if declared.value_kind not in ("scalar", "integer") or isinstance(value, bool) or not isinstance(value, Real):
         return {}
     broken = {}

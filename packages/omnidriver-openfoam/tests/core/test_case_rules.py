@@ -90,7 +90,7 @@ def test_a_dimensioned_number_is_judged_by_its_magnitude():
 
     entries = [_entry("$S.chi", value_kind="scalar", exclusive_minimum=0)]
     assert _violations(entries, {"chi": Dimensioned(-1.0, DimensionSet(length=-1))}) == {
-        ("chi", "chi is Dimensioned(-1.0, DimensionSet(length=-1)), outside the catalogue's bounds: must be more than 0."),
+        ("chi", "chi is -1.0, outside the catalogue's bounds: must be more than 0."),
     }
     assert _violations(entries, {"chi": Dimensioned(140000.0, DimensionSet(length=-1))}) == set()
 

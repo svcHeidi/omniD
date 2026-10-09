@@ -106,6 +106,16 @@ class TestDictEntryStructuredConstraints(unittest.TestCase):
             entry.applicable_when = {"x": "y"}  # type: ignore[misc]
 
 
+def test_a_bound_judges_plain_numbers_only():
+    from types import SimpleNamespace
+
+    from omnidriver.core.contracts.dictionary import bound_violations
+
+    entry = DictEntry(driver_path="chi", description="x", value_kind="scalar", exclusive_minimum=0)
+    assert bound_violations(entry, -1.0) == {"exclusive_minimum": 0}
+    assert bound_violations(entry, SimpleNamespace(value=-1.0, dimensions=(0, -1, 0, 0, 0, 0, 0))) == {}
+
+
 def test_dict_entry_has_phases_field_accepting_a_frozenset():
     entry = DictEntry(
         driver_path="foo",

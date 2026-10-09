@@ -44,6 +44,12 @@ def read_leaves(path: Path, scope: tuple[str, ...] = ()) -> dict[str, Any]:
     return flatten(node)
 
 
+def _magnitude(value: Any) -> Any:
+    from foamlib import Dimensioned
+
+    return value.value if isinstance(value, Dimensioned) else value
+
+
 def _present(value: Any) -> bool:
     return value is not None and not (isinstance(value, str) and value == "")
 
@@ -358,9 +364,10 @@ def rule_diagnostics(
                     concrete, f"{concrete} is {value!r}, not one of the values {source}: {sorted(menu)}.",
                     {"menu": sorted(menu)},
                 )
-            if broken := bound_violations(entry, value):
+            number = _magnitude(value)
+            if broken := bound_violations(entry, number):
                 violated(
-                    concrete, f"{concrete} is {value!r}, outside the catalogue's bounds: {'; '.join(bound_reasons(entry, value))}.",
+                    concrete, f"{concrete} is {number!r}, outside the catalogue's bounds: {'; '.join(bound_reasons(entry, number))}.",
                     broken,
                 )
             for sibling in entry.mutually_exclusive_with:
