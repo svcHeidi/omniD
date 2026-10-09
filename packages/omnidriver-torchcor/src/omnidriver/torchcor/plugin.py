@@ -8,6 +8,7 @@ from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_b
 from omnidriver.core.plugin_profile import load_plugin_profile
 
 from .case_json import CaseJsonError, patch, read_value, values_agree
+from .catalog import CASE_DOCUMENT, supplied_catalog
 
 CASE_FORMAT = "torchcor_case_json"
 
@@ -32,6 +33,33 @@ class TorchCorPlugin:
             return read_value(path.read_text(), ".".join(key_path)) if path.is_file() else None
 
         return _read
+
+    def get_record_key_catalog(self, case_root):
+        catalog = supplied_catalog()
+        if catalog is None:
+            return ({"document": CASE_DOCUMENT, "key": "<any>", "validated": False},)
+        source_refs = [f"{catalog.runner} --describe"]
+        entries = [
+            {"document": CASE_DOCUMENT, "key": key, "value_kind": spec["kind"], "unit": spec["unit"],
+             "description": spec["description"], "default": spec["default"], "minimum": spec["minimum"],
+             "exclusive_minimum": spec["exclusive_minimum"], "maximum": spec["maximum"], "menu": spec["menu"],
+             "source_refs": source_refs}
+            for key, spec in catalog.keys.items()
+        ]
+        # The fields of ionic_options and ionic_init depend on the model, so only the case's own model's are listed.
+        path = Path(case_root) / CASE_DOCUMENT
+        model = catalog.ionic_models.get(read_value(path.read_text(), "ionic_model")) if path.is_file() else None
+        if model is not None:
+            entries += [
+                {"document": CASE_DOCUMENT, "key": f"ionic_options.{name}", "value_kind": "string",
+                 "default": option["default"], "menu": option["menu"], "source_refs": source_refs}
+                for name, option in model["options"].items()
+            ]
+            entries += [
+                {"document": CASE_DOCUMENT, "key": f"ionic_init.{name}", "value_kind": "scalar", "source_refs": source_refs}
+                for name in model["init"]
+            ]
+        return tuple(entries)
 
     # -- case writer
     def get_supported_mutation_modes(self):

@@ -10,5 +10,8 @@ environment:
     - name: TORCHCOR_BIN
       required: true
       why: the bin directory of the venv TorchCor is installed in (from the solver repository's submodule), first on PATH so a record's python3 is TorchCor's (docs/solver-learning/torchcor.md A1, G0)
+    - name: TORCHCOR_REPOSITORY
+      required: false
+      why: the solver repository (the --repo given); the key validator, case rules and key catalogue read its runner's --describe here, since core hands them no repository. Unset, case.json keys are written unvalidated
   path_prepend:
     - TORCHCOR_BIN
