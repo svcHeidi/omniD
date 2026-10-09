@@ -21,17 +21,20 @@ if TYPE_CHECKING:
 class TutorialRecordError(ValueError):
     """A tutorial-record study refused a name, a conflict, or a missing case; the message names the offending key or source.
 
-    ``code`` names the refusal where it has a name of its own (else its class names it); ``rule`` is the declared
+    ``code`` is one of :data:`omnidriver.core.refusal.CODES`; ``rule`` is the declared
     rule a refused value broke, as ``{field: declared value}``; ``refusals`` are the
     :func:`~omnidriver.core.refusal.refusal_record`s behind it.
     """
+
+    code: str | None = None
 
     def __init__(
         self, message: str, *, code: str | None = None, rule: Mapping[str, Any] | None = None,
         refusals: Sequence[Mapping[str, Any]] = (),
     ) -> None:
         super().__init__(message)
-        self.code = code
+        if code is not None:
+            self.code = code
         self.rule = rule
         self.refusals = tuple(refusals)
 
@@ -978,9 +981,9 @@ def _validate_or_wrap(
         ) from exc
 
 
-def _refuse_axis_value(name: str, rule: Mapping[str, Any], message: str) -> None:
-    raise TutorialRecordError(message, code="axis_rule", refusals=(
-        refusal_record(code="axis_rule", document=None, key=name, rule=dict(rule), message=message),
+def _axis_refusal(name: str, rule: Mapping[str, Any] | None, message: str) -> TutorialRecordError:
+    return TutorialRecordError(message, code="axis_rule", refusals=(
+        refusal_record(code="axis_rule", document=None, key=name, rule=None if rule is None else dict(rule), message=message),
     ))
 
 
@@ -1072,18 +1075,23 @@ def resolve_case_patches(
         # kind must not reach it and surface as a native coercion error.
         value_kind_reasons = validate_value_shape(axis.value_kind, value)
         if value_kind_reasons:
-            _refuse_axis_value(
+            raise _axis_refusal(
                 name, {"value_kind": axis.value_kind},
                 f"axis {name!r} declares value_kind {axis.value_kind!r}, "
                 f"but the value {value!r} does not fit it: {'; '.join(value_kind_reasons)}",
             )
         if broken := bound_violations(axis, value):
-            _refuse_axis_value(
+            raise _axis_refusal(
                 name, broken, f"axis {name!r} is {value!r}, outside its bounds: {'; '.join(bound_reasons(axis, value))}",
             )
         # An axis must not write the staged case outside `commit_case_write`.
         before_digest = _case_root_digest(staged_case_root)
-        result = axis.resolve(value, staged_case_root)
+        try:
+            result = axis.resolve(value, staged_case_root)
+        except TutorialRecordError:
+            raise
+        except ValueError as exc:
+            raise _axis_refusal(name, None, f"axis {name!r}: {exc}") from exc
         after_digest = _case_root_digest(staged_case_root)
         if after_digest != before_digest:
             raise TutorialRecordError(
@@ -1296,7 +1304,7 @@ def lookup_record(entry: "str | TutorialRecord", *, driver_context: Any) -> Tuto
         raise TutorialRecordError(
             f"unknown tutorial record {entry!r}; the composed stack registers "
             f"{sorted(catalog) or 'none'}. To run a case folder that is not a "
-            "record, pass it with --case"
+            "record, pass it with --case", code="unknown_record",
         )
     return record
 

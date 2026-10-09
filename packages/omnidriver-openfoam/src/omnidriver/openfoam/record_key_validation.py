@@ -233,9 +233,9 @@ def make_validator(
                 except KeyError as exc:
                     if catalogued.open:
                         return infer_unvalidated_value_kind(value), False
-                    raise KeyError(
+                    raise TutorialRecordError(
                         f"{document}:{dotted} is not declared by the {catalogued.label} key catalog, and "
-                        f"{exc.args[0]} (omnidriver catalog --uncatalogued lists what it reads)"
+                        f"{exc.args[0]} (omnidriver catalog --uncatalogued lists what it reads)", code="unknown_key",
                     ) from None
             entry, binding = match
             for placeholder, bound_value in binding.items():
@@ -271,10 +271,10 @@ def make_validator(
             return kind, True
         if document.startswith("system/"):
             return infer_unvalidated_value_kind(value), False
-        raise KeyError(
+        raise TutorialRecordError(
             f"{document}:{dotted} is neither a {owner}-catalogued document ({', '.join(sorted(documents))}) "
             "nor an OpenFOAM-owned 'system/' document; refusing rather than silently treating an "
-            "unrecognised document as an unvalidated OpenFOAM key"
+            "unrecognised document as an unvalidated OpenFOAM key", code="unknown_document",
         )
 
     return validate

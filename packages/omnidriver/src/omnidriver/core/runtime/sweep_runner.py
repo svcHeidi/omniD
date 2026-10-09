@@ -13,7 +13,7 @@ from omnidriver.core.strict_planning import _strict_plan_for_spec
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
 from omnidriver.core.tutorial_records import TutorialRecordError, lookup_record, sort_study_name
-from ..refusal import diagnostic_refusal, refusal_fields
+from ..refusal import caught_code, diagnostic_refusal, refusal_fields
 from .failure_context import why_a_child_stopped
 from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
@@ -192,7 +192,7 @@ def _record_sweep_plan(
                 "resolved_axis_values": case.resolved_axis_values,
                 "status": "failed",
                 "materialization_error": f"{type(exc).__name__}: {exc}",
-                **refusal_fields(exc),
+                **refusal_fields(exc, code=caught_code(exc)),
             })
             continue
         case_reports.append({
@@ -292,7 +292,7 @@ def _record_sweep_run(
                 failure["plan_error"] = (
                     "; ".join(report.error_messages()) or f"strict_plan reported {report.status} status"
                 )
-                failure["code"] = f"plan_{report.status}"
+                failure["code"] = "plan_blocked" if report.status == "blocked" else "plan_failed"
                 if refusals := [diagnostic_refusal(d) for d in report.errors()]:
                     failure["refusals"] = refusals
             else:
@@ -326,13 +326,13 @@ def _record_sweep_run(
             status = "completed" if workflow_status(workflow_state_path) == "completed" else "failed"
             failure["stopped_by_signal"] = int(stop.code) - 128 if isinstance(stop.code, int) else None
         except subprocess.TimeoutExpired as exc:
-            failure["timeout_error"] = (
+            failure.update(code="case_timeout", timeout_error=(
                 f"case exceeded timeout of {case_timeout_s}s and was terminated: {exc}"
-            )
+            ))
         except (OSError, ValueError) as exc:
             failure.update(materialization_error=str(exc), **refusal_fields(exc))
         except Exception as exc:
-            failure.update(plan_error=str(exc), **refusal_fields(exc))
+            failure.update(plan_error=str(exc), **refusal_fields(exc, code=caught_code(exc)))
 
         if status == "completed":
             completed_count += 1
@@ -523,7 +523,7 @@ def sweep_plan(
         # no per-case slot to report it in -- but the caller still parses this
         # document, and a traceback on stderr with nothing on stdout is not an
         # answer. Same shape, zero cases, one explicit reason.
-        return {"case_count": 0, "cases": [], "spec_error": str(exc), **refusal_fields(exc)}
+        return {"case_count": 0, "cases": [], "spec_error": str(exc), "code": "spec_unreadable"}
     check_case_count_cap(sweep_spec, max_cases=max_cases)
     record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
     # Resolved to absolute before staging: a relative --output-dir otherwise

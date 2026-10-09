@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Literal, Mapping
 
-from ..refusal import failure
+from ..refusal import caught_code, failure
 from .attempt_lease import attempt_lease_is_held, case_lease_is_held
 from .execution_context import ReplannedExecution, StepExecutionContext
 from .failure_context import build_failure_context
@@ -138,7 +138,7 @@ def execute_step_owned(
                 applied_patches=list(applied), resulting_status="rerun_error",
             )
         return StepResult("failed", failure(
-            exc, entry=context.entry_label, step=step_id, workflow_state=workflow_state.to_json(),
+            exc, code=caught_code(exc), entry=context.entry_label, step=step_id, workflow_state=workflow_state.to_json(),
         ))
 
     step_state = _step_state_by_id(run_result.state, step_id)

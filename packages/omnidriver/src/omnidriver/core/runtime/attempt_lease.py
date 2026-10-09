@@ -36,6 +36,8 @@ ATTEMPT_LOCK_GUARD_FILENAME = _guard_filename(ATTEMPT_LOCK_FILENAME)
 class AttemptLeaseError(RuntimeError):
     """The output directory is already or ambiguously owned."""
 
+    code = "lease_held"
+
 
 @dataclass(frozen=True)
 class AttemptLease:

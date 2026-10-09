@@ -129,7 +129,24 @@ def test_a_renderer_resolver_or_reader_refusal_comes_back_as_the_cases_structure
     assert case["status"] == "failed"
     assert "constant/mesh.json" in case["materialization_error"]
     assert TOY_REFUSAL in case["materialization_error"]
-    assert case["code"]
+    assert case["code"] == "unclassified"
+
+
+def test_a_sweep_whose_cases_failed_says_so_by_code_and_a_crash_is_an_internal_error(tmp_path, capsys, monkeypatch):
+    import omnidriver.core.runtime.sweep_runner as sweep_runner
+
+    def crash(*args, **kwargs):
+        raise KeyError("boom")
+
+    monkeypatch.setattr(sweep_runner, "commit_and_build_record_spec", crash)
+    cases_root = _native_toy_case(tmp_path)
+    assert main([
+        "sweep-plan", "--plugin", "plugins.toy:ToyStack", "--spec", str(_one_case_sweep(tmp_path, cases_root)),
+        "--output-dir", str(tmp_path / "out"),
+    ]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["code"] == "cases_failed"
+    assert [case["code"] for case in payload["cases"]] == ["internal_error"]
 
 
 def test_a_case_that_breaks_a_rule_carries_each_refusal_as_data(tmp_path, capsys):

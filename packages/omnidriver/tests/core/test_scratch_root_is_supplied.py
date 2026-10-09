@@ -140,7 +140,7 @@ def test_the_cli_refuses_an_unsupplied_scratch_root_as_json(tmp_path, capsys, ac
     assert exit_code == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "failed"
-    assert payload["code"] == "ScratchRootNotSupplied"
+    assert payload["code"] == "scratch_root_not_supplied"
     assert "--scratch-dir" in payload["error"]
     assert SCRATCH_ENV_VAR in payload["error"]
     assert _tree(cases_root) == before

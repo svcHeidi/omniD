@@ -79,7 +79,7 @@ def make_record_key_validator(
         if document not in documents:
             raise TutorialRecordError(
                 f"{document}:{key}: no record step passes {document!r} to openCARP with +F, so "
-                f"openCARP would never read it (documents it reads: {sorted(documents)})"
+                f"openCARP would never read it (documents it reads: {sorted(documents)})", code="unknown_document",
             )
         owner = documents[document].get(key)
         if owner is not None:
@@ -97,7 +97,9 @@ def _catalog_check(document: str, key: str, value: Any) -> tuple[str, bool]:
     catalog = load_catalog()
     spec = catalog.parameters.get(template_name(key))
     if spec is None:
-        raise TutorialRecordError(f"{document}:{key} is not an openCARP {catalog.identity['tag']} parameter")
+        raise TutorialRecordError(
+            f"{document}:{key} is not an openCARP {catalog.identity['tag']} parameter", code="unknown_key",
+        )
     if spec.value_kind is None:
         raise TutorialRecordError(
             f"{document}:{key} is openCARP's whole-array form ({spec.opencarp_type}); set each element, e.g. {key}[0]"

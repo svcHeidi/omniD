@@ -526,6 +526,19 @@ def test_a_value_that_does_not_fit_an_axis_names_the_kind_as_its_rule():
     assert (refusal["code"], refusal["key"], refusal["rule"]) == ("axis_rule", "n", {"value_kind": "integer"})
 
 
+def test_a_value_an_axis_refuses_is_an_axis_rule_refusal():
+    def resolve(value, staged_case_root):
+        raise ValueError(f"{value} does not divide the extent")
+
+    axis = AxisContract(name="dx", value_kind="scalar", unit="m", description="d", resolve=resolve)
+    with pytest.raises(TutorialRecordError, match="axis 'dx': 0.3 does not divide the extent") as caught:
+        resolve_case_patches(
+            _record(axes=(axis,)), study_by_source={"base": {"dx": 0.3}},
+            staged_case_root=Path("/nonexistent"), direct_key_validator=_known_catalog_validator,
+        )
+    assert caught.value.code == "axis_rule"
+
+
 def test_a_key_the_validator_refuses_keeps_the_validators_code_and_rule():
     def validator(document, key_path, value):
         if key_path == ("cells",):
@@ -534,7 +547,7 @@ def test_a_key_the_validator_refuses_keeps_the_validators_code_and_rule():
 
     for name, code, rule, message in (
         ("constant/mesh.json:cells", "catalog_rule", {"minimum": 1}, "cells = -1 is outside the bounds"),
-        ("constant/mesh.json:cellz", "KeyError", None, "constant/mesh.json:cellz is not catalogued"),
+        ("constant/mesh.json:cellz", "unclassified", None, "constant/mesh.json:cellz is not catalogued"),
     ):
         with pytest.raises(TutorialRecordError) as caught:
             resolve_case_patches(

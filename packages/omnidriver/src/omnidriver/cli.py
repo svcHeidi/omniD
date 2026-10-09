@@ -25,7 +25,7 @@ from .core.runtime.case_records import (
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
 from .core.case_transaction import interrupted_commit
 from .core.environment_connection import load_environment
-from .core.refusal import Refusal, RefusingParser, failure, print_refusal, refusal_fields
+from .core.refusal import Refusal, RefusingParser, caught_code, failure, print_refusal, refusal_fields
 from .core.plugin_discovery import discover_plugins
 from .core.runtime.sweep_runner import SweepStopped, sweep_plan, sweep_run
 from omnidriver.core.introspection import describe_entry, describe_stack, named_catalog
@@ -181,7 +181,7 @@ def _execute_step(
         )
     except Exception as exc:
         prefix = "--apply rejected: " if apply_path is not None else ""
-        payload = failure(exc, error=f"{prefix}{exc}", entry=entry_label, step=step_id)
+        payload = failure(exc, code=caught_code(exc), error=f"{prefix}{exc}", entry=entry_label, step=step_id)
         state_path = output_dir / STATE_FILENAME
         if state_path.exists():
             payload["workflow_state_path"] = str(state_path)
@@ -281,7 +281,7 @@ def _execute_run(
             workflow_state_path=state_path,
             workflow_state=error_state.to_json(),
             error=str(exc),
-        ), **refusal_fields(exc)}, indent=2))
+        ), **refusal_fields(exc, code=caught_code(exc))}, indent=2))
         return 1
     workflow_state = outcome.state
     results = list(outcome.steps)
@@ -1055,6 +1055,10 @@ def _sweep_output_dir(args) -> str | Path | None:
         return None
 
 
+def _cases_failed(failed: bool) -> dict[str, str]:
+    return {"code": "cases_failed"} if failed else {}
+
+
 def _sweep_refusal(args, exc: Exception) -> int:
     """A refusal of the sweep as a whole, printed as JSON; a per-case refusal is a ``materialization_error`` in the sweep report instead."""
     print(json.dumps(failure(exc, action=args.action, spec=args.spec), indent=2))
@@ -1390,7 +1394,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
         # A spec that could not be read yields zero cases, so "no case
         # failed" would otherwise read as success.
         failed = bool(result.get("spec_error")) or any(case["status"] != "ok" for case in result["cases"])
-        print(json.dumps({"status": "failed" if failed else "ok", **result}, indent=2))
+        print(json.dumps({"status": "failed" if failed else "ok", **_cases_failed(failed), **result}, indent=2))
         return 1 if failed else 0
 
     if args.action == "sweep-run":
@@ -1414,7 +1418,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             print(json.dumps({"status": "failed", "code": "sweep_stopped", **stop.report}, indent=2))
             return stop.code
         failed = result["failed_count"] > 0
-        print(json.dumps({"status": "failed" if failed else "ok", **result}, indent=2))
+        print(json.dumps({"status": "failed" if failed else "ok", **_cases_failed(failed), **result}, indent=2))
         return 1 if failed else 0
 
     raise AssertionError(f"unreachable: unhandled action {args.action!r}")

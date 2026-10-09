@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pytest
 
+from omnidriver.core.tutorial_records import TutorialRecordError
 from omnidriver.cardiacfoam.record_key_validation import record_key_validator
 
 
@@ -55,7 +56,7 @@ def test_catalogued_physics_properties_key_validates_true():
 
 
 def test_misspelled_electro_properties_key_is_refused_by_name():
-    with pytest.raises(KeyError) as excinfo:
+    with pytest.raises(TutorialRecordError) as excinfo:
         record_key_validator(
             "constant/electroProperties",
             ("singleCellSolverCoeffs", "singleCellStimulus", "stim_amplitud"),
@@ -64,11 +65,12 @@ def test_misspelled_electro_properties_key_is_refused_by_name():
     message = str(excinfo.value)
     assert "constant/electroProperties" in message
     assert "stim_amplitud" in message
+    assert excinfo.value.code == "unknown_key"
 
 
 def test_a_first_segment_not_in_the_solver_vocabulary_is_refused():
     """Refused, though ``overrides._catalog_entry_for`` would accept it as $ELECTRO_MODEL_COEFFS."""
-    with pytest.raises(KeyError):
+    with pytest.raises(TutorialRecordError):
         record_key_validator(
             "constant/electroProperties",
             ("bogusCoeffs", "singleCellStimulus", "stim_amplitude"),
@@ -131,7 +133,7 @@ def test_a_patch_map_member_of_the_wrong_kind_is_refused_by_name():
 
 
 def test_a_map_at_a_key_with_no_catalogued_members_is_refused():
-    with pytest.raises(KeyError) as excinfo:
+    with pytest.raises(TutorialRecordError) as excinfo:
         record_key_validator(
             "constant/electroProperties", _BATH + ("groundPatchez",), {"xMin": 0},
         )
@@ -213,13 +215,13 @@ def test_pre_pacing_keys_are_validated_at_the_root_and_in_a_region_block():
     assert record_key_validator(document, ("regions", "epicardialCells", "singleCellStimulus"), {"nstim2": 0}) == ("mapping", True)
     with pytest.raises(ValueError, match="singleCellStimulus.stim_start does not fit"):
         record_key_validator(document, ("singleCellStimulus",), {"stim_start": "soon"})
-    with pytest.raises(KeyError, match="singleCellStimulus.stim_startt"):
+    with pytest.raises(TutorialRecordError, match="singleCellStimulus.stim_startt"):
         record_key_validator(document, ("singleCellStimulus",), {"stim_startt": 0})
     with pytest.raises(ValueError, match="must be an integer"):
         record_key_validator(document, ("regions", "epicardialCells", "maxBeats"), "many")
     with pytest.raises(ValueError, match="not a valid word|whitespace"):
         record_key_validator(document, ("regions", "not a name", "maxBeats"), 5)
-    with pytest.raises(KeyError, match="prePacingProperties"):
+    with pytest.raises(TutorialRecordError, match="prePacingProperties"):
         record_key_validator(document, ("maxBeatz",), 5)
 
 
@@ -248,14 +250,14 @@ def test_system_block_mesh_dict_hex_cell_counts_tuple_is_unvalidated():
 
 
 def test_a_near_miss_document_name_is_refused_not_treated_as_unvalidated():
-    with pytest.raises(KeyError) as excinfo:
+    with pytest.raises(TutorialRecordError) as excinfo:
         record_key_validator("constant/electroPropertie", ("myocardiumSolver",), "x")
     message = str(excinfo.value)
     assert "constant/electroPropertie" in message
 
 
 def test_an_unrelated_document_is_refused():
-    with pytest.raises(KeyError):
+    with pytest.raises(TutorialRecordError):
         record_key_validator("constant/mesh.json", ("cells",), 5)
 
 
