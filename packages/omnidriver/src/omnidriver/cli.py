@@ -25,7 +25,7 @@ from .core.runtime.case_records import (
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
 from .core.case_transaction import interrupted_commit
 from .core.environment_connection import load_environment
-from .core.refusal import Refusal, RefusingParser, caught_code, failure, print_refusal, refusal_fields
+from .core.refusal import Refusal, RefusingParser, caught_code, failure, print_refusal
 from .core.plugin_discovery import discover_plugins
 from .core.runtime.sweep_runner import SweepStopped, sweep_plan, sweep_run
 from omnidriver.core.introspection import describe_entry, describe_stack, named_catalog
@@ -280,8 +280,7 @@ def _execute_run(
             step=error_state.current_step_id or workflow_state.current_step_id,
             workflow_state_path=state_path,
             workflow_state=error_state.to_json(),
-            error=str(exc),
-        ), **refusal_fields(exc, code=caught_code(exc))}, indent=2))
+        ), **failure(exc, code=caught_code(exc))}, indent=2))
         return 1
     workflow_state = outcome.state
     results = list(outcome.steps)
@@ -1060,7 +1059,7 @@ def _cases_failed(failed: bool) -> dict[str, str]:
 
 
 def _sweep_refusal(args, exc: Exception) -> int:
-    """A refusal of the sweep as a whole, printed as JSON; a per-case refusal is a ``materialization_error`` in the sweep report instead."""
+    """A refusal of the sweep as a whole, printed as JSON; a per-case refusal is that case's ``code`` and ``error`` in the sweep report instead."""
     print(json.dumps(failure(exc, action=args.action, spec=args.spec), indent=2))
     return 1
 

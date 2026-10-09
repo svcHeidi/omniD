@@ -1,13 +1,14 @@
 """The one shape in which a command is refused: ``{"status": "failed", "code": ..., "error": ...}`` on stdout, exit 1.
 
-``code`` is one of :data:`CODES`. A refusal that knows which rules a value broke also carries ``refusals``, one
-:func:`refusal_record` per rule.
+``code`` is one of :data:`CODES`. A refusal that knows which rules a value broke also carries ``refusals``, the
+plan diagnostics behind it as data (``level``, ``code``, ``message``, ``source``, ``field``, ``detail``).
 """
 from __future__ import annotations
 
 import argparse
 import json
-from typing import Any
+from dataclasses import asdict
+from typing import Any, Sequence
 
 
 #: Every ``code`` a refusal reports, and what it means.
@@ -61,19 +62,6 @@ class RefusingParser(argparse.ArgumentParser):
         raise Refusal(message)
 
 
-def refusal_record(*, code: str, document: str | None, key: str | None, rule: Any, message: str) -> dict[str, Any]:
-    """One broken rule: ``rule`` maps the declaration's field names to their declared values, or is ``None``
-    when the ``code`` alone names the rule."""
-    return {"code": code, "document": document or None, "key": key or None, "rule": rule, "message": message}
-
-
-def diagnostic_refusal(item: Any) -> dict[str, Any]:
-    """A plan diagnostic as a :func:`refusal_record`; its rule is the one its ``detail`` names."""
-    return refusal_record(
-        code=item.code, document=item.source, key=item.field, rule=(item.detail or {}).get("rule"), message=item.message,
-    )
-
-
 def refusal_code(exc: BaseException | None) -> str:
     """``exc``'s own named code, else ``unclassified``."""
     code = getattr(exc, "code", None)
@@ -86,16 +74,15 @@ def caught_code(exc: BaseException) -> str:
     return refusal_code(exc) if isinstance(exc, (Refusal, ValueError, OSError)) else "internal_error"
 
 
-def refusal_fields(exc: BaseException | None, *, code: str | None = None) -> dict[str, Any]:
-    """``code``, and ``refusals`` when ``exc`` carries any: what a refusal adds beside its text."""
-    refusals = list(getattr(exc, "refusals", ()))
-    return {"code": code or refusal_code(exc), **({"refusals": refusals} if refusals else {})}
-
-
-def failure(exc: BaseException | None, *, code: str | None = None, error: str | None = None, **extra: Any) -> dict[str, Any]:
-    """The refusal payload for ``exc``, or for a refusal with no exception (``code`` and ``error`` given)."""
+def failure(
+    exc: BaseException | None, *, code: str | None = None, error: str | None = None,
+    diagnostics: Sequence[Any] | None = None, **extra: Any,
+) -> dict[str, Any]:
+    """The refusal payload for ``exc``, or for a refusal with no exception (``code`` and ``error`` given).
+    ``refusals`` are ``diagnostics``, else the ones ``exc`` carries."""
+    refusals = [asdict(item) for item in (getattr(exc, "diagnostics", ()) if diagnostics is None else diagnostics)]
     return {
-        "status": "failed", **extra, **refusal_fields(exc, code=code),
+        "status": "failed", **extra, "code": code or refusal_code(exc), **({"refusals": refusals} if refusals else {}),
         "error": str(exc) if error is None else error,
     }
 

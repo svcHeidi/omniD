@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from .case_write import _check_case_relative
 from .contracts.dictionary import bound_reasons, bound_violations, validate_value_shape
-from .refusal import refusal_code, refusal_record
+from .planning_types import StrictDiagnostic, diagnostic
+from .refusal import refusal_code
 
 if TYPE_CHECKING:
     from .conformance_study import ConformanceStudy
@@ -22,21 +23,21 @@ class TutorialRecordError(ValueError):
     """A tutorial-record study refused a name, a conflict, or a missing case; the message names the offending key or source.
 
     ``code`` is one of :data:`omnidriver.core.refusal.CODES`; ``rule`` is the declared
-    rule a refused value broke, as ``{field: declared value}``; ``refusals`` are the
-    :func:`~omnidriver.core.refusal.refusal_record`s behind it.
+    rule a refused value broke, as ``{field: declared value}``; ``diagnostics`` are the
+    broken rules behind it.
     """
 
     code: str | None = None
 
     def __init__(
         self, message: str, *, code: str | None = None, rule: Mapping[str, Any] | None = None,
-        refusals: Sequence[Mapping[str, Any]] = (),
+        diagnostics: Sequence[StrictDiagnostic] = (),
     ) -> None:
         super().__init__(message)
         if code is not None:
             self.code = code
         self.rule = rule
-        self.refusals = tuple(refusals)
+        self.diagnostics = tuple(diagnostics)
 
 
 # ---------------------------------------------------------------------------
@@ -975,16 +976,16 @@ def _validate_or_wrap(
         reason = exc.args[0] if exc.args and isinstance(exc.args[0], str) else str(exc)
         raise TutorialRecordError(
             f"validating {document}:{dotted} raised {type(exc).__name__}: {exc}", code=code,
-            refusals=(refusal_record(
-                code=code, document=document, key=dotted, rule=getattr(exc, "rule", None), message=reason,
-            ),),
+            diagnostics=(_broken("error", code, reason, document, dotted, getattr(exc, "rule", None)),),
         ) from exc
 
 
+def _broken(level: str, code: str, message: str, source: str, field: str, rule: Mapping[str, Any] | None) -> StrictDiagnostic:
+    return diagnostic(level, code, message, source=source, field=field, detail=None if rule is None else {"rule": dict(rule)})
+
+
 def _axis_refusal(name: str, rule: Mapping[str, Any] | None, message: str) -> TutorialRecordError:
-    return TutorialRecordError(message, code="axis_rule", refusals=(
-        refusal_record(code="axis_rule", document=None, key=name, rule=None if rule is None else dict(rule), message=message),
-    ))
+    return TutorialRecordError(message, code="axis_rule", diagnostics=(_broken("error", "axis_rule", message, "", name, rule),))
 
 
 def _check_step_is_run(

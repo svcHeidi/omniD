@@ -13,8 +13,8 @@ class StrictDiagnostic:
     message: str
     source: str = ""
     field: str = ""
-    #: What the message states, as data: ``rule`` names the declared rule a refusal broke
-    #: (:func:`omnidriver.core.refusal.diagnostic_refusal`); a scan note carries its scan record.
+    #: What the message states, as data: ``rule`` names the declared rule a refusal broke;
+    #: a scan note carries its scan record.
     detail: Mapping[str, Any] | None = None
 
 

@@ -719,7 +719,7 @@ def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
     assert (result["failed_count"], result["completed_count"]) == (2, 0)
     for case in result["cases"]:
         assert case["status"] == "failed"
-        assert "timeout" in case["timeout_error"].lower()
+        assert case["code"] == "case_timeout" and "timeout" in case["error"].lower()
     assert (output_dir / "sweep_manifest.json").exists()
 
 
@@ -858,7 +858,7 @@ def test_the_stderr_fallback_of_a_case_is_redacted_with_the_stacks_patterns(tmp_
     assert "hunter2" not in result["cases"][0]["error"] and "password=[REDACTED] failed" in result["cases"][0]["error"]
 
 
-def test_a_plan_that_cannot_run_says_why_in_plan_error(tmp_path):
+def test_a_plan_that_cannot_run_says_why(tmp_path):
     real = sweep_runner._strict_plan_for_spec
 
     def blocked(*args, **kwargs):
@@ -873,7 +873,8 @@ def test_a_plan_that_cannot_run_says_why_in_plan_error(tmp_path):
 
     case = result["cases"][0]
     assert case["status"] == "failed"
-    assert case["plan_error"] == "launcher_mismatch: wrong MPI first on PATH"
+    assert (case["code"], case["error"]) == ("plan_blocked", "launcher_mismatch: wrong MPI first on PATH")
+    assert [refusal["code"] for refusal in case["refusals"]] == ["launcher_mismatch"]
 
 
 def test_the_childs_own_record_write_finds_the_sweeps_record_already_in_the_case_folder(tmp_path):

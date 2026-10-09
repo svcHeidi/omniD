@@ -362,10 +362,10 @@ case, and `sweep-run` writes its `run_document.json`, `workflow_state.json`,
 `workflow_logs/` and `case_record.json` beside the case files. A `caseId` dependent
 entry becomes the case's directory name (validated for uniqueness and
 path-safety); otherwise cases are named `case_0001`, `case_0002`, ... in
-expansion order. A case that cannot be staged or planned fails alone
-(`materialization_error`, or `plan_error` in `sweep-run`, which lists the plan's
-error diagnostics), not the whole sweep. The failed case also carries `code`
-and, when rules refused it, `refusals` (below). `sweep-plan` reports each
+expansion order. A case that cannot be staged or planned fails alone, not the
+whole sweep, in the refusal shape (below): its `code`, its `error` and, when
+rules or the plan's error diagnostics refused it, `refusals`; the sweep's own
+`code` is then `cases_failed`. `sweep-plan` reports each
 case's `status`, `record_commit_status`, `unchanged_patches` (a patch that
 already matched the case) and its full `plan`.
 
@@ -382,8 +382,8 @@ signal's code; resume that case with `step`. A sweep does not resume across
 invocations: an `--output-dir` that already holds a manifest is refused by
 name, and `--fresh` clears the `--output-dir` (it must hold a
 `sweep_manifest.json`; the spec is validated first) and starts over.
-`--case-timeout-s <seconds>` marks a case that exceeds it failed (a
-`timeout_error` in its summary), ends its running step too, and the sweep continues; `--max-cases`
+`--case-timeout-s <seconds>` marks a case that exceeds it failed (code
+`case_timeout` in its summary), ends its running step too, and the sweep continues; `--max-cases`
 (default 200) caps the expanded case count, checked before any case is
 staged. Keep a failed output directory when diagnosing; cleanup is an
 explicit, disposable-output action.
@@ -869,10 +869,11 @@ a check fails if anything under the cases root changed while it ran.
 Every answer below is a command, not a module to import. Each prints JSON, and a
 command a caller got wrong prints one shape, `{"status": "failed", "code": ...,
 "error": ...}`, on stdout with exit 1 (`--help` is argparse's own text). A
-refusal by rules adds `refusals: [{code, document, key, rule, message}]`, one
-per broken rule, where `rule` is the declaration it broke
-(`{"exclusive_minimum": 0}`, `{"menu": [...]}`, `{"required_when": {...}}`) or
-`null` when `code` names it. `code` is one of these
+refusal by rules adds `refusals`, one plan diagnostic per broken rule
+(`{level, code, message, source, field, detail}`: `source` the document, `field`
+the dotted key or the axis), whose `detail.rule` is the declaration it broke
+(`{"exclusive_minimum": 0}`, `{"menu": [...]}`, `{"required_when": {...}}`);
+`detail` is `null` when `code` names the rule. `code` is one of these
 (`omnidriver.core.refusal.CODES`):
 
 | code | meaning |

@@ -510,9 +510,9 @@ def test_a_value_outside_an_axis_bound_is_refused_before_the_axis_resolves(bound
         )
     assert calls == []
     assert caught.value.code == "axis_rule"
-    assert caught.value.refusals == ({
-        "code": "axis_rule", "document": None, "key": "dx", "rule": bounds, "message": str(caught.value),
-    },)
+    assert caught.value.diagnostics == (diagnostic(
+        "error", "axis_rule", str(caught.value), field="dx", detail={"rule": bounds},
+    ),)
 
 
 def test_a_value_that_does_not_fit_an_axis_names_the_kind_as_its_rule():
@@ -522,8 +522,8 @@ def test_a_value_that_does_not_fit_an_axis_names_the_kind_as_its_rule():
             _record(axes=(axis,)), study_by_source={"base": {"n": "many"}},
             staged_case_root=Path("/nonexistent"), direct_key_validator=_known_catalog_validator,
         )
-    (refusal,) = caught.value.refusals
-    assert (refusal["code"], refusal["key"], refusal["rule"]) == ("axis_rule", "n", {"value_kind": "integer"})
+    (refusal,) = caught.value.diagnostics
+    assert (refusal.code, refusal.field, refusal.detail) == ("axis_rule", "n", {"rule": {"value_kind": "integer"}})
 
 
 def test_a_value_an_axis_refuses_is_an_axis_rule_refusal():
@@ -555,9 +555,10 @@ def test_a_key_the_validator_refuses_keeps_the_validators_code_and_rule():
                 staged_case_root=Path("/nonexistent"), direct_key_validator=validator,
             )
         assert caught.value.code == code
-        assert caught.value.refusals == ({
-            "code": code, "document": "constant/mesh.json", "key": name.split(":")[1], "rule": rule, "message": message,
-        },)
+        assert caught.value.diagnostics == (diagnostic(
+            "error", code, message, source="constant/mesh.json", field=name.split(":")[1],
+            detail=None if rule is None else {"rule": rule},
+        ),)
 
 
 def test_resolve_case_patches_refuses_an_axis_that_writes_the_staged_case(tmp_path):
@@ -1468,10 +1469,9 @@ def test_a_resolved_case_that_breaks_a_rule_is_refused_with_the_rules_own_messag
         assert fragment in message, (fragment, message)
     assert "many_cells" not in message
     assert exc.value.code == "case_rule"
-    assert exc.value.refusals == ({
-        "code": "too_many_cells", "document": None, "key": "cells", "rule": {"maximum": 10},
-        "message": "12 cells exceed 10",
-    },)
+    assert exc.value.diagnostics == (diagnostic(
+        "error", "too_many_cells", "12 cells exceed 10", field="cells", detail={"rule": {"maximum": 10}},
+    ),)
 
 
 def test_a_warning_does_not_refuse_the_case(tmp_path):

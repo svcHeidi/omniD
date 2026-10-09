@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any, Callable, Iterator, Mapping, Sequence
 from ..case_transaction import commit_case_write
 from ..case_write import CaseKeyNotFound, CaseMutationRequest, CaseWritePlan, render_mutation, resolve_mutation
 from ..provider_stack import MemberAbsent
-from ..refusal import diagnostic_refusal
 from ..sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
 from .models import DataArtifact
 from ..tutorial_records import (
@@ -416,7 +415,7 @@ def refuse_a_case_that_breaks_a_rule(
             + "; ".join(f"{item.field or item.source}: {item.message}" for item in broken)
             + (" Also noted: " + "; ".join(item.message for item in noted) if noted else "")
             + then,
-            code="case_rule", refusals=tuple(diagnostic_refusal(item) for item in broken),
+            code="case_rule", diagnostics=broken,
         )
 
 

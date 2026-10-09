@@ -116,7 +116,7 @@ def _one_case_sweep(tmp_path, cases_root):
     "plugins.toy:RefusingReaderPlugin",
 ])
 def test_a_renderer_resolver_or_reader_refusal_comes_back_as_the_cases_structured_error(tmp_path, capsys, plugin):
-    """A refusal the plugin raises (a `ValueError` subclass, like openCARP's `ParFormatError`) while a case is committed -- from its case writer, or from the config-value reader reached through `split_unchanged` -- is that case's `materialization_error`, never a traceback."""
+    """A refusal the plugin raises (a `ValueError` subclass, like openCARP's `ParFormatError`) while a case is committed -- from its case writer, or from the config-value reader reached through `split_unchanged` -- is that case's `error`, never a traceback."""
     from plugins.toy import TOY_REFUSAL
 
     cases_root = _native_toy_case(tmp_path)
@@ -127,8 +127,8 @@ def test_a_renderer_resolver_or_reader_refusal_comes_back_as_the_cases_structure
     assert exit_code == 1
     (case,) = json.loads(capsys.readouterr().out)["cases"]
     assert case["status"] == "failed"
-    assert "constant/mesh.json" in case["materialization_error"]
-    assert TOY_REFUSAL in case["materialization_error"]
+    assert "constant/mesh.json" in case["error"]
+    assert TOY_REFUSAL in case["error"]
     assert case["code"] == "unclassified"
 
 
@@ -163,9 +163,10 @@ def test_a_case_that_breaks_a_rule_carries_each_refusal_as_data(tmp_path, capsys
     (case,) = json.loads(capsys.readouterr().out)["cases"]
     assert case["code"] == "case_rule"
     assert case["refusals"] == [{
-        "code": "too_many_cells", "document": None, "key": "cells", "rule": None, "message": "12 cells exceed 10",
+        "level": "error", "code": "too_many_cells", "message": "12 cells exceed 10", "source": "", "field": "cells",
+        "detail": None,
     }]
-    assert "12 cells exceed 10" in case["materialization_error"]
+    assert "12 cells exceed 10" in case["error"]
 
 
 def test_plan_strict_against_a_read_only_tree_without_a_scratch_dir_refuses_as_json_S_I3(

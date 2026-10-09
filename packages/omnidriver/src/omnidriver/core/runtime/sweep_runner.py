@@ -13,7 +13,7 @@ from omnidriver.core.strict_planning import _strict_plan_for_spec
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
 from omnidriver.core.tutorial_records import TutorialRecordError, lookup_record, sort_study_name
-from ..refusal import caught_code, diagnostic_refusal, refusal_fields
+from ..refusal import caught_code, failure
 from .failure_context import why_a_child_stopped
 from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
@@ -76,6 +76,11 @@ def _manifest_failure(failure: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(context, dict):
         return dict(failure)
     return {**failure, "failure_context": {k: context[k] for k in _MANIFEST_FAILURE_CONTEXT_KEYS if k in context}}
+
+
+def _case_failure(exc: BaseException | None, **fields: Any) -> dict[str, Any]:
+    """Why a case failed, in the refusal shape less its ``status``: the case summary states that."""
+    return {key: value for key, value in failure(exc, **fields).items() if key != "status"}
 
 
 class SweepStopped(SystemExit):
@@ -187,13 +192,10 @@ def _record_sweep_plan(
         except Exception as exc:
             # One bad case costs one case, not the whole command (same
             # broad-catch reasoning as sweep_plan's factory-entry branch).
-            case_reports.append({
-                "case_id": case.case_id,
-                "resolved_axis_values": case.resolved_axis_values,
-                "status": "failed",
-                "materialization_error": f"{type(exc).__name__}: {exc}",
-                **refusal_fields(exc, code=caught_code(exc)),
-            })
+            case_reports.append(failure(
+                exc, code=caught_code(exc), error=f"{type(exc).__name__}: {exc}",
+                case_id=case.case_id, resolved_axis_values=case.resolved_axis_values,
+            ))
             continue
         case_reports.append({
             "case_id": case.case_id,
@@ -270,7 +272,7 @@ def _record_sweep_run(
         write_manifest(manifest_path, manifest)
 
         status = "failed"
-        failure: dict[str, Any] = {}
+        reason: dict[str, Any] = {}
         commit_status = None
         unchanged_patches: list[dict[str, Any]] = []
         artifact_reconciliation = None
@@ -289,12 +291,11 @@ def _record_sweep_run(
             report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
             payload = report.to_json()
             if report.status != "ok":
-                failure["plan_error"] = (
-                    "; ".join(report.error_messages()) or f"strict_plan reported {report.status} status"
+                reason = _case_failure(
+                    None, code="plan_blocked" if report.status == "blocked" else "plan_failed",
+                    error="; ".join(report.error_messages()) or f"strict_plan reported {report.status} status",
+                    diagnostics=report.errors(),
                 )
-                failure["code"] = "plan_blocked" if report.status == "blocked" else "plan_failed"
-                if refusals := [diagnostic_refusal(d) for d in report.errors()]:
-                    failure["refusals"] = refusals
             else:
                 run_document = payload["run_document"]
                 workflow_state_path = _workflow_state_path_from_run_document(run_document)
@@ -311,7 +312,7 @@ def _record_sweep_run(
                 )
                 child = _child_payload(result.stdout)
                 artifact_reconciliation = child.get("artifact_reconciliation")
-                failure.update(_child_failure(
+                reason.update(_child_failure(
                     result, child, redaction_patterns=driver_context.stack.call("get_log_redaction_patterns"),
                 ))
                 if workflow_state_path.exists():
@@ -324,15 +325,13 @@ def _record_sweep_run(
             stopped = stop
             # A stopped child leaves its state as it was mid-run; only a case that finished first counts as completed.
             status = "completed" if workflow_status(workflow_state_path) == "completed" else "failed"
-            failure["stopped_by_signal"] = int(stop.code) - 128 if isinstance(stop.code, int) else None
+            reason["stopped_by_signal"] = int(stop.code) - 128 if isinstance(stop.code, int) else None
         except subprocess.TimeoutExpired as exc:
-            failure.update(code="case_timeout", timeout_error=(
-                f"case exceeded timeout of {case_timeout_s}s and was terminated: {exc}"
-            ))
-        except (OSError, ValueError) as exc:
-            failure.update(materialization_error=str(exc), **refusal_fields(exc))
+            reason = _case_failure(
+                exc, code="case_timeout", error=f"case exceeded timeout of {case_timeout_s}s and was terminated: {exc}",
+            )
         except Exception as exc:
-            failure.update(plan_error=str(exc), **refusal_fields(exc, code=caught_code(exc)))
+            reason = _case_failure(exc, code=caught_code(exc))
 
         if status == "completed":
             completed_count += 1
@@ -354,14 +353,14 @@ def _record_sweep_run(
             case_summary["unchanged_patches"] = unchanged_patches
         if artifact_reconciliation is not None:
             case_summary["artifact_reconciliation"] = artifact_reconciliation
-        case_summary.update(failure)
+        case_summary.update(reason)
         case_summaries.append(case_summary)
 
         entry.sweep_outcome = "stopped" if stopped is not None else status
         entry.workflow_state_path = case_summary["workflow_state_path"]
         entry.updated_at = utc_now()
         entry.unchanged_patches = tuple(unchanged_patches)
-        entry.failure = _manifest_failure(failure)
+        entry.failure = _manifest_failure(reason)
         manifest.updated_at = entry.updated_at
         write_manifest(manifest_path, manifest)
         write_case_record(case_record_path, sweep_case_record(entry, output_dir))

@@ -106,7 +106,7 @@ class TestCliSweepActions(unittest.TestCase):
                 "case_count": 2,
                 "cases": [
                     {"case_id": "caseA", "status": "ok"},
-                    {"case_id": "caseB", "status": "failed", "materialization_error": "bad axis value"},
+                    {"case_id": "caseB", "status": "failed", "code": "axis_rule", "error": "bad axis value"},
                 ],
             },
         ), mock.patch("builtins.print"):

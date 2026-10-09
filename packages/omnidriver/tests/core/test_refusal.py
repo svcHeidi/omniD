@@ -63,10 +63,16 @@ def test_the_agent_guide_lists_every_code():
     assert [code for code in CODES if f"`{code}`" not in guide] == []
 
 
-def test_a_structured_refusal_keeps_its_refusals_beside_the_text():
-    refusals = ({"code": "catalog_rule", "document": "d", "key": "k", "rule": {"minimum": 0}, "message": "m"},)
-    payload = failure(TutorialRecordError("k is -1", code="catalog_rule", refusals=refusals))
-    assert payload["refusals"] == list(refusals) and payload["error"] == "k is -1"
+def test_a_structured_refusal_keeps_its_diagnostics_beside_the_text():
+    from omnidriver.core.planning_types import diagnostic
+
+    broken = diagnostic("error", "catalog_rule", "m", source="d", field="k", detail={"rule": {"minimum": 0}})
+    payload = failure(TutorialRecordError("k is -1", code="catalog_rule", diagnostics=(broken,)))
+    assert payload["refusals"] == [{
+        "level": "error", "code": "catalog_rule", "message": "m", "source": "d", "field": "k",
+        "detail": {"rule": {"minimum": 0}},
+    }]
+    assert payload["error"] == "k is -1"
 
 
 def test_print_refusal_prints_the_code(capsys):
