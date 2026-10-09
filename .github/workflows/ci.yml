@@ -144,6 +144,28 @@ jobs:
       - name: Run tests
         run: python -m pytest packages/omnidriver-opencarp/tests -q
 
+  test-agents:
+    name: test-agents (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: packages/omnidriver-agents/pyproject.toml
+
+      - name: Install omnidriver-agents
+        run: pip install -e packages/omnidriver-agents pytest
+
+      - name: Run tests
+        run: python -m pytest packages/omnidriver-agents/tests -q
+
   test-all-package-wheels:
     name: test-all-package-wheels (py3.11)
     runs-on: ubuntu-latest

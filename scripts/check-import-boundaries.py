@@ -24,6 +24,9 @@ CARDIACCORE_SRC = REPO_ROOT / "packages/omnidriver-cardiaccore/src/omnidriver/ca
 # belongs in it.
 OPENCARP_SRC = REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp"
 CARDIACFOAM_SRC = REPO_ROOT / "packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam"
+# The agent harness measures omniD from outside, through its CLI: importing
+# omniD would let the measurement depend on what it measures.
+AGENTS_SRC = REPO_ROOT / "packages/omnidriver-agents/src/omnidriver_agents"
 
 
 def _adapter_package_roots() -> dict[str, Path]:
@@ -121,6 +124,11 @@ def main() -> int:
         for path in root.rglob("*.py"):
             found.extend(_check_file(path, forbidden, root))
 
+    for path in AGENTS_SRC.rglob("*.py"):
+        found.extend(_check_file(path, ("omnidriver",), AGENTS_SRC))
+    for path in REPO_ROOT.glob("packages/*/src/omnidriver/**/*.py"):
+        found.extend(_check_file(path, ("omnidriver_agents",), REPO_ROOT))
+
     waived = {key for key, _ in found if key in KNOWN_VIOLATIONS}
     violations = [msg for key, msg in found if key not in KNOWN_VIOLATIONS]
 
@@ -157,6 +165,7 @@ def main() -> int:
             "siblings, and what passes between them is declared, not imported. "
             "A cardiac adapter importing omnidriver.openfoam is allowed -- that "
             "is the direction the layering permits. "
+            "omnidriver_agents imports no omnidriver package and none imports it. "
             "See ARCHITECTURE.md's Architectural Rules."
         )
         return 1

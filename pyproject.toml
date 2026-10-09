@@ -28,4 +28,5 @@ pythonpath = [
     "packages/omnidriver-cardiacfoam/tests",
     "packages/omnidriver-cardiaccore/tests",
     "packages/omnidriver-opencarp/tests",
+    "packages/omnidriver-agents/tests",
 ]

@@ -42,11 +42,12 @@ def test_the_scan_root_resolves() -> None:
     assert _PACKAGES.is_dir(), _PACKAGES
     assert sorted(p.parent.name for p in _PACKAGES.glob("*/src")) == [
         "omnidriver",
+        "omnidriver-agents",
         "omnidriver-cardiaccore",
         "omnidriver-cardiacfoam",
         "omnidriver-opencarp",
         "omnidriver-openfoam",
-    ], "all five packages must be scanned, or this guard proves nothing"
+    ], "all six packages must be scanned, or this guard proves nothing"
 
 
 def test_no_shipped_module_imports_the_pre_migration_package() -> None:
