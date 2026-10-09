@@ -1109,7 +1109,10 @@ _DIAGONAL = {6: (0, 3, 5), 9: (0, 4, 8)}
 
 def _evaluate_conductivity_diagonal(context: dict[str, Any]) -> list["StrictDiagnostic"]:
     """A conductivity is a positive quantity along each axis: every diagonal component of a uniform tensor is more than 0."""
+    from .record_key_validation import ELECTRO_DOCUMENT
+
     errors: list["StrictDiagnostic"] = []
+    coeffs = f"{context['myocardiumSolver']}Coeffs." if context.get("myocardiumSolver") else ""
     for key in _CONDUCTIVITY_TENSORS:
         value = context.get(key)
         components = getattr(value, "value", value)
@@ -1122,9 +1125,9 @@ def _evaluate_conductivity_diagonal(context: dict[str, Any]) -> list["StrictDiag
             continue
         diagonal = [components[i] for i in indices]
         if any(item <= 0 for item in diagonal):
-            errors.append(_diagnostic_from_phase(
-                phase="physics", field=key, level="error",
-                message=f"{key} has diagonal {diagonal}; each diagonal component must be more than 0.",
+            errors.append(diagnostic(
+                "error", "run_validation", f"{coeffs}{key} has diagonal {diagonal}; each diagonal component must be more than 0.",
+                source=ELECTRO_DOCUMENT, field=f"{coeffs}{key}", detail={"rule": {"diagonal_exclusive_minimum": 0}},
             ))
     return errors
 

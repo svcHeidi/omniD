@@ -1585,17 +1585,15 @@ def test_an_empty_external_stimulus_block_still_needs_its_corners(tmp_path):
 def test_a_uniform_conductivity_tensor_has_a_positive_diagonal(key):
     from foamlib import Dimensioned, DimensionSet
 
-    from omnidriver.cardiacfoam.validation import _evaluate_conductivity_diagonal
-
     siemens_per_metre = DimensionSet(mass=-1, length=-3, time=3, current=2)
-    symmetric = Dimensioned([0.1334, 0, 0, 0.0176, 0, 0.0176], siemens_per_metre)
-    assert _evaluate_conductivity_diagonal({key: symmetric}) == []
-    full = Dimensioned([0.1334, 0, 0, 0, 0.0176, 0, 0, 0, 0.0176], siemens_per_metre)
-    assert _evaluate_conductivity_diagonal({key: full}) == []
-    broken = Dimensioned([0.1334, 0, 0, -0.0176, 0, 0.0176], siemens_per_metre)
-    (found,) = _evaluate_conductivity_diagonal({key: broken})
-    assert (found.level, found.field) == ("error", key)
+
+    def judged(components):
+        return cross_field_diagnostics({"myocardiumSolver": "monodomainSolver", key: Dimensioned(components, siemens_per_metre)})
+
+    assert judged([0.1334, 0, 0, 0.0176, 0, 0.0176]) == []
+    assert judged([0.1334, 0, 0, 0, 0.0176, 0, 0, 0, 0.0176]) == []
+    (found,) = judged([0.1334, 0, 0, -0.0176, 0, 0.0176])
+    assert (found.level, found.source, found.field) == ("error", "constant/electroProperties", f"monodomainSolverCoeffs.{key}")
+    assert found.detail == {"rule": {"diagonal_exclusive_minimum": 0}}
     assert "diagonal" in found.message and "-0.0176" in found.message
-    assert [item.field for item in cross_field_diagnostics({key: broken})] == [key]
-    zero = Dimensioned([0, 0, 0, 0, 0, 0, 0, 0, 1], siemens_per_metre)
-    assert len(_evaluate_conductivity_diagonal({key: zero})) == 1
+    assert len(judged([0, 0, 0, 0, 0, 0, 0, 0, 1])) == 1

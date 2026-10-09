@@ -540,6 +540,21 @@ def test_a_value_an_axis_refuses_is_an_axis_rule_refusal():
     assert caught.value.code == "axis_rule"
 
 
+def test_the_rule_an_axis_refuses_a_value_by_is_its_refusals_rule():
+    def resolve(value, staged_case_root):
+        raise TutorialRecordError(f"{value!r} is no model", code="axis_rule", rule={"menu": ["A", "B"]})
+
+    axis = AxisContract(name="model", value_kind="word", unit=None, description="d", resolve=resolve)
+    with pytest.raises(TutorialRecordError) as caught:
+        resolve_case_patches(
+            _record(axes=(axis,)), study_by_source={"base": {"model": "C"}},
+            staged_case_root=Path("/nonexistent"), direct_key_validator=_known_catalog_validator,
+        )
+    assert caught.value.diagnostics == (diagnostic(
+        "error", "axis_rule", "axis 'model': 'C' is no model", field="model", detail={"rule": {"menu": ["A", "B"]}},
+    ),)
+
+
 def test_a_key_the_validator_refuses_keeps_the_validators_code_and_rule():
     def validator(document, key_path, value):
         if key_path == ("cells",):

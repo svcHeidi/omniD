@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from omnidriver.cardiacfoam.records.ionic_model_axis import ionic_model_axis
+from omnidriver.core.tutorial_records import TutorialRecordError
 
 _DOCUMENT = "constant/electroProperties"
 _SCOPE = ("singleCellSolverCoeffs",)
@@ -60,13 +61,16 @@ def test_an_unknown_model_is_refused_by_name(tmp_path):
     axis = _axis()
     case_root = _staged_case(tmp_path)
 
-    with pytest.raises(ValueError, match="NotAModel"):
+    with pytest.raises(TutorialRecordError, match="NotAModel") as refused:
         axis.resolve("NotAModel", case_root)
+    assert refused.value.code == "axis_rule"
+    assert "TWorld" in refused.value.rule["menu"] and "monodomainFDAManufactured" not in refused.value.rule["menu"]
 
 
 def test_a_manufactured_only_model_with_no_amplitude_is_refused_by_name(tmp_path):
     axis = _axis()
     case_root = _staged_case(tmp_path)
 
-    with pytest.raises(ValueError, match="monodomainFDAManufactured"):
+    with pytest.raises(TutorialRecordError, match="monodomainFDAManufactured") as refused:
         axis.resolve("monodomainFDAManufactured", case_root)
+    assert refused.value.code == "axis_rule"
