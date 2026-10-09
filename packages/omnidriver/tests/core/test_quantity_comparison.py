@@ -159,9 +159,7 @@ def test_a_report_is_written_once(tmp_path):
     (lambda runs, pairs: pairs.append(_pair("A", "one", "one")), "itself"),
     (lambda runs, pairs: runs["one"].update(case_id="nine"), "'nine'"),
     (lambda runs, pairs: runs["one"].update(artifact_id="record.solve.7"), "record.solve.7"),
-    # A self-sampling reader (takes_points is false) accepts 'points' as an
-    # expected location, so this fails on the missing 'max_sampling_offset',
-    # not on "takes no points".
+    # The schema pairs 'points' with 'max_sampling_offset' before any read.
     (lambda runs, pairs: runs["one"].update(points={"unit": "m", "at": {"a": [0, 0, 0]}}), "max_sampling_offset"),
     (lambda runs, pairs: runs.update(spare=dict(runs["one"])), "'spare'.*no pair"),
 ])
@@ -413,7 +411,8 @@ def test_a_points_taking_reader_with_a_mismatched_label_set_is_refused(tmp_path)
     grid = "0 0 0 1.0\n1 0 0 2.0\n"
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": grid, "two": grid}, artifact_format=GRID_FORMAT)
     points = {"unit": "m", "at": {"not-a": [0, 0, 0]}}
-    runs = {"one": _run(sweep, "one", points=points), "two": _run(sweep, "two", points=points)}
+    runs = {"one": _run(sweep, "one", points=points, max_sampling_offset=0.001),
+            "two": _run(sweep, "two", points=points, max_sampling_offset=0.001)}
     with pytest.raises(QuantityComparisonError, match="points are given for"):
         run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
     assert not (tmp_path / "report.json").exists()
@@ -422,7 +421,7 @@ def test_a_points_taking_reader_with_a_mismatched_label_set_is_refused(tmp_path)
 def test_points_for_a_stack_with_no_reader_are_refused_before_any_read(tmp_path):
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, artifact_format="toy_unreadable_format")
     points = {"unit": "m", "at": {"a": [0, 0, 0]}}
-    runs = {"one": _run(sweep, "one", points=points), "two": _run(sweep, "two")}
+    runs = {"one": _run(sweep, "one", points=points, max_sampling_offset=0.001), "two": _run(sweep, "two")}
     with pytest.raises(QuantityComparisonError, match="no reader"):
         run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
     assert not (tmp_path / "report.json").exists()
@@ -430,7 +429,8 @@ def test_points_for_a_stack_with_no_reader_are_refused_before_any_read(tmp_path)
 
 def test_max_sampling_offset_for_a_stack_with_no_reader_is_also_refused(tmp_path):
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, artifact_format="toy_unreadable_format")
-    runs = {"one": _run(sweep, "one", max_sampling_offset=0.001), "two": _run(sweep, "two")}
+    points = {"unit": "m", "at": {"a": [0, 0, 0]}}
+    runs = {"one": _run(sweep, "one", points=points, max_sampling_offset=0.001), "two": _run(sweep, "two")}
     with pytest.raises(QuantityComparisonError, match="no reader"):
         run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
     assert not (tmp_path / "report.json").exists()
@@ -473,6 +473,40 @@ def test_points_for_a_self_sampling_reader_without_max_sampling_offset_is_refuse
     with pytest.raises(QuantityComparisonError, match="max_sampling_offset"):
         run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")]),
                                 tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+@pytest.mark.parametrize("edit", [
+    lambda run: run.pop("points"),
+    lambda run: run.pop("max_sampling_offset"),
+])
+def test_points_and_max_sampling_offset_come_together(tmp_path, edit):
+    sweep, runs = _two_runs(tmp_path)
+    runs["one"].update(points={"unit": "m", "at": {"a": [0, 0, 0.007]}}, max_sampling_offset=0.001)
+    edit(runs["one"])
+    with pytest.raises(QuantityComparisonError, match="dependency|required"):
+        run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+@pytest.mark.parametrize(("where", "literal"), [
+    ("max_sampling_offset", "NaN"),
+    ("tolerance", "Infinity"),
+    ("coordinate", "1e400"),
+])
+def test_a_non_finite_number_in_the_request_is_refused_before_any_read(tmp_path, where, literal):
+    runs = _grid_runs(tmp_path, 0.0002, 0.0002)
+    request = _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")])
+    document = json.loads(request.read_text())
+    if where == "max_sampling_offset":
+        document["runs"]["two"]["max_sampling_offset"] = "__X__"
+    elif where == "tolerance":
+        document["tolerance"]["value"] = "__X__"
+    else:
+        document["runs"]["two"]["points"]["at"]["a"][0] = "__X__"
+    request.write_text(json.dumps(document).replace('"__X__"', literal))
+    with pytest.raises(QuantityComparisonError, match="finite|non-finite|constant"):
+        run_quantity_comparison(request, tmp_path / "report.json")
     assert not (tmp_path / "report.json").exists()
 
 
