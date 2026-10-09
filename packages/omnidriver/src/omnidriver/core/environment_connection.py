@@ -118,6 +118,21 @@ def _diagnostic(level: str, code: str, message: str, field: str = "") -> dict[st
     return {"level": level, "code": code, "message": message, "source": "environment", "field": field}
 
 
+def _solver_steps(stack: Any) -> list[dict[str, Any]]:
+    return [{"id": command, "command": command, "args": []} for command in sorted(stack.call("get_solver_commands"))]
+
+
+def _preflight(driver_context: "DriverContext", env: Mapping[str, str], steps: list[dict[str, Any]]) -> list[dict[str, str]]:
+    found = driver_context.stack.call("get_environment_diagnostics", {"steps": steps}, env=env, driver_context=driver_context)
+    return [asdict(item) if not isinstance(item, dict) else dict(item) for item in found]
+
+
+def solver_environment_diagnostics(driver_context: "DriverContext", env: Mapping[str, str]) -> list[dict[str, str]]:
+    """What the stack's preflight says of its solver commands in ``env``: the
+    serial diagnostics ``environment_report`` lists, warnings included."""
+    return _preflight(driver_context, env, _solver_steps(driver_context.stack))
+
+
 def environment_report(driver_context: "DriverContext", environ: Mapping[str, str] | None = None) -> dict[str, Any]:
     from .provider_stack import provider_profile
 
@@ -175,12 +190,9 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
     }
 
     def preflight(steps: list[dict[str, Any]]) -> list[dict[str, str]]:
-        found = stack.call(
-            "get_environment_diagnostics", {"steps": steps}, env=applied, driver_context=driver_context,
-        )
-        return [asdict(item) if not isinstance(item, dict) else dict(item) for item in found]
+        return _preflight(driver_context, applied, steps)
 
-    diagnostics += preflight([{"id": command, "command": command, "args": []} for command in solvers])
+    diagnostics += preflight(_solver_steps(stack))
     report["status"] = "failed" if any(item["level"] == "error" for item in diagnostics) else "ok"
     if connection.mpi_launcher is not None:
         report["launcher"] = mpi.identity(connection.mpi_launcher, applied)

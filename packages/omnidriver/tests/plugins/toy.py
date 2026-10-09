@@ -561,6 +561,13 @@ class FailingPreflightPlugin(ToyStack):
         return (StrictDiagnostic(level="error", code="toy_environment_missing", message="the toy's environment is not sourced"),)
 
 
+class WarningPreflightPlugin(ToyStack):
+    """A preflight that warns the solver binary is older than its source."""
+
+    def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None) -> tuple:
+        return (StrictDiagnostic(level="warning", code="toy_stale_build", message="the toy binary is older than its source"),)
+
+
 class AuxiliaryOnlyPreflightPlugin(ToyStack):
     """With the solver off PATH, names only an auxiliary command and echoes
     the PATH it searched, as openCARP's preflight does."""
@@ -1024,6 +1031,7 @@ NATIVE_WRITING_PLUGIN = _selector("NativeWritingPlugin")
 NO_PRODUCES_PLUGIN = _selector("NoProducesPlugin")
 SILENT_PREFLIGHT_PLUGIN = _selector("SilentPreflightPlugin")
 FAILING_PREFLIGHT_PLUGIN = _selector("FailingPreflightPlugin")
+WARNING_PREFLIGHT_PLUGIN = _selector("WarningPreflightPlugin")
 AUXILIARY_ONLY_PREFLIGHT_PLUGIN = _selector("AuxiliaryOnlyPreflightPlugin")
 SILENT_SURFACE_PLUGIN = _selector("SilentSurfacePlugin")
 UNLISTED_KEY_PLUGIN = _selector("UnlistedKeyPlugin")
