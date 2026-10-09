@@ -50,6 +50,14 @@ def test_a_study_that_breaks_a_rule_is_refused_before_it_runs(study, fragments, 
         assert fragment in message, (fragment, message)
 
 
+def test_a_rule_refusal_names_the_key_by_its_dotted_path_in_the_document(tmp_path):
+    with pytest.raises(TutorialRecordError) as exc:
+        _plan("singleCell", tmp_path, {COEFFS + "singleCellSolverCoeffs.tissue": "nowhere"})
+    assert [(d.source, d.field) for d in exc.value.diagnostics] == [
+        ("constant/electroProperties", "singleCellSolverCoeffs.tissue"),
+    ]
+
+
 def test_a_misspelled_key_is_a_warning_and_never_fails_the_plan(tmp_path):
     cases_root = tmp_path / "tutorials"
     shutil.copytree(TUTORIALS, cases_root)

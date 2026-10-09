@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
@@ -1185,7 +1186,10 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDi
     # The C++ takes the stimulus boxes from externalStimulus whenever it is found, empty or not.
     held = frozenset(name for name in ("externalStimulus",) if hasattr(parsed[f"{solver}Coeffs"].get(name), "keys"))
     infer_virtual_presence(rule_context, empty_blocks=held)
-    found = rule_diagnostics(entries, rule_context, document=document, mapping=mapping, catalogue=catalogue)
+    found = [
+        item if item.field in ("", "myocardiumSolver") else replace(item, field=f"{solver}Coeffs.{item.field}")
+        for item in rule_diagnostics(entries, rule_context, document=document, mapping=mapping, catalogue=catalogue)
+    ]
     found += control_dict_diagnostics(case_root)
     pre_pacing = region_document(case_root, "electro", "prePacingProperties")
     if pre_pacing is not None:

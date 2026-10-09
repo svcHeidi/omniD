@@ -1237,7 +1237,9 @@ def test_a_negative_root_stimulus_node_breaks_the_catalogue_bound(tmp_path):
     from omnidriver.cardiacfoam.validation import case_diagnostics
 
     _build_pvj_case(tmp_path, set_rpvj=True, graph_present=True, root_node="-1")
-    assert [(item.code, item.field) for item in case_diagnostics(tmp_path)] == [("catalog_rule", _ROOT_NODE)]
+    assert [(item.code, item.field) for item in case_diagnostics(tmp_path)] == [
+        ("catalog_rule", f"monodomainSolverCoeffs.{_ROOT_NODE}"),
+    ]
 
 
 @pytest.mark.parametrize("rpvj,refused", [("150.0", False), ("0", True), ("-10", True)])
@@ -1245,7 +1247,7 @@ def test_a_coupling_resistance_that_is_not_positive_breaks_the_catalogue_bound(t
     from omnidriver.cardiacfoam.validation import case_diagnostics
 
     _build_pvj_case(tmp_path, set_rpvj=True, rpvj=rpvj)
-    assert [item.field for item in case_diagnostics(tmp_path)] == (["domainCouplings.pvj.rPvj"] if refused else [])
+    assert [item.field for item in case_diagnostics(tmp_path)] == (["monodomainSolverCoeffs.domainCouplings.pvj.rPvj"] if refused else [])
 
 
 #: blockMesh's points for monodomain1D3D's unit-cube mesh (system/blockMeshDict.3D), as OpenFOAM lays out the file.
