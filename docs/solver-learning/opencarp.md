@@ -325,3 +325,42 @@ parameter table and the verdict. `bench` and `openCARP` need
 | L2 | the same without `OPENCARP_MPI_BIN` | `opencarp_mpi_launcher_mismatch`: `/opt/homebrew/bin/mpirun` (Open MPI 5.0.9) "started 2 separate one-process openCARP runs" | the mixing mistake is refused before a run (I2) |
 | L3 | the same without `HYDRA_IFACE` | `opencarp_mpi_launcher_mismatch`: "could not start 2 openCARP processes: ... channel initialization failed" | I3, found by the same probe |
 | L4 | a first version applied the prefix with `bash -c '<prefix> env -0'` | `opencarp_binary_unloadable` although the prefix exported `DYLD_LIBRARY_PATH` | `/usr/bin/env` is a protected binary: macOS strips `DYLD_*` again when bash starts it (the I3 note). The environment is now dumped by the same Python, `exec`ed from that bash |
+
+## M. The fibre at 45° (2026-10-09)
+
+The Niederer slab with the fibre rotated as in cardiacFOAM's native
+`obliqueWall` study; the frame reasoning is in
+`benchmarks/niederer2011/oblique/README.md`. Probes under
+`/Users/simaocastro/omnid-runs/2026-10-09/oblique/probes/`, runs under
+`.../oblique/runs/`. Every run is serial, Δt 0.01 ms, `mass_lumping 0`.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| M1 | `mesher +Help`; `mesher +Help fibers.<name>` | fibre options: `fibers.rotEndo`, `rotEpi` ("fibre angle at the endocardium (minimum z value)", degrees, default 0), `imbrication` ("typically 0 or smaller than 5 degrees"), `sheetEndo`, `sheetEpi`, `tm_fiber_profile`, `tm_sheet_profile`. openCARP itself has no fibre parameter: `orthoname` is "unsupported in openCARP" | the fibre comes only from the `.lon` mesher writes; the 45° rotation needed is in the x–z plane (the 20 × 3 mm face), which `rotEndo`/`rotEpi` cannot give: they rotate in x–y |
+| M2 | `m1_imbrication/`: the record's mesh command at 500 µm with `-fibers.rotEndo 45 -fibers.rotEpi 45`; with `-fibers.imbrication` 30, 45, 60, 89, 90, −45 | rot 45: header `1`, rows `0.707107 0.707107 0`. imbrication 30/45/60/90: header `2`, rows `0.894427 0 0.447214 -0.447214 0 0.894427`, `0.816497 0 0.57735 ...`, `0.755929 0 0.654654 ...`, `0.707107 0 0.707107 -0.707107 0 0.707107`; −45 mirrors z | **imbrication tilts the fibre towards +z by atan(sin(imbrication)), not by the angle given**: 45 gives 35.26°, and only 90 gives 45°, exactly. Any nonzero value adds a sheet vector, so openCARP reads the mesh as orthotropic |
+| M3 | `nversion.par`; `openCARP +Help 'gregion[0].g_in'` | `g_in` = `g_it` = 0.019, `g_en` = `g_et` = 0.24 (the file sets all six); `g_in` is "the sheet-normal direction" | with the sheet, σ stays transversely isotropic: the two-vector `.lon` poses the same problem as one vector |
+| M4 | the plain command and `-fibers.imbrication 0`; `cmp` of the five files; `-fibers.imbrication 90.0` against `90` | byte-identical; `90.0` and `90` byte-identical | the record can pass `-fibers.imbrication 0` as a default without changing the native case |
+| M5 | `sweep-run` of `oc_oblique_dx0.5` (`fibers.imbrication 90`) before omniD changed | not run: the record had no way to take it. Core accepted two axes' command arguments on one step only when byte-identical, so `dx` (`-resolution[i]`) and a fibre axis on `mesh` were refused (`docs/superpowers/specs/2026-09-27-solver-descriptions-design.md` §1 had designed the fix, unimplemented) | **omniD defect**, fixed on `feat/oblique-three-solvers`: `AxisResult.replacements` replaces a declared default by its key, composing with other axes; the record declares `-fibers.imbrication 0` and an axis `fibers.imbrication` |
+| M6 | `sweep-run --plugin opencarp` of `benchmarks/niederer2011/oblique/opencarp_obliqueWall.json` sliced by `level_study.py` at dx 500 and 200 µm | `ok`; the staged `slab.lon` holds 16 800 rows `0.707107 0 0.707107 -0.707107 0 0.707107`; mesher argv ends `-resolution[2] 500.0 -fibers.imbrication 90.0`. Solve 17.4 s (dx 0.5), 116.6 s (dx 0.2; 17.7 s aligned at 0.5) | the study needs nothing but its JSON |
+| M7 | the sign: `oc_obliqueneg_dx0.5` (`fibers.imbrication -90`) and cardiacFOAM with σxy negated; `probes/s1_sign/sign.py` reads both solvers on the face y = 0.25 mm (cardiacFOAM's top cell layer) | at x = 4.25 mm, z = 0.25 → 2.75 mm: openCARP +90 9.12 → 7.45, −90 6.01 → 11.32; cardiacFOAM +σxy 12.70 → 12.45, −σxy 15.58 → 18.09 (ms) | **+90 is cardiacFOAM's native tensor.** Each sign's trend across z matches the same sign in the other solver; the native positive σxy is the fibre (1, 0, 1)/√2 here |
+
+**P1-P9, aligned and oblique (ms).** cardiacFOAM `godunov_0` in the second
+column of each pair is in `cardiacfoam.md` AA.
+
+| pt | 0.5 aligned | 0.5 oblique | 0.2 aligned | 0.2 oblique |
+|---|---|---|---|---|
+| P1 | 1.252 | 1.251 | 1.254 | 1.253 |
+| P2 | 47.348 | 48.092 | 28.346 | 28.429 |
+| P3 | 32.938 | 53.066 | 30.977 | 51.836 |
+| P4 | 58.054 | 66.034 | 40.292 | 59.745 |
+| P5 | 11.518 | 5.518 | 8.712 | 6.075 |
+| P6 | 47.671 | 47.282 | 28.864 | 29.074 |
+| P7 | 33.856 | 49.507 | 31.993 | 46.896 |
+| P8 | 58.144 | 63.961 | 40.591 | 55.328 |
+| P9 | 24.901 | 28.948 | 18.828 | 26.427 |
+
+The 0.2 aligned column is the threeway run of the same day (same tree, same
+study). The fibre at 45° delays P8 by 14.7 ms at dx 0.2 mm, the delay the
+native oblique README states, and P3/P7 by 15-21 ms; P5 (across the 3 mm from
+the stimulus) comes earlier. P2 and P6 barely move: across the 7 mm the
+conductivity is σt in both problems.
