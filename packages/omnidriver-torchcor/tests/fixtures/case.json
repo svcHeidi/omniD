@@ -5,6 +5,7 @@
   "t_end_ms": 150,
   "dx_mm": 0.5,
   "slab_mm": [20, 7, 3],
+  "fibre": [1, 0, 0],
   "ionic_model": "TenTusscherPanfilov",
   "ionic_options": {"cell_type": "EPI"},
   "ionic_init": {
