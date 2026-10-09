@@ -873,7 +873,10 @@ refusal by rules adds `refusals`, one plan diagnostic per broken rule
 (`{level, code, message, source, field, detail}`: `source` the document, `field`
 the dotted key or the axis), whose `detail.rule` is the declaration it broke
 (`{"exclusive_minimum": 0}`, `{"menu": [...]}`, `{"required_when": {...}}`);
-`detail` is `null` when `code` names the rule. `code` is one of these
+`detail` is `null` when `code` names the rule. A bound is always a number
+(`minimum`, `exclusive_minimum`, `maximum`); a bound the solver states as an
+expression of other parameters is a string under its own key
+(openCARP's `{"maximum_expression": "tend"}`). `code` is one of these
 (`omnidriver.core.refusal.CODES`):
 
 | code | meaning |
