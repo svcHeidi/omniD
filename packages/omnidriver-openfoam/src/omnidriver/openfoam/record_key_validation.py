@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-from omnidriver.core.contracts.dictionary import bound_reasons, validate_value_shape
+from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations, validate_value_shape
+from omnidriver.core.tutorial_records import TutorialRecordError
 from omnidriver.core.runtime.record_surface import ANY_KEY
 
 from .dict_keys_scanner import cxx_value_kind, document_scans, supplied_scan
@@ -251,16 +252,21 @@ def make_validator(
             if computed:
                 return kind, True
             reasons = validate_value_shape(kind, value)
-            if not reasons and (bounded := bound_reasons(entry, value)):
-                raise ValueError(f"{document}:{dotted} = {value!r} is outside the catalogue's bounds: {'; '.join(bounded)}")
+            if not reasons and (broken := bound_violations(entry, value)):
+                raise TutorialRecordError(
+                    f"{document}:{dotted} = {value!r} is outside the catalogue's bounds: "
+                    + "; ".join(bound_reasons(entry, value)),
+                    code="catalog_rule", rule=broken,
+                )
             if reasons:
-                raise ValueError(
+                raise TutorialRecordError(
                     f"{document}:{dotted} does not fit "
                     + (
                         f"value_kind {kind!r}, which the supplied C++ reads it as (the catalogue says {entry.value_kind!r})"
                         if kind != entry.value_kind else f"catalogued value_kind {entry.value_kind!r}"
                     )
-                    + f": {'; '.join(reasons)}"
+                    + f": {'; '.join(reasons)}",
+                    code="catalog_rule", rule={"value_kind": kind},
                 )
             return kind, True
         if document.startswith("system/"):

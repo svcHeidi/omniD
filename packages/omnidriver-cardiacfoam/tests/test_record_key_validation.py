@@ -184,8 +184,9 @@ def test_a_catalogued_control_dict_key_is_validated_by_kind_and_bounds():
 def test_surface_to_volume_ratio_and_capacitance_are_positive(key_path):
     assert record_key_validator("constant/electroProperties", key_path, 0.5) == ("scalar", True)
     for value in (0, -1):
-        with pytest.raises(ValueError, match="must be more than 0"):
+        with pytest.raises(ValueError, match="must be more than 0") as caught:
             record_key_validator("constant/electroProperties", key_path, value)
+        assert (caught.value.code, caught.value.rule) == ("catalog_rule", {"exclusive_minimum": 0})
 
 
 def test_a_number_spelled_as_text_is_read_and_a_directive_is_left_to_openfoam():

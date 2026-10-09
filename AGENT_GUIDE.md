@@ -364,7 +364,8 @@ entry becomes the case's directory name (validated for uniqueness and
 path-safety); otherwise cases are named `case_0001`, `case_0002`, ... in
 expansion order. A case that cannot be staged or planned fails alone
 (`materialization_error`, or `plan_error` in `sweep-run`, which lists the plan's
-error diagnostics), not the whole sweep. `sweep-plan` reports each
+error diagnostics), not the whole sweep. The failed case also carries `code`
+and, when rules refused it, `refusals` (below). `sweep-plan` reports each
 case's `status`, `record_commit_status`, `unchanged_patches` (a patch that
 already matched the case) and its full `plan`.
 
@@ -760,9 +761,9 @@ so they describe a state the binary was not built from.
 The catalogues stay the source of truth, and a key that appears in or
 disappears from the C++ never fails a plan. A plan compares them with the scan:
 - a key, sub-dictionary, menu value or selection table the C++ reads and the
-  catalogue lacks is a `plugin_catalog_uncatalogued` note carrying what was
-  scanned (type, default, whether it is required, where, and the `entry`
-  arguments to write the catalogue entry from). A literal the C++ compares a
+  catalogue lacks is a `plugin_catalog_uncatalogued` note whose `detail` is
+  what was scanned (type, default, whether it is required, where, and the
+  `entry` arguments to write the catalogue entry from). A literal the C++ compares a
   value against is a menu value, except a test against the read's own default
   in a function that accepts any other value: that asks whether the key is
   unset;
@@ -770,7 +771,8 @@ disappears from the C++ never fails a plan. A plan compares them with the scan:
   ("catalogued; the supplied C++ no longer reads it"), and a case or study that
   sets it gets an `unread_case_dict_key` warning saying it has no effect;
 - a catalogue claim the C++ refutes is a `plugin_catalog_disagreement` warning
-  stating both sides: a type the C++ reads differently, a menu value no table
+  stating both sides, as `detail` (`path`, `field`, `catalogue`, `cxx`,
+  `sources`) beside the sentence: a type the C++ reads differently, a menu value no table
   registers, a required key the C++ gives a default, or an optional key the C++
   requires. A read counts against an entry only when it agrees with the entry
   beyond the final name, or is in a file the entry cites, so a same-named key
@@ -865,8 +867,13 @@ a check fails if anything under the cases root changed while it ran.
 ## Discovering what's valid
 
 Every answer below is a command, not a module to import. Each prints JSON, and a
-command a caller got wrong prints one shape, `{"status": "failed", "error": ...}`,
-on stdout with exit 1 (`--help` is argparse's own text).
+command a caller got wrong prints one shape, `{"status": "failed", "code": ...,
+"error": ...}`, on stdout with exit 1 (`--help` is argparse's own text). `code`
+is stable: the refusal's own name (`ScratchRootNotSupplied`, `case_rule`,
+`axis_rule`, `catalog_rule`) or its exception class. A refusal by rules adds
+`refusals: [{code, document, key, rule, message}]`, one per broken rule, where
+`rule` is the declaration it broke (`{"exclusive_minimum": 0}`,
+`{"menu": [...]}`, `{"required_when": {...}}`) or `null` when `code` names it.
 
 1. **What does this stack offer?** `omnidriver describe --repo <tree>` (or
    `--plugin <id>`), with no `--entry`, lists `records` (name, native case,
@@ -913,8 +920,8 @@ the case holds; a read the scan cannot place in a dictionary is not noted.
 Every record case passes the stack's rules once its study is written and
 before anything runs: `plan --strict`, `run` and each case of a sweep. A rule
 that finds an error refuses the case by name (`tutorial record 'X': the
-resolved case breaks N rule(s): <field>: <message>`), with the rule's own
-message. The rules read the resolved case's files, so a direct key, an axis
+resolved case breaks N rule(s): <field>: <message>`, code `case_rule`), with
+the rule's own message, and each rule as one of its `refusals`. The rules read the resolved case's files, so a direct key, an axis
 and the native case all count.
 
 - **Catalogue relations** (cardiacFOAM's `electroProperties`, `prePacingProperties`

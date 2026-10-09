@@ -165,7 +165,10 @@ def _catalog_diagnostics(
         ),)
     source = f"{cxx_mapping_source}:{source_root}"
     disagreements = tuple(
-        diagnostic("warning", "plugin_catalog_disagreement", item, source=source)
+        diagnostic(
+            "warning", "plugin_catalog_disagreement", item["message"], source=source, field=item["path"] or "",
+            detail={key: value for key, value in item.items() if key != "message"},
+        )
         for item in report.get("disagreements", ())
     )
     unread = tuple(
@@ -181,7 +184,7 @@ def _catalog_diagnostics(
         diagnostic(
             "info", "plugin_catalog_uncatalogued", _describe_uncatalogued(item) +
             " (omnidriver catalog --uncatalogued lists every one)",
-            source=source, field=item.get("path", ""),
+            source=source, field=item.get("path", ""), detail=item,
         )
         for item in report.get("uncatalogued", ())
         if held.intersection(item.get("documents", ()))

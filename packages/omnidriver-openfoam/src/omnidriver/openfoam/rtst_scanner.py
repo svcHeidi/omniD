@@ -9,6 +9,17 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+
+def disagreement(
+    path: str | None, field: str, catalogue: Any, cxx: Any, message: str, *, sources: Iterable[str] = (), **extra: Any,
+) -> dict[str, Any]:
+    """One catalogue claim the C++ refutes: the claim's ``path`` and ``field``, what each side says, where the C++
+    says it, and the sentence that states both."""
+    return {
+        "path": path, "field": field, "catalogue": catalogue, "cxx": cxx, "sources": sorted(sources), **extra,
+        "message": message,
+    }
+
 # `addToRunTimeSelectionTable(base, derived, ctor);` -- whitespace-tolerant
 # including newlines.
 _RTST_RE = re.compile(
@@ -77,25 +88,33 @@ def runtime_selection_report(
     internal = dict(mapping.get("internal_bases", {}))
     mapped_bases = {rule["base"] for rule in by_path.values()}
 
-    disagreements: list[str] = []
+    disagreements: list[dict[str, Any]] = []
     uncatalogued: list[dict[str, Any]] = []
     values: dict[str, list[str]] = {}
     for path, rule in sorted(by_path.items()):
         base, mode = rule["base"], rule["mode"]
         if mode not in _MODES:
-            disagreements.append(f"runtime_selection maps {path} with unknown mode {mode!r}")
+            disagreements.append(disagreement(
+                path, "runtime_selection", None, None, f"runtime_selection maps {path} with unknown mode {mode!r}",
+            ))
         elif path not in enums:
-            disagreements.append(f"runtime_selection maps {path}, which is not a catalogue enum")
+            disagreements.append(disagreement(
+                path, "runtime_selection", None, None, f"runtime_selection maps {path}, which is not a catalogue enum",
+            ))
         elif base not in registrations:
-            disagreements.append(f"{path}: menu drawn from {base}, but no addToRunTimeSelectionTable({base}, ...) exists")
+            disagreements.append(disagreement(
+                path, "menu", list(enums[path].enum_values), [],
+                f"{path}: menu drawn from {base}, but no addToRunTimeSelectionTable({base}, ...) exists",
+            ))
         else:
             registered = set(registrations[base])
             catalogued = set(enums[path].enum_values)
             values[path] = sorted(registered)
             if mode != "polymorphic" and catalogued - registered:
-                disagreements.append(
-                    f"{path}: menu lists {sorted(catalogued - registered)}, which {base} does not register"
-                )
+                disagreements.append(disagreement(
+                    path, "menu", sorted(catalogued - registered), sorted(registered),
+                    f"{path}: menu lists {sorted(catalogued - registered)}, which {base} does not register",
+                ))
             if mode != "subset":
                 uncatalogued += [
                     {"kind": "menu_value", "path": path, "value": name, "base": base,
@@ -103,16 +122,23 @@ def runtime_selection_report(
                     for name in sorted(registered - catalogued)
                 ]
     disagreements += [
-        f"runtime_selection lists {path} as not runtime-selected, which is not a catalogue enum"
+        disagreement(
+            path, "runtime_selection", None, None,
+            f"runtime_selection lists {path} as not runtime-selected, which is not a catalogue enum",
+        )
         for path in sorted(not_selected) if path not in enums
     ]
     disagreements += [
-        f"runtime_selection lists {base} as internal, but "
-        + ("no table registers it" if base not in registrations else "it is also mapped")
+        disagreement(
+            None, "runtime_selection", None, None,
+            f"runtime_selection lists {base} as internal, but "
+            + ("no table registers it" if base not in registrations else "it is also mapped"),
+            base=base,
+        )
         for base in sorted(internal) if base not in registrations or base in mapped_bases
     ]
     disagreements += [
-        f"{path}: catalogue enum with no runtime_selection classification"
+        disagreement(path, "runtime_selection", None, None, f"{path}: catalogue enum with no runtime_selection classification")
         for path in sorted(enums) if path not in by_path and path not in not_selected
     ]
     uncatalogued += [

@@ -92,7 +92,10 @@ def test_a_supplied_root_that_is_not_a_directory_is_refused(tmp_path):
 def test_what_the_cxx_disagrees_with_never_fails_the_plan(tmp_path):
     (tmp_path / "tree" / "src").mkdir(parents=True)
     report = {
-        "disagreements": ["a.c: catalogue value_kind 'word'; the C++ reads scalar (x.C:3)"],
+        "disagreements": [{
+            "path": "a.c", "field": "value_kind", "catalogue": "word", "cxx": ["scalar"], "sources": ["x.C:3"],
+            "message": "a.c: catalogue value_kind 'word'; the C++ reads scalar (x.C:3)",
+        }],
         "unread": [{
             "document": "toyDict", "driver_path": "$S.a.b", "note": "catalogued; the supplied C++ no longer reads it",
         }],
@@ -112,6 +115,11 @@ def test_what_the_cxx_disagrees_with_never_fails_the_plan(tmp_path):
     ]
     assert "no longer reads it" in diagnostics[1].message and "has no effect" in diagnostics[1].message
     assert "'c' as get<word> with no default, so it is required, at x.C:3 (f)" in diagnostics[2].message
+    assert diagnostics[0].message == "a.c: catalogue value_kind 'word'; the C++ reads scalar (x.C:3)"
+    assert (diagnostics[0].field, diagnostics[0].detail) == ("a.c", {
+        "path": "a.c", "field": "value_kind", "catalogue": "word", "cxx": ["scalar"], "sources": ["x.C:3"],
+    })
+    assert diagnostics[2].detail == report["uncatalogued"][0]
 
 
 def test_notes_about_a_dictionary_the_case_does_not_hold_or_a_read_with_no_known_one_are_left_to_the_catalog_command(tmp_path):

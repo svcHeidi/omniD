@@ -35,11 +35,12 @@ def test_a_registered_name_the_menu_lacks_is_uncatalogued():
 
 
 def test_a_menu_value_no_table_registers_is_a_disagreement_unless_polymorphic():
-    assert _report(("Stewart", "TNNP", "Gone"))["disagreements"] == [
-        "ionicModel: menu lists ['Gone'], which ionicModel does not register",
-    ]
+    assert _report(("Stewart", "TNNP", "Gone"))["disagreements"] == [{
+        "path": "ionicModel", "field": "menu", "catalogue": ["Gone"], "cxx": ["Stewart", "TNNP"], "sources": [],
+        "message": "ionicModel: menu lists ['Gone'], which ionicModel does not register",
+    }]
     assert _report(("Stewart", "TNNP", "Gone"), mode="polymorphic")["disagreements"] == []
-    assert _report(("TNNP",), registrations={})["disagreements"] == [
+    assert [item["message"] for item in _report(("TNNP",), registrations={})["disagreements"]] == [
         "ionicModel: menu drawn from ionicModel, but no addToRunTimeSelectionTable(ionicModel, ...) exists",
     ]
 
@@ -53,7 +54,7 @@ def test_an_unmapped_table_is_uncatalogued_and_a_stale_mapping_is_a_disagreement
             "internal_bases": {"noSuchBase": "why"},
         },
     )
-    assert report["disagreements"] == [
+    assert [item["message"] for item in report["disagreements"]] == [
         "runtime_selection maps gone.path, which is not a catalogue enum",
         "runtime_selection lists gone.word as not runtime-selected, which is not a catalogue enum",
         "runtime_selection lists noSuchBase as internal, but no table registers it",

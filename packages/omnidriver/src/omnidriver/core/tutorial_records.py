@@ -11,14 +11,29 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from .case_write import _check_case_relative
-from .contracts.dictionary import bound_reasons, validate_value_shape
+from .contracts.dictionary import bound_reasons, bound_violations, validate_value_shape
+from .refusal import refusal_code, refusal_record
 
 if TYPE_CHECKING:
     from .conformance_study import ConformanceStudy
 
 
 class TutorialRecordError(ValueError):
-    """A tutorial-record study refused a name, a conflict, or a missing case; the message names the offending key or source."""
+    """A tutorial-record study refused a name, a conflict, or a missing case; the message names the offending key or source.
+
+    ``code`` names the refusal where it has a name of its own (else its class names it); ``rule`` is the declared
+    rule a refused value broke, as ``{field: declared value}``; ``refusals`` are the
+    :func:`~omnidriver.core.refusal.refusal_record`s behind it.
+    """
+
+    def __init__(
+        self, message: str, *, code: str | None = None, rule: Mapping[str, Any] | None = None,
+        refusals: Sequence[Mapping[str, Any]] = (),
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.rule = rule
+        self.refusals = tuple(refusals)
 
 
 # ---------------------------------------------------------------------------
@@ -953,9 +968,20 @@ def _validate_or_wrap(
         return direct_key_validator(document, key_path, value)
     except Exception as exc:
         dotted = ".".join(key_path)
+        code = refusal_code(exc)
+        reason = exc.args[0] if exc.args and isinstance(exc.args[0], str) else str(exc)
         raise TutorialRecordError(
-            f"validating {document}:{dotted} raised {type(exc).__name__}: {exc}"
+            f"validating {document}:{dotted} raised {type(exc).__name__}: {exc}", code=code,
+            refusals=(refusal_record(
+                code=code, document=document, key=dotted, rule=getattr(exc, "rule", None), message=reason,
+            ),),
         ) from exc
+
+
+def _refuse_axis_value(name: str, rule: Mapping[str, Any], message: str) -> None:
+    raise TutorialRecordError(message, code="axis_rule", refusals=(
+        refusal_record(code="axis_rule", document=None, key=name, rule=dict(rule), message=message),
+    ))
 
 
 def _check_step_is_run(
@@ -1046,14 +1072,15 @@ def resolve_case_patches(
         # kind must not reach it and surface as a native coercion error.
         value_kind_reasons = validate_value_shape(axis.value_kind, value)
         if value_kind_reasons:
-            raise TutorialRecordError(
+            _refuse_axis_value(
+                name, {"value_kind": axis.value_kind},
                 f"axis {name!r} declares value_kind {axis.value_kind!r}, "
-                f"but the value {value!r} does not fit it: "
-                f"{'; '.join(value_kind_reasons)}"
+                f"but the value {value!r} does not fit it: {'; '.join(value_kind_reasons)}",
             )
-        bounded = bound_reasons(axis, value)
-        if bounded:
-            raise TutorialRecordError(f"axis {name!r} is {value!r}, outside its bounds: {'; '.join(bounded)}")
+        if broken := bound_violations(axis, value):
+            _refuse_axis_value(
+                name, broken, f"axis {name!r} is {value!r}, outside its bounds: {'; '.join(bound_reasons(axis, value))}",
+            )
         # An axis must not write the staged case outside `commit_case_write`.
         before_digest = _case_root_digest(staged_case_root)
         result = axis.resolve(value, staged_case_root)

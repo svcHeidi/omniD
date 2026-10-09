@@ -13,6 +13,7 @@ from omnidriver.core.strict_planning import _strict_plan_for_spec
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
 from omnidriver.core.tutorial_records import TutorialRecordError, lookup_record, sort_study_name
+from ..refusal import diagnostic_refusal, refusal_fields
 from .failure_context import why_a_child_stopped
 from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
@@ -43,7 +44,7 @@ if TYPE_CHECKING:
 
 
 #: What a child ``run --run-document`` says about why it did not complete.
-_CHILD_FAILURE_KEYS = ("error", "blocking_reason", "diagnostics", "environment_diagnostics", "failure_context")
+_CHILD_FAILURE_KEYS = ("code", "error", "refusals", "blocking_reason", "diagnostics", "environment_diagnostics", "failure_context")
 #: What of a failed step the manifest keeps: where it failed and why, and the logs' paths, never their text.
 _MANIFEST_FAILURE_CONTEXT_KEYS = ("step_id", "attempt", "exit_code", "diagnostics", "stdout_log", "stderr_log")
 
@@ -64,6 +65,7 @@ def _child_failure(
     failure = {key: payload[key] for key in _CHILD_FAILURE_KEYS if key in payload}
     if not failure and result.returncode != 0:
         tail = why_a_child_stopped(result.stdout, result.stderr, redaction_patterns)
+        failure["code"] = "run_without_report"
         failure["error"] = f"the run exited {result.returncode} without a report" + (f"; {tail}" if tail else "")
     return failure
 
@@ -190,6 +192,7 @@ def _record_sweep_plan(
                 "resolved_axis_values": case.resolved_axis_values,
                 "status": "failed",
                 "materialization_error": f"{type(exc).__name__}: {exc}",
+                **refusal_fields(exc),
             })
             continue
         case_reports.append({
@@ -289,6 +292,9 @@ def _record_sweep_run(
                 failure["plan_error"] = (
                     "; ".join(report.error_messages()) or f"strict_plan reported {report.status} status"
                 )
+                failure["code"] = f"plan_{report.status}"
+                if refusals := [diagnostic_refusal(d) for d in report.errors()]:
+                    failure["refusals"] = refusals
             else:
                 run_document = payload["run_document"]
                 workflow_state_path = _workflow_state_path_from_run_document(run_document)
@@ -324,9 +330,9 @@ def _record_sweep_run(
                 f"case exceeded timeout of {case_timeout_s}s and was terminated: {exc}"
             )
         except (OSError, ValueError) as exc:
-            failure["materialization_error"] = str(exc)
+            failure.update(materialization_error=str(exc), **refusal_fields(exc))
         except Exception as exc:
-            failure["plan_error"] = str(exc)
+            failure.update(plan_error=str(exc), **refusal_fields(exc))
 
         if status == "completed":
             completed_count += 1
@@ -517,7 +523,7 @@ def sweep_plan(
         # no per-case slot to report it in -- but the caller still parses this
         # document, and a traceback on stderr with nothing on stdout is not an
         # answer. Same shape, zero cases, one explicit reason.
-        return {"case_count": 0, "cases": [], "spec_error": str(exc)}
+        return {"case_count": 0, "cases": [], "spec_error": str(exc), **refusal_fields(exc)}
     check_case_count_cap(sweep_spec, max_cases=max_cases)
     record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
     # Resolved to absolute before staging: a relative --output-dir otherwise

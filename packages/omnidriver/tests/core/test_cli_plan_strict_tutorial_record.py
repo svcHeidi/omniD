@@ -129,6 +129,26 @@ def test_a_renderer_resolver_or_reader_refusal_comes_back_as_the_cases_structure
     assert case["status"] == "failed"
     assert "constant/mesh.json" in case["materialization_error"]
     assert TOY_REFUSAL in case["materialization_error"]
+    assert case["code"]
+
+
+def test_a_case_that_breaks_a_rule_carries_each_refusal_as_data(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    spec = tmp_path / "study.json"
+    spec.write_text(json.dumps({
+        "base": {"entry": "toyTutorial", "cases_root": str(cases_root)},
+        "sweep": {"mode": "zip", "independent": {"constant/mesh.json:cells": [12]}},
+    }))
+    assert main([
+        "sweep-plan", "--plugin", "plugins.toy:RuleCheckingPlugin", "--spec", str(spec),
+        "--output-dir", str(tmp_path / "out"),
+    ]) == 1
+    (case,) = json.loads(capsys.readouterr().out)["cases"]
+    assert case["code"] == "case_rule"
+    assert case["refusals"] == [{
+        "code": "too_many_cells", "document": None, "key": "cells", "rule": None, "message": "12 cells exceed 10",
+    }]
+    assert "12 cells exceed 10" in case["materialization_error"]
 
 
 def test_plan_strict_against_a_read_only_tree_without_a_scratch_dir_refuses_as_json_S_I3(

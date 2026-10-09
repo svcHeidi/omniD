@@ -25,7 +25,7 @@ from .core.runtime.case_records import (
 from .core.runtime.workflow_orchestrator import STATE_FILENAME
 from .core.case_transaction import interrupted_commit
 from .core.environment_connection import load_environment
-from .core.refusal import Refusal, RefusingParser, print_refusal
+from .core.refusal import Refusal, RefusingParser, failure, print_refusal, refusal_fields
 from .core.plugin_discovery import discover_plugins
 from .core.runtime.sweep_runner import SweepStopped, sweep_plan, sweep_run
 from omnidriver.core.introspection import describe_entry, describe_stack, named_catalog
@@ -98,17 +98,17 @@ def _refuse_environment_errors(context: _ExecutionContext, *, action: str) -> in
     )
     if readiness.environment_ok and readiness.coverage_ok:
         return None
-    payload = {
-        "status": "failed",
-        "entry": context.entry_label,
-        "action": action,
-        "error": (
+    payload = failure(
+        None,
+        code="environment_preflight_failed" if not readiness.environment_ok else "required_check_unavailable",
+        error=(
             "Execution environment preflight failed."
             if not readiness.environment_ok
             else "A required check could not run; dispatch refused."
         ),
-        "environment_diagnostics": [asdict(diagnostic) for diagnostic in context.environment_diagnostics],
-    }
+        entry=context.entry_label, action=action,
+        environment_diagnostics=[asdict(diagnostic) for diagnostic in context.environment_diagnostics],
+    )
     if not readiness.coverage_ok:
         payload["blocking_reason"] = readiness.blocking_reason
     if context.source_path is not None:
@@ -156,12 +156,7 @@ def _execute_step(
             if not isinstance(study, dict):
                 raise ValueError("--apply must be a JSON object of 'document:key' patches")
         except (OSError, ValueError) as exc:
-            print(json.dumps({
-                "status": "failed",
-                "entry": entry_label,
-                "step": step_id,
-                "error": f"--apply rejected: {exc}",
-            }, indent=2))
+            print(json.dumps(failure(exc, error=f"--apply rejected: {exc}", entry=entry_label, step=step_id), indent=2))
             return 1
 
     context = _ExecutionContext(
@@ -186,12 +181,7 @@ def _execute_step(
         )
     except Exception as exc:
         prefix = "--apply rejected: " if apply_path is not None else ""
-        payload = {
-            "status": "failed",
-            "entry": entry_label,
-            "step": step_id,
-            "error": f"{prefix}{exc}",
-        }
+        payload = failure(exc, error=f"{prefix}{exc}", entry=entry_label, step=step_id)
         state_path = output_dir / STATE_FILENAME
         if state_path.exists():
             payload["workflow_state_path"] = str(state_path)
@@ -254,21 +244,17 @@ def _execute_run(
                             expected_artifacts=tuple(expected_artifacts or ()))
             replayed = workflow_state.status == "completed"
         except Exception as exc:
-            print(json.dumps({
-                "status": "failed",
-                "entry": entry_label,
-                "error": f"Could not read existing workflow state: {exc}",
-                "workflow_state_path": str(state_path),
-            }, indent=2))
+            print(json.dumps(failure(
+                exc, error=f"Could not read existing workflow state: {exc}",
+                entry=entry_label, workflow_state_path=str(state_path),
+            ), indent=2))
             return 1
     if workflow_state.status == "failed":
-        print(json.dumps({
-            "status": "failed",
-            "entry": entry_label,
-            "error": "workflow_state is failed; use action=step to rerun a failed step explicitly",
-            "workflow_state_path": str(state_path),
-            "workflow_state": workflow_state.to_json(),
-        }, indent=2))
+        print(json.dumps(failure(
+            None, code="workflow_state_failed",
+            error="workflow_state is failed; use action=step to rerun a failed step explicitly",
+            entry=entry_label, workflow_state_path=str(state_path), workflow_state=workflow_state.to_json(),
+        ), indent=2))
         return 1
     try:
         outcome = run_workflow(
@@ -288,14 +274,14 @@ def _execute_run(
             error_state = workflow_state_from_json(json.loads(state_path.read_text()))
         except Exception:
             error_state = workflow_state
-        print(json.dumps(_step_payload(
+        print(json.dumps({**_step_payload(
             status="failed",
             entry=entry_label,
             step=error_state.current_step_id or workflow_state.current_step_id,
             workflow_state_path=state_path,
             workflow_state=error_state.to_json(),
             error=str(exc),
-        ), indent=2))
+        ), **refusal_fields(exc)}, indent=2))
         return 1
     workflow_state = outcome.state
     results = list(outcome.steps)
@@ -310,9 +296,9 @@ def _execute_run(
     if replayed:
         payload["replayed"] = True
     if workflow_state.status == "pending" and workflow_state.current_step_id is None:
-        payload["error"] = "workflow_state is pending but has no current_step_id"
+        payload.update(code="workflow_without_current_step", error="workflow_state is pending but has no current_step_id")
     elif workflow_state.status == "pending" and max_total_attempts is not None:
-        payload["error"] = "maximum total step attempts reached; workflow remains incomplete"
+        payload.update(code="attempts_exhausted", error="maximum total step attempts reached; workflow remains incomplete")
     payload["artifact_reconciliation"] = _reconciliation_payload(
         case_root, expected_artifacts, driver_context=driver_context,
     )
@@ -330,14 +316,11 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         # A load failure never reached validation, so it has no other
         # diagnostic -- synthesize one here in the one canonical shape an
         # agent parsing `diagnostics` can rely on.
-        print(json.dumps({
-            "status": "failed",
-            "error": f"Could not load run document: {exc}",
-            "run_document": args.run_document,
-            "diagnostics": [asdict(diagnostic(
-                "error", "run_document_unreadable", str(exc), source="cli",
-            ))],
-        }, indent=2))
+        print(json.dumps(failure(
+            exc, code="run_document_unreadable", error=f"Could not load run document: {exc}",
+            run_document=args.run_document,
+            diagnostics=[asdict(diagnostic("error", "run_document_unreadable", str(exc), source="cli"))],
+        ), indent=2))
         return None
     if run_doc.plugin is not None:
         planned = run_doc.plugin
@@ -347,16 +330,11 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         # and `quantities.comparison`.
         mismatched = stack_identity_mismatch(planned, selected)
         if mismatched:
-            print(json.dumps({
-                "status": "failed",
-                "run_document": args.run_document,
-                "error": (
-                    "RunDocument plugin does not match the selected plugin: "
-                    + ", ".join(mismatched)
-                ),
-                "planned_plugin": planned,
-                "selected_plugin": selected,
-            }, indent=2))
+            print(json.dumps(failure(
+                None, code="run_document_plugin_mismatch",
+                error="RunDocument plugin does not match the selected plugin: " + ", ".join(mismatched),
+                run_document=args.run_document, planned_plugin=planned, selected_plugin=selected,
+            ), indent=2))
             return None
     execution_env = load_environment(driver_context, args.environment_source)
     inputs, diagnostics = build_execution_inputs(
@@ -369,6 +347,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         print(json.dumps({
             "status": "failed",
             "run_document": args.run_document,
+            "code": "run_document_invalid",
             "diagnostics": [asdict(d) for d in diagnostics],
         }, indent=2))
         return None
@@ -382,7 +361,7 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
                 then="; patch it with step --apply, or plan again, before it runs",
             )
         except TutorialRecordError as exc:
-            print(json.dumps({"status": "failed", "run_document": args.run_document, "error": str(exc)}, indent=2))
+            print(json.dumps(failure(exc, run_document=args.run_document), indent=2))
             return None
     setup_root_raw = (run_doc.launch or {}).get("setupRoot")
 
@@ -473,11 +452,7 @@ def _context_from_entry(
     try:
         report = plan()
     except (TutorialRecordError, AttemptLeaseError) as exc:
-        print(json.dumps({
-            "status": "failed",
-            "entry": label,
-            "error": str(exc),
-        }, indent=2))
+        print(json.dumps(failure(exc, entry=label), indent=2))
         return None, 1
     readiness = is_launchable(
         plan_status=report.status,
@@ -487,10 +462,9 @@ def _context_from_entry(
         print(json.dumps(report.to_json(), indent=2))
         return None, 1
     if report.workflow_dag is None or report.workflow_state is None:
-        print(json.dumps({
-            "status": "failed",
-            "error": "strict plan did not produce workflow_dag and workflow_state",
-        }, indent=2))
+        print(json.dumps(failure(
+            None, code="plan_incomplete", error="strict plan did not produce workflow_dag and workflow_state",
+        ), indent=2))
         return None, 1
     execution_env = load_environment(driver_context, environment_source)
 
@@ -520,12 +494,7 @@ def _dispatch_context(args, context: _ExecutionContext) -> int:
         with acquire_case_lease(context.case_root):
             return _dispatch_context_owned(args, context)
     except AttemptLeaseError as exc:
-        print(json.dumps({
-            "status": "failed",
-            "entry": context.entry_label,
-            "action": args.action,
-            "error": str(exc),
-        }, indent=2))
+        print(json.dumps(failure(exc, entry=context.entry_label, action=args.action), indent=2))
         return 1
 
 
@@ -534,16 +503,15 @@ def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
     with acquire_attempt_lease(context.output_dir):
         if args.fresh and output_existed:
             if context.case_root.resolve().is_relative_to(context.output_dir.resolve()):
-                print(json.dumps({
-                    "status": "failed",
-                    "entry": context.entry_label,
-                    "action": args.action,
-                    "error": (
+                print(json.dumps(failure(
+                    None, code="fresh_would_delete_case",
+                    error=(
                         f"--fresh would delete the case itself: its output directory "
                         f"{context.output_dir} holds the case. Plan again "
                         "(plan --strict --entry) to restage it"
                     ),
-                }, indent=2))
+                    entry=context.entry_label, action=args.action,
+                ), indent=2))
                 return 1
             fresh_error = ensure_fresh_output_dir(
                 context.output_dir,
@@ -558,21 +526,17 @@ def _dispatch_context_owned(args, context: _ExecutionContext) -> int:
                 }),
             )
             if fresh_error is not None:
-                print(json.dumps({
-                    "status": "failed",
-                    "entry": context.entry_label,
-                    "action": args.action,
-                    "error": fresh_error,
-                }, indent=2))
+                print(json.dumps(failure(
+                    None, code="fresh_refused", error=fresh_error, entry=context.entry_label, action=args.action,
+                ), indent=2))
                 return 1
         interrupted = interrupted_commit(context.case_root)
         if interrupted is not None:
-            print(json.dumps({
-                "status": "failed",
-                "entry": context.entry_label,
-                "action": args.action,
-                "error": f"an edit of this case was interrupted ({', '.join(interrupted)}); plan again",
-            }, indent=2))
+            print(json.dumps(failure(
+                None, code="case_edit_interrupted",
+                error=f"an edit of this case was interrupted ({', '.join(interrupted)}); plan again",
+                entry=context.entry_label, action=args.action,
+            ), indent=2))
             return 1
         if args.action == "step":
             return _execute_step(
@@ -620,7 +584,7 @@ def _compare_quantities(args) -> int:
     try:
         report = run_quantity_comparison(Path(args.comparison_request), Path(args.report))
     except QuantityComparisonError as exc:
-        print(json.dumps({"status": "failed", "action": "compare", "error": str(exc), "errors": list(exc.errors)}, indent=2))
+        print(json.dumps(failure(exc, action="compare", errors=list(exc.errors)), indent=2))
         return 1
     print(json.dumps(report, indent=2))
     return 0
@@ -1087,23 +1051,13 @@ def _sweep_output_dir(args) -> str | Path | None:
     try:
         return default_sweep_output_dir(args.spec, scratch_root=args.scratch_dir)
     except TutorialRecordError as exc:
-        print(json.dumps({
-            "status": "failed",
-            "action": args.action,
-            "spec": args.spec,
-            "error": str(exc),
-        }, indent=2))
+        print(json.dumps(failure(exc, action=args.action, spec=args.spec), indent=2))
         return None
 
 
 def _sweep_refusal(args, exc: Exception) -> int:
     """A refusal of the sweep as a whole, printed as JSON; a per-case refusal is a ``materialization_error`` in the sweep report instead."""
-    print(json.dumps({
-        "status": "failed",
-        "action": args.action,
-        "spec": args.spec,
-        "error": str(exc),
-    }, indent=2))
+    print(json.dumps(failure(exc, action=args.action, spec=args.spec), indent=2))
     return 1
 
 
@@ -1113,20 +1067,20 @@ def _scan_or_uncatalogued(args, driver_context) -> int:
 
     try:
         cache_root = resolve_scratch_root(args.scratch_dir)
-    except TutorialRecordError:
+    except TutorialRecordError as exc:
         if args.action == "scan":
-            print(json.dumps({
-                "status": "failed", "action": "scan",
-                "error": "no scratch root was supplied: scan writes its cache there; pass "
-                         "--scratch-dir <dir> or set OMNIDRIVER_SCRATCH_DIR",
-            }, indent=2))
+            print(json.dumps(failure(
+                exc, action="scan",
+                error="no scratch root was supplied: scan writes its cache there; pass "
+                      "--scratch-dir <dir> or set OMNIDRIVER_SCRATCH_DIR",
+            ), indent=2))
             return 1
         cache_root = None
     if args.action == "catalog":
         try:
             print(json.dumps(scan_query(driver_context, cache_root=cache_root, unread=args.unread), indent=2))
         except TutorialRecordError as exc:
-            print(json.dumps({"status": "failed", "action": "catalog", "error": str(exc)}, indent=2))
+            print(json.dumps(failure(exc, action="catalog"), indent=2))
             return 1
         return 0
     cxx = cxx_evidence(driver_context, os.environ, cache_root=cache_root, force=True)
@@ -1136,8 +1090,10 @@ def _scan_or_uncatalogued(args, driver_context) -> int:
         "cxx_source": cxx,
     }
     if cxx is None or not cxx["scanned"]:
-        summary["status"] = "failed"
-        summary["error"] = "the stack declares no C++ source" if cxx is None else cxx["reason"]
+        summary.update(failure(
+            None, code="cxx_source_undeclared" if cxx is None else "cxx_source_not_scanned",
+            error="the stack declares no C++ source" if cxx is None else cxx["reason"],
+        ))
     else:
         cxx.pop("selector_values")
         for name in ("uncatalogued", "unresolved", "unread", "disagreements"):
@@ -1161,7 +1117,7 @@ def _check(args, driver_context, repository, cases_root: Path, inputs: dict[str,
             regression=args.regression,
         )
     except (TutorialRecordError, KeyError) as exc:
-        print(json.dumps({"status": "failed", "action": "check", "error": str(exc.args[0] if exc.args else exc)}, indent=2))
+        print(json.dumps(failure(exc, action="check", error=str(exc.args[0] if exc.args else exc)), indent=2))
         return 1
     print(json.dumps(report, indent=2))
     return 0
@@ -1302,7 +1258,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
         try:
             print(json.dumps(named_catalog(driver_context, args.named, args.item), indent=2))
         except TutorialRecordError as exc:
-            print(json.dumps({"status": "failed", "action": "catalog", "error": str(exc)}, indent=2))
+            print(json.dumps(failure(exc, action="catalog"), indent=2))
             return 1
         return 0
 
@@ -1324,7 +1280,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
         try:
             selected_entry, cases_root = case_folder_record(args.case, driver_context=driver_context)
         except TutorialRecordError as exc:
-            print(json.dumps({"status": "failed", "action": args.action, "error": str(exc)}, indent=2))
+            print(json.dumps(failure(exc, action=args.action), indent=2))
             return 1
     elif args.action not in {"sweep-plan", "sweep-run"} and not args.run_document and (
         selected_entry is not None or args.action == "check"
@@ -1351,9 +1307,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
                 driver_context=driver_context,
             )
         except (TutorialRecordError, KeyError) as exc:
-            print(json.dumps({
-                "status": "failed", "entry": entry_label, "action": "catalog", "error": str(exc),
-            }, indent=2))
+            print(json.dumps(failure(exc, entry=entry_label, action="catalog"), indent=2))
             return 1
         print(json.dumps(result, indent=2))
         return 0
@@ -1372,12 +1326,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
                 driver_context=driver_context,
             )
         except TutorialRecordError as exc:
-            print(json.dumps({
-                "status": "failed",
-                "entry": entry_label,
-                "action": "describe",
-                "error": str(exc),
-            }, indent=2))
+            print(json.dumps(failure(exc, entry=entry_label, action="describe"), indent=2))
             return 1
         print(json.dumps(description, indent=2))
         return 0
@@ -1397,12 +1346,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
                 driver_context=driver_context,
             )
         except (TutorialRecordError, AttemptLeaseError) as exc:
-            print(json.dumps({
-                "status": "failed",
-                "entry": entry_label,
-                "action": "plan",
-                "error": str(exc),
-            }, indent=2))
+            print(json.dumps(failure(exc, entry=entry_label, action="plan"), indent=2))
             return 1
         print(json.dumps(report.to_json(), indent=2))
         return 0 if report.status == "ok" else 1
@@ -1467,7 +1411,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
         except (SweepValidationError, TutorialRecordError, AttemptLeaseError) as exc:
             return _sweep_refusal(args, exc)
         except SweepStopped as stop:
-            print(json.dumps({"status": "failed", **stop.report}, indent=2))
+            print(json.dumps({"status": "failed", "code": "sweep_stopped", **stop.report}, indent=2))
             return stop.code
         failed = result["failed_count"] > 0
         print(json.dumps({"status": "failed" if failed else "ok", **result}, indent=2))

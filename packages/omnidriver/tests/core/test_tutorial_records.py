@@ -503,12 +503,48 @@ def test_a_value_outside_an_axis_bound_is_refused_before_the_axis_resolves(bound
         return AxisResult()
 
     axis = AxisContract(name="dx", value_kind="scalar", unit="m", description="d", resolve=resolve, **bounds)
-    with pytest.raises(TutorialRecordError, match=rf"axis 'dx' is {value!r}, outside its bounds: {reason}"):
+    with pytest.raises(TutorialRecordError, match=rf"axis 'dx' is {value!r}, outside its bounds: {reason}") as caught:
         resolve_case_patches(
             _record(axes=(axis,)), study_by_source={"base": {"dx": value}},
             staged_case_root=Path("/nonexistent"), direct_key_validator=_known_catalog_validator,
         )
     assert calls == []
+    assert caught.value.code == "axis_rule"
+    assert caught.value.refusals == ({
+        "code": "axis_rule", "document": None, "key": "dx", "rule": bounds, "message": str(caught.value),
+    },)
+
+
+def test_a_value_that_does_not_fit_an_axis_names_the_kind_as_its_rule():
+    axis = AxisContract(name="n", value_kind="integer", unit=None, description="d", resolve=lambda v, r: AxisResult())
+    with pytest.raises(TutorialRecordError) as caught:
+        resolve_case_patches(
+            _record(axes=(axis,)), study_by_source={"base": {"n": "many"}},
+            staged_case_root=Path("/nonexistent"), direct_key_validator=_known_catalog_validator,
+        )
+    (refusal,) = caught.value.refusals
+    assert (refusal["code"], refusal["key"], refusal["rule"]) == ("axis_rule", "n", {"value_kind": "integer"})
+
+
+def test_a_key_the_validator_refuses_keeps_the_validators_code_and_rule():
+    def validator(document, key_path, value):
+        if key_path == ("cells",):
+            raise TutorialRecordError("cells = -1 is outside the bounds", code="catalog_rule", rule={"minimum": 1})
+        raise KeyError(f"{document}:{'.'.join(key_path)} is not catalogued")
+
+    for name, code, rule, message in (
+        ("constant/mesh.json:cells", "catalog_rule", {"minimum": 1}, "cells = -1 is outside the bounds"),
+        ("constant/mesh.json:cellz", "KeyError", None, "constant/mesh.json:cellz is not catalogued"),
+    ):
+        with pytest.raises(TutorialRecordError) as caught:
+            resolve_case_patches(
+                _record(), study_by_source={"base": {name: -1}},
+                staged_case_root=Path("/nonexistent"), direct_key_validator=validator,
+            )
+        assert caught.value.code == code
+        assert caught.value.refusals == ({
+            "code": code, "document": "constant/mesh.json", "key": name.split(":")[1], "rule": rule, "message": message,
+        },)
 
 
 def test_resolve_case_patches_refuses_an_axis_that_writes_the_staged_case(tmp_path):
@@ -1383,7 +1419,9 @@ class _RuleCheckingPlugin(_RecordCaseWriterPlugin):
         cells = json.loads((Path(case_root) / "constant" / "mesh.json").read_text())["cells"]
         found = []
         if int(cells) > 10:
-            found.append(diagnostic("error", "too_many_cells", f"{cells} cells exceed 10", field="cells"))
+            found.append(diagnostic(
+                "error", "too_many_cells", f"{cells} cells exceed 10", field="cells", detail={"rule": {"maximum": 10}},
+            ))
         if int(cells) > 5:
             found.append(diagnostic("warning", "many_cells", f"{cells} cells", field="cells"))
         return tuple(found)
@@ -1416,6 +1454,11 @@ def test_a_resolved_case_that_breaks_a_rule_is_refused_with_the_rules_own_messag
     for fragment in ("'toyTutorial'", "cells: 12 cells exceed 10"):
         assert fragment in message, (fragment, message)
     assert "many_cells" not in message
+    assert exc.value.code == "case_rule"
+    assert exc.value.refusals == ({
+        "code": "too_many_cells", "document": None, "key": "cells", "rule": {"maximum": 10},
+        "message": "12 cells exceed 10",
+    },)
 
 
 def test_a_warning_does_not_refuse_the_case(tmp_path):
