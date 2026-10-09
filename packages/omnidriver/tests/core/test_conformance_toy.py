@@ -682,3 +682,35 @@ def test_a_failed_step_diagnostic_in_the_workflow_state_is_quoted(tmp_path):
         "the workflow state recorded: step 'solve': solver_entry_missing: sealedHeartBoundary is required"
     )
     assert _with_recorded_failure([], tmp_path / "absent.json", "the workflow state") == []
+
+
+def test_describe_lists_a_records_quantities_and_the_readers_of_what_it_produces(tmp_path):
+    from omnidriver.core.introspection import describe_entry
+    from omnidriver.core.plugin_interface import load_plugin_context
+    from plugins.toy import VALUES_FORMAT, write_quantity_toy_case
+
+    write_quantity_toy_case(tmp_path, "A 0.0015 0 0 0.007\n")
+    surface = describe_entry(
+        "toyQuantities", overrides={"cases_root": str(tmp_path)},
+        driver_context=load_plugin_context("plugins.toy:DescribedQuantityPlugin"),
+    )["record_surface"]
+    assert surface["quantities"] == [{
+        "artifact_format": VALUES_FORMAT, "reference": "toy/reference.json", "at": {"A": [0.0, 0.0, 0.007]},
+        "at_unit": "m", "pairs": {"A": "A"}, "max_sampling_offset": 0.0,
+    }]
+    assert surface["readers"] == [{
+        "format": VALUES_FORMAT, "steps": ["solve"], "value_unit": "s", "sampling_rule": "toy-row",
+        "coordinate_unit": "m", "takes_points": False, "sentinels": [-1.0],
+    }]
+
+
+def test_a_record_with_no_quantity_or_reader_lists_none(tmp_path):
+    from omnidriver.core.introspection import describe_entry
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    target = toy_conformance_target(tmp_path)
+    surface = describe_entry(
+        target.record, overrides={"cases_root": str(target.cases_root)},
+        driver_context=load_plugin_context(target.plugin),
+    )["record_surface"]
+    assert (surface["quantities"], surface["readers"]) == ([], [])

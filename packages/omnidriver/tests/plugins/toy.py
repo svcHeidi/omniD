@@ -911,6 +911,21 @@ class QuantityToyPlugin(ToyStack):
         return self._READERS.get(artifact_format)
 
 
+class DescribedQuantityPlugin(QuantityToyPlugin):
+    """``toyQuantities`` declaring the quantity its conformance study compares, so describe can list it."""
+
+    RECORDS = {"toyQuantities": dataclasses.replace(TOY_QUANTITY_RECORD, conformance=ConformanceStudy(
+        base_study={}, patch=("constant/mesh.json:cells", 7), untouched=("constant/mesh.json", ("label",)),
+        sweep_name="number_cells", sweep_values=(2, 3), unknown_name="cell_count",
+        quantity=QuantityTarget(
+            artifact_format=VALUES_FORMAT, reference=Path("toy/reference.json"),
+            pairs={"A": "A"}, at={"A": (0.0, 0.0, 0.007)}, at_unit="m", max_sampling_offset=0.0,
+            study={}, sweep_values=(2, 3), tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9,
+            rank_evidence=RankEvidence(log_pattern=r"nRanks=(\d+)"),
+        ),
+    ))}
+
+
 class RaisingReaderPlugin(QuantityToyPlugin):
     _READERS = {VALUES_FORMAT: _RaisingReader()}
 

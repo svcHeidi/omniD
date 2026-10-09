@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ..contracts.catalogue_paths import PLACEHOLDER
+from ..tutorial_records import PLAIN_FILE_FORMAT
 
 DOCUMENTATION_ROLE = "case.documentation"
 
@@ -35,6 +36,47 @@ def lists_key(entry: Mapping[str, Any], document: str, key: str) -> bool:
     if entry.get("key") == ANY_KEY:
         return entry.get("validated") is False
     return key_pattern(str(entry.get("key", ""))).fullmatch(key) is not None
+
+
+def _listed_points(points: Mapping[str, Any] | None) -> dict[str, list[float]] | None:
+    return None if points is None else {label: list(point) for label, point in points.items()}
+
+
+def record_quantities(record) -> list[dict[str, Any]]:
+    """The quantity the record's conformance study compares, as declared: ``reference`` is a benchmark
+    relative to ``check --benchmarks``, and ``at`` and ``pairs`` are ``null`` where the reference's own
+    points supply them."""
+    quantity = record.conformance.quantity if record.conformance is not None else None
+    if quantity is None:
+        return []
+    return [{
+        "artifact_format": quantity.artifact_format, "reference": str(quantity.reference),
+        "at": _listed_points(quantity.at), "at_unit": quantity.at_unit,
+        "pairs": None if quantity.pairs is None else dict(quantity.pairs),
+        "max_sampling_offset": quantity.max_sampling_offset,
+    }]
+
+
+def record_readers(record, stack) -> list[dict[str, Any]]:
+    """For each format the record's steps declare on what they produce, the reader the stack reads it with,
+    and the steps producing it; a format no reader takes is not listed."""
+    steps: dict[str, list[str]] = {}
+    for step in record.workflow_steps:
+        for path in step.produces:
+            artifact_format = step.produced_format(path)
+            if artifact_format != PLAIN_FILE_FORMAT and step.step_id not in steps.setdefault(artifact_format, []):
+                steps[artifact_format].append(step.step_id)
+    listed = []
+    for artifact_format, producers in steps.items():
+        reader = stack.call("get_artifact_value_reader", artifact_format)
+        if reader is None:
+            continue
+        listed.append({
+            "format": artifact_format, "steps": producers, "value_unit": reader.value_unit,
+            "sampling_rule": reader.sampling_rule, "coordinate_unit": reader.coordinate_unit,
+            "takes_points": reader.takes_points, "sentinels": sorted(reader.sentinels),
+        })
+    return listed
 
 
 def record_surface(
@@ -67,6 +109,8 @@ def record_surface(
             "count": len(listed) - len(keys),
             "why": "their applicable_when rules out this case's own solver; `omnidriver catalog` lists every key",
         }} if len(keys) < len(listed) else {}),
+        "quantities": record_quantities(record),
+        "readers": record_readers(record, stack),
         "guidance": [dict(item) for item in stack.call("get_agent_guidance")],
         "case_documentation": documentation,
         "inputs": inputs,
