@@ -195,3 +195,42 @@ and the venv `~/torchcor-venv` rebuilt from that submodule. Outputs under
 | G2 | `g2_refusals/`: the case with `chi_per_m` added; `ionic_init.V_int`; `cell_type: "EPIC"`; `device: "mps"` | each exits 2 before writing anything, naming the key: `chi_per_m: not a key this runner takes`; `ionic_init.V_int: not an initial value of TenTusscherPanfilov`; `ionic_options.cell_type: 'EPIC' is not one of ['ENDO', 'EPI', 'MCELL']`; `device: 'mps' is not one of ['cpu']` | the runner refuses what TorchCor would accept silently (B4, B6) or fail on late (D12) |
 | G3 | `omnidriver check --repo ~/torchcor-cases --record nversion --scratch-dir .../scratch-tc --benchmarks <omniD>/benchmarks`, from the shell `omnidriver env --plugin torchcor` prints (`torchcor-nversion-check.json`) | exit 0 in 186 s; C1-C12 and C14 passed, C13 `not_applicable` (serial-only). C14's sweep, dx 0.5 against 0.25 (3675 and 23 941 nodes, solve 10.6 and 23.8 s to 60 ms): P1 0.955/0.955, P2 21.375/19.950, P3 33.105/30.485, P4 38.050/36.765, P5 6.455/6.265, P6 22.175/20.640, P7 33.660/31.265, P8 40.325/37.540 ms | omniD drives TorchCor end to end through the runner. Every corner activates earlier as dx is refined, as F5 already saw for P8 |
 | G4 | `cross/`: `sweep-run` of TorchCor `nversion` at dx 0.5 (dt 0.005 ms, to 150 ms) and of openCARP `niedererNVersion` at dx 500 µm, `dt` 5 µs, `tend` 100 ms, `mass_lumping` 0, each from its own shell; `compare` of P1-P8 against `niederer2011.json` at the campaign's 5 ms bar (`request_dx0.5.json`) | TorchCor / openCARP: P1 0.955 / 1.241, P2 21.375 / 47.354, P3 33.105 / 32.884, P4 38.050 / 57.960, P5 6.455 / 11.506, P6 22.175 / 47.678, P7 33.660 / 33.801, P8 40.325 / 58.051 ms; report `failed`: P1, P3, P7 within 5 ms, P2, P4, P5, P6, P8 outside | the two agree along the fibre (P3, P7 within 0.25 ms) and disagree across it: TorchCor reaches the transverse corners about twice as fast, with the same conductivities (`nversion.par` `g_it` 0.019, `g_et` 0.24) and both consistent mass. Informal, one resolution; why (TorchCor's consistent-mass FE on a coarse tetrahedral mesh, F5, or a difference in the transverse conductivity each forms) is open |
+
+## H. TorchCor against openCARP at dx 0.5
+
+Why G4's two solvers disagree across the fibre, one variable at a time. Runs
+under `/Users/simaocastro/omnid-runs/2026-10-09/transverse/`. `drive.py` is a
+throwaway copy of the runner's `run` (same case.json, `step()` loop and 0 mV
+threshold) that loads a given CARP mesh directory, takes θ, and can override
+`it`/`et` and the stimulus intensity; `lat.py` reads openCARP's
+`init_acts_vm_act-thresh.dat` at the nearest node. Every corner is a node on
+every mesh below. Times in ms, dt 0.005 ms, consistent mass throughout.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| H1 | `mesher` exactly as `niederer_n_version.py`'s mesh step, `-resolution[0..2] 500.0` (`mesh_mesher/`) | 4305 nodes, 16 800 `Tt` (5 per hex), region `1`; `.lon` header `1`, every row `1 0 0`. Byte-identical to G4's openCARP `slab.pts` and `slab.elem` | the `.lon` openCARP writes is the format the runner writes; `MeshReader.read_fibres` skips the header line and normalises each row, so both read one fibre vector `(1,0,0)` per element |
+| H2 | `drive.py mesh_mesher 1` (TorchCor on openCARP's mesh, θ 1) | P1 0.955, P2 46.100, P3 32.385, P4 56.750, P5 10.650, P6 46.395, P7 33.275, P8 56.830 | **the mesh carries the gap.** On openCARP's mesh TorchCor reaches the transverse corners as late as openCARP does (P8 56.83 against 58.05), not 40.3 |
+| H3 | `drive.py mesh_gmsh 1` and `0.5`, `mesh_mesher 0.5` (`mesh_gmsh/` = G4's runner-written mesh) | gmsh θ 1: P2 21.375, P4 38.050, P8 40.325 (G1 within 0.03 ms; the driver's box test takes 42 stimulus nodes to the runner's 40). gmsh θ 0.5: P8 40.345. mesher θ 0.5: P2 46.115, P8 56.900 | θ moves no corner by more than 0.07 ms on either mesh |
+| H4 | `openCARP +F nversion.par -meshname slab ... -theta 1`, then `-theta 0.99` (`oc/`) | `theta = 1 is above the 0.99 maximum` (`+Help theta`: min 0.1, max 0.99). At 0.99: P2 47.398, P8 58.115 against θ 0.5's 47.354, 58.051 (the θ 0.5 rerun reproduces G4 exactly) | openCARP refuses θ 1; at 0.99 θ moves P8 by 0.06 ms |
+| H5 | openCARP `nversion.par` on G4's gmsh mesh, files copied unchanged (`oc_gmsh/`) | rc 0; region `0`, float coordinates and the `1` `.lon` header read as given, nothing converted. P1 1.245, P2 21.900, P3 33.558, P4 38.633, P5 6.962, P6 22.916, P7 34.062, P8 40.908 | **the converse holds:** openCARP on TorchCor's mesh lands within 0.6 ms of TorchCor at every corner. The solvers agree; the meshes do not |
+| H6 | `drive.py <mesh> 1 ... 0 0.17 0.62` (isotropic, `it` = `il`, `et` = `el`) on both meshes | gmsh: P2 9.655, P3 30.210, P8 31.580. mesher: P2 10.120, P3 32.675, P8 34.030 | with isotropic conductivity the meshes differ by 2.5 ms at most. The 17 ms belongs to the slow transverse direction (harmonic σ_t 0.0176 S/m against σ_l 0.133), which 0.5 mm under-resolves: the structured mesh slows it (openCARP's 500 µm cable across the fibre already runs at 51 % of its 10 µm speed, `opencarp.md` J3), the unstructured one does not. Edges: mesher 0.50-0.71 mm, 40 % axis-aligned; gmsh 0.38-1.03 mm, 5 % axis-aligned |
+| H7 | `STIM=35.71 drive.py mesh_mesher 1` | P1 1.225, P2 46.870, P3 32.715, P4 57.490, P5 11.360, P6 47.205, P7 33.630, P8 57.580 | the stimulus explains P1. TorchCor divides `intensity` by 100, as it divides its ionic current, so the case's 50 is 50 µA/cm²; the paper's 50 000 µA/cm³ over χ 1400 cm⁻¹ is 35.71 µA/cm², which `nversion.par` sets. Matched, P1 is within 0.02 ms and every corner within 0.5 ms of openCARP. That remainder (the two use the same initial state, `singlecell.sv` against the case's `ionic_init`) is not separated here |
+| H8 | `mesher ... -resolution 200.0` (58 176 nodes): `drive.py` and `openCARP` (142 s); `gmsh_mesh.py 0.2` (the runner's pygmsh call, 44 861 nodes): `drive.py` | mesher, TorchCor / openCARP: P2 27.815 / 28.318, P4 39.635 / 40.154, P8 39.930 / 40.451 (openCARP equals `opencarp.md` J5). gmsh, TorchCor: P2 20.350, P3 30.400, P4 36.780, P8 37.600 | at 0.2 mm both solvers still agree on one mesh (0.5 ms). The meshes now differ by 8 ms at P2 and 2.3 ms at P8. On gmsh, P2 barely moves with dx (21.4, 19.95 at 0.25 (G3), 20.35); on mesher it falls 47.4 to 28.3. Which is nearer the converged corner is not settled by these runs; it needs dx 0.1 on both meshes |
+
+**What the paper says at dx 0.5.** `benchmarks/niederer2011.json` holds one
+published value: P8's last-activation range 37.8-48.7 ms across codes at the
+finest resolution (dx 0.1 mm, dt 0.005 ms). The per-code times at each
+resolution are in the electronic supplementary material, which the reference
+records as not retrieved (`niederer2011-esm`, `accessed: false`). The repository
+has no dx 0.5 figure for P8 from the paper.
+
+**Verdict.** The G4 gap (P8 40.3 against 58.1, P2 21.4 against 47.4) is the mesh:
+openCARP's structured `mesher` slab against the runner's unstructured pygmsh
+slab, at a resolution that under-resolves conduction across the fibre. Swapping
+meshes moves each solver onto the other's numbers (H2, H5). θ (H3, H4), the
+`.lon` format and TorchCor's fibre and conductivity handling (H1, H2, H6) are
+cleared. The stimulus accounts for the 0.29 ms P1 offset and about 0.5 ms at
+P8 (H7): the case's `stimulus.intensity` 50, copied from `benchmark.py`, is
+1.4 times the paper's stimulus, a case value rather than a TorchCor or runner
+defect. A cross-solver comparison at dx 0.5 compares meshes unless both solvers
+read the same mesh.
