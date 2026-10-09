@@ -112,6 +112,6 @@ def case_diagnostics(case_root: Path) -> tuple[StrictDiagnostic, ...]:
                     found.append(diagnostic(
                         "error", "catalog_rule",
                         f"{key} = {raw} is beyond its {label}, {bound} = {limit:g}",
-                        source=document, field=key,
+                        source=document, field=key, detail={"rule": {label: bound}},
                     ))
     return tuple(found)

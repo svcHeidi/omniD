@@ -20,6 +20,7 @@ def _by_level(case_root):
 def test_a_value_beyond_a_bound_that_names_a_parameter_is_an_error_at_that_parameters_value(tmp_path):
     (error,) = _by_level(_case(tmp_path, "tend = 150\nspacedt = 1000\n"))["error"]
     assert (error.field, error.message) == ("spacedt", "spacedt = 1000 is beyond its maximum, tend = 150")
+    assert error.detail == {"rule": {"maximum": "tend"}}
 
 
 def test_the_bound_takes_the_catalogue_default_of_a_parameter_the_case_leaves_out(tmp_path):

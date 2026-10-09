@@ -29,6 +29,17 @@ def test_refusals_name_the_key(document, key_path, value, named):
         record_key_validator(document, key_path, value)
 
 
+@pytest.mark.parametrize(("key_path", "value", "rule"), [
+    (("gregion[0]", "g_il"), -1, {"minimum": "0."}),
+    (("bidomain",), 5, {"menu": ["2", "1", "0"]}),
+    (("compute_APD",), "no", {"value_kind": "boolean"}),
+])
+def test_a_catalogue_refusal_names_the_rule_it_breaks(key_path, value, rule):
+    with pytest.raises(TutorialRecordError) as caught:
+        record_key_validator("nversion.par", key_path, value)
+    assert (caught.value.code, caught.value.rule) == ("catalog_rule", rule)
+
+
 def test_whole_array_shorthand_asks_for_elements():
     # +Help lists '-phys_region[Int].ID' as '{ phys_region[PrMelem1].num_IDs x Int }'
     with pytest.raises(TutorialRecordError, match="element"):

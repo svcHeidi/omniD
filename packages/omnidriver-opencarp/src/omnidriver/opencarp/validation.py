@@ -105,15 +105,22 @@ def _catalog_check(document: str, key: str, value: Any) -> tuple[str, bool]:
     problems = validate_value_shape(spec.value_kind, value)
     if problems:
         hint = " (openCARP reads 'no' and 'off' as on: F1)" if spec.value_kind == "boolean" else ""
-        raise TutorialRecordError(f"{document}:{key}: {'; '.join(problems)}{hint}")
+        raise TutorialRecordError(
+            f"{document}:{key}: {'; '.join(problems)}{hint}", code="catalog_rule", rule={"value_kind": spec.value_kind},
+        )
     if spec.menu:
         spelled = str(int(value)) if isinstance(value, bool) else str(value)
         if spelled not in spec.menu:
-            raise TutorialRecordError(f"{document}:{key} = {value!r} is not one of {list(spec.menu)}")
+            raise TutorialRecordError(
+                f"{document}:{key} = {value!r} is not one of {list(spec.menu)}", code="catalog_rule",
+                rule={"menu": list(spec.menu)},
+            )
     for bound, label, outside in ((spec.minimum, "minimum", lambda v, b: v < b), (spec.maximum, "maximum", lambda v, b: v > b)):
         if number_of(bound) is not None and spec.value_kind in ("integer", "scalar"):
             if outside(float(value), number_of(bound)):
-                raise TutorialRecordError(f"{document}:{key} = {value!r} is beyond its {label} {bound}")
+                raise TutorialRecordError(
+                    f"{document}:{key} = {value!r} is beyond its {label} {bound}", code="catalog_rule", rule={label: bound},
+                )
     return spec.value_kind, True
 
 
