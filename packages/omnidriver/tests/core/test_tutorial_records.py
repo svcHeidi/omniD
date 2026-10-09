@@ -267,7 +267,7 @@ def test_one_axis_name_resolves_within_each_record_that_declares_it():
         return "integer", True
 
     for record, document in ((first, "constant/first.json"), (second, "constant/second.json")):
-        combined, _ = resolve_case_patches(
+        combined, _, _ = resolve_case_patches(
             record, study_by_source={"base": {"number_cells": 4}},
             staged_case_root=Path("/nonexistent"), direct_key_validator=validator,
         )
@@ -400,7 +400,7 @@ def test_combine_patches_refuses_int_and_bool_as_a_conflict():
 
 def test_resolve_case_patches_runs_axes_and_direct_keys_together():
     record = _record()
-    combined, command_args = resolve_case_patches(
+    combined, command_args, _ = resolve_case_patches(
         record,
         study_by_source={
             "base": {"constant/physics.json:modelName": "modelAlpha"},
@@ -429,7 +429,7 @@ def test_resolve_case_patches_refuses_a_direct_key_absent_from_the_catalog():
 
 def test_resolve_case_patches_accepts_an_unvalidated_environment_owned_key():
     record = _record()
-    combined, _ = resolve_case_patches(
+    combined, _, _ = resolve_case_patches(
         record,
         study_by_source={"base": {"system/unowned.json:endTime": 0.02}},
         staged_case_root=Path("/nonexistent"),
@@ -593,23 +593,85 @@ def _axis(name: str, **result: Any) -> AxisContract:
     return AxisContract(name=name, value_kind="integer", resolve=lambda value, root: AxisResult(**result))
 
 
-def _arguments(record: TutorialRecord, study: dict[str, Any]) -> dict[str, tuple[str, ...]]:
-    return resolve_case_patches(
+def _resolved(record: TutorialRecord, study: dict[str, Any]) -> tuple[dict, dict]:
+    _, arguments, replacements = resolve_case_patches(
         record, study_by_source={"base": study}, staged_case_root=Path("/nonexistent"),
         direct_key_validator=_known_catalog_validator,
-    )[1]
+    )
+    return arguments, replacements
+
+
+def _arguments(record: TutorialRecord, study: dict[str, Any]) -> dict[str, tuple[str, ...]]:
+    return _resolved(record, study)[0]
+
+
+def _argv(record: TutorialRecord, study: dict[str, Any], step_id: str = "mesh") -> tuple[str, ...]:
+    arguments, replacements = _resolved(record, study)
+    step = next(step for step in record.workflow_steps if step.step_id == step_id)
+    return step.argv(arguments.get(step_id, ()), replacements.get(step_id, {}))
 
 
 def test_replacements_of_different_keys_compose_with_a_free_contribution():
-    """Two axes replacing different declared defaults, and a third passing free arguments, all reach one step, the replacements in declared order."""
+    """Each replaced default takes its declared slot; the free contribution follows the defaults."""
     record = _record_with_two_defaults(
         _axis("size", command_arguments={"mesh": ("-n", "5")}),
         _axis("twist", replacements={"mesh": {("-twist",): ("30",)}}),
         _axis("angle", replacements={"mesh": {("-angle",): ("90",)}}),
     )
-    arguments = _arguments(record, {"size": 1, "twist": 1, "angle": 1})
-    assert arguments == {"mesh": ("-n", "5", "-angle", "90", "-twist", "30")}
-    assert record.workflow_steps[0].argv(arguments["mesh"]) == ("generate-mesh", "-n", "5", "-angle", "90", "-twist", "30")
+    study = {"size": 1, "twist": 1, "angle": 1}
+    assert _arguments(record, study) == {"mesh": ("-n", "5")}
+    assert _argv(record, study) == ("generate-mesh", "-angle", "90", "-twist", "30", "-n", "5")
+
+
+def test_a_replaced_default_keeps_its_slot_among_unreplaced_ones():
+    record = _record_with_two_defaults(_axis("twist", replacements={"mesh": {("-twist",): ("30",)}}))
+    assert _argv(record, {"twist": 1}) == ("generate-mesh", "-angle", "0", "-twist", "30")
+    record = _record_with_two_defaults(_axis("angle", replacements={"mesh": {("-angle",): ("90",)}}))
+    assert _argv(record, {"angle": 1}) == ("generate-mesh", "-angle", "90", "-twist", "0")
+
+
+def test_argv_is_identical_in_either_axis_order():
+    angle = _axis("angle", replacements={"mesh": {("-angle",): ("90",)}})
+    twist = _axis("twist", replacements={"mesh": {("-twist",): ("30",)}})
+    forward = _argv(_record_with_two_defaults(angle, twist), {"angle": 1, "twist": 1})
+    backward = _argv(_record_with_two_defaults(twist, angle), {"twist": 1, "angle": 1})
+    assert forward == backward == ("generate-mesh", "-angle", "90", "-twist", "30")
+
+
+def test_a_replacement_holding_a_declared_default_key_is_refused_naming_the_axis():
+    smuggling = _record_with_two_defaults(_axis("rogue", replacements={"mesh": {("-angle",): ("90", "-twist", "5")}}))
+    with pytest.raises(TutorialRecordError, match=r"axis 'rogue'.*'-twist'"):
+        _arguments(smuggling, {"rogue": 1})
+    own = _record_with_two_defaults(_axis("rogue", replacements={"mesh": {("-angle",): ("-angle", "5")}}))
+    with pytest.raises(TutorialRecordError, match=r"axis 'rogue'.*'-angle'"):
+        _arguments(own, {"rogue": 1})
+
+
+def test_a_replacement_on_an_undeclared_step_is_refused():
+    record = _record_with_two_defaults(_axis("rogue", replacements={"nowhere": {("-angle",): ("1",)}}))
+    with pytest.raises(TutorialRecordError, match=r"axis 'rogue'.*'nowhere'.*does not declare"):
+        _arguments(record, {"rogue": 1})
+
+
+def test_a_replacement_on_a_step_the_route_does_not_run_is_refused():
+    record = _record_with_two_defaults(_axis("angle", replacements={"mesh": {("-angle",): ("1",)}}))
+    with pytest.raises(TutorialRecordError, match=r"axis 'angle'.*'mesh'.*does not run"):
+        resolve_case_patches(
+            record, study_by_source={"base": {"angle": 1}}, staged_case_root=Path("/nonexistent"),
+            direct_key_validator=_known_catalog_validator, workflow_step_ids=(),
+        )
+
+
+@pytest.mark.parametrize("key, values, fragment", [
+    ("-angle", ("90",), "bare string"),
+    ((), ("90",), "at least one token"),
+    (("-angle",), "90", "bare string"),
+    (("-angle",), (1,), "not a str"),
+    (("",), ("90",), "empty token"),
+])
+def test_a_malformed_replacement_is_refused_at_construction(key, values, fragment):
+    with pytest.raises(TutorialRecordError, match=fragment):
+        AxisResult(replacements={"mesh": {key: values}})
 
 
 def test_one_default_replaced_with_different_values_by_two_axes_is_refused():
@@ -623,7 +685,7 @@ def test_one_default_replaced_with_different_values_by_two_axes_is_refused():
         _axis("one", replacements={"mesh": {("-angle",): ("90",)}}),
         _axis("two", replacements={"mesh": {("-angle",): ("90",)}}),
     )
-    assert _arguments(agreeing, {"one": 1, "two": 1}) == {"mesh": ("-angle", "90")}
+    assert _resolved(agreeing, {"one": 1, "two": 1})[1] == {"mesh": {("-angle",): ("90",)}}
 
 
 def test_a_replacement_of_an_undeclared_default_replaces_nothing():
@@ -678,6 +740,17 @@ def test_preview_shows_the_axis_argument_in_place_of_the_default(tmp_path):
     assert preview["command_arguments"] == {"mesh": ["-dict", "system/meshDict.1D"]}
 
 
+def test_preview_shows_a_replaced_default_in_its_declared_slot(tmp_path):
+    _native_case(tmp_path, {})
+    preview = record_execution.preview_record_case(
+        _record_with_two_defaults(_axis("twist", replacements={"mesh": {("-twist",): ("30",)}})),
+        cases_root=tmp_path / "cases", study_by_source={"base": {"twist": 1}},
+        driver_context=_context_with_writer(),
+    )
+    assert preview["workflow_commands"] == {"mesh": ["generate-mesh", "-angle", "0", "-twist", "30"]}
+    assert preview["replacements"] == {"mesh": {"-twist": ["30"]}}
+
+
 def test_resolve_case_patches_allows_identical_command_arguments_for_one_step():
     """Two axes contributing the SAME arguments to the same step agree, and the arguments are not concatenated (duplicated) either."""
     def axis_one(value, staged_case_root):
@@ -690,7 +763,7 @@ def test_resolve_case_patches_allows_identical_command_arguments_for_one_step():
         AxisContract(name="one", value_kind="integer", resolve=axis_one),
         AxisContract(name="two", value_kind="integer", resolve=axis_two),
     ))
-    _, command_args = resolve_case_patches(
+    _, command_args, _ = resolve_case_patches(
         record,
         study_by_source={"base": {"one": 1, "two": 2}},
         staged_case_root=Path("/nonexistent"),

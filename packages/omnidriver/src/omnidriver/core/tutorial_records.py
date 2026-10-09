@@ -145,9 +145,14 @@ class DefaultArgument:
     are dropped and the contribution appended. An axis that does not pass the
     key appends, and the default stays. What follows the key is passed as
     given; the record declares only the default, never the values that may
-    replace it. An axis may instead name the key in its
-    ``AxisResult.replacements``, which composes with other axes' arguments
-    for the same step.
+    replace it.
+
+    An axis may instead name the key in its ``AxisResult.replacements``: the
+    key and the new values then stand in the default's declared position.
+    Replacements of different keys compose, from any axes, with at most one
+    free contribution, which follows the defaults; two axes' free arguments
+    for one step must still be identical. A replacement's values may hold no
+    default's key.
 
     Ambiguity is refused by name. At construction each default's ``key`` must
     occur exactly once as a contiguous run in the step's default command line
@@ -336,8 +341,9 @@ class WorkflowStep:
     mean. An axis may contribute arguments for a step it names
     (``AxisResult.command_arguments``). ``default_arguments`` are passed
     unless an axis passes its own (:class:`DefaultArgument` states the rule);
-    the step runs :meth:`argv`: ``command``, the defaults no axis replaced,
-    then the axis's contribution.
+    the step runs :meth:`argv`: ``command``, each default in its declared
+    position (its replacement's values if an axis replaced it, nothing if a
+    free contribution did), then the free contribution.
 
     ``produces`` and ``consumes`` are tuples of case-relative paths the step
     writes and reads, never artifact ids (those are derived).  ``produces``
@@ -426,10 +432,21 @@ class WorkflowStep:
                     f"workflow step {self.step_id!r} consumes {str(path)!r} with a format; a format belongs on the step that produces the file"
                 )
 
-    def argv(self, contributed: Sequence[str] = ()) -> tuple[str, ...]:
-        """The command line this step runs given an axis's contribution (:class:`DefaultArgument` states the rule)."""
+    def argv(
+        self, contributed: Sequence[str] = (), replacements: Mapping[tuple[str, ...], Sequence[str]] | None = None,
+    ) -> tuple[str, ...]:
+        """The command line this step runs given an axis's free contribution and the default keys it replaces (:class:`DefaultArgument` states the rule)."""
         contributed = tuple(contributed)
-        kept: list[str] = []
+        replacements = {key: tuple(values) for key, values in (replacements or {}).items()}
+        for key, values in replacements.items():
+            for default in self.default_arguments:
+                if _token_runs(values, default.key):
+                    raise TutorialRecordError(
+                        f"workflow step {self.step_id!r}: the replacement {list(values)!r} of default argument "
+                        f"{list(key)!r} holds default argument key {list(default.key)!r}; a replacement "
+                        f"carries values only, and each default is replaced by its own key"
+                    )
+        tokens: list[str] = []
         for default in self.default_arguments:
             count = len(_token_runs(contributed, default.key))
             if count > 1:
@@ -437,9 +454,11 @@ class WorkflowStep:
                     f"workflow step {self.step_id!r}: the contributed arguments {list(contributed)!r} pass "
                     f"default argument key {list(default.key)!r} {count} times; pass it once to replace the default"
                 )
-            if count == 0:
-                kept.extend(default.tokens())
-        return self.command + tuple(kept) + contributed
+            if default.key in replacements:
+                tokens.extend(default.key + replacements[default.key])
+            elif count == 0:
+                tokens.extend(default.tokens())
+        return self.command + tuple(tokens) + contributed
 
     def produced_format(self, path: str) -> str:
         """The declared format of one of this step's ``produces`` paths."""
@@ -674,9 +693,9 @@ class AxisResult:
     (:class:`DefaultArgument` states the rule).
 
     ``replacements`` maps a step id to ``{default-argument key: values}``:
-    each replaces one default the step declares, by its identity. Unlike free
-    ``command_arguments``, replacements of different keys from different axes
-    compose on one step.
+    each replaces one default the step declares, by its identity, in the
+    default's declared position. Unlike free ``command_arguments``,
+    replacements of different keys from different axes compose on one step.
     """
 
     patches: tuple[AxisPatch, ...] = ()
@@ -917,6 +936,25 @@ def _validate_or_wrap(
         ) from exc
 
 
+def _check_step_is_run(
+    record: TutorialRecord, axis_name: str, step_id: str, effect: str, *,
+    route_step_ids: Sequence[str], axis_has_patches: bool,
+) -> None:
+    """Refuse an axis whose ``effect`` names a step the record does not declare, or, when that is its only effect, one the route does not run."""
+    declared = record.step_ids()
+    if step_id not in declared:
+        raise TutorialRecordError(
+            f"axis {axis_name!r} {effect} step {step_id!r}, which tutorial record {record.name!r} "
+            f"does not declare (declared steps: {sorted(declared)})"
+        )
+    if step_id not in route_step_ids and not axis_has_patches:
+        raise TutorialRecordError(
+            f"axis {axis_name!r} only {effect} step {step_id!r}, which the selected route of "
+            f"tutorial record {record.name!r} does not run (it runs {list(route_step_ids)}); "
+            f"drop {axis_name!r} or select a route that runs {step_id!r}"
+        )
+
+
 def resolve_case_patches(
     record: TutorialRecord,
     *,
@@ -924,7 +962,9 @@ def resolve_case_patches(
     staged_case_root: Path,
     direct_key_validator: DirectKeyValidator,
     workflow_step_ids: Sequence[str] | None = None,
-) -> tuple[tuple[SourcedPatch, ...], dict[str, tuple[str, ...]]]:
+) -> tuple[
+    tuple[SourcedPatch, ...], dict[str, tuple[str, ...]], dict[str, dict[tuple[str, ...], tuple[str, ...]]],
+]:
     """Resolve one case's whole study into a conflict-checked patch list.
 
     ``study_by_source`` maps a source label (``"base"``, ``"sweep"``) to that
@@ -939,12 +979,14 @@ def resolve_case_patches(
     declared step that route does not run is refused, since its value would
     have no effect.
 
-    Returns ``(combined_patches, command_arguments_by_step)``, the latter the
-    axes' ``AxisResult.command_arguments`` merged by step id, followed by
-    their ``AxisResult.replacements`` in the order the step declares its
-    defaults. Replacements of different keys compose; one key replaced with
-    different values by two axes, a key the step declares no default for, and
-    a free contribution passing a key another axis replaces are refused.
+    Returns ``(combined_patches, command_arguments_by_step,
+    replacements_by_step)``: the axes' ``AxisResult.command_arguments`` merged
+    by step id, and their ``AxisResult.replacements`` merged to
+    ``{default key: values}``, both for ``WorkflowStep.argv``. Replacements of
+    different keys compose; one key replaced with different values by two
+    axes, a key the step declares no default for, a value holding a default's
+    key, and a free contribution passing a key another axis replaces are
+    refused, naming the axis.
     """
     classified: list[tuple[str, str, DocumentKeyName | AxisMatch, Any]] = []
     for source, values in study_by_source.items():
@@ -970,7 +1012,6 @@ def resolve_case_patches(
         )
         sourced_patches.append(SourcedPatch(patch=patch, source=source, validated=validated))
 
-    known_step_ids = frozenset(record.step_ids())
     route_step_ids = tuple(record.step_ids() if workflow_step_ids is None else workflow_step_ids)
     steps_by_id = {step.step_id: step for step in record.workflow_steps}
     command_arguments: dict[str, tuple[str, ...]] = {}
@@ -1011,19 +1052,10 @@ def resolve_case_patches(
                 SourcedPatch(patch=revalidated, source=name, validated=validated)
             )
         for step_id, extra_args in result.command_arguments.items():
-            if step_id not in known_step_ids:
-                raise TutorialRecordError(
-                    f"axis {name!r} contributes command arguments to step "
-                    f"{step_id!r}, which tutorial record {record.name!r} "
-                    f"does not declare (declared steps: {sorted(known_step_ids)})"
-                )
-            if step_id not in route_step_ids and not result.patches:
-                raise TutorialRecordError(
-                    f"axis {name!r} only contributes command arguments to step {step_id!r}, which "
-                    f"the selected route of tutorial record {record.name!r} does not run "
-                    f"(it runs {list(route_step_ids)}); drop {name!r} or select a route that "
-                    f"runs {step_id!r}"
-                )
+            _check_step_is_run(
+                record, name, step_id, "contributes command arguments to",
+                route_step_ids=route_step_ids, axis_has_patches=bool(result.patches),
+            )
             extra_args = tuple(extra_args)
             # Refused here rather than when the DAG is built.
             try:
@@ -1044,17 +1076,10 @@ def resolve_case_patches(
                     f"({list(existing_args)}) and axis {name!r} ({list(extra_args)})"
                 )
         for step_id, by_key in result.replacements.items():
-            if step_id not in known_step_ids:
-                raise TutorialRecordError(
-                    f"axis {name!r} replaces a default argument of step {step_id!r}, which "
-                    f"tutorial record {record.name!r} does not declare (declared steps: {sorted(known_step_ids)})"
-                )
-            if step_id not in route_step_ids and not result.patches:
-                raise TutorialRecordError(
-                    f"axis {name!r} only replaces default arguments of step {step_id!r}, which "
-                    f"the selected route of tutorial record {record.name!r} does not run "
-                    f"(it runs {list(route_step_ids)}); drop {name!r} or select a route that runs {step_id!r}"
-                )
+            _check_step_is_run(
+                record, name, step_id, "replaces default arguments of",
+                route_step_ids=route_step_ids, axis_has_patches=bool(result.patches),
+            )
             declared_keys = [default.key for default in steps_by_id[step_id].default_arguments]
             for key, values in by_key.items():
                 if key not in declared_keys:
@@ -1069,6 +1094,13 @@ def resolve_case_patches(
                         f"by axis {earlier[1]!r} and with {list(values)} by axis {name!r}"
                     )
                 replaced[step_id][key] = (values, name)
+                try:
+                    steps_by_id[step_id].argv(
+                        command_arguments.get(step_id, ()),
+                        {k: v for k, (v, _owner) in replaced[step_id].items()},
+                    )
+                except TutorialRecordError as exc:
+                    raise TutorialRecordError(f"axis {name!r}: {exc}") from exc
 
     for step_id, by_key in replaced.items():
         free = command_arguments.get(step_id, ())
@@ -1078,15 +1110,11 @@ def resolve_case_patches(
                     f"step {step_id!r}: axis {command_argument_source[step_id]!r} passes {list(key)!r} "
                     f"in its command arguments, which axis {axis_name!r} replaces; one argument has one owner"
                 )
-        tokens = tuple(
-            token
-            for default in steps_by_id[step_id].default_arguments if default.key in by_key
-            for token in default.key + by_key[default.key][0]
-        )
-        command_arguments[step_id] = free + tokens
 
     combined = combine_patches(sourced_patches)
-    return combined, dict(command_arguments)
+    return combined, dict(command_arguments), {
+        step_id: {key: values for key, (values, _owner) in by_key.items()} for step_id, by_key in replaced.items()
+    }
 
 
 # ---------------------------------------------------------------------------

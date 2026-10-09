@@ -19,7 +19,7 @@ _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source=
 
 def _resolve(record_name: str, study: dict, tmp_path):
     record = _CTX.stack.call("get_tutorial_records")[record_name]
-    combined, command_arguments = resolve_case_patches(
+    combined, command_arguments, _ = resolve_case_patches(
         record, study_by_source={"base": study}, staged_case_root=tmp_path,
         direct_key_validator=_CTX.stack.call("get_record_key_validator", driver_context=_CTX),
     )
@@ -121,7 +121,7 @@ def test_a_tet_route_refuses_an_axis_whose_only_effect_is_the_blockmesh_dict(
 
 @pytest.mark.parametrize(("record_name", "variant"), _TET_ROUTES_WRITING_DIMENSION)
 def test_a_tet_study_may_state_the_solvers_dimension(record_name, variant, tmp_path):
-    patches, _ = _resolve_on_route(record_name, variant, {"dimension": "3D"}, tmp_path)
+    patches, *_ = _resolve_on_route(record_name, variant, {"dimension": "3D"}, tmp_path)
     assert any(sourced.patch.key_path[-1] == "dimension" for sourced in patches)
 
 
