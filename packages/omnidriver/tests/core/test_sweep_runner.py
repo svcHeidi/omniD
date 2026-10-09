@@ -308,7 +308,7 @@ def _record_number_cells_axis() -> AxisContract:
             ),
         )
 
-    return AxisContract(name="number_cells", value_kind="integer", resolve=resolve)
+    return AxisContract(unit=None, description="a test axis", name="number_cells", value_kind="integer", resolve=resolve)
 
 
 class _RecordSweepWriterPlugin(ToyProvider):

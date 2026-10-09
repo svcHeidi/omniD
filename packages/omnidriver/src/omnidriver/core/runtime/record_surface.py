@@ -41,10 +41,7 @@ def record_surface(
     record, *, native_case_root: Path, driver_context,
     supplied: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    axes = [
-        {"name": axis.name, "value_kind": axis.value_kind}
-        for axis in sorted(record.axes, key=lambda axis: axis.name)
-    ]
+    axes = [axis.to_json() for axis in sorted(record.axes, key=lambda axis: axis.name)]
     stack = driver_context.stack
     documentation = []
     for rule in stack.call("get_profile").case_files:

@@ -141,6 +141,30 @@ def validate_value_shape(kind: str, value: Any) -> tuple[str, ...]:
     raise AssertionError(f"unhandled value kind {kind!r}")  # pragma: no cover
 
 
+#: The numeric bounds a declaration (a catalogue entry, an axis) may state on a ``scalar`` or ``integer`` value.
+NUMERIC_BOUNDS = {"minimum": "must be at least {:g}", "exclusive_minimum": "must be more than {:g}"}
+
+
+def bound_violations(declared: Any, value: Any) -> dict[str, float]:
+    """Each of ``declared``'s numeric bounds ``value`` breaks, by field name; empty when it fits, none is declared
+    or the value is no number. A dimensioned number is judged by its magnitude."""
+    if getattr(value, "dimensions", None) is not None:
+        value = value.value
+    if declared.value_kind not in ("scalar", "integer") or isinstance(value, bool) or not isinstance(value, Real):
+        return {}
+    broken = {}
+    if declared.minimum is not None and value < declared.minimum:
+        broken["minimum"] = declared.minimum
+    if declared.exclusive_minimum is not None and value <= declared.exclusive_minimum:
+        broken["exclusive_minimum"] = declared.exclusive_minimum
+    return broken
+
+
+def bound_reasons(declared: Any, value: Any) -> tuple[str, ...]:
+    """:func:`bound_violations`, as text."""
+    return tuple(NUMERIC_BOUNDS[name].format(limit) for name, limit in bound_violations(declared, value).items())
+
+
 @dataclass(frozen=True)
 class DictEntry:
     driver_path: str

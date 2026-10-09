@@ -11,7 +11,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from .case_write import _check_case_relative
-from .contracts.dictionary import validate_value_shape
+from .contracts.dictionary import bound_reasons, validate_value_shape
 
 if TYPE_CHECKING:
     from .conformance_study import ConformanceStudy
@@ -730,20 +730,43 @@ AxisFunction = Callable[[Any, Path], AxisResult]
 
 @dataclass(frozen=True)
 class AxisContract:
-    """A named axis: what value it accepts, and the pure function computing its patches and command arguments.
+    """A named axis: what value it accepts, what it sets, and the pure function computing its patches and command arguments.
 
-    Core ships no axis; an adapter declares each on the record that uses it.
+    ``unit`` is the unit of the study value (``None`` for a value that has
+    none: a name, a count, a mapping); ``description`` says what the axis sets,
+    in the solver's terms. ``minimum`` and ``exclusive_minimum`` bound a
+    ``scalar`` or ``integer`` value as a catalogue entry's do, and core refuses
+    a value outside them before ``resolve`` runs. Core ships no axis; an
+    adapter declares each on the record that uses it.
     """
 
     name: str
     value_kind: str
+    unit: str | None
+    description: str
     resolve: AxisFunction
+    minimum: float | None = None
+    exclusive_minimum: float | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
             raise TutorialRecordError("an axis must have a non-empty name")
         if not callable(self.resolve):
             raise TutorialRecordError(f"axis {self.name!r}'s resolve must be callable")
+        if not self.description.strip():
+            raise TutorialRecordError(f"axis {self.name!r} must say what it sets (description)")
+        if (self.minimum is not None or self.exclusive_minimum is not None) and self.value_kind not in ("scalar", "integer"):
+            raise TutorialRecordError(
+                f"axis {self.name!r} declares a numeric bound but its value_kind is {self.value_kind!r}, not scalar or integer"
+            )
+
+    def to_json(self) -> dict[str, Any]:
+        """What ``describe`` lists of the axis; a bound it does not declare is not listed."""
+        bounds = {"minimum": self.minimum, "exclusive_minimum": self.exclusive_minimum}
+        return {
+            "name": self.name, "value_kind": self.value_kind, "unit": self.unit, "description": self.description,
+            **{name: limit for name, limit in bounds.items() if limit is not None},
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -1028,6 +1051,9 @@ def resolve_case_patches(
                 f"but the value {value!r} does not fit it: "
                 f"{'; '.join(value_kind_reasons)}"
             )
+        bounded = bound_reasons(axis, value)
+        if bounded:
+            raise TutorialRecordError(f"axis {name!r} is {value!r}, outside its bounds: {'; '.join(bounded)}")
         # An axis must not write the staged case outside `commit_case_write`.
         before_digest = _case_root_digest(staged_case_root)
         result = axis.resolve(value, staged_case_root)

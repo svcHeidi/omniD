@@ -153,7 +153,10 @@ def _number_cells_axis() -> AxisContract:
             document="constant/mesh.json", key_path=("cells",), value=int(value), value_kind="integer",
         ),))
 
-    return AxisContract(name="number_cells", value_kind="integer", resolve=resolve)
+    return AxisContract(
+        name="number_cells", value_kind="integer", unit=None,
+        description="the toy mesh's cell count, written to constant/mesh.json:cells", exclusive_minimum=0, resolve=resolve,
+    )
 
 
 def _solve(command, *, consumes=("constant/mesh.json",), produces=("solved.marker",), **fields) -> WorkflowStep:
@@ -456,7 +459,10 @@ def _marker_axis() -> AxisContract:
     def resolve(value, staged_case_root):
         return AxisResult(command_arguments={"solve": ("--marker", f"{value}.marker")})
 
-    return AxisContract(name="marker", value_kind="word", resolve=resolve)
+    return AxisContract(
+        name="marker", value_kind="word", unit=None,
+        description="the stem of the marker file the solve step writes (--marker <stem>.marker)", resolve=resolve,
+    )
 
 
 class DefaultArgumentPlugin(ToyStack):

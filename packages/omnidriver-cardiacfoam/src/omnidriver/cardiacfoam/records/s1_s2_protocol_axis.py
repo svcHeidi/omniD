@@ -96,4 +96,11 @@ def s1_s2_protocol_axis(
         )
         return AxisResult(patches=patches)
 
-    return AxisContract(name=name, value_kind="mapping", resolve=resolve)
+    return AxisContract(
+        name=name, value_kind="mapping", unit=None, resolve=resolve,
+        description=(
+            "The S1-S2 protocol {s1_interval_ms, n_s1, s2_interval_ms, n_s2} (intervals in ms): sets "
+            "singleCellStimulus stim_period_S1, nstim1, stim_period_S2 and nstim2, and derives writeAfterTime "
+            "and system/controlDict endTime (s)."
+        ),
+    )

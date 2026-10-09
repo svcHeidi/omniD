@@ -62,4 +62,10 @@ def ionic_model_axis(
         )
         return AxisResult(patches=(ionic_model_patch, stim_amplitude_patch))
 
-    return AxisContract(name=name, value_kind="word", resolve=resolve)
+    return AxisContract(
+        name=name, value_kind="word", unit=None, resolve=resolve,
+        description=(
+            "The ionic model (ionicModel in the solver's coefficients); singleCellStimulus.stim_amplitude "
+            "is set to the model's own amplitude from the ionic model catalog."
+        ),
+    )

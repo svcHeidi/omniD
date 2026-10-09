@@ -35,4 +35,9 @@ def cable_dx_axis(name: str):
     return block_mesh_resolution_axis(
         name, documents=(BLOCK_MESH_DICT_DOCUMENT,),
         resolution=_dx_to_hex_cell_counts, expected_blocks=1, value_kind="scalar",
+        unit="m", exclusive_minimum=0,
+        description=(
+            "The cable's cell size: each blockMesh cell count not fixed at 1 is that direction's extent "
+            "(system/blockMeshDict's vertices times its scale, in metres) over dx, which must divide it evenly."
+        ),
     )

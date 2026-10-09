@@ -58,6 +58,10 @@ def _staged_case(tmp_path: Path, document: str, content: str) -> Path:
     return case_root
 
 
+def _axis(*args, **kwargs):
+    return block_mesh_resolution_axis(*args, unit=None, description="a test axis", **kwargs)
+
+
 def _isotropic(n, current, extents=None):
     del current, extents
     return (n, n, n)
@@ -70,7 +74,7 @@ def _isotropic(n, current, extents=None):
 
 
 def test_builder_returns_an_axis_contract_declaring_an_integer_study_value():
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "my_axis", documents=("system/blockMeshDict",), resolution=_isotropic,
     )
     assert isinstance(axis, AxisContract)
@@ -81,20 +85,20 @@ def test_builder_returns_an_axis_contract_declaring_an_integer_study_value():
 
 def test_builder_refuses_a_bare_string_for_documents():
     with pytest.raises(TypeError, match="not a bare string"):
-        block_mesh_resolution_axis(
+        _axis(
             "my_axis", documents="system/blockMeshDict", resolution=_isotropic,
         )
 
 
 def test_builder_refuses_an_empty_documents_sequence():
     with pytest.raises(ValueError, match="at least one document"):
-        block_mesh_resolution_axis("my_axis", documents=(), resolution=_isotropic)
+        _axis("my_axis", documents=(), resolution=_isotropic)
 
 
 @pytest.mark.parametrize("bad_expected_blocks", [0, -1, True, "3", 1.5])
 def test_builder_refuses_a_non_positive_integer_expected_blocks(bad_expected_blocks):
     with pytest.raises(ValueError, match="expected_blocks must be a positive integer"):
-        block_mesh_resolution_axis(
+        _axis(
             "my_axis", documents=("system/blockMeshDict",), resolution=_isotropic,
             expected_blocks=bad_expected_blocks,
         )
@@ -102,7 +106,7 @@ def test_builder_refuses_a_non_positive_integer_expected_blocks(bad_expected_blo
 
 def test_builder_refuses_a_non_callable_resolution():
     with pytest.raises(TypeError, match="resolution must be callable"):
-        block_mesh_resolution_axis(
+        _axis(
             "my_axis", documents=("system/blockMeshDict",), resolution="not callable",
         )
 
@@ -114,7 +118,7 @@ def test_builder_refuses_a_non_callable_resolution():
 
 def test_resolve_produces_the_planners_hex_cell_counts_patch(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
     )
 
@@ -142,7 +146,7 @@ def test_resolve_supports_a_non_isotropic_resolution_formula(tmp_path):
     """`resolution` is the record's own pure formula -- this axis does not
     assume it is always isotropic."""
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "cable_cells", documents=("system/blockMeshDict",),
         resolution=lambda n, current, extents=None: (n, 1, 1),
     )
@@ -164,7 +168,7 @@ def test_resolution_receives_the_documents_own_current_cell_counts(tmp_path):
         seen.append(current)
         return tuple(value if c != 1 else 1 for c in current)
 
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",), resolution=resolution,
     )
 
@@ -197,7 +201,7 @@ def test_several_documents_each_get_their_own_current_counts_and_own_patch(tmp_p
         del extents
         return tuple(n if c != 1 else 1 for c in current)
 
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells",
         documents=(
             "system/blockMeshDict.1D",
@@ -238,7 +242,7 @@ def test_extents_is_none_for_a_document_with_no_vertices_block(tmp_path):
         seen.append(extents)
         return (value, value, value)
 
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",), resolution=resolution,
     )
     axis.resolve(20, case_root)
@@ -253,7 +257,7 @@ def test_extents_is_none_for_a_document_with_no_vertices_block(tmp_path):
 
 def test_resolve_refuses_a_non_integer_cell_count(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",),
         resolution=lambda n, current, extents=None: (n, n, "20"),
     )
@@ -266,7 +270,7 @@ def test_resolve_refuses_a_boolean_masquerading_as_an_integer_count(tmp_path):
     """`bool` is an `int` subclass in Python -- `True`/`False` must still be
     refused, not silently accepted as 1/0."""
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",),
         resolution=lambda n, current, extents=None: (n, n, True),
     )
@@ -277,7 +281,7 @@ def test_resolve_refuses_a_boolean_masquerading_as_an_integer_count(tmp_path):
 
 def test_resolve_refuses_a_non_positive_cell_count(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",),
         resolution=lambda n, current, extents=None: (0, n, n),
     )
@@ -288,7 +292,7 @@ def test_resolve_refuses_a_non_positive_cell_count(tmp_path):
 
 def test_resolve_refuses_a_negative_cell_count(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _ONE_HEX_BLOCK_DICT)
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",),
         resolution=lambda n, current, extents=None: (-5, n, n),
     )
@@ -300,7 +304,7 @@ def test_resolve_refuses_a_negative_cell_count(tmp_path):
 def test_resolve_refuses_a_document_that_does_not_exist_in_the_staged_case(tmp_path):
     case_root = tmp_path / "case"
     case_root.mkdir()
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
     )
 
@@ -310,7 +314,7 @@ def test_resolve_refuses_a_document_that_does_not_exist_in_the_staged_case(tmp_p
 
 def test_resolve_refuses_when_one_of_several_documents_is_missing(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict.1D", _ONE_HEX_BLOCK_DICT)
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells",
         documents=("system/blockMeshDict.1D", "system/blockMeshDict.2D"),
         resolution=_isotropic,
@@ -328,7 +332,7 @@ def test_resolve_refuses_when_one_of_several_documents_is_missing(tmp_path):
 
 def test_expected_blocks_greater_than_one_is_threaded_through_the_key_path(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT)
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
         expected_blocks=2,
     )
@@ -341,7 +345,7 @@ def test_expected_blocks_greater_than_one_is_threaded_through_the_key_path(tmp_p
 
 def test_resolve_succeeds_against_a_document_with_the_correctly_declared_block_count(tmp_path):
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT)
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
         expected_blocks=2,
     )
@@ -360,7 +364,7 @@ def test_resolve_refuses_a_document_whose_real_block_count_disagrees_with_expect
     a future writer.
     """
     case_root = _staged_case(tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT)
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
         expected_blocks=1,
     )
@@ -373,7 +377,7 @@ def test_resolve_refuses_a_document_whose_blocks_disagree_with_each_other(tmp_pa
     case_root = _staged_case(
         tmp_path, "system/blockMeshDict", _TWO_HEX_BLOCK_DICT_DISAGREEING,
     )
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict",), resolution=_isotropic,
         expected_blocks=2,
     )
@@ -434,9 +438,19 @@ def test_a_real_three_block_block_mesh_dict_is_refined_through_the_key_path_that
     staged.parent.mkdir(parents=True)
     staged.write_text(real.read_text())
     assert real.read_text().count("hex (") == 3
-    axis = block_mesh_resolution_axis(
+    axis = _axis(
         "number_cells", documents=("system/blockMeshDict.3D",), resolution=lambda n, current, extents=None: (n, n, n),
         expected_blocks=3,
     )
     (patch,) = axis.resolve(20, tmp_path / "case").patches
     assert (patch.document, patch.value, patch.key_path) == ("system/blockMeshDict.3D", (20, 20, 20), ("hex_cell_counts", "3"))
+
+
+def test_the_axis_carries_its_unit_description_and_bound():
+    axis = block_mesh_resolution_axis(
+        "dx", documents=("system/blockMeshDict",), resolution=_isotropic, value_kind="scalar",
+        unit="m", description="cell size", exclusive_minimum=0,
+    )
+    assert axis.to_json() == {
+        "name": "dx", "value_kind": "scalar", "unit": "m", "description": "cell size", "exclusive_minimum": 0,
+    }

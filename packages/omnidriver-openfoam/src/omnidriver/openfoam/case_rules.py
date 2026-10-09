@@ -8,11 +8,11 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable, Mapping
-from numbers import Real
 from pathlib import Path
 from typing import Any
 
 from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
+from omnidriver.core.contracts.dictionary import bound_reasons
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
 from .literals import switch_value
@@ -42,21 +42,6 @@ def read_leaves(path: Path, scope: tuple[str, ...] = ()) -> dict[str, Any]:
     for segment in scope:
         node = node[segment]
     return flatten(node)
-
-
-def bound_reasons(entry: Any, value: Any) -> tuple[str, ...]:
-    """Reasons a number lies outside the entry's declared bounds; empty when it fits, none is declared or the value is no number.
-    A dimensioned number is judged by its magnitude."""
-    if getattr(value, "dimensions", None) is not None:
-        value = value.value
-    if entry.value_kind not in ("scalar", "integer") or isinstance(value, bool) or not isinstance(value, Real):
-        return ()
-    reasons = []
-    if entry.minimum is not None and value < entry.minimum:
-        reasons.append(f"must be at least {entry.minimum:g}")
-    if entry.exclusive_minimum is not None and value <= entry.exclusive_minimum:
-        reasons.append(f"must be more than {entry.exclusive_minimum:g}")
-    return tuple(reasons)
 
 
 def _present(value: Any) -> bool:

@@ -55,6 +55,8 @@ AXES = (
         # builder's default "integer" kind does not fit; `_validate_cell_counts`
         # enforces the length of three.
         value_kind="integer_list",
+        unit=None,
+        description="The three hex cell counts of system/blockMeshDict.",
     ),
 )
 

@@ -68,7 +68,7 @@ def test_the_reserved_name_is_parallel():
 def test_a_record_may_not_claim_the_reserved_name(field):
     kwargs: dict = {}
     if field == "axis":
-        kwargs["axes"] = (AxisContract(name="parallel", value_kind="scalar",
+        kwargs["axes"] = (AxisContract(unit=None, description="a test axis", name="parallel", value_kind="scalar",
                                        resolve=lambda value, root: AxisResult()),)
     else:
         kwargs.update(variant_selector="parallel", default_variant="a", workflow_variants={"a": ("solve",)})

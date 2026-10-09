@@ -3,12 +3,11 @@
 Native case: 02_EP_tissue/03E_study_resolution (nversion.par, singlecell.sv), whose run.py builds the mesh and stimulus in Python; what this record takes from run.py is verified against the real binary -- see docs/solver-learning/opencarp.md."""
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Any
 
 from omnidriver.core.tutorial_records import (
-    AxisContract, AxisResult, DefaultArgument, ProducedPath, TutorialRecord, TutorialRecordError, WorkflowStep,
+    AxisContract, AxisResult, DefaultArgument, ProducedPath, TutorialRecord, WorkflowStep,
 )
 
 from ..lat_reader import LAT_FORMAT
@@ -16,32 +15,33 @@ from ..lat_reader import LAT_FORMAT
 
 def _dx_resolution(value: Any, staged_case_root: Path) -> AxisResult:
     del staged_case_root
-    dx = float(value)
-    if not math.isfinite(dx) or dx <= 0:
-        raise TutorialRecordError(f"dx must be a positive length in µm, got {value!r}")
-    text = repr(dx)
+    text = repr(float(value))
     return AxisResult(command_arguments={
         "mesh": ("-resolution[0]", text, "-resolution[1]", text, "-resolution[2]", text),
     })
 
 
-DX_AXIS = AxisContract(name="dx", value_kind="scalar", resolve=_dx_resolution)
+DX_AXIS = AxisContract(
+    name="dx", value_kind="scalar", unit="um", exclusive_minimum=0, resolve=_dx_resolution,
+    description="The slab's isotropic resolution: mesher -resolution[0..2], in micrometres (mesher's own unit).",
+)
 
 IMBRICATION_KEY = ("-fibers.imbrication",)
 
 
 def _imbrication(value: Any, staged_case_root: Path) -> AxisResult:
     del staged_case_root
-    degrees = float(value)
-    if not math.isfinite(degrees):
-        raise TutorialRecordError(f"fibers.imbrication must be a finite angle in degrees, got {value!r}")
-    return AxisResult(replacements={"mesh": {IMBRICATION_KEY: (repr(degrees),)}})
+    return AxisResult(replacements={"mesh": {IMBRICATION_KEY: (repr(float(value)),)}})
 
 
-# mesher tilts the fibre out of the x-y plane towards +z by atan(sin(imbrication)),
-# not by the angle given: 90 gives (1, 0, 1)/sqrt(2), the 45 degree fibre of the
-# x-z plane. Any nonzero value also writes a sheet vector, so the .lon holds two.
-IMBRICATION_AXIS = AxisContract(name="fibers.imbrication", value_kind="scalar", resolve=_imbrication)
+# Any nonzero imbrication also writes a sheet vector, so the .lon holds two (opencarp.md M2).
+IMBRICATION_AXIS = AxisContract(
+    name="fibers.imbrication", value_kind="scalar", unit="deg", resolve=_imbrication,
+    description=(
+        "mesher -fibers.imbrication, in degrees: the fibre tilts out of the x-y plane towards +z by "
+        "atan(sin(imbrication)), so 90 gives the 45 degree fibre of the x-z plane; 0 is mesher's default."
+    ),
+)
 
 # tend, dt and mass_lumping are ordinary nversion.par keys, so a study names
 # them directly as nversion.par:<key> rather than through an axis.

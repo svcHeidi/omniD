@@ -112,8 +112,11 @@ def block_mesh_resolution_axis(
         [Any, tuple[int, int, int], tuple[float, float, float] | None],
         tuple[int, int, int],
     ],
+    unit: str | None,
+    description: str,
     expected_blocks: int = 1,
     value_kind: str = "integer",
+    exclusive_minimum: float | None = None,
 ) -> AxisContract:
     """Build a named axis mapping a study value to every named document's
     hex-block cell counts.
@@ -133,6 +136,10 @@ def block_mesh_resolution_axis(
     ``expected_blocks`` is how many ``hex (`` blocks every named document
     must declare, all sharing one current resolution; refused by name
     otherwise at resolve time.
+
+    ``unit``, ``description`` and ``exclusive_minimum`` are the axis's own
+    (:class:`AxisContract`): the unit of the study value, what it sets, and
+    the bound core checks before ``resolve`` runs.
 
     ``value_kind`` declares the shape of the study value this axis's
     ``resolve`` accepts. Defaults to ``"integer"`` (a bare resolution count);
@@ -189,4 +196,7 @@ def block_mesh_resolution_axis(
             ))
         return AxisResult(patches=tuple(patches))
 
-    return AxisContract(name=name, value_kind=value_kind, resolve=resolve)
+    return AxisContract(
+        name=name, value_kind=value_kind, unit=unit, description=description,
+        exclusive_minimum=exclusive_minimum, resolve=resolve,
+    )

@@ -166,7 +166,15 @@ def _s1_s2_protocol_axis(name: str, *, electro_document: str, scope: tuple[str, 
             command_arguments={POSTPROCESS_STEP_ID: postprocess_args},
         )
 
-    return AxisContract(name=name, value_kind="mapping", resolve=resolve)
+    return AxisContract(
+        name=name, value_kind="mapping", unit=None, resolve=resolve,
+        description=(
+            "The S1-S2 protocol {n_s1, n_s2, end_time_buffer_s, and s2_interval_ms or requested_di90_ms with "
+            "reference_repolarization90_s} (times in ms unless suffixed _s): writes externalStimulus's stimulus "
+            "lists from the native S1 interval, box, duration and intensity, system/controlDict endTime (s), and "
+            "the postprocess step's S1/S2 counts."
+        ),
+    )
 
 
 # `Allrun.post` takes the resolved S1/S2 split as `--n-s1`/`--n-s2`/

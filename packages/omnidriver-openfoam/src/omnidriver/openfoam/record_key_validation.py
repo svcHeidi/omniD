@@ -11,10 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-from omnidriver.core.contracts.dictionary import validate_value_shape
+from omnidriver.core.contracts.dictionary import bound_reasons, validate_value_shape
 from omnidriver.core.runtime.record_surface import ANY_KEY
 
-from .case_rules import bound_reasons
 from .dict_keys_scanner import cxx_value_kind, document_scans, supplied_scan
 
 from .mutators import check_dictionary_word_is_safe

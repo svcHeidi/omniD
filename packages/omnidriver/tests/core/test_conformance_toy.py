@@ -360,7 +360,10 @@ def test_c10_surface_lists_the_toy_axis_key_and_guidance(tmp_path):
     payload = describe_entry(target.record, overrides={"cases_root": str(target.cases_root)},
                              driver_context=load_plugin_context(target.plugin))
     surface = payload["record_surface"]
-    assert surface["axes"] == [{"name": "number_cells", "value_kind": "integer"}]
+    assert surface["axes"] == [{
+        "name": "number_cells", "value_kind": "integer", "unit": None,
+        "description": "the toy mesh's cell count, written to constant/mesh.json:cells", "exclusive_minimum": 0,
+    }]
     assert {"document": "constant/mesh.json", "key": "cells", "value_kind": "integer"} in [
         {k: e[k] for k in ("document", "key", "value_kind")} for e in surface["keys"]]
     assert surface["guidance"] and surface["guidance"][0]["title"]

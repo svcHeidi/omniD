@@ -690,7 +690,8 @@ the worked case (`omnidriver check`'s C13 and C14; evidence in
    x = a, y = c, z = 7 mm - b, and probe k is P(k+1). openCARP's frame is the
    reference frame (`docs/solver-learning/opencarp.md` F3).
 2. **Run both at the same resolution, long enough to reach every point.** The
-   `dx` axis is in metres for cardiacFOAM and µm for openCARP; the native
+   `dx` axis is in metres for cardiacFOAM and µm for openCARP (each axis's
+   `unit` in `describe --entry`'s `record_surface.axes`); the native
    cardiacFOAM `endTime` reaches only P1. Each solver is its own `sweep-run`
    with its own `--output-dir` and `--scratch-dir`.
 3. **Write each side's points in its solver's frame and unit**: openCARP's in
@@ -880,6 +881,10 @@ on stdout with exit 1 (`--help` is argparse's own text).
    `--document` or `--key`. Each entry carries `driver_path`, `value_kind`,
    `menu`, `unit`, `typical_value` and its relations (`applicable_when`,
    `forbidden_when`, `required_when`, `mutually_exclusive_with`).
+   `record_surface.axes` lists each axis's `value_kind`, `unit` (`null` for a
+   name, a count or a mapping), a `description` of what it sets, and its
+   `minimum` or `exclusive_minimum` where it declares one; a value outside a
+   bound is refused before the axis runs.
 3. **What models can I pick?** `describe` lists each named catalog's items by
    name (`plugin_catalogs`: for cardiacFOAM the ionic and active-tension
    models). `omnidriver catalog --plugin P --named ionic_model_catalog` prints
