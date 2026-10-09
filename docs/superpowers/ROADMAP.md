@@ -1,6 +1,6 @@
 # omnidriver: where it stands
 
-Read this first, after `CLAUDE.md`. It describes the state as of 2026-10-05.
+Read this first, after `CLAUDE.md`. It describes the state as of 2026-10-09.
 History lives in `plans/` and `specs/`; this file is only the present and what
 is next.
 
@@ -23,6 +23,14 @@ Pass 2 (`plans/2026-10-01-pass2-convergence.md`) is complete.
   tutorials, C++ source and scripts. omnidriver reads it from `--repo`, or
   from the repository of a supplied cases root. It never searches for one, and
   a cases root or a scratch root has no default.
+- **Three solvers of different shapes.** cardiacFOAM (OpenFOAM, finite
+  volume), openCARP (a binary with `.par` files, finite elements) and TorchCor
+  (a PyTorch API with no input file, a runner in its own venv, no MPI). All three
+  run the Niederer benchmark through the same commands.
+- **`omnidriver-agents` measures agents from outside.** It runs one task under
+  several agent CLIs, with and without omniD, and writes a task record per
+  trial: guidance hashes, tokens, cost, solver launches, refusals, and an
+  oracle's verdict. It imports nothing from omniD.
 - **The C++ is scanned once per source state**, and the scan is cached under
   the scratch root by a digest of the source.
 - **The catalogues are the source of truth** for descriptions, units, rules
@@ -259,23 +267,32 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
 5. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the
    solver changed.
-6. **TorchCor, the third solver** (`packages/omnidriver-torchcor`, branch
-   `feat/torchcor`; evidence `docs/solver-learning/torchcor.md` A-G). The case
-   and the runner live in `~/torchcor-cases` (local, no remote: the owner's
-   call), with TorchCor as a submodule at `b02daee` installed editable into its
-   own venv. `omnidriver check` of `nversion` on this Mac (CPU) passes C1-C12
-   and C14, C13 `not_applicable`. Open:
-   - F2-F5, F7, F8 of `torchcor.md` (float32 against float64 at dx 0.1, thread
-     and compile-cache determinism, dx 0.1 wall time, why P8 falls as dx is
-     refined, the library TTP's 0.005 ms, mesh portability across gmsh
-     versions);
-   - F6: whether `et = 0.2` in TorchCor's `verification/benchmark.py` is a typo,
-     a question for TorchCor's author;
-   - TorchCor and openCARP at dx 0.5 agree along the fibre (P3, P7 within
-     0.25 ms) and not across it: TorchCor's P2, P4, P6, P8 are 18-26 ms earlier
-     (`torchcor.md` G4). Why is open (F5);
-   - a GPU run (`device: cuda`), untested: no CUDA here.
-7. **Later:**
+6. **The Niederer comparison across solvers and meshes** (2026-10-09). The
+   goal is an agent that reasons with each solver's mapping and tries the
+   benchmark on each one. Frame and mesh alignment is the agent's own
+   preprocessing, not an omniD feature. Evidence: `torchcor.md` G-I,
+   `opencarp.md` M, `cardiacfoam.md` Y, Z and AA. Studies are in
+   `benchmarks/niederer2011/oblique/`.
+   - At dx 0.5, the mesh decides the result. The finite-element solvers agree
+     within 0.5 ms on a shared mesh, but move 17-26 ms between structured and
+     unstructured tets. cardiacFOAM on any tet mesh agrees with itself within
+     1.1 ms (P8 50 ms). Its 143 ms P8 belongs to the 0.5 mm hex mesh.
+   - At dx 0.2, on native meshes, P8 is 38.0 (TorchCor), 40.6 (openCARP) and
+     54.6 ms (cardiacFOAM). The first two are inside the paper's 37.8-48.7 ms
+     at dx 0.1.
+   - Oblique (45 degrees): the like-for-like cardiacFOAM study is
+     `godunov_AB` (sealed walls, conormal). Its `zeroGradient` wall gives
+     P3 = P7 and P4 = P8 exactly.
+   - Open: dx 0.1 on all three; TorchCor on a GPU (no CUDA here); TorchCor's
+     F2-F4, F6-F8 (`torchcor.md`; F6, whether `et = 0.2` upstream is a typo, is
+     for its author).
+7. **The agent harness's first experiment** (`packages/omnidriver-agents`,
+   plan `plans/2026-10-09-agent-harness.md` Task 9). It needs a one-time login
+   in a clean home (`HOME=<agent home> claude`, then `/login`), then the
+   isolation probe, then the openCARP N-version task: Opus, Sonnet and Haiku,
+   `omnid` against `bare`, three trials each. A task such as "compare Niederer
+   across the three solvers on one mesh" tests whether the mappings suffice.
+8. **Later:**
    - one run using cardiacCore and cardiacFOAM steps
      (`specs/2026-09-18-cross-adapter-workflow-design.md`);
    - more TOML records;
