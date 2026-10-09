@@ -144,6 +144,36 @@ jobs:
       - name: Run tests
         run: python -m pytest packages/omnidriver-opencarp/tests -q
 
+  # TorchCor runs in its own venv and is never installed here: the plugin's
+  # tests read committed runner output, so this job installs core and the
+  # torchcor adapter only.
+  test-torchcor:
+    name: test-torchcor (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            packages/omnidriver/pyproject.toml
+            packages/omnidriver-torchcor/pyproject.toml
+
+      - name: Install omnidriver + omnidriver-torchcor
+        run: |
+          pip install -e packages/omnidriver \
+                      -e packages/omnidriver-torchcor \
+                      pytest
+
+      - name: Run tests
+        run: python -m pytest packages/omnidriver-torchcor/tests -q
+
   test-all-package-wheels:
     name: test-all-package-wheels (py3.11)
     runs-on: ubuntu-latest
@@ -160,6 +190,7 @@ jobs:
             packages/omnidriver-cardiacfoam/pyproject.toml
             packages/omnidriver-cardiaccore/pyproject.toml
             packages/omnidriver-opencarp/pyproject.toml
+            packages/omnidriver-torchcor/pyproject.toml
 
       - name: Install test collection dependencies
         run: |
@@ -168,6 +199,7 @@ jobs:
                       -e packages/omnidriver-cardiacfoam \
                       -e packages/omnidriver-cardiaccore \
                       -e packages/omnidriver-opencarp \
+                      -e packages/omnidriver-torchcor \
                       pytest
 
       - name: Build, install, and invoke all package wheels

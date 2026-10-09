@@ -10,7 +10,7 @@ re-deriving what the last five sessions established.
 
 ## What this is
 
-A solver-agnostic orchestrator, split into five packages under `packages/`:
+A solver-agnostic orchestrator, split into six packages under `packages/`:
 
 | package | may know about | must not know about |
 |---|---|---|
@@ -19,6 +19,7 @@ A solver-agnostic orchestrator, split into five packages under `packages/`:
 | `omnidriver-cardiacfoam` | electrophysiology, ionic models, the cardiac plugin | — |
 | `omnidriver-cardiaccore` | evidence-backed cardiacCore preprocessing workflows | cardiacFoam solver semantics |
 | `omnidriver-opencarp` | the openCARP binary, `.par` format, `mesher`, IGB/LAT outputs | OpenFOAM, cardiacFoam |
+| `omnidriver-torchcor` | TorchCor, its solver repository's runner (`run_case.py`) and `case.json` | OpenFOAM, openCARP |
 
 Core containing **zero** cardiac vocabulary is not aspirational — it is
 enforced. `scripts/check-import-boundaries.py` exits non-zero on any cardiac
@@ -38,7 +39,7 @@ of defect is only visible from a wheel.
 uv venv --python 3.11 /tmp/od311 && VIRTUAL_ENV=/tmp/od311 uv pip install -q \
   -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam \
   -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiaccore \
-  -e packages/omnidriver-opencarp pytest
+  -e packages/omnidriver-opencarp -e packages/omnidriver-torchcor pytest
 uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
   -e "packages/omnidriver[post]" pytest
 ```
