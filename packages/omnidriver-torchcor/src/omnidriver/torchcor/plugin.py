@@ -11,7 +11,7 @@ from omnidriver.core.plugin_profile import load_plugin_profile
 
 from .activation_reader import ACTIVATION_FORMAT, NearestNodeReader
 from .case_json import CaseJsonError, patch, read_value, values_agree
-from .catalog import CASE_DOCUMENT, CatalogError, repository_catalog
+from .catalog import CASE_DOCUMENT, repository_catalog, runner_of
 from .environment import SOLVER_COMMANDS, torchcor_environment_diagnostics
 from .records import TUTORIAL_RECORDS
 from .validation import case_diagnostics, validate_key
@@ -63,23 +63,17 @@ class TorchCorPlugin:
         model = catalog.ionic_models.get(read_value(path.read_text(), "ionic_model")) if path.is_file() else None
         if model is not None:
             entries += [
-                {"document": CASE_DOCUMENT, "key": f"ionic_options.{name}", "value_kind": "string",
-                 "default": option["default"], "menu": option["menu"], "source_refs": source_refs}
-                for name, option in model["options"].items()
-            ]
-            entries += [
-                {"document": CASE_DOCUMENT, "key": f"ionic_init.{name}", "value_kind": "scalar", "source_refs": source_refs}
-                for name in model["init"]
+                {"document": CASE_DOCUMENT, "key": f"{field}.{name}", "value_kind": spec["kind"], "default": spec["default"],
+                 **({"menu": spec["menu"]} if spec.get("menu") is not None else {}), "source_refs": source_refs}
+                for field, listed in (("ionic_options", "options"), ("ionic_init", "init"))
+                for name, spec in model[listed].items()
             ]
         return tuple(entries)
 
     # -- rules
     def validate_run_semantics(self, case_root, *, driver_context):
-        try:
-            catalog = repository_catalog(driver_context)
-        except CatalogError as exc:
-            return (diagnostic("error", "torchcor_describe_failed", str(exc), source=CASE_DOCUMENT),)
-        return () if catalog is None else case_diagnostics(case_root, catalog)
+        located = runner_of(driver_context)
+        return () if located is None else case_diagnostics(case_root, *located)
 
     def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
         del case_root, workflow_dag, env, scratch_root

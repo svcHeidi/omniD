@@ -295,11 +295,12 @@
   "ionic_models": {
     "AlievPanfilov": {
       "options": {},
-      "init": []
+      "init": {}
     },
     "BuenoOrovio": {
       "options": {
         "formulation": {
+          "kind": "string",
           "default": "TRANSFORM",
           "menu": [
             "ORIGINAL",
@@ -307,52 +308,131 @@
           ]
         }
       },
-      "init": [
-        "V_init",
-        "s_init",
-        "v_init",
-        "w_init"
-      ]
+      "init": {
+        "V_init": {
+          "kind": "scalar",
+          "default": -84.0
+        },
+        "s_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "v_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "w_init": {
+          "kind": "scalar",
+          "default": 1.0
+        }
+      }
     },
     "CourtemancheRamirezNattel": {
       "options": {},
-      "init": [
-        "Ca_rel_init",
-        "Ca_up_init",
-        "Cai_init",
-        "Ki_init",
-        "V_init",
-        "d_init",
-        "f_Ca_init",
-        "f_init",
-        "h_init",
-        "j_init",
-        "m_init",
-        "oa_init",
-        "oi_init",
-        "u_init",
-        "ua_init",
-        "ui_init",
-        "v_init",
-        "w_init",
-        "xr_init",
-        "xs_init"
-      ]
+      "init": {
+        "Ca_rel_init": {
+          "kind": "scalar",
+          "default": 1.49
+        },
+        "Ca_up_init": {
+          "kind": "scalar",
+          "default": 1.49
+        },
+        "Cai_init": {
+          "kind": "scalar",
+          "default": 0.102
+        },
+        "Ki_init": {
+          "kind": "scalar",
+          "default": 139.0
+        },
+        "V_init": {
+          "kind": "scalar",
+          "default": -81.2
+        },
+        "d_init": {
+          "kind": "scalar",
+          "default": 0.000137
+        },
+        "f_Ca_init": {
+          "kind": "scalar",
+          "default": 0.775
+        },
+        "f_init": {
+          "kind": "scalar",
+          "default": 0.999
+        },
+        "h_init": {
+          "kind": "scalar",
+          "default": 0.965
+        },
+        "j_init": {
+          "kind": "scalar",
+          "default": 0.978
+        },
+        "m_init": {
+          "kind": "scalar",
+          "default": 0.00291
+        },
+        "oa_init": {
+          "kind": "scalar",
+          "default": 0.0304
+        },
+        "oi_init": {
+          "kind": "scalar",
+          "default": 0.999
+        },
+        "u_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "ua_init": {
+          "kind": "scalar",
+          "default": 0.00496
+        },
+        "ui_init": {
+          "kind": "scalar",
+          "default": 0.999
+        },
+        "v_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "w_init": {
+          "kind": "scalar",
+          "default": 0.999
+        },
+        "xr_init": {
+          "kind": "scalar",
+          "default": 3.29e-05
+        },
+        "xs_init": {
+          "kind": "scalar",
+          "default": 0.0187
+        }
+      }
     },
     "MitchellSchaeffer": {
       "options": {},
-      "init": [
-        "V_init",
-        "h_init"
-      ]
+      "init": {
+        "V_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "h_init": {
+          "kind": "scalar",
+          "default": 1.0
+        }
+      }
     },
     "ModifiedMS2v": {
       "options": {},
-      "init": []
+      "init": {}
     },
     "OHaraRudy": {
       "options": {
         "cell_type": {
+          "kind": "string",
           "default": "ENDO",
           "menu": [
             "ENDO",
@@ -361,6 +441,7 @@
           ]
         },
         "ina": {
+          "kind": "string",
           "default": "ORdINa",
           "menu": [
             "ORdINa",
@@ -368,6 +449,7 @@
           ]
         },
         "formulation": {
+          "kind": "string",
           "default": "ORIGINAL",
           "menu": [
             "CLERX",
@@ -375,57 +457,193 @@
           ]
         }
       },
-      "init": [
-        "CaMKt_init",
-        "Cai_init",
-        "Jrelnp_init",
-        "Jrelp_init",
-        "Ki_init",
-        "Nai_init",
-        "V_init",
-        "a_init",
-        "ap_init",
-        "cajsr_init",
-        "cansr_init",
-        "cass_init",
-        "d_init",
-        "fcaf_init",
-        "fcafp_init",
-        "fcas_init",
-        "ff_init",
-        "ffp_init",
-        "fs_init",
-        "hL_init",
-        "hLp_init",
-        "hTT2_init",
-        "hf_init",
-        "hs_init",
-        "hsp_init",
-        "iF_init",
-        "iFp_init",
-        "iS_init",
-        "iSp_init",
-        "jTT2_init",
-        "j_init",
-        "jca_init",
-        "jp_init",
-        "kss_init",
-        "mL_init",
-        "mORd_init",
-        "mTT2_init",
-        "m_init",
-        "nass_init",
-        "nca_init",
-        "xk1_init",
-        "xrf_init",
-        "xrs_init",
-        "xs1_init",
-        "xs2_init"
-      ]
+      "init": {
+        "CaMKt_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "Cai_init": {
+          "kind": "scalar",
+          "default": 0.0001
+        },
+        "Jrelnp_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "Jrelp_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "Ki_init": {
+          "kind": "scalar",
+          "default": 145.0
+        },
+        "Nai_init": {
+          "kind": "scalar",
+          "default": 7.0
+        },
+        "V_init": {
+          "kind": "scalar",
+          "default": -87.0
+        },
+        "a_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "ap_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "cajsr_init": {
+          "kind": "scalar",
+          "default": 1.2
+        },
+        "cansr_init": {
+          "kind": "scalar",
+          "default": 1.2
+        },
+        "cass_init": {
+          "kind": "scalar",
+          "default": 0.0001
+        },
+        "d_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "fcaf_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "fcafp_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "fcas_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "ff_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "ffp_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "fs_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "hL_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "hLp_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "hTT2_init": {
+          "kind": "scalar",
+          "default": 0.7901175333455224
+        },
+        "hf_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "hs_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "hsp_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "iF_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "iFp_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "iS_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "iSp_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "jTT2_init": {
+          "kind": "scalar",
+          "default": 0.7901175333455224
+        },
+        "j_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "jca_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "jp_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "kss_init": {
+          "kind": "scalar",
+          "default": 145.0
+        },
+        "mL_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "mORd_init": {
+          "kind": "scalar",
+          "default": 0.01808309026024831
+        },
+        "mTT2_init": {
+          "kind": "scalar",
+          "default": 0.001176364714838779
+        },
+        "m_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "nass_init": {
+          "kind": "scalar",
+          "default": 7.0
+        },
+        "nca_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "xk1_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "xrf_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "xrs_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "xs1_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "xs2_init": {
+          "kind": "scalar",
+          "default": 0.0
+        }
+      }
     },
     "TenTusscherPanfilov": {
       "options": {
         "cell_type": {
+          "kind": "string",
           "default": "EPI",
           "menu": [
             "ENDO",
@@ -434,36 +652,109 @@
           ]
         }
       },
-      "init": [
-        "CaSR_init",
-        "CaSS_init",
-        "Cai_init",
-        "F2_init",
-        "FCaSS_init",
-        "F_init",
-        "GCaL_init",
-        "GKr_init",
-        "GKs_init",
-        "Gto_init",
-        "H_init",
-        "J_init",
-        "Ki_init",
-        "M_init",
-        "Nai_init",
-        "O_init",
-        "R__init",
-        "R_init",
-        "S_init",
-        "V_init",
-        "Xr1_init",
-        "Xr2_init",
-        "Xs_init",
-        "d_init"
-      ]
+      "init": {
+        "CaSR_init": {
+          "kind": "scalar",
+          "default": 1.3
+        },
+        "CaSS_init": {
+          "kind": "scalar",
+          "default": 7e-05
+        },
+        "Cai_init": {
+          "kind": "scalar",
+          "default": 7e-05
+        },
+        "F2_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "FCaSS_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "F_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "GCaL_init": {
+          "kind": "scalar",
+          "default": 3.98e-05
+        },
+        "GKr_init": {
+          "kind": "scalar",
+          "default": 0.153
+        },
+        "GKs_init": {
+          "kind": "scalar",
+          "default": 0.392
+        },
+        "Gto_init": {
+          "kind": "scalar",
+          "default": 0.294
+        },
+        "H_init": {
+          "kind": "scalar",
+          "default": 0.75
+        },
+        "J_init": {
+          "kind": "scalar",
+          "default": 0.75
+        },
+        "Ki_init": {
+          "kind": "scalar",
+          "default": 138.3
+        },
+        "M_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "Nai_init": {
+          "kind": "scalar",
+          "default": 7.67
+        },
+        "O_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "R__init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "R_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "S_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "V_init": {
+          "kind": "scalar",
+          "default": -86.2
+        },
+        "Xr1_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "Xr2_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "Xs_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "d_init": {
+          "kind": "scalar",
+          "default": 0.0
+        }
+      }
     },
     "Tomek19": {
       "options": {
         "cell_type": {
+          "kind": "string",
           "default": "ENDO",
           "menu": [
             "ENDO",
@@ -472,55 +763,185 @@
           ]
         }
       },
-      "init": [
-        "C1_init",
-        "C2_init",
-        "C3_init",
-        "CaMKt_init",
-        "Cai_init",
-        "Cajsr_init",
-        "Cansr_init",
-        "Cass_init",
-        "I_init",
-        "Jrel_np_init",
-        "Jrel_p_init",
-        "Ki_init",
-        "Kss_init",
-        "Nai_init",
-        "Nass_init",
-        "O_init",
-        "V_init",
-        "a_init",
-        "ap_init",
-        "d_init",
-        "fCaf_init",
-        "fCafp_init",
-        "fCas_init",
-        "ff_init",
-        "ffp_init",
-        "fs_init",
-        "hL_init",
-        "hLp_init",
-        "h_init",
-        "hp_init",
-        "iF_init",
-        "iFp_init",
-        "iS_init",
-        "iSp_init",
-        "jCa_init",
-        "j_init",
-        "jp_init",
-        "mL_init",
-        "m_init",
-        "nCa_i_init",
-        "nCa_ss_init",
-        "xs1_init",
-        "xs2_init"
-      ]
+      "init": {
+        "C1_init": {
+          "kind": "scalar",
+          "default": 0.00070344
+        },
+        "C2_init": {
+          "kind": "scalar",
+          "default": 0.00085109
+        },
+        "C3_init": {
+          "kind": "scalar",
+          "default": 0.9981
+        },
+        "CaMKt_init": {
+          "kind": "scalar",
+          "default": 0.0111
+        },
+        "Cai_init": {
+          "kind": "scalar",
+          "default": 8.1583e-05
+        },
+        "Cajsr_init": {
+          "kind": "scalar",
+          "default": 1.5214
+        },
+        "Cansr_init": {
+          "kind": "scalar",
+          "default": 1.5211
+        },
+        "Cass_init": {
+          "kind": "scalar",
+          "default": 7.0305e-05
+        },
+        "I_init": {
+          "kind": "scalar",
+          "default": 1.3289e-05
+        },
+        "Jrel_np_init": {
+          "kind": "scalar",
+          "default": 1.6129e-22
+        },
+        "Jrel_p_init": {
+          "kind": "scalar",
+          "default": 1.2475e-20
+        },
+        "Ki_init": {
+          "kind": "scalar",
+          "default": 142.3002
+        },
+        "Kss_init": {
+          "kind": "scalar",
+          "default": 142.3002
+        },
+        "Nai_init": {
+          "kind": "scalar",
+          "default": 12.1025
+        },
+        "Nass_init": {
+          "kind": "scalar",
+          "default": 12.1029
+        },
+        "O_init": {
+          "kind": "scalar",
+          "default": 0.00037585
+        },
+        "V_init": {
+          "kind": "scalar",
+          "default": -88.7638
+        },
+        "a_init": {
+          "kind": "scalar",
+          "default": 0.00095098
+        },
+        "ap_init": {
+          "kind": "scalar",
+          "default": 0.00048454
+        },
+        "d_init": {
+          "kind": "scalar",
+          "default": 8.1084e-09
+        },
+        "fCaf_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "fCafp_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "fCas_init": {
+          "kind": "scalar",
+          "default": 0.9999
+        },
+        "ff_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "ffp_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "fs_init": {
+          "kind": "scalar",
+          "default": 0.939
+        },
+        "hL_init": {
+          "kind": "scalar",
+          "default": 0.5255
+        },
+        "hLp_init": {
+          "kind": "scalar",
+          "default": 0.2872
+        },
+        "h_init": {
+          "kind": "scalar",
+          "default": 0.8286
+        },
+        "hp_init": {
+          "kind": "scalar",
+          "default": 0.6707
+        },
+        "iF_init": {
+          "kind": "scalar",
+          "default": 0.9996
+        },
+        "iFp_init": {
+          "kind": "scalar",
+          "default": 0.9996
+        },
+        "iS_init": {
+          "kind": "scalar",
+          "default": 0.5936
+        },
+        "iSp_init": {
+          "kind": "scalar",
+          "default": 0.6538
+        },
+        "jCa_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "j_init": {
+          "kind": "scalar",
+          "default": 0.8284
+        },
+        "jp_init": {
+          "kind": "scalar",
+          "default": 0.8281
+        },
+        "mL_init": {
+          "kind": "scalar",
+          "default": 0.0001629
+        },
+        "m_init": {
+          "kind": "scalar",
+          "default": 0.00080572
+        },
+        "nCa_i_init": {
+          "kind": "scalar",
+          "default": 0.0012
+        },
+        "nCa_ss_init": {
+          "kind": "scalar",
+          "default": 0.00066462
+        },
+        "xs1_init": {
+          "kind": "scalar",
+          "default": 0.248
+        },
+        "xs2_init": {
+          "kind": "scalar",
+          "default": 0.00017707
+        }
+      }
     },
     "Tomek20": {
       "options": {
         "cell_type": {
+          "kind": "string",
           "default": "ENDO",
           "menu": [
             "ENDO",
@@ -529,68 +950,237 @@
           ]
         }
       },
-      "init": [
-        "C1_init",
-        "C2_init",
-        "C3_init",
-        "CD_init",
-        "CaMKt_init",
-        "Cai_init",
-        "Cai_mM_init",
-        "I_init",
-        "Jrel_np_init",
-        "Jrel_p_init",
-        "Ki_init",
-        "Nai_init",
-        "O_init",
-        "TRPN_init",
-        "TmBlocked_init",
-        "V_init",
-        "XS_init",
-        "XW_init",
-        "ZETAS_init",
-        "ZETAW_init",
-        "aa_init",
-        "ap_init",
-        "cajsr_init",
-        "cansr_init",
-        "cass_init",
-        "cli_init",
-        "clss_init",
-        "d_init",
-        "delta_sl_init",
-        "fcaf_init",
-        "fcafp_init",
-        "fcas_init",
-        "ff_init",
-        "ffp_init",
-        "fs_init",
-        "hL_init",
-        "hLp_init",
-        "h_init",
-        "hp_init",
-        "iF_init",
-        "iFp_init",
-        "iS_init",
-        "iSp_init",
-        "j_init",
-        "jca_init",
-        "jp_init",
-        "kss_init",
-        "length_init",
-        "mL_init",
-        "m_init",
-        "nass_init",
-        "nca_i_init",
-        "nca_ss_init",
-        "stretch_init",
-        "xs1_init",
-        "xs2_init"
-      ]
+      "init": {
+        "C1_init": {
+          "kind": "scalar",
+          "default": 0.9982511
+        },
+        "C2_init": {
+          "kind": "scalar",
+          "default": 0.000793602
+        },
+        "C3_init": {
+          "kind": "scalar",
+          "default": 0.0006532143
+        },
+        "CD_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "CaMKt_init": {
+          "kind": "scalar",
+          "default": 0.01095026
+        },
+        "Cai_init": {
+          "kind": "scalar",
+          "default": 0.07453481
+        },
+        "Cai_mM_init": {
+          "kind": "scalar",
+          "default": 7.453481e-05
+        },
+        "I_init": {
+          "kind": "scalar",
+          "default": 9.804083e-06
+        },
+        "Jrel_np_init": {
+          "kind": "scalar",
+          "default": 1.808248e-22
+        },
+        "Jrel_p_init": {
+          "kind": "scalar",
+          "default": 4.358608e-21
+        },
+        "Ki_init": {
+          "kind": "scalar",
+          "default": 147.7115
+        },
+        "Nai_init": {
+          "kind": "scalar",
+          "default": 12.39736
+        },
+        "O_init": {
+          "kind": "scalar",
+          "default": 0.0002922449
+        },
+        "TRPN_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "TmBlocked_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "V_init": {
+          "kind": "scalar",
+          "default": -89.74808
+        },
+        "XS_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "XW_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "ZETAS_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "ZETAW_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "aa_init": {
+          "kind": "scalar",
+          "default": 0.0008899259
+        },
+        "ap_init": {
+          "kind": "scalar",
+          "default": 0.0004534165
+        },
+        "cajsr_init": {
+          "kind": "scalar",
+          "default": 1.525693
+        },
+        "cansr_init": {
+          "kind": "scalar",
+          "default": 1.528001
+        },
+        "cass_init": {
+          "kind": "scalar",
+          "default": 6.497341e-05
+        },
+        "cli_init": {
+          "kind": "scalar",
+          "default": 29.20698
+        },
+        "clss_init": {
+          "kind": "scalar",
+          "default": 29.20696
+        },
+        "d_init": {
+          "kind": "scalar",
+          "default": 1.588841e-31
+        },
+        "delta_sl_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "fcaf_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "fcafp_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "fcas_init": {
+          "kind": "scalar",
+          "default": 0.9999014
+        },
+        "ff_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "ffp_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "fs_init": {
+          "kind": "scalar",
+          "default": 0.9401791
+        },
+        "hL_init": {
+          "kind": "scalar",
+          "default": 0.5566017
+        },
+        "hLp_init": {
+          "kind": "scalar",
+          "default": 0.3115491
+        },
+        "h_init": {
+          "kind": "scalar",
+          "default": 0.8473267
+        },
+        "hp_init": {
+          "kind": "scalar",
+          "default": 0.7018454
+        },
+        "iF_init": {
+          "kind": "scalar",
+          "default": 0.9996716
+        },
+        "iFp_init": {
+          "kind": "scalar",
+          "default": 0.9996716
+        },
+        "iS_init": {
+          "kind": "scalar",
+          "default": 0.5988908
+        },
+        "iSp_init": {
+          "kind": "scalar",
+          "default": 0.6620692
+        },
+        "j_init": {
+          "kind": "scalar",
+          "default": 0.8471657
+        },
+        "jca_init": {
+          "kind": "scalar",
+          "default": 0.9999846
+        },
+        "jp_init": {
+          "kind": "scalar",
+          "default": 0.8469014
+        },
+        "kss_init": {
+          "kind": "scalar",
+          "default": 147.7114
+        },
+        "length_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "mL_init": {
+          "kind": "scalar",
+          "default": 0.0001351203
+        },
+        "m_init": {
+          "kind": "scalar",
+          "default": 0.0006517154
+        },
+        "nass_init": {
+          "kind": "scalar",
+          "default": 12.3977
+        },
+        "nca_i_init": {
+          "kind": "scalar",
+          "default": 0.0008326009
+        },
+        "nca_ss_init": {
+          "kind": "scalar",
+          "default": 0.0004899378
+        },
+        "stretch_init": {
+          "kind": "scalar",
+          "default": 1.0
+        },
+        "xs1_init": {
+          "kind": "scalar",
+          "default": 0.243959
+        },
+        "xs2_init": {
+          "kind": "scalar",
+          "default": 0.0001586167
+        }
+      }
     },
     "TWorld": {
       "options": {
         "cell_type": {
+          "kind": "string",
           "default": "ENDO",
           "menu": [
             "ENDO",
@@ -599,6 +1189,7 @@
           ]
         },
         "sex": {
+          "kind": "string",
           "default": "MIX",
           "menu": [
             "FEMALE",
@@ -607,101 +1198,380 @@
           ]
         }
       },
-      "init": [
-        "C0_init",
-        "C1_init",
-        "C2_init",
-        "Cai_init",
-        "Cli_init",
-        "I_init",
-        "Ki_init",
-        "Nai_init",
-        "O_init",
-        "V_init",
-        "buffers_CaM_init",
-        "buffers_Csqn_init",
-        "buffers_Myosin_ca_init",
-        "buffers_Myosin_mg_init",
-        "buffers_NaBj_init",
-        "buffers_NaBsl_init",
-        "buffers_SLHj_init",
-        "buffers_SLHsl_init",
-        "buffers_SLLj_init",
-        "buffers_SLLsl_init",
-        "buffers_SRB_init",
-        "buffers_TnCHc_init",
-        "buffers_TnCHm_init",
-        "buffers_TnClow_init",
-        "caj_init",
-        "camk_f_ICaL_init",
-        "camk_f_PLB_init",
-        "camk_f_RyR_init",
-        "camk_trap_init",
-        "casig_serca_trap_init",
-        "casl_init",
-        "casr_init",
-        "contraction_Ca_TRPN_init",
-        "contraction_TmBlocked_init",
-        "contraction_XS_init",
-        "contraction_XW_init",
-        "contraction_ZETAS_init",
-        "contraction_ZETAW_init",
-        "d_P_init",
-        "d_init",
-        "fBPf_init",
-        "fcaBPf_init",
-        "fcaf_P_init",
-        "fcaf_init",
-        "fcafp_init",
-        "fcas_P_init",
-        "fcas_init",
-        "ff_P_init",
-        "ff_init",
-        "ffp_init",
-        "fs_P_init",
-        "fs_init",
-        "hL_init",
-        "hLp_init",
-        "h_P_init",
-        "h_init",
-        "hp_P_init",
-        "hp_init",
-        "ical_pureCDI_junc_init",
-        "ical_pureCDI_sl_init",
-        "j_P_init",
-        "j_init",
-        "jca_init",
-        "jp_P_init",
-        "jp_init",
-        "jrel_icaldep_act_init",
-        "jrel_icaldep_f1_init",
-        "jrel_icaldep_f2_init",
-        "mL_init",
-        "m_P_init",
-        "m_init",
-        "naj_init",
-        "nasl_init",
-        "nca_i_init",
-        "nca_init",
-        "ryr_CaRI_init",
-        "ryr_CaRI_p_init",
-        "ryr_I_init",
-        "ryr_I_p_init",
-        "ryr_O_init",
-        "ryr_O_p_init",
-        "ryr_R_init",
-        "ryr_R_p_init",
-        "xs_junc_init",
-        "xs_sl_init",
-        "xtof_init",
-        "xtof_p_init",
-        "xtos_init",
-        "xtos_p_init",
-        "ytof_init",
-        "ytof_p_init",
-        "ytos_init",
-        "ytos_p_init"
-      ]
+      "init": {
+        "C0_init": {
+          "kind": "scalar",
+          "default": 0.997558791218494
+        },
+        "C1_init": {
+          "kind": "scalar",
+          "default": 0.000960122333286174
+        },
+        "C2_init": {
+          "kind": "scalar",
+          "default": 0.000804204051120587
+        },
+        "Cai_init": {
+          "kind": "scalar",
+          "default": 9.66105402693763e-05
+        },
+        "Cli_init": {
+          "kind": "scalar",
+          "default": 15.5745509675962
+        },
+        "I_init": {
+          "kind": "scalar",
+          "default": 3.55901681542091e-05
+        },
+        "Ki_init": {
+          "kind": "scalar",
+          "default": 134.213097948672
+        },
+        "Nai_init": {
+          "kind": "scalar",
+          "default": 8.88365804124162
+        },
+        "O_init": {
+          "kind": "scalar",
+          "default": 0.00064129227809794
+        },
+        "V_init": {
+          "kind": "scalar",
+          "default": -87.0655895407835
+        },
+        "buffers_CaM_init": {
+          "kind": "scalar",
+          "default": 0.000326761159683871
+        },
+        "buffers_Csqn_init": {
+          "kind": "scalar",
+          "default": 1.32358809148372
+        },
+        "buffers_Myosin_ca_init": {
+          "kind": "scalar",
+          "default": 0.00435725142843641
+        },
+        "buffers_Myosin_mg_init": {
+          "kind": "scalar",
+          "default": 0.134587917639655
+        },
+        "buffers_NaBj_init": {
+          "kind": "scalar",
+          "default": 3.5588839934477
+        },
+        "buffers_NaBsl_init": {
+          "kind": "scalar",
+          "default": 0.776467094025442
+        },
+        "buffers_SLHj_init": {
+          "kind": "scalar",
+          "default": 0.0497605868295565
+        },
+        "buffers_SLHsl_init": {
+          "kind": "scalar",
+          "default": 0.0960185900338078
+        },
+        "buffers_SLLj_init": {
+          "kind": "scalar",
+          "default": 0.00415486833433121
+        },
+        "buffers_SLLsl_init": {
+          "kind": "scalar",
+          "default": 0.00810233315864154
+        },
+        "buffers_SRB_init": {
+          "kind": "scalar",
+          "default": 0.00247759889601234
+        },
+        "buffers_TnCHc_init": {
+          "kind": "scalar",
+          "default": 0.124415836833344
+        },
+        "buffers_TnCHm_init": {
+          "kind": "scalar",
+          "default": 0.00475139089328611
+        },
+        "buffers_TnClow_init": {
+          "kind": "scalar",
+          "default": 0.0104491410305814
+        },
+        "caj_init": {
+          "kind": "scalar",
+          "default": 9.20580586542242e-05
+        },
+        "camk_f_ICaL_init": {
+          "kind": "scalar",
+          "default": 0.149310462149601
+        },
+        "camk_f_PLB_init": {
+          "kind": "scalar",
+          "default": 0.0102519516890396
+        },
+        "camk_f_RyR_init": {
+          "kind": "scalar",
+          "default": 0.0583425856770706
+        },
+        "camk_trap_init": {
+          "kind": "scalar",
+          "default": 0.0414775695414329
+        },
+        "casig_serca_trap_init": {
+          "kind": "scalar",
+          "default": 0.0414775695414004
+        },
+        "casl_init": {
+          "kind": "scalar",
+          "default": 9.62428218317655e-05
+        },
+        "casr_init": {
+          "kind": "scalar",
+          "default": 0.709622552333155
+        },
+        "contraction_Ca_TRPN_init": {
+          "kind": "scalar",
+          "default": 0.0319778784167468
+        },
+        "contraction_TmBlocked_init": {
+          "kind": "scalar",
+          "default": 0.992378492940848
+        },
+        "contraction_XS_init": {
+          "kind": "scalar",
+          "default": 0.00191507884532543
+        },
+        "contraction_XW_init": {
+          "kind": "scalar",
+          "default": 0.00285370717430549
+        },
+        "contraction_ZETAS_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "contraction_ZETAW_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "d_P_init": {
+          "kind": "scalar",
+          "default": 0.0
+        },
+        "d_init": {
+          "kind": "scalar",
+          "default": 6.00992839633468e-26
+        },
+        "fBPf_init": {
+          "kind": "scalar",
+          "default": 0.999999987992091
+        },
+        "fcaBPf_init": {
+          "kind": "scalar",
+          "default": 0.999999987985882
+        },
+        "fcaf_P_init": {
+          "kind": "scalar",
+          "default": 0.999999987985882
+        },
+        "fcaf_init": {
+          "kind": "scalar",
+          "default": 0.999999988251085
+        },
+        "fcafp_init": {
+          "kind": "scalar",
+          "default": 0.999999987980701
+        },
+        "fcas_P_init": {
+          "kind": "scalar",
+          "default": 0.999145398038995
+        },
+        "fcas_init": {
+          "kind": "scalar",
+          "default": 0.991477881027689
+        },
+        "ff_P_init": {
+          "kind": "scalar",
+          "default": 0.999999987992091
+        },
+        "ff_init": {
+          "kind": "scalar",
+          "default": 0.999999988243592
+        },
+        "ffp_init": {
+          "kind": "scalar",
+          "default": 0.999999987868131
+        },
+        "fs_P_init": {
+          "kind": "scalar",
+          "default": 0.930411822666439
+        },
+        "fs_init": {
+          "kind": "scalar",
+          "default": 0.911094950010905
+        },
+        "hL_init": {
+          "kind": "scalar",
+          "default": 0.478572465113524
+        },
+        "hLp_init": {
+          "kind": "scalar",
+          "default": 0.258793079229038
+        },
+        "h_P_init": {
+          "kind": "scalar",
+          "default": 0.647375310489836
+        },
+        "h_init": {
+          "kind": "scalar",
+          "default": 0.791660456106286
+        },
+        "hp_P_init": {
+          "kind": "scalar",
+          "default": 0.419158183843564
+        },
+        "hp_init": {
+          "kind": "scalar",
+          "default": 0.61240980788246
+        },
+        "ical_pureCDI_junc_init": {
+          "kind": "scalar",
+          "default": 0.99834227586449
+        },
+        "ical_pureCDI_sl_init": {
+          "kind": "scalar",
+          "default": 0.99826318591148
+        },
+        "j_P_init": {
+          "kind": "scalar",
+          "default": 0.647279109941897
+        },
+        "j_init": {
+          "kind": "scalar",
+          "default": 0.791587530878068
+        },
+        "jca_init": {
+          "kind": "scalar",
+          "default": 0.999993204834445
+        },
+        "jp_P_init": {
+          "kind": "scalar",
+          "default": 0.418669666153646
+        },
+        "jp_init": {
+          "kind": "scalar",
+          "default": 0.791052149435449
+        },
+        "jrel_icaldep_act_init": {
+          "kind": "scalar",
+          "default": -9.23949112019061e-15
+        },
+        "jrel_icaldep_f1_init": {
+          "kind": "scalar",
+          "default": 0.999994847409611
+        },
+        "jrel_icaldep_f2_init": {
+          "kind": "scalar",
+          "default": 0.998725931920675
+        },
+        "mL_init": {
+          "kind": "scalar",
+          "default": 0.000224902633151066
+        },
+        "m_P_init": {
+          "kind": "scalar",
+          "default": 0.0033402868342183
+        },
+        "m_init": {
+          "kind": "scalar",
+          "default": 0.00115997496446638
+        },
+        "naj_init": {
+          "kind": "scalar",
+          "default": 8.88424477947199
+        },
+        "nasl_init": {
+          "kind": "scalar",
+          "default": 8.88341217642103
+        },
+        "nca_i_init": {
+          "kind": "scalar",
+          "default": 0.00621547539490541
+        },
+        "nca_init": {
+          "kind": "scalar",
+          "default": 0.00528788208273223
+        },
+        "ryr_CaRI_init": {
+          "kind": "scalar",
+          "default": 0.0653313479138348
+        },
+        "ryr_CaRI_p_init": {
+          "kind": "scalar",
+          "default": 0.0651828099424919
+        },
+        "ryr_I_init": {
+          "kind": "scalar",
+          "default": 4.57362306340243e-09
+        },
+        "ryr_I_p_init": {
+          "kind": "scalar",
+          "default": 6.8611892649539e-09
+        },
+        "ryr_O_init": {
+          "kind": "scalar",
+          "default": 3.33929041065479e-08
+        },
+        "ryr_O_p_init": {
+          "kind": "scalar",
+          "default": 5.00978004918837e-08
+        },
+        "ryr_R_init": {
+          "kind": "scalar",
+          "default": 0.821525956842405
+        },
+        "ryr_R_p_init": {
+          "kind": "scalar",
+          "default": 0.8216639452872
+        },
+        "xs_junc_init": {
+          "kind": "scalar",
+          "default": 0.0311875010014239
+        },
+        "xs_sl_init": {
+          "kind": "scalar",
+          "default": 0.031204810574373
+        },
+        "xtof_init": {
+          "kind": "scalar",
+          "default": 0.00028609937449475
+        },
+        "xtof_p_init": {
+          "kind": "scalar",
+          "default": 0.000132590043205027
+        },
+        "xtos_init": {
+          "kind": "scalar",
+          "default": 0.000286101402392894
+        },
+        "xtos_p_init": {
+          "kind": "scalar",
+          "default": 0.000132590983159417
+        },
+        "ytof_init": {
+          "kind": "scalar",
+          "default": 0.99999864687518
+        },
+        "ytof_p_init": {
+          "kind": "scalar",
+          "default": 0.99999864687975
+        },
+        "ytos_init": {
+          "kind": "scalar",
+          "default": 0.768184915918179
+        },
+        "ytos_p_init": {
+          "kind": "scalar",
+          "default": 0.777117031645024
+        }
+      }
     }
   },
   "devices": [

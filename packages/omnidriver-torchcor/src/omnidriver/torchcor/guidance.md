@@ -3,8 +3,9 @@
 - **A case is `case.json`, run by the solver repository's `scripts/run_case.py`**
   in TorchCor's own venv. Every key is required; `run_case.py --describe` (or
   `omnidriver describe`) lists them. Select the stack with `--repo` naming the
-  repository so omniD judges a study's keys before anything runs; with
-  `--plugin torchcor` alone, keys are written unvalidated.
+  repository so omniD judges a study's keys, and the staged case by the
+  runner's own `--check`, before anything runs; with `--plugin torchcor`
+  alone, keys are written unvalidated.
 - **`device`** is a case value. Only the devices this host can run are offered:
   `cpu` always, `cuda` where present, `mps` never with torch 2.14 (TorchCor's
   assembly needs a sparse CSR conversion MPS lacks; D12, G0c).

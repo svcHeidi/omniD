@@ -16,7 +16,6 @@ def test_the_catalogue_is_built_from_the_runners_describe():
     built = Catalog.from_describe(DESCRIBED)
     assert built.keys["conductivity_S_per_m.et"]["kind"] == "scalar"
     assert built.keys["device"]["menu"] == ["cpu"]
-    assert built.devices == ("cpu",)
     assert "TenTusscherPanfilov" in built.ionic_models
     assert built.ionic_models["TenTusscherPanfilov"]["options"]["cell_type"]["menu"] == ["ENDO", "EPI", "MCELL"]
     assert "V_init" in built.ionic_models["TenTusscherPanfilov"]["init"]
@@ -77,7 +76,7 @@ def test_the_key_catalogue_lists_every_key_and_the_cases_own_model_fields(tmp_pa
     assert {e["document"] for e in entries.values()} == {"case.json"}
     assert entries["chi_per_mm"]["value_kind"] == "scalar"
     assert entries["ionic_options.cell_type"]["menu"] == ["ENDO", "EPI", "MCELL"]
-    assert entries["ionic_init.V_init"]["value_kind"] == "scalar"
+    assert entries["ionic_init.V_init"]["value_kind"] == "scalar" and entries["ionic_init.V_init"]["default"] == -86.2
     assert entries["dx_mm"]["source_refs"] == [f"{root / 'scripts' / 'run_case.py'} --describe"]
 
 
@@ -87,3 +86,21 @@ def test_without_a_runner_the_document_is_listed_open(tmp_path):
     (tmp_path / "case.json").write_text((FIXTURES / "case.json").read_text())
     (entry,) = TorchCorPlugin().get_record_key_catalog(tmp_path, driver_context=context_of())
     assert entry["document"] == "case.json" and entry["key"] == "<any>" and entry["validated"] is False
+
+
+def test_a_case_is_checked_once_per_runner_and_bytes(tmp_path, monkeypatch):
+    root = repository_with_runner(tmp_path)
+    case = tmp_path / "case.json"
+    case.write_text((FIXTURES / "case.json").read_text())
+    runner, source = root / "scripts" / "run_case.py", root / "torchcor"
+    first = catalog.check(runner, source, dict(os.environ), case)
+    assert [item["key"] for item in first] == ["theta", "ionic_options.cell_type", "ionic_init.V_int"]
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("--check ran again")
+
+    monkeypatch.setattr(catalog.subprocess, "run", refuse)
+    assert catalog.check(runner, source, dict(os.environ), case) == first
+    case.write_text(case.read_text() + " ")
+    with pytest.raises(AssertionError, match="ran again"):
+        catalog.check(runner, source, dict(os.environ), case)
