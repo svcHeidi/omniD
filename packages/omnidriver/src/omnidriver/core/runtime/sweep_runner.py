@@ -433,13 +433,7 @@ def _stage_entry_case(
                 continue
             if (
                 any(name.startswith(prefix) for prefix in conventions.generated_file_prefixes)
-                or (
-                    any(name.endswith(suffix) for suffix in conventions.generated_file_suffixes)
-                    and not any(
-                        name.endswith(suffix)
-                        for suffix in conventions.preserved_file_suffixes
-                    )
-                )
+                or any(name.endswith(suffix) for suffix in conventions.generated_file_suffixes)
             ):
                 ignored.add(name)
                 continue

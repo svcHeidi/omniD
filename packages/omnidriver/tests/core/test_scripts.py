@@ -145,6 +145,15 @@ def test_a_script_name_is_an_authorized_workflow_command_only_where_a_folder_is_
     assert codes == {"unknown_workflow_command"}
 
 
+def test_an_unknown_command_with_no_repository_supplied_names_repo(context):
+    """With no repository there is no scripts folder, so the refusal says so; with one it does not."""
+    bare = driver_context(ToyStack(), source="test:scripts")
+    (refused,) = validate_workflow_commands(_dag("run_case.py", []), driver_context=bare)
+    assert "No repository was supplied" in refused.message and "--repo" in refused.message
+    (refused,) = validate_workflow_commands(_dag("run_case.py", []), driver_context=context)
+    assert "--repo" not in refused.message
+
+
 def test_a_script_step_runs_with_the_interpreter_from_the_step_environment(scripts, context, tmp_path):
     if shutil.which("python3") is None:
         pytest.skip("no python3 on PATH")

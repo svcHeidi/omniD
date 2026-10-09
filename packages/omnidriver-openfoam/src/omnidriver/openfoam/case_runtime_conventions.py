@@ -8,18 +8,21 @@ from omnidriver.core.plugin_interface import CaseRuntimeConventions
 
 
 def openfoam_case_runtime_conventions() -> CaseRuntimeConventions:
-    """Return the paths an OpenFOAM execution derives rather than authors."""
+    """Return the paths an OpenFOAM execution derives rather than authors.
+
+    A mesh is not among them: a case folder may hold the ``polyMesh`` or
+    ``.msh`` its solver reads, so staging drops one only where a record's
+    step declares it produced.
+    """
 
     return CaseRuntimeConventions(
         generated_directory_names=(
             "postProcessing",
             "logs",
-            "polyMesh",
             "results",
         ),
         generated_file_prefixes=("log.",),
-        generated_file_suffixes=(".foam", ".msh", ".geo"),
-        preserved_file_suffixes=(".geo.template",),
+        generated_file_suffixes=(".foam",),
         case_entrypoints=("Allrun",),
         case_script_commands=("Allrun", "Allclean", "Allrun.pre", "Allrun.post"),
         replica_directory_globs=("processor*",),

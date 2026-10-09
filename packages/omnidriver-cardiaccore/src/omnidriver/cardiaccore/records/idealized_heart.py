@@ -4,7 +4,7 @@ They use the ``cobiveco`` convention, so steps declare their own field paths ins
 
 from __future__ import annotations
 
-from omnidriver.core.tutorial_records import RecordInput, TutorialRecord
+from omnidriver.core.tutorial_records import TutorialRecord
 
 from .anatomy import CONV, MESH, TREE_OUT, step
 
@@ -20,24 +20,14 @@ COBIVECO = ("0/tm", "0/tv", "0/apicobasal")
 COBIVECO_TREE_OUT = tuple(path for path in TREE_OUT if "RVSeptalEndoFaces" not in path)
 
 #: This mesh's polyMesh in full: it also carries `cellZones`/`faceZones`/
-#: `pointZones`, which `anatomy.MESH`'s five files omit and restaging must copy.
+#: `pointZones`, which `anatomy.MESH`'s five files omit.
 IDEALIZED_MESH = MESH + tuple(
     f"constant/polyMesh/{name}" for name in ("cellZones", "faceZones", "pointZones")
 )
 
-
-def _mesh_input(native_case_relpath: str) -> RecordInput:
-    """Staging excludes ``polyMesh``; this committed mesh has no generating step, so a native-location input opts it back in."""
-    return RecordInput(
-        name="mesh",
-        native_relpath=native_case_relpath,
-        files=tuple((path, path) for path in IDEALIZED_MESH),
-    )
-
 CONDUCTIVITY = step(
     "conductivity", "setCardiacConductivity",
-    # All eight mesh files: every input destination must map to some step's
-    # consumes, and native `createMesh.H` reads the full mesh as one `fvMesh`.
+    # All eight mesh files: native `createMesh.H` reads the full mesh as one `fvMesh`.
     consumes=(*IDEALIZED_MESH, "0/fiber", "0/sheet"),
     produces=("0/Conductivity",),
 )
@@ -61,7 +51,6 @@ MORPHOMETRY = step(
 IDEALIZED_HEART = TutorialRecord(
     name="idealizedHeart",
     native_case_relpath="cases/idealizedHeart",
-    inputs=(_mesh_input("cases/idealizedHeart"),),
     workflow_steps=(
         CONDUCTIVITY,
         ANATOMY_STEP,
@@ -80,7 +69,6 @@ IDEALIZED_HEART = TutorialRecord(
 IDEALIZED_HEART_ENDOCARDIAL = TutorialRecord(
     name="idealizedHeartEndocardial",
     native_case_relpath="cases/idealizedHeartEndocardial",
-    inputs=(_mesh_input("cases/idealizedHeartEndocardial"),),
     workflow_steps=(
         CONDUCTIVITY,
         ANATOMY_STEP,
@@ -98,7 +86,6 @@ IDEALIZED_HEART_ENDOCARDIAL = TutorialRecord(
 IDEALIZED_HEART_PIG_TRANSMURAL = TutorialRecord(
     name="idealizedHeartPigTransmural",
     native_case_relpath="cases/idealizedHeartPigTransmural",
-    inputs=(_mesh_input("cases/idealizedHeartPigTransmural"),),
     workflow_steps=(
         CONDUCTIVITY,
         ANATOMY_STEP,

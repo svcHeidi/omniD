@@ -212,6 +212,13 @@ that entrypoint. `--case` is valid with `describe`, `catalog`, `plan`, `step`
 and `run`, excludes `--entry` and `--cases-root`, and is refused by name where
 the stack declares no entrypoint (openCARP).
 
+Staging copies everything the folder holds except run output the stack names
+(for OpenFOAM, its `case_runtime_conventions`). The ad hoc record declares
+nothing generated, so a mesh the folder holds is kept, including one left by an
+earlier in-place run: clean the folder, or let its `Allrun` regenerate the mesh.
+A staged record case that lacks a path one of its steps consumes, and no
+earlier step produces, is refused by name before anything runs.
+
 A folder inside the repository supplied with `--repo` is staged at its
 repository-relative depth (`<scratch>/records/<dir name>/cases/<dir name>`, say),
 and a copy of the repository's declared `scripts` folder (without `__pycache__`,

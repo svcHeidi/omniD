@@ -248,6 +248,7 @@ def write_toy_native_case(cases_root: Path) -> Path:
     native = cases_root / "toyTutorial"
     (native / "constant").mkdir(parents=True)
     (native / "constant" / "mesh.json").write_text(json.dumps({"cells": "1", "label": "toy"}))
+    (native / "README.md").write_text("toy tutorial\n")
     return native
 
 
@@ -324,6 +325,14 @@ class NoConsumesPlugin(ToyStack):
 
 
 class GhostConsumesPlugin(ToyStack):
+    """Declares it consumes a directory, which C8 cannot fingerprint."""
+
+    RECORDS = {"toyTutorial": _toy_record(_solve(
+        ("touch", "solved.marker"), consumes=("constant",),
+    ))}
+
+
+class MissingConsumesPlugin(ToyStack):
     """Declares it consumes a file the native case does not have."""
 
     RECORDS = {"toyTutorial": _toy_record(_solve(
@@ -687,11 +696,12 @@ class RefusingReaderPlugin(ToyStack):
 
 
 class OverGeneratedConventionsPlugin(ToyStack):
-    """Declares the native case's own authored input as a generated file name,
-    so staging drops it even from the untouched native case's restage."""
+    """Declares an authored file of the native case that no step consumes as a
+    generated file name, so staging drops it even from the untouched native
+    case's restage. (A consumed one is refused at staging, before C11.)"""
 
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
-        return CaseRuntimeConventions(generated_file_names=("mesh.json",))
+        return CaseRuntimeConventions(generated_file_names=("README.md",))
 
 
 TOY_CELL_LIMIT = 10
@@ -1051,6 +1061,7 @@ PROBING_PLUGIN = _selector("ProbingPlugin")
 REPLACING_PLUGIN = _selector("ReplacingRendererPlugin")
 NO_CONSUMES_PLUGIN = _selector("NoConsumesPlugin")
 GHOST_CONSUMES_PLUGIN = _selector("GhostConsumesPlugin")
+MISSING_CONSUMES_PLUGIN = _selector("MissingConsumesPlugin")
 NATIVE_WRITING_PLUGIN = _selector("NativeWritingPlugin")
 NO_PRODUCES_PLUGIN = _selector("NoProducesPlugin")
 SILENT_PREFLIGHT_PLUGIN = _selector("SilentPreflightPlugin")
