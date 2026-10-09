@@ -89,32 +89,26 @@ def _token_runs(tokens: Sequence[str], key: Sequence[str]) -> list[int]:
     return [i for i in range(len(tokens) - width + 1) if tuple(tokens[i:i + width]) == key]
 
 
+def paths_touch(first: str, second: str) -> bool:
+    """Whether two case-relative paths are equal or one is a parent directory of the other."""
+    a, b = PurePosixPath(str(first)), PurePosixPath(str(second))
+    return a == b or a in b.parents or b in a.parents
+
+
 def _first_touching_step(
     path_str: str, steps: Sequence["WorkflowStep"],
 ) -> tuple[int, str] | None:
     """The first step touching ``path_str``, exactly or as a parent or child directory, and whether through ``consumes`` or ``produces``."""
-    path = PurePosixPath(path_str)
-
-    def _touches(other: str) -> bool:
-        other_path = PurePosixPath(str(other))
-        return other_path == path or path in other_path.parents or other_path in path.parents
-
     for index, step in enumerate(steps):
-        if any(_touches(p) for p in step.consumes):
+        if any(paths_touch(path_str, p) for p in step.consumes):
             return index, "consumes"
-        if any(_touches(p) for p in step.produces):
+        if any(paths_touch(path_str, p) for p in step.produces):
             return index, "produces"
     return None
 
 
 def _any_step_consumes(path_str: str, steps: Sequence["WorkflowStep"]) -> bool:
-    path = PurePosixPath(path_str)
-    for step in steps:
-        for consumed in step.consumes:
-            consumed_path = PurePosixPath(str(consumed))
-            if consumed_path == path or path in consumed_path.parents or consumed_path in path.parents:
-                return True
-    return False
+    return any(paths_touch(path_str, consumed) for step in steps for consumed in step.consumes)
 
 
 def _string_tokens(label: str, value: Any, *, allow_empty_tuple: bool, allow_empty_token: bool) -> tuple[str, ...]:
@@ -396,6 +390,11 @@ class WorkflowStep:
                     raise TutorialRecordError(f"{label} must be a str, not {type(path).__name__}")
                 if "{" in path or "}" in path:
                     raise TutorialRecordError(f"{label} must not contain '{{' or '}}': placeholders are not supported")
+                if field_name == "consumes" and any(c in path for c in "*?["):
+                    raise TutorialRecordError(
+                        f"{label} is a pattern; a consumed path names one file or directory "
+                        "the case must hold (only produces may be a pattern)"
+                    )
                 try:
                     parts = _check_case_relative("the path", path).parts
                 except ValueError as exc:

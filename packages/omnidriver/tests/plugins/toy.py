@@ -325,6 +325,14 @@ class NoConsumesPlugin(ToyStack):
 
 
 class GhostConsumesPlugin(ToyStack):
+    """Declares it consumes a directory, which C8 cannot fingerprint."""
+
+    RECORDS = {"toyTutorial": _toy_record(_solve(
+        ("touch", "solved.marker"), consumes=("constant",),
+    ))}
+
+
+class MissingConsumesPlugin(ToyStack):
     """Declares it consumes a file the native case does not have."""
 
     RECORDS = {"toyTutorial": _toy_record(_solve(
@@ -1053,6 +1061,7 @@ PROBING_PLUGIN = _selector("ProbingPlugin")
 REPLACING_PLUGIN = _selector("ReplacingRendererPlugin")
 NO_CONSUMES_PLUGIN = _selector("NoConsumesPlugin")
 GHOST_CONSUMES_PLUGIN = _selector("GhostConsumesPlugin")
+MISSING_CONSUMES_PLUGIN = _selector("MissingConsumesPlugin")
 NATIVE_WRITING_PLUGIN = _selector("NativeWritingPlugin")
 NO_PRODUCES_PLUGIN = _selector("NoProducesPlugin")
 SILENT_PREFLIGHT_PLUGIN = _selector("SilentPreflightPlugin")

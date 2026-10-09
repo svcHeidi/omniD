@@ -16,7 +16,7 @@ from omnidriver.conformance.checks import _failed_cases, _with_recorded_failure
 from omnidriver.core.runtime.failure_context import OUTPUT_TAIL_CHARS, why_a_child_stopped
 from plugins.toy import (
     ACCEPTING_PLUGIN, BROKEN_RULE_PLUGIN,
-    DEFAULT_ARGUMENT_MARKER, DEFAULT_ARGUMENT_PLUGIN, DEFAULT_ROUTE_MARKER, DEFAULT_ROUTE_PLUGIN, DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NAMED_KEY_PLUGIN,
+    DEFAULT_ARGUMENT_MARKER, DEFAULT_ARGUMENT_PLUGIN, DEFAULT_ROUTE_MARKER, DEFAULT_ROUTE_PLUGIN, DOCUMENTED_PLUGIN, GHOST_CONSUMES_PLUGIN, MISSING_CONSUMES_PLUGIN, INDEXED_KEY_PLUGIN, KINDLESS_KEY_PLUGIN, NAMED_KEY_PLUGIN,
     NATIVE_WRITING_PLUGIN, NO_CONSUMES_PLUGIN, NO_PRODUCES_PLUGIN, OPEN_DOCUMENT_PLUGIN, OTHER_OPEN_DOCUMENT_PLUGIN,
     OVER_GENERATED_CONVENTIONS_PLUGIN, PREDICTED_FORMAT_PLUGIN, REPLACING_PLUGIN, SILENT_PREFLIGHT_PLUGIN, SILENT_SURFACE_PLUGIN,
     UNDECLARED_OUTPUT_PLUGIN, UNLISTED_KEY_PLUGIN, VALIDATED_KINDLESS_PLUGIN,
@@ -136,12 +136,21 @@ def test_an_unknown_check_id_still_raises(tmp_path):
         run_check("C99", toy_conformance_target(tmp_path))
 
 
-def test_c8_bites_a_consumed_file_that_does_not_exist(tmp_path):
-    """enumerate_case_inputs lists every consumed path, even a missing one (strength ``unavailable``), so listing alone proves nothing."""
+def test_c8_bites_a_consumed_directory_that_is_not_fingerprinted(tmp_path):
+    """enumerate_case_inputs lists a consumed directory without fingerprinting its files, so listing alone proves nothing."""
     verdict = run_check("C8", toy_conformance_target(tmp_path, plugin=GHOST_CONSUMES_PLUGIN))
     assert verdict.status == "failed"
-    assert "does/not/exist.json" in verdict.detail
-    assert "constant/mesh.json" not in verdict.detail
+    assert "consumed but not fingerprinted" in verdict.detail
+    assert "constant'" in verdict.detail
+
+
+def test_a_record_consuming_a_path_its_case_lacks_is_refused_at_plan_time(tmp_path):
+    from omnidriver.conformance.checks import _context, _plan
+    from omnidriver.core.tutorial_records import TutorialRecordError
+
+    target = toy_conformance_target(tmp_path, plugin=MISSING_CONSUMES_PLUGIN)
+    with pytest.raises(TutorialRecordError, match=r"does/not/exist\.json"):
+        _plan(target, _context(target))
 
 
 def test_checks_take_the_scratch_root_as_an_argument_so_threads_do_not_interleave(tmp_path, monkeypatch):

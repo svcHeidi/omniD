@@ -1410,6 +1410,38 @@ def test_commit_record_case_refuses_a_case_missing_what_a_step_consumes(tmp_path
     assert "grid" not in message and "physics" not in message
 
 
+def _consumer_declared_before_producer():
+    return _record(axes=(), workflow_steps=(
+        WorkflowStep(step_id="solve", command=("solverBinary",), consumes=("constant/grid",)),
+        WorkflowStep(step_id="mesh", command=("generate-mesh",), produces=("constant/grid",)),
+    ))
+
+
+def test_a_consumed_path_is_produced_when_the_route_runs_the_producer_first(tmp_path):
+    """The route's order decides what is produced before a step runs, not the record's declaration order."""
+    (tmp_path / "staged").mkdir()
+    record_execution.refuse_a_case_missing_what_it_consumes(
+        _consumer_declared_before_producer(), tmp_path / "staged", ("mesh", "solve"),
+    )
+
+
+def test_a_consumed_path_is_refused_when_the_route_runs_the_producer_later(tmp_path):
+    (tmp_path / "staged").mkdir()
+    with pytest.raises(TutorialRecordError, match="step 'solve' consumes"):
+        record_execution.refuse_a_case_missing_what_it_consumes(
+            _consumer_declared_before_producer(), tmp_path / "staged", ("solve", "mesh"),
+        )
+
+
+def test_a_consumed_pattern_is_refused_at_declaration():
+    with pytest.raises(TutorialRecordError, match="pattern"):
+        WorkflowStep(step_id="solve", command=("solverBinary",), consumes=("postProcessing/*.txt",))
+
+
+def test_a_produced_pattern_is_still_declarable():
+    WorkflowStep(step_id="solve", command=("solverBinary",), produces=("postProcessing/*.txt",))
+
+
 def test_commit_record_case_refuses_a_conflict_between_base_and_sweep(tmp_path):
     _native_case(tmp_path, {"constant/physics.json": {"modelName": "modelAlpha"}})
     record = _record(axes=())

@@ -25,6 +25,7 @@ from ..tutorial_records import (
     TutorialRecord,
     TutorialRecordError,
     _strictly_equal,
+    paths_touch,
     patches_to_parameters,
     record_input_destinations,
     resolve_case_patches,
@@ -369,22 +370,18 @@ def refuse_a_case_missing_what_it_consumes(
 ) -> None:
     """Refuse the staged case, naming each step and path, when a step of the
     route consumes a path the case lacks and no earlier step produces."""
+    steps_by_id = {step.step_id: step for step in record.workflow_steps}
     produced: list[str] = []
     missing: list[str] = []
-    for step in record.workflow_steps:
-        if step.step_id not in workflow_step_ids:
-            continue
+    for step_id in workflow_step_ids:
+        step = steps_by_id[step_id]
         lacking = [
             path for path in step.consumes
             if not (Path(case_root) / path).exists()
-            and not any(
-                path == made or PurePosixPath(made) in PurePosixPath(path).parents
-                or fnmatch.fnmatchcase(path, made)
-                for made in produced
-            )
+            and not any(paths_touch(path, made) or fnmatch.fnmatchcase(path, made) for made in produced)
         ]
         if lacking:
-            missing.append(f"step {step.step_id!r} consumes {lacking}")
+            missing.append(f"step {step_id!r} consumes {lacking}")
         produced.extend(str(path) for path in step.produces)
     if missing:
         raise TutorialRecordError(
