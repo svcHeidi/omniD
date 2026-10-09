@@ -117,8 +117,24 @@ class _Run:
     artifact: DataArtifact
     reader: Any | None
     points: Mapping[str, Point]
-    max_offset: float | None
+    max_offset: float | Mapping[str, float] | None
     evidence: dict[str, str] | None
+
+
+def _refuse_constant(constant: str) -> Any:
+    raise ValueError(f"{constant} is not valid JSON")
+
+
+def _non_finite(node: Any, path: str = "") -> str | None:
+    """The JSON path of the first number in ``node`` that is not finite, else ``None``."""
+    if isinstance(node, float) and not math.isfinite(node):
+        return path or "<root>"
+    children = node.items() if isinstance(node, Mapping) else enumerate(node) if isinstance(node, list) else ()
+    for key, child in children:
+        found = _non_finite(child, f"{path}/{key}")
+        if found is not None:
+            return found
+    return None
 
 
 def _resolve(base: Path, raw: str) -> Path:
@@ -192,8 +208,9 @@ def _artifact(name: str, document: Mapping[str, Any], artifact_id: str) -> DataA
     )
 
 
-def _points(name: str, raw: Mapping[str, Any], reader: Any, names: tuple[str, ...]) -> tuple[Mapping[str, Point], float | None]:
-    """``points`` is where to sample when ``reader.takes_points``, else an expected location checked against ``sampled_at``; both need ``max_sampling_offset``."""
+def _points(name: str, raw: Mapping[str, Any], reader: Any, names: tuple[str, ...]
+            ) -> tuple[Mapping[str, Point], float | Mapping[str, float] | None]:
+    """``points`` is where to sample when ``reader.takes_points``, else an expected location checked against ``sampled_at``; the schema pairs it with ``max_sampling_offset``, one number or one per point."""
     supplied = raw.get("points")
     if reader.takes_points and supplied is None:
         raise QuantityComparisonError(f"run {name!r}: this artifact's reader samples at supplied points; give 'points' for {list(names)}")
@@ -201,15 +218,20 @@ def _points(name: str, raw: Mapping[str, Any], reader: Any, names: tuple[str, ..
         return {}, None
     if set(supplied["at"]) != set(names):
         raise QuantityComparisonError(f"run {name!r}: points are given for {sorted(supplied['at'])}, but its pairs use {sorted(names)}")
-    offset = raw.get("max_sampling_offset")
-    if offset is None:
+    offset = raw["max_sampling_offset"]
+    if isinstance(offset, Mapping) and set(offset) != set(supplied["at"]):
+        missing, extra = sorted(set(supplied["at"]) - set(offset)), sorted(set(offset) - set(supplied["at"]))
         raise QuantityComparisonError(
-            f"run {name!r}: 'points' is given without 'max_sampling_offset'; a location check must be pre-registered before any read"
+            f"run {name!r}: 'max_sampling_offset' is given for {sorted(offset)}, but its points are {sorted(supplied['at'])}"
+            + (f"; missing {missing}" if missing else "") + (f"; not points {extra}" if extra else "")
         )
+
+    def to_reader(value: Any) -> float:
+        return convert(float(value), supplied["unit"], reader.coordinate_unit)
+
     try:
-        points = {label: tuple(convert(float(v), supplied["unit"], reader.coordinate_unit) for v in xyz)
-                  for label, xyz in supplied["at"].items()}
-        max_offset = convert(float(offset), supplied["unit"], reader.coordinate_unit)
+        points = {label: tuple(to_reader(v) for v in xyz) for label, xyz in supplied["at"].items()}
+        max_offset = {label: to_reader(b) for label, b in offset.items()} if isinstance(offset, Mapping) else to_reader(offset)
     except QuantityError as exc:
         raise QuantityComparisonError(f"run {name!r}: {exc}") from exc
     return points, max_offset
@@ -350,6 +372,10 @@ def _side(run: _Run, quantity: Quantity, unit: str) -> dict[str, Any]:
     }
 
 
+def _bound(run: _Run, name: str) -> float:
+    return run.max_offset[name] if isinstance(run.max_offset, Mapping) else run.max_offset
+
+
 def _metric(pair: _Pair, runs: Mapping[str, _Run], quantities: Mapping[str, Mapping[str, Quantity]],
             reference: PointReference) -> dict[str, Any]:
     unit = reference.quantity_unit
@@ -357,7 +383,7 @@ def _metric(pair: _Pair, runs: Mapping[str, _Run], quantities: Mapping[str, Mapp
     left_q, right_q = quantities[pair.left_run][pair.left_quantity], quantities[pair.right_run][pair.right_quantity]
     status, difference, bound = compare_pair(left_q, right_q, unit=unit, tolerance=pair.tolerance)
     left, right = _side(left_run, left_q, unit), _side(right_run, right_q, unit)
-    if any(run.max_offset is not None and side["sampling_offset"] is not None and side["sampling_offset"] > run.max_offset
+    if any(side["sampling_offset"] is not None and side["sampling_offset"] > _bound(run, side["quantity"])
            for run, side in ((left_run, left), (right_run, right))):
         status = "sampled_off_point"  # location is checked before value
     return {
@@ -433,9 +459,12 @@ def run_quantity_comparison(request_path: str | Path, report_path: str | Path) -
         )
     try:
         raw_bytes = request_path.read_bytes()
-        request = json.loads(raw_bytes)
-    except (OSError, json.JSONDecodeError) as exc:
+        request = json.loads(raw_bytes, parse_constant=_refuse_constant)
+    except (OSError, ValueError) as exc:
         raise QuantityComparisonError(f"cannot read the comparison request {request_path}: {exc}") from exc
+    where = _non_finite(request)
+    if where is not None:
+        raise QuantityComparisonError(f"cannot read the comparison request {request_path}: {where} is not a finite number")
     schema_problems = schema_errors(request, _REQUEST_SCHEMA)
     if schema_problems:
         raise QuantityComparisonError(*(f"not a comparison request ({request_path}): {problem}" for problem in schema_problems))

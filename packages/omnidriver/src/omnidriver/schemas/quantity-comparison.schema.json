@@ -33,13 +33,14 @@
     "run": {
       "type": "object", "additionalProperties": false,
       "required": ["plugin", "sweep_output", "case_id", "artifact_id"],
+      "dependentRequired": {"max_sampling_offset": ["points"], "points": ["max_sampling_offset"]},
       "properties": {
         "plugin": {"type": "string", "minLength": 1},
         "sweep_output": {"type": "string", "minLength": 1},
         "case_id": {"type": "string", "minLength": 1},
         "artifact_id": {"type": "string", "minLength": 1},
         "points": {
-          "description": "Two meanings, by the artifact's reader. For a reader that takes points (samples at supplied locations): where to sample, in this run's own frame and unit -- the reader receives them. For a reader that samples where it chooses: the agent's *expected* location of each named quantity, in this run's own frame and unit -- the reader never receives them; the comparison checks each sample's reported sampled_at against its expected point instead. Either meaning requires 'max_sampling_offset' (refused by name, before any read, if it is missing).",
+          "description": "Two meanings, by the artifact's reader. For a reader that takes points (samples at supplied locations): where to sample, in this run's own frame and unit -- the reader receives them. For a reader that samples where it chooses: the agent's *expected* location of each named quantity, in this run's own frame and unit -- the reader never receives them; the comparison checks each sample's reported sampled_at against its expected point instead. Either meaning requires 'max_sampling_offset' (refused by the schema, before any read, if it is missing).",
           "type": "object", "additionalProperties": false, "required": ["unit", "at"],
           "properties": {
             "unit": {"type": "string", "minLength": 1},
@@ -49,8 +50,11 @@
           }
         },
         "max_sampling_offset": {
-          "description": "Required whenever 'points' is given (either meaning above); pre-registered, no default.",
-          "type": "number", "minimum": 0
+          "description": "Given exactly when 'points' is (either meaning above); pre-registered, no default, in the unit of 'points'. A number bounds every point; an object bounds each point on its own and must name exactly the points of 'points.at'.",
+          "oneOf": [
+            {"type": "number", "minimum": 0},
+            {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}}
+          ]
         }
       }
     },

@@ -159,9 +159,7 @@ def test_a_report_is_written_once(tmp_path):
     (lambda runs, pairs: pairs.append(_pair("A", "one", "one")), "itself"),
     (lambda runs, pairs: runs["one"].update(case_id="nine"), "'nine'"),
     (lambda runs, pairs: runs["one"].update(artifact_id="record.solve.7"), "record.solve.7"),
-    # A self-sampling reader (takes_points is false) accepts 'points' as an
-    # expected location, so this fails on the missing 'max_sampling_offset',
-    # not on "takes no points".
+    # The schema pairs 'points' with 'max_sampling_offset' before any read.
     (lambda runs, pairs: runs["one"].update(points={"unit": "m", "at": {"a": [0, 0, 0]}}), "max_sampling_offset"),
     (lambda runs, pairs: runs.update(spare=dict(runs["one"])), "'spare'.*no pair"),
 ])
@@ -350,6 +348,56 @@ def test_points_are_converted_to_the_reader_unit_and_an_off_point_sample_fails(t
     assert report["runs"]["two"]["max_sampling_offset_unit"] == "mm"
 
 
+GRID_POINTS = {"unit": "m", "at": {"a": [0.0009, 0, 0], "b": [0.0009, 0, 0]}}
+
+
+def _grid_runs(tmp_path, one_offset, two_offset):
+    grid = "0 0 0 1.0\n1 0 0 2.0\n"
+    sweep = write_toy_sweep(tmp_path / "sweep", {"one": grid, "two": grid}, artifact_format=GRID_FORMAT)
+    return {"one": _run(sweep, "one", points=GRID_POINTS, max_sampling_offset=one_offset),
+            "two": _run(sweep, "two", points=GRID_POINTS, max_sampling_offset=two_offset)}
+
+
+def test_a_number_bound_applies_to_every_point(tmp_path):
+    runs = _grid_runs(tmp_path, 0.0002, 0.00005)
+    report = run_quantity_comparison(
+        _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")]), tmp_path / "report.json")
+    assert {m["status"] for m in report["metrics"]} == {"sampled_off_point"}
+    assert report["runs"]["two"]["max_sampling_offset"] == pytest.approx(0.05)
+
+
+def test_a_per_point_bound_applies_to_each_point_on_its_own(tmp_path):
+    runs = _grid_runs(tmp_path, 0.0002, {"a": 0.0002, "b": 0.00005})
+    report = run_quantity_comparison(
+        _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")]), tmp_path / "report.json")
+    by_label = {m["reference_label"]: m for m in report["metrics"]}
+    assert by_label["A"]["status"] == "within_tolerance"
+    assert by_label["B"]["status"] == "sampled_off_point"
+    assert report["runs"]["two"]["max_sampling_offset"] == {"a": pytest.approx(0.2), "b": pytest.approx(0.05)}
+    assert report["runs"]["two"]["max_sampling_offset_unit"] == "mm"
+
+
+@pytest.mark.parametrize(("bound", "match"), [
+    ({"a": 0.001}, "max_sampling_offset.*missing.*'b'"),
+    ({"a": 0.001, "b": 0.001, "c": 0.001}, "max_sampling_offset.*not points.*'c'"),
+])
+def test_a_per_point_bound_must_name_exactly_the_runs_points(tmp_path, bound, match):
+    runs = _grid_runs(tmp_path, 0.001, bound)
+    with pytest.raises(QuantityComparisonError, match=match):
+        run_quantity_comparison(
+            _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+@pytest.mark.parametrize("bound", [-0.001, "0.001", True, {"a": -1, "b": 0.001}, {"a": "x", "b": 0.001}, {}])
+def test_a_bound_that_is_not_a_non_negative_number_is_refused(tmp_path, bound):
+    runs = _grid_runs(tmp_path, 0.001, bound)
+    with pytest.raises(QuantityComparisonError):
+        run_quantity_comparison(
+            _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
 def test_a_points_taking_reader_without_points_is_refused(tmp_path):
     grid = "0 0 0 1.0\n1 0 0 2.0\n"
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": grid, "two": grid}, artifact_format=GRID_FORMAT)
@@ -363,7 +411,8 @@ def test_a_points_taking_reader_with_a_mismatched_label_set_is_refused(tmp_path)
     grid = "0 0 0 1.0\n1 0 0 2.0\n"
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": grid, "two": grid}, artifact_format=GRID_FORMAT)
     points = {"unit": "m", "at": {"not-a": [0, 0, 0]}}
-    runs = {"one": _run(sweep, "one", points=points), "two": _run(sweep, "two", points=points)}
+    runs = {"one": _run(sweep, "one", points=points, max_sampling_offset=0.001),
+            "two": _run(sweep, "two", points=points, max_sampling_offset=0.001)}
     with pytest.raises(QuantityComparisonError, match="points are given for"):
         run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
     assert not (tmp_path / "report.json").exists()
@@ -372,7 +421,7 @@ def test_a_points_taking_reader_with_a_mismatched_label_set_is_refused(tmp_path)
 def test_points_for_a_stack_with_no_reader_are_refused_before_any_read(tmp_path):
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, artifact_format="toy_unreadable_format")
     points = {"unit": "m", "at": {"a": [0, 0, 0]}}
-    runs = {"one": _run(sweep, "one", points=points), "two": _run(sweep, "two")}
+    runs = {"one": _run(sweep, "one", points=points, max_sampling_offset=0.001), "two": _run(sweep, "two")}
     with pytest.raises(QuantityComparisonError, match="no reader"):
         run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
     assert not (tmp_path / "report.json").exists()
@@ -380,7 +429,8 @@ def test_points_for_a_stack_with_no_reader_are_refused_before_any_read(tmp_path)
 
 def test_max_sampling_offset_for_a_stack_with_no_reader_is_also_refused(tmp_path):
     sweep = write_toy_sweep(tmp_path / "sweep", {"one": SAME, "two": SAME}, artifact_format="toy_unreadable_format")
-    runs = {"one": _run(sweep, "one", max_sampling_offset=0.001), "two": _run(sweep, "two")}
+    points = {"unit": "m", "at": {"a": [0, 0, 0]}}
+    runs = {"one": _run(sweep, "one", points=points, max_sampling_offset=0.001), "two": _run(sweep, "two")}
     with pytest.raises(QuantityComparisonError, match="no reader"):
         run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
     assert not (tmp_path / "report.json").exists()
@@ -423,6 +473,40 @@ def test_points_for_a_self_sampling_reader_without_max_sampling_offset_is_refuse
     with pytest.raises(QuantityComparisonError, match="max_sampling_offset"):
         run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")]),
                                 tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+@pytest.mark.parametrize("edit", [
+    lambda run: run.pop("points"),
+    lambda run: run.pop("max_sampling_offset"),
+])
+def test_points_and_max_sampling_offset_come_together(tmp_path, edit):
+    sweep, runs = _two_runs(tmp_path)
+    runs["one"].update(points={"unit": "m", "at": {"a": [0, 0, 0.007]}}, max_sampling_offset=0.001)
+    edit(runs["one"])
+    with pytest.raises(QuantityComparisonError, match="dependency|required"):
+        run_quantity_comparison(_request(tmp_path, runs, [_pair("A", "one", "two")]), tmp_path / "report.json")
+    assert not (tmp_path / "report.json").exists()
+
+
+@pytest.mark.parametrize(("where", "literal"), [
+    ("max_sampling_offset", "NaN"),
+    ("tolerance", "Infinity"),
+    ("coordinate", "1e400"),
+])
+def test_a_non_finite_number_in_the_request_is_refused_before_any_read(tmp_path, where, literal):
+    runs = _grid_runs(tmp_path, 0.0002, 0.0002)
+    request = _request(tmp_path, runs, [_pair("A", "one", "two"), _pair("B", "one", "two")])
+    document = json.loads(request.read_text())
+    if where == "max_sampling_offset":
+        document["runs"]["two"]["max_sampling_offset"] = "__X__"
+    elif where == "tolerance":
+        document["tolerance"]["value"] = "__X__"
+    else:
+        document["runs"]["two"]["points"]["at"]["a"][0] = "__X__"
+    request.write_text(json.dumps(document).replace('"__X__"', literal))
+    with pytest.raises(QuantityComparisonError, match="finite|non-finite|constant"):
+        run_quantity_comparison(request, tmp_path / "report.json")
     assert not (tmp_path / "report.json").exists()
 
 
