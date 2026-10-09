@@ -261,7 +261,28 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
 5. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the
    solver changed.
-6. **Later:**
+6. **TorchCor, the third solver** (`packages/omnidriver-torchcor`, branch
+   `feat/torchcor`; evidence `docs/solver-learning/torchcor.md` A-G). The case
+   and the runner live in `~/torchcor-cases` (local, no remote: the owner's
+   call), with TorchCor as a submodule at `b02daee` installed editable into its
+   own venv. `omnidriver check` of `nversion` on this Mac (CPU) passes C1-C12
+   and C14, C13 `not_applicable`. Open:
+   - core hands the key validator, the case rules and the key catalogue no
+     repository, so they read the runner through the supplied
+     `TORCHCOR_REPOSITORY`, which restates `--repo` (a mismatch is refused in
+     preflight). A repository on the `DriverContext` reaching those members
+     would remove the variable;
+   - F2-F5, F7, F8 of `torchcor.md` (float32 against float64 at dx 0.1, thread
+     and compile-cache determinism, dx 0.1 wall time, why P8 falls as dx is
+     refined, the library TTP's 0.005 ms, mesh portability across gmsh
+     versions);
+   - F6: whether `et = 0.2` in TorchCor's `verification/benchmark.py` is a typo,
+     a question for TorchCor's author;
+   - TorchCor and openCARP at dx 0.5 agree along the fibre (P3, P7 within
+     0.25 ms) and not across it: TorchCor's P2, P4, P6, P8 are 18-26 ms earlier
+     (`torchcor.md` G4). Why is open (F5);
+   - a GPU run (`device: cuda`), untested: no CUDA here.
+7. **Later:**
    - one run using cardiacCore and cardiacFOAM steps
      (`specs/2026-09-18-cross-adapter-workflow-design.md`);
    - more TOML records;
