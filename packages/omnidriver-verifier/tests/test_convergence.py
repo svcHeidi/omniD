@@ -86,3 +86,9 @@ def test_a_norm_the_problem_does_not_name_is_refused():
     result["levels"][0]["errors"]["phiE"] = {"L2": 1.0}
     with pytest.raises(ProblemError):
         comparison_table(problem, [result])
+
+
+def test_a_result_missing_its_levels_is_refused_by_name():
+    with pytest.raises(ProblemError) as caught:
+        comparison_table(load_problem("fda_monodomain"), [{"solver": "a", "problem": "fda_monodomain", "mesh": "hex"}])
+    assert caught.value.code == "results_invalid"

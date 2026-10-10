@@ -44,3 +44,27 @@ def test_an_unknown_problem_is_refused(capsys, argv):
 def test_a_usage_error_is_refused(capsys):
     code, answer = _run(capsys, "frobnicate")
     assert code == 1 and answer["code"] == "usage"
+
+
+def test_compare_tables_the_results_files(capsys, tmp_path):
+    problem = load_problem("fda_monodomain")
+    ladder = problem["refinement"]["hex"]
+    result = {
+        "solver": "toy", "problem": "fda_monodomain", "mesh": "hex", "stated": {"space": 2},
+        "levels": [{"dimension": 1, "cells_per_axis": n, "dt": dt, "steps": steps,
+                    "errors": {"V": {"L1": n**-2.0, "L2": n**-2.0, "Linf": n**-2.0}}}
+                   for n, dt, steps in zip(ladder["cells_per_axis"], ladder["dt"], ladder["steps"])],
+    }
+    path = tmp_path / "toy.json"
+    path.write_text(json.dumps(result))
+    code, answer = _run(capsys, "compare", "fda_monodomain", "--results", str(path))
+    assert code == 0 and answer["status"] == "ok"
+    [row] = answer["rows"]
+    assert row["solver"] == "toy" and row["least_squares_order"]["V"]["L2"] == pytest.approx(2)
+
+
+def test_compare_refuses_an_unreadable_results_file(capsys, tmp_path):
+    path = tmp_path / "broken.json"
+    path.write_text("{")
+    code, answer = _run(capsys, "compare", "fda_monodomain", "--results", str(path))
+    assert code == 1 and answer["code"] == "results_invalid" and str(path) in answer["error"]

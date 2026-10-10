@@ -82,6 +82,7 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
     fields, kinds = problem["norms"]["fields"], problem["norms"]["kinds"]
     rows = []
     for result in results:
+        _require("a result", result, ("solver", "problem", "mesh", "levels"))
         solver = result["solver"]
         if result["problem"] != problem["id"]:
             raise ProblemError(f"{solver}: a result of {result['problem']!r}, not {problem['id']!r}")
@@ -91,6 +92,7 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
         rungs = {cells: (dt, steps) for cells, dt, steps in zip(ladder["cells_per_axis"], ladder["dt"], ladder["steps"])}
         by_dimension: dict[int, list[Mapping[str, Any]]] = {}
         for level in result["levels"]:
+            _require(f"{solver}: a level", level, ("dimension", "cells_per_axis", "dt", "steps", "errors"))
             cells, d = level["cells_per_axis"], level["dimension"]
             if d not in problem["dimensions"] or rungs.get(cells) != (level["dt"], level["steps"]):
                 raise ProblemError(f"{solver}: level {d}D N={cells} dt={level['dt']} steps={level['steps']} is off "
@@ -122,6 +124,12 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
                                         for field in orders},
             })
     return {"status": "ok", "problem": problem["id"], "rows": rows}
+
+
+def _require(where: str, item: Any, keys: tuple[str, ...]) -> None:
+    missing = [key for key in keys if not isinstance(item, Mapping) or key not in item]
+    if missing:
+        raise ProblemError(f"{where} misses {missing}", code="results_invalid")
 
 
 def _eval(text: str, scope: Mapping[str, Any]) -> float:

@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Sequence
 
 from omnidriver.core.refusal import Refusal, RefusingParser, print_refusal
 
-from .problem import load_problem, problem_ids
+from .problem import ProblemError, load_problem, problem_ids
 
 
 def _parser() -> RefusingParser:
@@ -18,6 +19,10 @@ def _parser() -> RefusingParser:
         ("residual", "substitute a problem's exact fields into its equations (needs the symbolic extra)"),
     ):
         commands.add_parser(name, help=help_text).add_argument("problem_id")
+    compare = commands.add_parser("compare", help="table each solver's errors per level, with observed and stated orders")
+    compare.add_argument("problem_id")
+    compare.add_argument("--results", nargs="+", required=True, type=Path,
+                         help="one JSON per solver: solver, problem, mesh, stated, levels")
     return parser
 
 
@@ -31,9 +36,20 @@ def _answer(args: Any) -> dict[str, Any]:
     problem = load_problem(args.problem_id)
     if args.command == "show":
         return {"status": "ok", "problem": problem}
+    if args.command == "compare":
+        from .convergence import comparison_table
+
+        return comparison_table(problem, [_results(path) for path in args.results])
     from .residual import residual_verdict
 
     return residual_verdict(problem)
+
+
+def _results(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        raise ProblemError(f"{path}: not a readable results JSON ({exc})", code="results_invalid") from None
 
 
 def main(argv: Sequence[str] | None = None) -> int:
