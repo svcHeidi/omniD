@@ -25,18 +25,10 @@ def test_each_numerics_key_carries_its_attributes_on_every_entry_that_offers_its
         assert set(entry.menu_attributes) <= set(entry.enum_values)
 
 
-def test_the_time_orders_the_source_states_are_recorded_with_the_composition_rule_of_sbdf2():
-    assert TIME_COUPLING_SCHEME["godunov"]["formal_order"] == {"time": 1}
-    sbdf2 = TIME_COUPLING_SCHEME["sbdf2"]
-    assert sbdf2["formal_order"] == {"time": 2} and "ddt(Vm)" in sbdf2["composes"]
-    assert BATCHED_INTEGRATOR["euler"]["formal_order"] == {"time": 1}
-    assert "formal_order" not in BATCHED_INTEGRATOR["rushLarsen"]
-
-
 @pytest.mark.parametrize("key,attributes", [(key, attrs) for key, table in _KEYS.items() for attrs in table.values()])
 def test_a_claim_names_where_it_is_stated_and_is_not_settled(key, attributes):
     assert attributes["settled_by"] is None and attributes["stated_by"]
-    assert {source["kind"] for source in attributes["stated_by"]} <= {"source", "authors"}
+    assert {source["kind"] for source in attributes["stated_by"]} <= {"source", "inferred", "method"}
     assert all(isinstance(order, int) for order in attributes.get("formal_order", {}).values())
 
 
@@ -51,3 +43,12 @@ def test_a_quoted_line_of_the_source_is_in_the_file_it_names(key, source):
 def test_the_descriptions_state_no_order_the_data_now_carries():
     for entry, key in _ENTRIES:
         assert not re.search(r"first[- ]order|second[- ]order|forward-Euler", entry.description), entry.driver_path
+
+
+def test_an_order_no_author_states_is_labelled_as_omnids_inference():
+    sbdf2 = TIME_COUPLING_SCHEME["sbdf2"]
+    assert [s["claim"] for s in sbdf2["stated_by"] if s["kind"] == "inferred"] == ["formal_order"]
+    assert sbdf2["composes"]["kind"] == "inferred"
+    assert [s["file"] for s in TIME_COUPLING_SCHEME["godunov"]["stated_by"]] == [
+        "tutorials/manufacturedSolutions/bathBidomain/README.md",
+    ]

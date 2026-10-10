@@ -12,14 +12,16 @@ _SRC = "src/electroModels/"
 _DOMAIN = _SRC + "electroDomains/myocardiumDomain/"
 _MONODOMAIN = _SRC + "myocardiumModels/monodomainSolver/monodomainSolver.C"
 _BATCHED = "src/ionicModels/ionicModel/batchedIonicModel.H"
+_BATH_README = "tutorials/manufacturedSolutions/bathBidomain/README.md"
 
 
 def _source(file: str, excerpt: str, reading: str) -> dict[str, Any]:
     return {"kind": "source", "file": file, "excerpt": excerpt, "reading": reading}
 
 
-def _authors(ref: str) -> dict[str, Any]:
-    return {"kind": "authors", "ref": ref}
+def _inferred(claim: str, reading: str) -> dict[str, Any]:
+    """omniD's own inference from the quoted sources, never a statement of the authors."""
+    return {"kind": "inferred", "claim": claim, "reading": reading}
 
 
 def _claim(stated_by: list[dict[str, Any]], **attributes: Any) -> dict[str, Any]:
@@ -28,7 +30,11 @@ def _claim(stated_by: list[dict[str, Any]], **attributes: Any) -> dict[str, Any]
 
 TIME_COUPLING_SCHEME: Final = {
     "godunov": _claim(
-        [_authors("cardiacFOAM's description of timeCouplingScheme: godunov is first-order Lie splitting")],
+        [_source(
+            _BATH_README, "explicit first-order `godunov` (Lie splitting)",
+            "the authors state godunov as an explicit first-order Lie splitting, in the README of the bath bidomain "
+            "manufactured-solution tutorial",
+        )],
         formal_order={"time": 1},
     ),
     "sbdf2": _claim(
@@ -46,7 +52,11 @@ TIME_COUPLING_SCHEME: Final = {
                 "monodomainSolver::solveDiffusionImplicit solves fvm::ddt(Vm) against this extrapolated ionic current, so the "
                 "step's time order is also bounded by the order of the ddt(Vm) scheme of fvSchemes",
             ),
-            _authors("cardiacFOAM's description of timeCouplingScheme: sbdf2 is second-order semi-implicit backward differentiation"),
+            _inferred(
+                "formal_order",
+                "the source names the extrapolation and the couplings second-order, not the scheme; the second order of "
+                "the scheme is omniD's inference from them",
+            ),
         ],
         formal_order={"time": 2},
         conditions=[
@@ -54,7 +64,11 @@ TIME_COUPLING_SCHEME: Final = {
             "ionic current at the current state",
             "the ionic model must support both Vm-rate coupling and ionic-current evaluation, or the run stops",
         ],
-        composes="the time order of the step is the lower of this one and the order of the ddt(Vm) scheme in fvSchemes",
+        composes={
+            "kind": "inferred",
+            "reads": ["ddtSchemes"],
+            "statement": "the time order of the step is bounded by the order of the ddt(Vm) scheme in fvSchemes",
+        },
     ),
 }
 
@@ -70,7 +84,6 @@ SOLUTION_ALGORITHM: Final = {
                 _DOMAIN + "myocardiumDomain.C", "explicit stability limit",
                 "applyModelTimeControls caps deltaT at suggestExplicitDeltaT(maxCo) when the explicit algorithm is used",
             ),
-            _authors("cardiacFOAM's description of solutionAlgorithm: an operator-split forward-Euler diffusion step"),
         ],
         stability={"deltaT": "capped at suggestExplicitDeltaT(maxCo); maxCo is read from controlDict, default 0.1"},
     ),
@@ -81,7 +94,6 @@ SOLUTION_ALGORITHM: Final = {
                 "monodomainSolver::solveDiffusionImplicit solves the diffusion term implicitly against fvm::ddt(Vm), "
                 "whose scheme is the ddt(Vm) scheme of fvSchemes",
             ),
-            _authors("cardiacFOAM's description of solutionAlgorithm: a pimple-controlled implicit solve"),
         ],
     ),
 }
