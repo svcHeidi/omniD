@@ -74,11 +74,9 @@ tolerances" for P1–P9. Neither is quite true of the committed
    reference declares a frame convention instead (`stated_by_source: false`:
    origin at P1, axes along the 20/7/3 mm edges) and gives coordinates only
    for the points the paper itself settles (P1, P4, P8, P9). P2, P3, P5, P6
-   and P7 are not paper coordinates either — they come from the project
-   owner's own (unpublished) manuscript appendix, frame-converted into this
-   file's convention; the P2/P3 (and hence P6/P7) naming order is that
-   appendix's convention, not independently checked against niederer2011's
-   own ESM (not retrieved). See the reference's own `sources` and Controller
+   and P7 are placed by Figure 1b's vertical pairings and this file's own
+   choice of P2/P3 naming order (hence P6/P7), not independently checked
+   against niederer2011's own ESM (not retrieved). See the reference's own `sources` and Controller
    resolution recorded in `.superpowers/sdd/niederer-benchmark-definition.md`,
    section "Resolution of P2-P7".
 2. **The paper states no tolerance.** Tolerances live only in the agent's

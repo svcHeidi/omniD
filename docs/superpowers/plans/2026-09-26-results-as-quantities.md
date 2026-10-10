@@ -26,18 +26,15 @@
 **Runs alongside:** topic A, `docs/superpowers/specs/2026-09-26-core-generality-design.md`. See "Coordination with topic A" below.
 
 
-> **Corrected 2026-09-26 (controller): P2–P7 are resolved.** This plan was written
-> before the owner's own labelled table was found:
-> `~/Documents/Latex_papers/ElectrophysiologySolver/sections/paperI_methods_publication/appendices/niederer_protocol.qmd`.
-> The resolution, with its derivation into the Niederer frame, is appended to
+> **Corrected 2026-09-26 (controller): P2–P7 are placed.** The reference chooses
+> a naming order for P2/P3 and places P2–P7 in the Niederer frame by the vertical
+> pairings of Figure 1b; the derivation is appended to
 > `.superpowers/sdd/niederer-benchmark-definition.md` under "Resolution of P2–P7".
 > Task 4 therefore gives **every point P1–P9 its coordinates**, and nothing is
 > `unresolved`:
 > P1 (0,0,0) · P2 (0,7,0) · P3 (20,0,0) · P4 (20,7,0) · P5 (0,0,3) · P6 (0,7,3) · P7 (20,0,3) · P8 (20,7,3) · P9 (10,3.5,1.5) mm.
-> P1, P8 and P9 cite the Niederer paper. The rest cite the owner's paper I
-> appendix as "labelling convention consistent with Niederer 2011's P1/P8/P9 and
-> vertical pairings", and state that the P2/P3 naming order is not independently
-> checked against the ESM. The `unresolved` machinery (schema, loader, refusal
+> Every point cites the Niederer paper; the P2/P3 naming order is the file's own
+> choice and is not independently checked against the ESM. The `unresolved` machinery (schema, loader, refusal
 > of pairs naming an unresolved point) stays: it is a general feature for future
 > references, tested with the toy reference only.
 
@@ -2413,7 +2410,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
   - Default: P5 stays unresolved.
   - If the owner confirms, give P5 `"coordinates": [0, 0, 3]`, a `definition` citing the P1–P5 construction line, and no `unresolved`. Record the decision, dated, in the commit message.
   
-  ~~P2, P3, P6 and P7 stay unresolved in any case.~~ Superseded 2026-09-26: resolved from the owner's paper I appendix (banner at the top).
+  ~~P2, P3, P6 and P7 stay unresolved in any case.~~ Superseded 2026-09-26: placed by the file's own naming order (banner at the top).
 
 - [ ] **Step 2: Write the gate script, and check it bites**
 

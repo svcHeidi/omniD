@@ -290,8 +290,7 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      against native main until that merge. omniD's strict plan refuses a `-setnumber` name a template does not declare;
    - cardiacFOAM with `gradSchemes Gauss linear` does not converge on gmsh tets
      (FDA and rotated problems alike); the tutorial's base case uses `leastSquares`
-     and converges at second order. The paper's `fullMatrix` cases set Gauss linear on hex,
-     which converges there. Whether a tet case should refuse or note `Gauss linear` is open;
+     and converges at second order. On hex, Gauss linear converges. Whether a tet case should refuse or note `Gauss linear` is open;
    - openCARP's generated RK4 blocks read an uninitialised `t` (`GlobalData_t t = t + dt/2;`),
      harmless unless a rate names `t`; with N and O's defects, whether to report them upstream.
 5. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).

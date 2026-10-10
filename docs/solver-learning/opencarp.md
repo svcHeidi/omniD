@@ -390,7 +390,7 @@ defect upstream is the owner's call (`docs/superpowers/ROADMAP.md` §5).
 ## O. The time order, FDA manufactured monodomain (2026-10-10)
 
 The temporal ladder of `fda_monodomain` (`refinement.temporal`: N = 640 fixed,
-dt 0.025 halved to 0.0015625, the owner's paper matrix), against cardiacFOAM
+dt 0.025 halved to 0.0015625), against cardiacFOAM
 (`cardiacfoam.md` AC). The generated model, mapping and meshes are N's hex
 run's, unchanged (`cell_model_verdict` passed; the `.model`, `.cc` and `.h`
 are byte-identical to it); the cell model integrates with `.method(rk4)`, so
