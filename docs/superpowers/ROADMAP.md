@@ -309,3 +309,7 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
        mapping (`purkinjeFibreRadius` required; `verificationModel.type none`);
      - `tetNumberCells`' description says "unit cube", but bathBidomain's mesh
        is three unit boxes.
+     - 109 refusal sites in `tutorial_records.py` and `record_execution.py` still
+       report `unclassified`; name a code for each as an agent meets it;
+     - openCARP's conformance offset unit resolves only with `--benchmarks`;
+       `describe` reports `null` without it.
