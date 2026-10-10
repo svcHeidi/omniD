@@ -86,6 +86,9 @@ def observed_orders(spacings: Sequence[float], errors: Sequence[float]) -> dict[
 def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Per solver and dimension, each level's errors, evaluation time (``steps*dt``) and observed order against
     the previous level, the least-squares order over the levels, and the solver's stated orders as it gave them.
+    Orders are fitted against the box edge over N (the ladder's label) unless every level of a dimension carries a
+    ``mesh_size`` (a mesh-measured length such as the mean edge, in the problem's units), which is then used and
+    named in the row's ``spacing``.
 
     Each result is ``{"solver", "problem", "mesh", "stated", "levels": [{"dimension", "cells_per_axis", "dt",
     "steps", "errors": {field: {kind: value}}}]}``. :class:`ProblemError` for a result of another problem, a mesh
@@ -124,12 +127,17 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
                 raise ProblemError(f"{solver}: {d}D field(s) {partial} are given at only some of the levels",
                                    code="results_invalid")
             edge = problem["domain"]["box"][0][1] - problem["domain"]["box"][0][0]
-            spacings = [edge / level["cells_per_axis"] for level in levels]
+            measured = [level.get("mesh_size") for level in levels]
+            if any(size is not None for size in measured) and any(size is None for size in measured):
+                raise ProblemError(f"{solver}: {d}D mesh_size is given at only some of the levels",
+                                   code="results_invalid")
+            spacings = [edge / level["cells_per_axis"] for level in levels] if measured[0] is None else measured
             orders = {field: {kind: observed_orders(spacings, [level["errors"][field][kind] for level in levels])
                               for kind in kinds}
                       for field in fields if field in levels[0]["errors"]}
             rows.append({
                 "solver": solver, "dimension": d, "mesh": result["mesh"], "stated": result.get("stated"),
+                "spacing": "edge_over_n" if measured[0] is None else "mesh_size",
                 "levels": [
                     {"cells_per_axis": level["cells_per_axis"], "h": h, "dt": level["dt"], "steps": level["steps"],
                      "time": level["steps"] * level["dt"], "errors": level["errors"],
