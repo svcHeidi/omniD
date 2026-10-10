@@ -83,3 +83,10 @@ def test_a_parameter_the_equation_names_is_required():
     problem = _shipped()
     del problem["parameters"]["chi"]
     assert "chi" in _refused(problem)
+
+
+@pytest.mark.parametrize(("key", "value"), [("use", "average"), ("tolerance", 0), ("tolerance_reason", "")])
+def test_a_derived_constant_states_which_value_a_solver_uses_and_its_tolerance(key, value):
+    problem = _shipped()
+    problem["derived"]["Beta"][key] = value
+    assert f"derived.Beta.{key}" in _refused(problem)

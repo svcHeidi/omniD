@@ -17,7 +17,8 @@ class SymbolicUnavailable(Refusal):
 def residual_verdict(problem: Mapping[str, Any]) -> dict[str, Any]:
     """Per dimension, the simplified residual of the equation and of each state's ODE (``"0"`` when the exact
     fields solve them), the source the data implies beside the one it declares, the normal derivative of the exact
-    potential on each face, and each derived constant beside the literal the native code uses."""
+    potential on each face, and each derived constant beside the native literal: a dimension fails when the two
+    differ by more than the tolerance the data states."""
     try:
         import sympy
     except ImportError:
@@ -53,7 +54,12 @@ def _dimension(sympy: Any, problem: Mapping[str, Any], d: int) -> dict[str, Any]
         names[name] = parse(entry["expression"][key])
         value = float(names[name].evalf(17))
         native = entry["native"][key]
-        derived[name] = {"value": value, "native": native, "difference": native - value}
+        difference = native - value
+        derived[name] = {
+            "status": "passed" if abs(difference) <= entry["tolerance"] else "failed",
+            "value": value, "native": native, "difference": difference, "tolerance": entry["tolerance"],
+            "use": entry["use"],
+        }
     for name, by_dimension in problem["fields"].items():
         names[name] = parse(by_dimension[key])
     exact = {name: parse(text) for name, text in problem["exact"].items()}
@@ -79,7 +85,8 @@ def _dimension(sympy: Any, problem: Mapping[str, Any], d: int) -> dict[str, Any]
         f"{x.name}={side}": _simplified(sympy, sympy.diff(potential, x).subs(x, sympy.Rational(str(side))))
         for x, sides in zip(space, problem["domain"]["box"]) for side in sides
     }
-    passed = all(value == "0" for value in (*residuals.values(), *boundary.values()))
+    passed = all(value == "0" for value in (*residuals.values(), *boundary.values())) and all(
+        entry["status"] == "passed" for entry in derived.values())
     return {
         "dimension": d,
         "status": "passed" if passed else "failed",

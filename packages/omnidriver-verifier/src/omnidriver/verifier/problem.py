@@ -13,6 +13,8 @@ EQUATIONS: dict[str, tuple[str, ...]] = {"monodomain": ("Cm", "chi", "sigma_xx",
 BOUNDARY_KINDS = ("zero_normal_gradient",)
 INITIAL_KINDS = ("exact",)
 MESH_KINDS = ("hex",)
+#: Which value of a derived constant a solver is given: the native literal, or the value derived from the data.
+DERIVED_USES = ("native", "derived")
 
 FUNCTIONS = frozenset({"sqrt", "cos", "sin", "exp", "log"})
 CONSTANTS = frozenset({"pi"})
@@ -28,6 +30,7 @@ _BLOCKS: dict[str, frozenset[str] | None] = {
     "refinement": None, "norms": frozenset({"fields", "kinds", "points", "weight", "normalised_by", "at"}),
     "provenance": None,
 }
+_DERIVED_KEYS = frozenset({"expression", "native", "use", "use_reason", "tolerance", "tolerance_reason"})
 _TRACED = ("equation", "domain", "time", "parameters", "derived", "fields", "exact", "cell_model", "source",
            "boundary", "initial", "refinement", "norms")
 _ALLOWED_NODES = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Call, ast.Name, ast.Load, ast.Constant,
@@ -85,9 +88,16 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
     space = SPACE[:max(dimensions)]
     derived = _table("derived", problem["derived"])
     for name, entry in derived.items():
-        _keys(f"derived.{name}.", _table(f"derived.{name}", entry), frozenset({"expression", "native"}), required=True)
+        _keys(f"derived.{name}.", _table(f"derived.{name}", entry), _DERIVED_KEYS, required=True)
         _per_dimension(f"derived.{name}.expression", entry["expression"], dimensions, parameters)
         _per_dimension(f"derived.{name}.native", entry["native"], dimensions, None)
+        _menu(f"derived.{name}.use", entry["use"], DERIVED_USES)
+        tolerance = entry["tolerance"]
+        if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)) or tolerance <= 0:
+            raise ProblemError(f"derived.{name}.tolerance: {tolerance!r} is not a positive number")
+        for reason in ("use_reason", "tolerance_reason"):
+            if not isinstance(entry[reason], str) or not entry[reason]:
+                raise ProblemError(f"derived.{name}.{reason}: states no reason")
     fields = _table("fields", problem["fields"])
     for name, by_dimension in fields.items():
         _per_dimension(f"fields.{name}", by_dimension, dimensions, {*space, *parameters})

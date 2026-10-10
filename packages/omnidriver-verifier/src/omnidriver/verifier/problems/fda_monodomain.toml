@@ -32,6 +32,10 @@ sigma_zz = 0.030396355
 [derived.Beta]
 expression = { 1 = "-pi**2*sigma_xx", 2 = "-pi**2*(sigma_xx + 4*sigma_yy)", 3 = "-pi**2*(sigma_xx + 4*sigma_yy + 9*sigma_zz)" }
 native = { 1 = -1.1, 2 = -5.9, 3 = -8.6 }
+use = "native"
+use_reason = "cardiacFOAM computes with the native literal; a solver given the same literal solves the same continuous problem, so a cross-solver difference carries no Beta term"
+tolerance = 1e-6
+tolerance_reason = "43 times the largest measured |native - derived| (1D -6.5e-11, 2D -1.5e-8, 3D -2.3e-8, from sigma's nine significant digits); a Beta off by 1e-6 adds the source 1e-6*(V - u3), which moves V by at most 1e-6*(end - start)*max|V|/(chi*Cm) = 3.7e-8, three orders under the finest measured discretisation error (openCARP 1D, N = 160: L2 4.39e-5); a six-digit sigma (3D: 1.6e-5) or a wrong sigma entry fails"
 
 [fields]
 F = { 1 = "cos(pi*x)", 2 = "cos(pi*x)*cos(2*pi*y)", 3 = "cos(pi*x)*cos(2*pi*y)*cos(3*pi*z)" }
