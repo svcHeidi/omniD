@@ -47,6 +47,24 @@ the automation across codes.
 | cardiacFOAM | FV, hex and tet, OpenFOAM-based | no; its first verification is part of the contribution | the FV code this work develops |
 | MonoAlg3D | FV, structured, GPU | yes | a published FV code, so the FV side does not rest on cardiacFOAM alone (owner, 2026-10-10) |
 
+**Scope, owner 2026-10-10:**
+- Paper 1 is **monodomain only**: the full monodomain set (1D, 2D, 3D) on all four solvers.
+- The **pseudo-ECG** manufactured problem is added if the other solvers can carry it. cardiacFOAM's `monodomainPseudoECG` uses a full anisotropic tensor, so each solver must support full-tensor conductivity and pseudo-ECG output.
+- Bidomain and bath come later. Only openCARP and cardiacFOAM have bidomain.
+
+**How problems reach each solver**
+(`docs/superpowers/reports/mms-injection-2026-10-10/`):
+- Each problem is defined once, as data, transcribed from cardiacFOAM's
+  `*FDAManufactured` models. A `Beta·(V−u3)/χ` term cancels diffusion, so no
+  source term is needed.
+- Each plugin generates its own injection from that definition.
+- Probed so far: openCARP and TorchCor reach order ≈ 2 on monodomain with no
+  solver change. MonoAlg3D builds on CPU here; its injection (a C model plus
+  an extra-data plugin) is designed but not yet run.
+- For monodomain, cardiacFOAM's σ matches the hard-coded Beta to about 10
+  digits, so there is no error floor. The bidomain tutorial's 6-digit σ
+  leaves a floor of about 1.6e-5·V, deferred with bidomain.
+
 **Layers, in the verifier's order:**
 1. **Model parity:** do the solvers implement the same equations, terms and
    definitions? This draws on the verified variable mappings
