@@ -266,6 +266,10 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - on the bath-bidomain branch only: its reaction/diffusion split skips the
      SBDF2 `VmRate` and `Iion` refresh that `advance()` does, so bath with SBDF2
      differs from the normal advance.
+   - `purkinjeFibreRadius`: the catalogue follows native main, where it is required
+     once a coupling is bidirectional. Native `60f4cb597` (on `omnid/*` branches,
+     not on main) makes it `lookupOrDefault` 2e-5 m; the catalogue entry follows
+     once the owner merges it.
 4a. **Verifier findings, owner's calls** (2026-10-10, `cardiacfoam.md` AB,
    `opencarp.md` N):
    - restore `dt_values` in `sweep_hex_convergence.json` on
