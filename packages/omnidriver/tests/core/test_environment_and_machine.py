@@ -78,6 +78,33 @@ def test_a_manifest_names_only_supplied_variables(tmp_path):
         load_plugin_profile(profile)
 
 
+def _keeps_profile(tmp_path: Path, item: str):
+    profile = tmp_path / "plugin.yaml"
+    profile.write_text(
+        "schema_version: 1\nplugin: {id: toy, api_version: '3'}\nenvironment:\n  supplied:\n"
+        f"    - {{name: TOY_LIBS, required: false, why: after the source{item}}}\n"
+    )
+    return profile
+
+
+def test_a_manifest_declares_the_variable_a_supplied_one_keeps(tmp_path):
+    (variable,) = load_plugin_profile(_keeps_profile(tmp_path, ", keeps: TOY_OWN_LIBS")).environment.supplied
+    assert variable.keeps == "TOY_OWN_LIBS"
+    (variable,) = load_plugin_profile(_keeps_profile(tmp_path, "")).environment.supplied
+    assert variable.keeps is None
+
+
+@pytest.mark.parametrize("keeps", ["1LIBS", "A-B", "A B", "ÄLIBS", "''", "[A]", "7"])
+def test_a_keeps_that_is_not_a_bash_variable_name_is_refused_by_name(tmp_path, keeps):
+    with pytest.raises(ValueError, match=r"supplied\[0\]\.keeps must be a variable name"):
+        load_plugin_profile(_keeps_profile(tmp_path, f", keeps: {keeps}"))
+
+
+def test_a_misspelt_key_of_a_supplied_variable_is_refused_by_name(tmp_path):
+    with pytest.raises(ValueError, match=r"supplied\[0\] has unknown keys \['keep'\]"):
+        load_plugin_profile(_keeps_profile(tmp_path, ", keep: TOY_OWN_LIBS"))
+
+
 class _Provider:
     def __init__(self, connection, cxx_mapping=None):
         self._profile = SimpleNamespace(environment=connection, cxx_mapping=cxx_mapping, plugin_id="toy")

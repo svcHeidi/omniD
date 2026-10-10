@@ -7,6 +7,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -174,6 +175,10 @@ def is_replica_directory_name(name: str, globs: tuple[str, ...]) -> bool:
     return any(fnmatch.fnmatchcase(name, pattern) for pattern in globs)
 
 
+# A name bash can expand as ${NAME}: ASCII, unlike str.isidentifier.
+_BASH_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
 def _environment_connection(profile_path: Path, raw: Any) -> EnvironmentConnection | None:
     if raw is None:
         return None
@@ -194,8 +199,11 @@ def _environment_connection(profile_path: Path, raw: Any) -> EnvironmentConnecti
                 profile_path,
                 f"environment.supplied[{index}] needs a name, a boolean 'required' and a 'why'",
             )
+        unknown_item = sorted(set(item) - {"name", "required", "why", "keeps"})
+        if unknown_item:
+            raise _mapping_error(profile_path, f"environment.supplied[{index}] has unknown keys {unknown_item}")
         keeps = item.get("keeps")
-        if keeps is not None and not (isinstance(keeps, str) and keeps.isidentifier()):
+        if keeps is not None and not (isinstance(keeps, str) and _BASH_NAME.fullmatch(keeps)):
             raise _mapping_error(profile_path, f"environment.supplied[{index}].keeps must be a variable name")
         supplied.append(SuppliedVariable(item["name"], item["required"], item["why"], keeps=keeps))
     names = {item.name for item in supplied}
