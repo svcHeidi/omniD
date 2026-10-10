@@ -200,3 +200,21 @@ def test_string_value_kind_K6():
     assert dictionary.validate_value_shape("string", "") == ()
     assert dictionary.validate_value_shape("string", "two words") == ()
     assert dictionary.validate_value_shape("string", 3) == ("must be a string",)
+
+
+def test_a_menu_value_may_carry_attributes_core_does_not_read():
+    entry = dictionary.DictEntry(
+        driver_path="$A.x", description="", value_kind="enum", enum_values=("a", "b"),
+        menu_attributes={"a": {"anything": [1, {"nested": True}]}},
+    )
+    assert entry.menu_attributes["a"]["anything"][0] == 1
+
+
+def test_attributes_on_a_value_outside_the_menu_are_refused_by_name():
+    with pytest.raises(ValueError, match=r"'\$A.x'.*menu_attributes.*'c'"):
+        dictionary.DictEntry(
+            driver_path="$A.x", description="", value_kind="enum", enum_values=("a", "b"),
+            menu_attributes={"a": {}, "c": {}},
+        )
+    with pytest.raises(ValueError, match="menu_attributes"):
+        dictionary.DictEntry(driver_path="$A.x", description="", value_kind="word", menu_attributes={"a": {}})

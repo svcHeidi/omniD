@@ -70,6 +70,7 @@ def listed_entry(document: str, key: str, entry: Any) -> dict[str, Any]:
         "required_one_of": list(entry.required_one_of),
         "default": entry.default,
         "allowed_bindings": {name: None if domain is None else list(domain) for name, domain in entry.allowed_bindings.items()},
+        "menu_attributes": {value: dict(attributes) for value, attributes in entry.menu_attributes.items()},
         "constraints": list(entry.constraints),
         "examples": list(entry.examples),
         "notes": entry.notes,

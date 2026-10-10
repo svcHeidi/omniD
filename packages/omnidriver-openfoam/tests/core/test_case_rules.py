@@ -219,3 +219,11 @@ def test_only_a_relation_on_a_selector_key_is_judged_against_the_selectors():
     )
     assert [e.driver_path for e in kept] == ["a", "c", "f"]
     assert applicable_given([gated_on_other_solver], {}) == [gated_on_other_solver]
+
+
+def test_a_listing_carries_the_attributes_of_menu_values():
+    from omnidriver.openfoam.record_key_validation import listed_entry
+
+    entry = _entry("$S.scheme", value_kind="enum", enum_values=("a", "b"), menu_attributes={"a": {"order": 2}})
+    assert listed_entry("system/dict", "scheme", entry)["menu_attributes"] == {"a": {"order": 2}}
+    assert "menu_attributes" not in listed_entry("system/dict", "scheme", _entry("$S.scheme"))
