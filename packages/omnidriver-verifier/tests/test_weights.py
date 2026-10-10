@@ -107,3 +107,22 @@ def test_a_mesh_with_no_points_has_no_weights_and_an_element_of_it_is_refused():
     with pytest.raises(ProblemError) as caught:
         nodal_control_volumes([], [[0, 1]])
     assert caught.value.code == "weights_invalid"
+
+
+class _CountedPoint(tuple):
+    reads = 0
+
+    def __len__(self):
+        type(self).reads += 1
+        return super().__len__()
+
+
+def test_the_work_per_element_does_not_grow_with_the_mesh():
+    """The axis count is a property of the mesh, read once: on a quadratic implementation every element re-reads
+    every point's length, so the reads are elements x points rather than at most one per point."""
+    _, points, elements = _grid(3, 6)
+    counted = [_CountedPoint(point) for point in points]
+    _CountedPoint.reads = 0
+    weights = nodal_control_volumes(counted, elements, SCALE)
+    assert len(elements) > 100 and weights == nodal_control_volumes(points, elements, SCALE)
+    assert _CountedPoint.reads <= len(points)

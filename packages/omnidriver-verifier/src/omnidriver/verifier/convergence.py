@@ -172,7 +172,7 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
             raise ProblemError(f"{solver}: mesh {result['mesh']!r} is not in {problem['mesh_progression']}")
         ladder = problem["refinement"][result["mesh"]]
         rungs = {cells: (dt, steps) for cells, dt, steps in zip(ladder["cells_per_axis"], ladder["dt"], ladder["steps"])}
-        by_dimension: dict[int, list[Mapping[str, Any]]] = {}
+        by_dimension: dict[tuple[int, int], list[Mapping[str, Any]]] = {}
         for level in result["levels"]:
             _require(f"{solver}: a level", level, ("dimension", "cells_per_axis", "dt", "steps", "errors"))
             cells, d = level["cells_per_axis"], level["dimension"]
@@ -187,8 +187,8 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
                                    f"outside norms.fields {fields}")
             if any(other["cells_per_axis"] == cells for other in by_dimension.get(d, [])):
                 raise ProblemError(f"{solver}: level {d}D N={cells} is listed twice", code="results_invalid")
-            by_dimension.setdefault(d, []).append(level)
-        for d, levels in sorted(by_dimension.items()):
+            by_dimension.setdefault(key, []).append(level)
+        for (d, n), levels in sorted(by_dimension.items()):
             levels = sorted(levels, key=lambda level: level["cells_per_axis"])
             partial = [field for field in fields if 0 < sum(field in level["errors"] for level in levels) < len(levels)]
             if partial:
@@ -214,10 +214,12 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
     return {"status": "ok", "problem": problem["id"], "rows": rows}
 
 
-#: What a temporal level's errors are measured against: the exact solution, or the same solver's finest-dt
-#: solution on the same mesh, each level's own exact error less the finest level's, point by point, which removes
-#: the spatial error both share and the difference between their evaluation times.
-TEMPORAL_REFERENCES = ("exact", "finest_dt")
+#: What a temporal level's errors are measured against: the exact solution; the same solver's finest-dt solution
+#: on the same mesh, each level's own exact error less the finest level's, point by point, which removes the spatial
+#: error both share and the difference between their evaluation times; or the same solver's dt -> 0 limit on the
+#: same mesh (its error fields extrapolated in dt, each level's exact error less the limit's), which removes the
+#: spatial error and leaves every level, the finest included, with its own temporal error.
+TEMPORAL_REFERENCES = ("exact", "finest_dt", "extrapolated")
 
 #: A configuration converges to the exact solution only if its least-squares order against it reaches this and its
 #: error at the finest dt is below the coarsest's.
@@ -244,14 +246,20 @@ def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, An
     over the levels, and the stated orders as the result gives them. Against the finest dt the orders are
     :func:`orders_against_a_finer_level`'s, and the row records that ``reference_dt``.
 
-    Every row of the ``exact`` reference says whether its finest level is :func:`floor_contaminated` per field and
-    norm (``floor_contaminated``), and the least-squares order without that level where it is
-    (``least_squares_order_without_floor``, else null); a contaminated order is not the scheme's. A configuration
-    ``converges`` to the exact solution only if every norm's least-squares order reaches
-    :data:`MIN_CONVERGING_ORDER` and its finest-dt error is below its coarsest. A ``finest_dt`` row carries its
-    exact row's verdict as ``converges_to_reference`` (null when no exact row of that solver, configuration and
-    dimension is given), because an order against a solution the scheme does not converge to is the order of its
-    dt-dependent part only, never a verdict by itself.
+    Every row names whether the spatial error is out of its errors (``spatial_floor_removed``: false for ``exact``,
+    true for ``finest_dt`` and ``extrapolated``). Every ``exact`` and ``extrapolated`` row says whether its finest
+    level is :func:`floor_contaminated` per field and norm (``floor_contaminated``), and the least-squares order
+    without that level where it is (``least_squares_order_without_floor``, else null); a contaminated order is not
+    the scheme's. A configuration ``converges`` to its reference only if every norm's least-squares order reaches
+    :data:`MIN_CONVERGING_ORDER` and its finest-dt error is below its coarsest. A ``finest_dt`` row carries the
+    verdict of the ``extrapolated`` row of its solver, configuration, dimension and mesh, else of the ``exact`` one,
+    as ``converges_to_reference`` (null when neither is given) and names which as ``verdict_from``, because an order
+    against a solution the scheme does not converge to is the order of its dt-dependent part only, never a verdict
+    by itself. An ``extrapolated`` result may carry ``extrapolation``, how its limit was obtained, which its row
+    repeats.
+
+    The ladder's mesh is ``cells_per_axis``; a ``finer_cells_per_axis`` the problem declares is a second mesh of
+    the same dt ladder, which lowers the spatial error, and its levels make rows of their own.
 
     Each result is ``{"solver", "problem", "configuration", "reference", "stated", "levels": [{"dimension",
     "cells_per_axis", "dt", "steps", "errors": {field: {kind: value}}}]}``, ``reference`` one of
@@ -264,6 +272,8 @@ def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, An
         raise ProblemError(f"{problem['id']!r} has no refinement.{TEMPORAL}")
     fields, kinds = problem["norms"]["fields"], problem["norms"]["kinds"]
     rungs = dict(zip(ladder["dt"], ladder["steps"]))
+    finer = ladder.get("finer_cells_per_axis", {})
+    meshes = {int(d): {n, *([finer[d]] if d in finer else [])} for d, n in ladder["cells_per_axis"].items()}
     finest = min(ladder["dt"])
     rows = []
     for result in results:
@@ -278,32 +288,32 @@ def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, An
         if "reference_dt" in result and result["reference_dt"] != (finest if reference == "finest_dt" else None):
             raise ProblemError(f"{label}: reference_dt {result['reference_dt']!r} does not match reference "
                                f"{reference!r} (the finest dt of the ladder is {finest})", code="results_invalid")
-        by_dimension: dict[int, list[Mapping[str, Any]]] = {}
+        by_dimension: dict[tuple[int, int], list[Mapping[str, Any]]] = {}
         for level in result["levels"]:
             _require(f"{label}: a level", level, ("dimension", "cells_per_axis", "dt", "steps", "errors"))
             d, dt = level["dimension"], level["dt"]
-            on_ladder = (d in ladder["dimensions"] and level["cells_per_axis"] == ladder["cells_per_axis"][str(d)]
+            on_ladder = (d in ladder["dimensions"] and level["cells_per_axis"] in meshes[d]
                          and rungs.get(dt) == level["steps"])
             if not on_ladder or (reference == "finest_dt" and dt == finest):
                 raise ProblemError(f"{label}: level {d}D N={level['cells_per_axis']} dt={dt} steps={level['steps']} "
                                    f"is off the problem's {TEMPORAL} ladder for reference {reference!r}",
                                    code="results_invalid")
-            if any(other["dt"] == dt for other in by_dimension.get(d, [])):
-                raise ProblemError(f"{label}: level {d}D dt={dt} is listed twice", code="results_invalid")
+            key = (d, level["cells_per_axis"])
+            if any(other["dt"] == dt for other in by_dimension.get(key, [])):
+                raise ProblemError(f"{label}: level {d}D N={key[1]} dt={dt} is listed twice", code="results_invalid")
             given = level["errors"]
             missing = [f"{field}.{kind}" for field in given for kind in kinds if kind not in given[field]]
             if not given or missing or not set(given) <= set(fields):
                 raise ProblemError(f"{label}: level {d}D dt={dt} misses {missing} or names fields outside "
                                    f"norms.fields {fields}", code="results_invalid")
-            by_dimension.setdefault(d, []).append(level)
-        for d, levels in sorted(by_dimension.items()):
+            by_dimension.setdefault(key, []).append(level)
+        for (d, n), levels in sorted(by_dimension.items()):
             levels = sorted(levels, key=lambda level: -level["dt"])
             named = [field for field in fields if field in levels[0]["errors"]]
             if any(set(level["errors"]) != set(named) for level in levels):
                 raise ProblemError(f"{label}: {d}D levels name different fields", code="results_invalid")
             dts = [level["dt"] for level in levels]
-            fit = (observed_orders if reference == "exact"
-                   else lambda h, e: orders_against_a_finer_level(h, e, finest))
+            fit = (lambda h, e: orders_against_a_finer_level(h, e, finest)) if reference == "finest_dt" else observed_orders
             orders = {field: {kind: fit(dts, [level["errors"][field][kind] for level in levels])
                               for kind in kinds} for field in named}
             series = {field: {kind: [level["errors"][field][kind] for level in levels] for kind in kinds}
@@ -311,7 +321,8 @@ def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, An
             row = {
                 "solver": solver, "configuration": result["configuration"], "reference": reference,
                 "reference_dt": finest if reference == "finest_dt" else None,
-                "dimension": d, "cells_per_axis": ladder["cells_per_axis"][str(d)], "stated": result.get("stated"),
+                "dimension": d, "cells_per_axis": n, "stated": result.get("stated"),
+                "spatial_floor_removed": reference != "exact",
                 "levels": [
                     {"dt": level["dt"], "steps": level["steps"], "time": level["steps"] * level["dt"],
                      "errors": {field: level["errors"][field] for field in named},
@@ -322,7 +333,9 @@ def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, An
                 "least_squares_order": {field: {kind: orders[field][kind]["least_squares"] for kind in kinds}
                                         for field in named},
             }
-            if reference == "exact":
+            if reference == "extrapolated":
+                row["extrapolation"] = result.get("extrapolation")
+            if reference != "finest_dt":
                 flags = {field: {kind: floor_contaminated(series[field][kind], orders[field][kind]["successive"])
                                  for kind in kinds} for field in named}
                 row["floor_contaminated"] = flags
@@ -336,11 +349,16 @@ def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, An
                     and series[field][kind][-1] < series[field][kind][0]
                     for field in named for kind in kinds)
             rows.append(row)
-    exact = {(row["solver"], row["configuration"], row["dimension"]): row["converges"]
-             for row in rows if row["reference"] == "exact"}
+    verdicts: dict[tuple, tuple[str, bool]] = {}
+    for kind in ("exact", "extrapolated"):
+        for row in rows:
+            if row["reference"] == kind:
+                verdicts[(row["solver"], row["configuration"], row["dimension"], row["cells_per_axis"])] = (
+                    kind, row["converges"])
     for row in rows:
         if row["reference"] == "finest_dt":
-            row["converges_to_reference"] = exact.get((row["solver"], row["configuration"], row["dimension"]))
+            row["verdict_from"], row["converges_to_reference"] = verdicts.get(
+                (row["solver"], row["configuration"], row["dimension"], row["cells_per_axis"]), (None, None))
     return {"status": "ok", "problem": problem["id"], "refinement": TEMPORAL, "rows": rows}
 
 

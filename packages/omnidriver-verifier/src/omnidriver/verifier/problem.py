@@ -306,9 +306,9 @@ def _ladder(where: str, ladder: Mapping[str, Any], time: Mapping[str, Any], repo
 def _temporal_ladder(ladder: Mapping[str, Any], time: Mapping[str, Any], report_when: Any, dimensions: list[int],
                      progression: list[str]) -> None:
     where = f"refinement.{TEMPORAL}"
-    known = {"mesh", "dimensions", "cells_per_axis", "dt", "steps", "excluded"}
+    known = {"mesh", "dimensions", "cells_per_axis", "finer_cells_per_axis", "dt", "steps", "excluded"}
     _keys(f"{where}.", ladder, known, required=False)
-    missing = sorted(known - {"excluded"} - set(ladder))
+    missing = sorted(known - {"excluded", "finer_cells_per_axis"} - set(ladder))
     if missing:
         raise ProblemError(f"missing key(s) {', '.join(f'{where}.{key}' for key in missing)}")
     _menu(f"{where}.mesh", ladder["mesh"], tuple(progression))
@@ -316,6 +316,11 @@ def _temporal_ladder(ladder: Mapping[str, Any], time: Mapping[str, Any], report_
     if not used or not set(used) <= set(dimensions):
         raise ProblemError(f"{where}.dimensions: {used!r} is not a non-empty subset of the problem's {dimensions}")
     _cells(f"{where}.cells_per_axis", ladder["cells_per_axis"], used)
+    if "finer_cells_per_axis" in ladder:
+        _cells(f"{where}.finer_cells_per_axis", ladder["finer_cells_per_axis"], used)
+        if any(ladder["finer_cells_per_axis"][d] <= n for d, n in ladder["cells_per_axis"].items()):
+            raise ProblemError(f"{where}.finer_cells_per_axis: {dict(ladder['finer_cells_per_axis'])!r} is not finer "
+                               f"than cells_per_axis {dict(ladder['cells_per_axis'])!r}")
     dts, steps = ladder["dt"], ladder["steps"]
     if len(dts) < 2 or len(dts) != len(steps):
         raise ProblemError(f"{where}: dt and steps must be of one length, at least two levels")
