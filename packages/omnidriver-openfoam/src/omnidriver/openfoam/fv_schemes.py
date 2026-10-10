@@ -7,6 +7,8 @@ tables (:func:`omnidriver.openfoam.case_rules.scheme_diagnostics`). Any other ta
 
 from __future__ import annotations
 
+import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Final, Mapping
 
@@ -36,6 +38,15 @@ NO_DEFAULT: Final = "none"
 _SOURCE = ("src/OpenFOAM/matrices/schemes/schemesLookup.C", "src/OpenFOAM/matrices/schemes/schemesLookupDetail.C")
 
 
+NUMERICS_FILE: Final = Path(__file__).with_name("openfoam_scheme_numerics.json")
+
+
+@lru_cache(maxsize=1)
+def _attributes() -> dict[str, dict[str, dict[str, Any]]]:
+    """``{table: {scheme name: attributes}}``: what OpenFOAM's authors state of a scheme (``openfoam_scheme_numerics.json``)."""
+    return json.loads(NUMERICS_FILE.read_text())["attributes"]
+
+
 def _entry(table: str, key: str) -> DictEntry:
     example, does = _TABLES[table]
     menu = tuple(committed_menus()["tables"][table])
@@ -57,6 +68,7 @@ def _entry(table: str, key: str) -> DictEntry:
         source_refs=_SOURCE,
         value_kind="string",
         enum_values=names,
+        menu_attributes={name: attributes for name, attributes in _attributes().get(table, {}).items()},
         notes=(
             "The menu is the head of the value: the names OpenFOAM's own source registers for this table "
             "(src/finiteVolume), from openfoam_menus.json; a plan with $FOAM_SRC supplied judges the value against a fresh "
@@ -71,6 +83,13 @@ FV_SCHEMES_ENTRIES: Final[tuple[DictEntry, ...]] = tuple(
     _entry(table, key) for table in _TABLES for key in ("default", TERM)
 )
 FV_SCHEMES_ENTRIES_BY_PATH: Final = {entry.driver_path: entry for entry in FV_SCHEMES_ENTRIES}
+
+
+def ddt_stability_limit(scheme: str) -> float | None:
+    """The largest ``rate * deltaT`` for which ``scheme``'s operator stays stable when a linear decay ``rate`` acts on the
+    old time level, or ``None`` when no limit is recorded for it."""
+    stability = FV_SCHEMES_ENTRIES_BY_PATH["ddtSchemes.default"].menu_attributes.get(scheme, {}).get("stability", {})
+    return stability.get("decay_on_old_level_rate_dt_max")
 
 
 def _match(key_path: tuple[str, ...]) -> tuple[DictEntry, dict[str, str]] | None:

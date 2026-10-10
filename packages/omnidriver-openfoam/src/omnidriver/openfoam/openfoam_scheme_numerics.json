@@ -1,0 +1,297 @@
+{
+ "description": "Facts stated about the values of OpenFOAM's fvSchemes menus: the authors' own statements (a header's class Description, the source it names, or a citation), recorded as stated. settled_by is null until a run of ours settles the claim. omniD reads none of it; the consumer that owns an attribute owns its schema.",
+ "attributes": {
+  "ddtSchemes": {
+   "backward": {
+    "formal_order": {
+     "time": 2
+    },
+    "conditions": [
+     "the first time step takes the Euler coefficients (the previous time step is taken as infinite while timeIndex < 2)"
+    ],
+    "stability": {
+     "decay_on_old_level_rate_dt_max": 4.0,
+     "derivation": "A linear decay rate acting on the old time level keeps the ddt operator stable while rate*deltaT stays below the bound: backward's characteristic polynomial 3z^2 + (2a - 4)z + 1 with |z| < 1 gives 4; see docs/solver-learning/cardiacfoam-pvj-coupling.md"
+    },
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/ddtSchemes/backwardDdtScheme/backwardDdtScheme.H",
+      "text": "Second-order backward-differencing ddt using the current and two previous time-step values."
+     },
+     {
+      "kind": "source",
+      "file": "src/finiteVolume/finiteVolume/ddtSchemes/backwardDdtScheme/backwardDdtScheme.C",
+      "excerpt": "if (mesh().time().timeIndex() < 2) { return GREAT; }",
+      "reading": "deltaT0_(vf) is GREAT while timeIndex < 2, so the first step takes the Euler coefficients"
+     }
+    ],
+    "settled_by": null
+   },
+   "Euler": {
+    "formal_order": {
+     "time": 1
+    },
+    "stability": {
+     "decay_on_old_level_rate_dt_max": 2.0,
+     "derivation": "A linear decay rate acting on the old time level keeps the ddt operator stable while rate*deltaT stays below the bound: Euler's amplification |1 - a| < 1 gives 2; see docs/solver-learning/cardiacfoam-pvj-coupling.md"
+    },
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/ddtSchemes/EulerDdtScheme/EulerDdtScheme.H",
+      "text": "Basic first-order Euler implicit/explicit ddt using only the current and previous time-step values."
+     }
+    ],
+    "settled_by": null
+   },
+   "steadyState": {
+    "conditions": [
+     "the time derivative is zero, so the scheme has no time order"
+    ],
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/ddtSchemes/steadyStateDdtScheme/steadyStateDdtScheme.H",
+      "text": "SteadyState implicit/explicit ddt which returns 0."
+     }
+    ],
+    "settled_by": null
+   },
+   "CrankNicolson": {
+    "formal_order": {
+     "time": 2
+    },
+    "conditions": [
+     "the mandatory off-centring coefficient ocCoeff in [0,1] follows the name; the header states the second order for the scheme and, for an off-centred one, only 'greater temporal accuracy than the first-order Euler-implicit scheme'"
+    ],
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/ddtSchemes/CrankNicolsonDdtScheme/CrankNicolsonDdtScheme.H",
+      "text": "Second-oder Crank-Nicolson implicit ddt using the current and previous time-step fields as well as the previous time-step ddt."
+     }
+    ],
+    "settled_by": null
+   },
+   "localEuler": {
+    "formal_order": {
+     "time": 1
+    },
+    "conditions": [
+     "steady-state computations with local time stepping only (the header says the scheme should only be used for those)"
+    ],
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/ddtSchemes/localEulerDdtScheme/localEulerDdtScheme.H",
+      "text": "Local time-step first-order Euler implicit/explicit ddt."
+     }
+    ],
+    "settled_by": null
+   },
+   "CoEuler": {
+    "formal_order": {
+     "time": 1
+    },
+    "conditions": [
+     "steady-state computations with local time stepping only (the header says the scheme should only be used for those)"
+    ],
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/ddtSchemes/CoEulerDdtScheme/CoEulerDdtScheme.H",
+      "text": "Courant number limited first-order Euler implicit/explicit ddt."
+     }
+    ],
+    "settled_by": null
+   },
+   "SLTS": {
+    "formal_order": {
+     "time": 1
+    },
+    "conditions": [
+     "steady-state computations with local time stepping only (the header says the scheme should only be used for those)"
+    ],
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/ddtSchemes/SLTSDdtScheme/SLTSDdtScheme.H",
+      "text": "Stabilised local time-step first-order Euler implicit/explicit ddt."
+     }
+    ],
+    "settled_by": null
+   }
+  },
+  "gradSchemes": {
+   "Gauss": {
+    "formal_order": {
+     "space": 2
+    },
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/gradSchemes/gaussGrad/gaussGrad.H",
+      "text": "Basic second-order gradient scheme using face-interpolation and Gauss' theorem."
+     }
+    ],
+    "settled_by": null
+   },
+   "iterativeGauss": {
+    "formal_order": {
+     "space": 2
+    },
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/gradSchemes/iterativeGaussGrad/iterativeGaussGrad.H",
+      "text": "A second-order gradient scheme using face-interpolation, Gauss' theorem and iterative skew correction."
+     }
+    ],
+    "settled_by": null
+   },
+   "leastSquares": {
+    "formal_order": {
+     "space": 2
+    },
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/gradSchemes/leastSquaresGrad/leastSquaresGrad.H",
+      "text": "Second-order gradient scheme using least-squares."
+     }
+    ],
+    "settled_by": null
+   }
+  },
+  "laplacianSchemes": {
+   "Gauss": {
+    "formal_order": {
+     "space": 2
+    },
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/laplacianSchemes/gaussLaplacianScheme/gaussLaplacianScheme.H",
+      "text": "Basic second-order laplacian using face-gradients and Gauss' theorem."
+     }
+    ],
+    "settled_by": null
+   }
+  },
+  "divSchemes": {
+   "Gauss": {
+    "formal_order": {
+     "space": 2
+    },
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/divSchemes/gaussDivScheme/gaussDivScheme.H",
+      "text": "Basic second-order div using face-gradients and Gauss' theorem."
+     },
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/convectionSchemes/gaussConvectionScheme/gaussConvectionScheme.H",
+      "text": "Basic second-order convection using face-gradients and Gauss' theorem."
+     }
+    ],
+    "settled_by": null
+   }
+  },
+  "snGradSchemes": {
+   "corrected": {
+    "formal_order": {
+     "space": 2
+    },
+    "conditions": [
+     "the second order is the one the non-orthogonal correction restores; the header states the correction, not an order"
+    ],
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/snGradSchemes/correctedSnGrad/correctedSnGrad.H",
+      "text": "Surface gradient scheme with full explicit non-orthogonal correction."
+     },
+     {
+      "kind": "source",
+      "file": "src/finiteVolume/finiteVolume/snGradSchemes/correctedSnGrad/correctedSnGrad.C",
+      "excerpt": "mesh.nonOrthCorrectionVectors()",
+      "reading": "the correction is built from the mesh's non-orthogonal correction vectors"
+     },
+     {
+      "kind": "citation",
+      "ref": "Jasak H. (1996), Error analysis and estimation for the finite volume method with applications to fluid flows, PhD thesis, Imperial College London",
+      "locator": null,
+      "checked_by_omnid": false
+     },
+     {
+      "kind": "citation",
+      "ref": "Moukalled F., Mangani L., Darwish M. (2016), The Finite Volume Method in Computational Fluid Dynamics, Springer",
+      "locator": null,
+      "checked_by_omnid": false
+     }
+    ],
+    "settled_by": null
+   },
+   "uncorrected": {
+    "formal_order": {
+     "space": 2
+    },
+    "conditions": [
+     "second order on an orthogonal mesh only: the scheme applies no non-orthogonal correction; the header states no order"
+    ],
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/snGradSchemes/uncorrectedSnGrad/uncorrectedSnGrad.H",
+      "text": "Surface gradient scheme with no non-orthogonal correction."
+     },
+     {
+      "kind": "citation",
+      "ref": "Jasak H. (1996), Error analysis and estimation for the finite volume method with applications to fluid flows, PhD thesis, Imperial College London",
+      "locator": null,
+      "checked_by_omnid": false
+     },
+     {
+      "kind": "citation",
+      "ref": "Moukalled F., Mangani L., Darwish M. (2016), The Finite Volume Method in Computational Fluid Dynamics, Springer",
+      "locator": null,
+      "checked_by_omnid": false
+     }
+    ],
+    "settled_by": null
+   }
+  },
+  "interpolationSchemes": {
+   "linear": {
+    "formal_order": {
+     "space": 2
+    },
+    "conditions": [
+     "second order for central differencing where the face centre lies on the line joining the two cell centres; the header states no order"
+    ],
+    "stated_by": [
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/interpolation/surfaceInterpolation/schemes/linear/linear.H",
+      "text": "Central-differencing interpolation scheme class"
+     },
+     {
+      "kind": "citation",
+      "ref": "Jasak H. (1996), Error analysis and estimation for the finite volume method with applications to fluid flows, PhD thesis, Imperial College London",
+      "locator": null,
+      "checked_by_omnid": false
+     },
+     {
+      "kind": "citation",
+      "ref": "Moukalled F., Mangani L., Darwish M. (2016), The Finite Volume Method in Computational Fluid Dynamics, Springer",
+      "locator": null,
+      "checked_by_omnid": false
+     }
+    ],
+    "settled_by": null
+   }
+  }
+ }
+}
