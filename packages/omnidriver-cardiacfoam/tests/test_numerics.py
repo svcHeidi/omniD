@@ -45,7 +45,7 @@ def test_the_descriptions_state_no_order_the_data_now_carries():
         assert not re.search(r"first[- ]order|second[- ]order|forward-Euler", entry.description), entry.driver_path
 
 
-def test_an_order_no_author_states_is_labelled_as_omnids_inference():
+def test_an_order_no_author_states_is_labelled_inferred():
     sbdf2 = TIME_COUPLING_SCHEME["sbdf2"]
     assert [s["claim"] for s in sbdf2["stated_by"] if s["kind"] == "inferred"] == ["formal_order"]
     assert sbdf2["composes"]["kind"] == "inferred"

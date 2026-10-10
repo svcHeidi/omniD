@@ -20,7 +20,7 @@ def _source(file: str, excerpt: str, reading: str) -> dict[str, Any]:
 
 
 def _inferred(claim: str, reading: str) -> dict[str, Any]:
-    """omniD's own inference from the quoted sources, never a statement of the authors."""
+    """An inference from the quoted sources, never a statement of the authors."""
     return {"kind": "inferred", "claim": claim, "reading": reading}
 
 
@@ -55,7 +55,7 @@ TIME_COUPLING_SCHEME: Final = {
             _inferred(
                 "formal_order",
                 "the source names the extrapolation and the couplings second-order, not the scheme; the second order of "
-                "the scheme is omniD's inference from them",
+                "the scheme is inferred from them and not stated by the source",
             ),
         ],
         formal_order={"time": 2},
