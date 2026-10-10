@@ -277,11 +277,15 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      `277dfeb19`; the exported sweep runs every level at the finest dt);
    - whether to report openCARP v18.1's Line-element defect upstream (quadrature
      on [-1, 1] against shape functions on [0, 1]).
-   - the anisotropic monodomain (`cardiacfoam.md` AD, `opencarp.md` P): omniD's
-     tet route runs `gmsh ... -setnumber lc` on `setup/studies/tetConvergence/box.geo.template`,
-     and native main's template has the placeholder `lc = __LC__`, so gmsh writes a
-     14-node mesh and `gmshToFoam` fails; which side moves is the owner's call.
-     omniD records the `gmsh` step as completed when gmsh prints errors and exits 0;
+   - the gmsh tet templates (`cardiacfoam.md` AD6): all 8 on native main (`277dfeb19`)
+     use `lc = __LC__;`, none `DefineConstant`, while five omniD records
+     (`manufactured_monodomain_pseudo_ecg`, `manufactured_bidomain`,
+     `manufactured_eikonal_ecg`, `manufactured_bath_bidomain`, `niederer_2011`) pass
+     `gmsh -setnumber lc`, so gmsh writes a 14-node mesh, exits 0, and `gmshToFoam` fails.
+     Native `60805b27` (take `lc` via `DefineConstant`) is only on the `omnid/*` branches,
+     not an ancestor of native main, and the template comment on main names
+     `render_tet_geo`, which exists on neither. Which side moves is the owner's decision;
+     omniD's strict plan refuses a `-setnumber` name a template does not declare;
    - cardiacFOAM with `gradSchemes Gauss linear` does not converge on gmsh tets
      (FDA and rotated problems alike); the tutorial's base case uses `leastSquares`
      and converges at second order. The paper's `fullMatrix` cases set Gauss linear on hex,
