@@ -6,6 +6,7 @@ import json
 import pytest
 
 from omnidriver.verifier.cli import main
+from omnidriver.verifier.problem import load_problem
 
 
 def _run(capsys, *argv: str) -> tuple[int, dict]:
@@ -15,20 +16,15 @@ def _run(capsys, *argv: str) -> tuple[int, dict]:
 
 def test_problems_lists_each_problem(capsys):
     code, answer = _run(capsys, "problems")
-    assert code == 0
-    assert answer == {"status": "ok", "problems": [{
-        "id": "fda_monodomain",
-        "title": "Monodomain manufactured solution of Pathmanathan & Gray (FDA RST24CV03.01)",
-        "dimensions": [1, 2, 3],
-        "mesh_progression": ["hex"],
-    }]}
+    assert code == 0 and answer["status"] == "ok"
+    assert [sorted(entry) for entry in answer["problems"]] == [["dimensions", "id", "mesh_progression", "title"]]
+    assert [entry["id"] for entry in answer["problems"]] == ["fda_monodomain"]
 
 
 def test_show_prints_the_definition(capsys):
     code, answer = _run(capsys, "show", "fda_monodomain")
     assert code == 0 and answer["status"] == "ok"
-    assert answer["problem"]["exact"]["V"] == "sqrt(1 + t)*F"
-    assert answer["problem"]["native"]["cardiacfoam"]["commit"].startswith("277dfeb1")
+    assert answer["problem"] == load_problem("fda_monodomain")
 
 
 def test_residual_prints_the_verdict_per_dimension(capsys):

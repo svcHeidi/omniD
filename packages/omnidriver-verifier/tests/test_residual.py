@@ -97,9 +97,11 @@ def test_the_residual_reads_the_equation_from_the_data():
 
 
 def test_the_initial_fields_are_the_exact_fields_at_the_start():
-    entry = residual_verdict(load_problem("fda_monodomain"))["dimensions"][0]
+    problem = load_problem("fda_monodomain")
+    problem["time"]["start"] = 3
+    entry = residual_verdict(problem)["dimensions"][0]
     assert entry["initial"]["u3"] == "0"
-    assert entry["initial"]["V"] == "cos(pi*x)"
+    assert entry["initial"]["V"] == "2*cos(pi*x)"
 
 
 def _generated(problem: dict, **values) -> dict:
@@ -159,3 +161,11 @@ def test_a_generated_cell_model_naming_a_parameter_it_gives_no_value_is_refused(
     with pytest.raises(ProblemError) as caught:
         cell_model_verdict(problem, model)
     assert "cell_model.parameters" in str(caught.value)
+
+
+def test_a_box_below_zero_gives_its_coordinates_no_sign():
+    problem = load_problem("fda_monodomain")
+    problem["domain"]["box"] = [[-1, 1], [0, 1], [0, 1]]
+    entry = residual_verdict(problem)["dimensions"][0]
+    assert entry["residuals"] == {"pde": "0", "u1": "0", "u2": "0", "u3": "0"}
+    assert set(entry["boundary"]) == {"x=-1", "x=1"}

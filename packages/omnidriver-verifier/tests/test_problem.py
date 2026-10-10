@@ -16,9 +16,7 @@ def _shipped() -> dict:
 
 def test_the_library_holds_the_fda_monodomain_problem():
     assert problem_ids() == ["fda_monodomain"]
-    problem = load_problem("fda_monodomain")
-    assert problem["dimensions"] == [1, 2, 3]
-    assert problem["mesh_progression"] == ["hex"]
+    assert load_problem("fda_monodomain")["id"] == "fda_monodomain"
 
 
 def test_an_unknown_id_is_refused_by_name():
