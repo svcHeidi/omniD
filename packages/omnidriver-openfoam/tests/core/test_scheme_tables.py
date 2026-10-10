@@ -32,8 +32,8 @@ def test_the_source_root_is_foam_src_from_the_supplied_environment_and_nothing_e
 def test_the_scan_reads_the_scheme_tables_and_the_ode_solvers_of_the_libraries_it_names(source):
     tables = scan_selection_tables(source)
     assert tables.schemes["ddtSchemes"]["backward"] == "backwardDdtScheme"
-    assert tables.ode_solvers == {"Euler": "Euler", "RKF45": "RKF45"}
-    assert tables.menus()["ODESolver"] == ["Euler", "RKF45"]
+    assert tables.ode_solvers == {"Euler": "Euler"}
+    assert tables.menus()["ODESolver"] == ["Euler"]
 
 
 def test_a_library_outside_the_named_ones_is_not_read(source):

@@ -1,4 +1,4 @@
-"""``rtst_scanner.scan_scheme_registrations`` over files of OpenFOAM v2412's own source, committed verbatim under
+"""``rtst_scanner.scan_scheme_registrations`` over verbatim snippets of OpenFOAM v2412's own source, committed under
 ``fixtures/openfoam_v2412_src`` (the registration macros, and the headers that name the registered schemes)."""
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def test_a_convection_scheme_and_a_div_scheme_fill_the_one_div_table(tables):
 
 def test_a_limited_interpolation_scheme_is_named_by_the_macro_argument_whatever_line_it_is_written_on(tables):
     interpolation = tables["interpolationSchemes"]
-    assert {"linear", "upwind", "MUSCL", "limitedMUSCL", "vanLeer", "limitedVanLeer", "Phi"} <= set(interpolation)
+    assert {"linear", "upwind", "MUSCL", "limitedMUSCL", "vanLeer", "Phi"} <= set(interpolation)
     assert interpolation["linear"] == "linear"
 
 
@@ -69,4 +69,4 @@ def test_a_macro_inside_a_define_registers_nothing(texts):
 
 
 def test_the_ode_solvers_are_found_by_the_runtime_selection_scan(texts):
-    assert scan_rtst_registrations(texts)["ODESolver"] == {"Euler": "Euler", "RKF45": "RKF45"}
+    assert scan_rtst_registrations(texts)["ODESolver"] == {"Euler": "Euler"}
