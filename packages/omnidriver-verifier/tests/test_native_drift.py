@@ -12,20 +12,62 @@ import pytest
 
 sympy = pytest.importorskip("sympy")
 
-from omnidriver.verifier.problem import load_problem
+from omnidriver.verifier.problem import load_problem, pde_sides
 
 FIXTURES = Path(__file__).parent / "fixtures" / "cardiacfoam"
 IONIC = "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H"
+IONIC_CURRENT = "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured.C"
+SOLVER = "src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C"
+DOMAIN = "src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C"
+WALL = "src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C"
 REFERENCE = "src/verificationModels/monodomainVerification/manufacturedFDAReference.H"
-ELECTRO = "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties"
-CONTROL = "tutorials/manufacturedSolutions/monodomainPseudoECG/system/controlDict"
-SWEEP = "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json"
+VERIFIER = "src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.C"
+UTILS = "src/verificationModels/verificationUtils.H"
+CASE = "tutorials/manufacturedSolutions/monodomainPseudoECG"
+ELECTRO = f"{CASE}/constant/electroProperties"
+CONTROL = f"{CASE}/system/controlDict"
+BLOCKMESH = {d: f"{CASE}/system/blockMeshDict.{d}D" for d in (1, 2, 3)}
+SWEEP = f"{CASE}/setup/studies/cartesianConvergence/sweep_hex_convergence.json"
+SNIPPETS = (IONIC, IONIC_CURRENT, SOLVER, DOMAIN, WALL, REFERENCE, VERIFIER, UTILS, ELECTRO, CONTROL, SWEEP,
+            *BLOCKMESH.values())
+
 # The C++ names its constants and state indices; the data names them so.
 CXX_NAMES = {"Chi": "chi", "Fx": "F", "Gx": "G"}
+# Each term of the solver's equation, in the data's PDE syntax.
+CXX_PDE_TERMS = {
+    "fvm::ddt(domain.VmRef())": "Derivative(V, t)",
+    "fvm::laplacian(tGf(), domain.Vm())": "div(sigma*grad(V))",
+    "domain.chi()": "chi",
+    "domain.Cm()": "Cm",
+    "tIionExtrap()": "Im",
+    "domain.sourceField()": "source",
+}
+# The domain current Im the cell model hands the solver. Its correction is zero here: only the coupled 1D-3D
+# verifier sets a manufactured source term on the ionic model.
+CXX_IM_TERMS = {
+    "Im[integrationPtI]": "Im",
+    "A[Iion]": "Iion",
+    "CONSTANTS_[Cm]": "Cm",
+    "manufacturedSourceCorrection(integrationPtI)": "0",
+}
+CXX_REPORT_TERMS = {"time.endTime().value()": "end", "time.deltaTValue()": "dt", "time.value()": "t"}
+# sealedWallTrace, through conormalWallPatchTypes, to the patch type every non-constraint patch takes.
+CXX_WALL_TRACES = {"zeroGradient": "zero_normal_gradient"}
+CXX_POINTS = {"C()": "cell_centres"}
+# The time the exact fields are evaluated at: the mesh time, reached after a level's steps.
+CXX_NORM_TIMES = {"mesh.time().value()": "steps*dt"}
+CXX_NORM_KINDS = {"L1": "weightedAbs/totalVolume", "L2": "Foam::sqrt(weightedSq/totalVolume)", "Linf": "maxAbs"}
+CXX_NORM_WEIGHTS = {"cell_volume": ("weightedAbs += volumes[i]*diff;", "weightedSq += volumes[i]*diff*diff;")}
+CXX_NORM_NORMALISATIONS = {"total_volume": "totalVolume += volumes[i];"}
+CXX_FIELDS = {"Vm": "V"}
+# OpenFOAM's dimension sets [kg m s K mol A cd], in SI units.
+SI_UNITS = {(0, -1, 0, 0, 0, 0, 0): "1/m", (-1, -4, 4, 0, 0, 2, 0): "F/m^2", (-1, -3, 3, 0, 0, 2, 0): "S/m"}
+# What the cell model's current is per, from its dimensions: Cm times the domain current Im (Im = A[Iion]/Cm).
+CURRENT_BASES = {"dimCurrent/dimArea": "per_unit_membrane_area", "dimVoltage/dimTime": "per_unit_capacitance"}
 
 
 def _snippets() -> dict[str, str]:
-    return {name: (FIXTURES / name).read_text() for name in (IONIC, REFERENCE, ELECTRO, CONTROL, SWEEP)}
+    return {name: (FIXTURES / name).read_text() for name in SNIPPETS}
 
 
 def _body(text: str, commit: str) -> list[str]:
@@ -63,6 +105,131 @@ def _same(left: str, right: str, names: dict | None = None) -> bool:
     return sympy.simplify(_sym(left, names or {}) - _sym(right, names or {})) == 0
 
 
+def _spelled(text: str, terms: dict[str, str]) -> str:
+    text = " ".join(text.split())
+    for cxx, data in terms.items():
+        text = text.replace(cxx, data)
+    return text
+
+
+def _equation(lhs: str, rhs: str) -> object | None:
+    """``lhs - rhs`` with each operator an opaque function, or None when a side is not in the data's syntax."""
+    opaque = {name: sympy.Function(name) for name in ("Derivative", "div", "grad")}
+    try:
+        return sympy.expand(_sym(lhs, opaque) - _sym(rhs, opaque))
+    except (SyntaxError, TypeError, sympy.SympifyError):
+        return None
+
+
+def _pde_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
+    function, *solve = _body(snippets[SOLVER], commit)
+    lhs, rhs = _spelled(" ".join(solve), CXX_PDE_TERMS).split("==")
+    ((im, current),) = _statements([_spelled(" ".join(_body(snippets[IONIC_CURRENT], commit)), CXX_IM_TERMS)])
+    native = _equation(lhs, rhs)
+    data = _equation(*pde_sides(problem["pde"]["equation"]))
+    found = []
+    if native is None or data is None or sympy.simplify(native.subs(sympy.Symbol(im), _sym(current, {})) - data):
+        found.append("pde")
+    algorithm = next(line for line in _body(snippets[ELECTRO], commit) if "solutionAlgorithm" in line)
+    if not function.endswith("solveDiffusion" + algorithm.split()[-1].rstrip(";").capitalize()):
+        found.append("solution algorithm")
+    return found
+
+
+def _units_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
+    found = []
+    units = problem["units"]["native"]
+    electro = [line.split() for line in _body(snippets[ELECTRO], commit)]
+    for line in electro:
+        if "[" in line:
+            name = {"cm": "Cm"}.get(line[0], line[0])
+            exponents = tuple(int(v) for v in " ".join(line).split("[")[1].split("]")[0].split())
+            if SI_UNITS.get(exponents) != units[name]:
+                found.append(f"units {name}")
+    conductivity = _body(snippets[SWEEP], commit)[0]
+    exponents = tuple(int(v) for v in conductivity.split("[")[1].split("]")[0].split())
+    if SI_UNITS.get(exponents) != units["sigma"]:
+        found.append("units sigma")
+
+    current_dims, chi_dims, cm_dims = (
+        re.search(pattern, " ".join(_body(snippets[DOMAIN], commit))).group(1)
+        for pattern in (r'"ionicCurrent",.*?dimensionedScalar\("zero", ([\w/*()]+), 0\.0\)',
+                        r'chi_\("chi", ([\w/*()]+),', r'Cm_\("cm", ([\w/*()]+),')
+    )
+    dims = {name: sympy.Symbol(name) for name in ("dimCurrent", "dimTime", "dimVoltage", "dimArea", "dimVolume")}
+    iion = sympy.simplify(_sym(cm_dims, dims) * _sym(current_dims, dims))
+    basis = next((value for key, value in CURRENT_BASES.items() if sympy.simplify(iion - _sym(key, dims)) == 0), None)
+    if basis != problem["units"]["Iion"]:
+        found.append("units Iion")
+    if sympy.simplify(_sym(chi_dims, dims) - dims["dimArea"] / dims["dimVolume"]) != 0:
+        found.append("units chi")
+    return found
+
+
+def _boundary_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
+    electro = {line.split()[0]: line.split()[-1].rstrip(";") for line in _body(snippets[ELECTRO], commit)}
+    wall = " ".join(" ".join(_body(snippets[WALL], commit)).split())
+    trace = electro["sealedWallTrace"]
+    physical = f': word("{trace}")' in wall and "constraintType(t) ? t : physicalType" in wall
+    if (electro["sealedHeartBoundary"] != "false" or not physical
+            or CXX_WALL_TRACES.get(trace) != problem["boundary"]["all_faces"]):
+        return ["boundary"]
+    return []
+
+
+def _domain_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
+    found = []
+    box = problem["domain"]["box"]
+    for d, name in BLOCKMESH.items():
+        vertices = [tuple(float(v) for v in line.strip(" ()").split()) for line in _body(snippets[name], commit)]
+        extents = [[min(v[axis] for v in vertices), max(v[axis] for v in vertices)] for axis in range(3)]
+        if extents[:d] != box[:d]:
+            found.append(f"domain {d}D")
+    return found
+
+
+def _time_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
+    found = []
+    utils = _body(snippets[UTILS], commit)
+    rule = _spelled(utils[0].strip().removeprefix("return").rstrip(";"), CXX_REPORT_TERMS)
+    native_lhs, native_rhs = rule.split(">=")
+    data_lhs, data_rhs = problem["time"]["report_when"].split(">=")
+    if not _same(f"({native_lhs}) - ({native_rhs})", f"({data_lhs}) - ({data_rhs})"):
+        found.append("report rule")
+    (end_time,) = _body(snippets[CONTROL], commit)
+    if float(end_time.split()[-1].rstrip(";")) != problem["time"]["end"]:
+        found.append("endTime")
+    return found
+
+
+def _norms_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
+    found = []
+    norms = problem["norms"]
+    utils = " ".join(" ".join(_body(snippets[UTILS], commit)).split())
+    for kind in norms["kinds"]:
+        if CXX_NORM_KINDS[kind] not in utils:
+            found.append(f"norm {kind}")
+    if not all(line in utils for line in CXX_NORM_WEIGHTS[norms["weight"]]):
+        found.append("norm weight")
+    if CXX_NORM_NORMALISATIONS[norms["normalised_by"]] not in utils:
+        found.append("norm normalisation")
+
+    verifier = _body(snippets[VERIFIER], commit)
+    centres = [line for line in verifier if "centres =" in line]
+    times = [line.split("=")[1].strip().rstrip(";") for line in verifier if "const scalar t =" in line]
+    pre_points, post_points = (CXX_POINTS.get(line.split(".")[-2]) for line in centres)
+    if post_points != norms["points"]:
+        found.append("norm points")
+    if pre_points != problem["initial"]["points"]["cardiacfoam"]:
+        found.append("initial points")
+    if CXX_NORM_TIMES.get(times[1]) != norms["at"]:
+        found.append("norm time")
+    fields = [CXX_FIELDS.get(m, m) for m in re.findall(r"const auto (\w+)Norms =", " ".join(verifier))]
+    if fields != norms["fields"]:
+        found.append("norm fields")
+    return found
+
+
 def drift(snippets: dict[str, str], problem: dict) -> list[str]:
     commit = problem["native"]["cardiacfoam"]["commit"]
     found = []
@@ -76,12 +243,20 @@ def drift(snippets: dict[str, str], problem: dict) -> list[str]:
     native_beta = problem["derived"]["Beta"]["native"]
     if [float(value) for value in betas] != [native_beta[str(d)] for d in problem["dimensions"]]:
         found.append("ionic Beta")
+    # The cell model leaves V to the PDE: its rate is pinned to zero.
+    unknown = problem["pde"]["unknown"]
+    if float(constants[f"RATES[{unknown}]"]) != 0 or problem["cell_model"]["inputs"] != [unknown]:
+        found.append("cell model integrates V")
     rates = problem["cell_model"]["rates"]
     for state in problem["cell_model"]["states"]:
         if not _same(constants[f"RATES[{state}]"], rates[state]):
             found.append(f"rate {state}")
     if not _same(constants["ALGEBRAIC[Iion]"], problem["cell_model"]["Iion"]):
         found.append("Iion")
+    found += _pde_drift(snippets, problem, commit)
+    found += _units_drift(snippets, problem, commit)
+    found += _boundary_drift(snippets, problem, commit)
+    found += _domain_drift(snippets, problem, commit)
 
     reference = _statements(_body(snippets[REFERENCE], commit))
     for name in ("F", "G"):
@@ -100,12 +275,11 @@ def drift(snippets: dict[str, str], problem: dict) -> list[str]:
         if not _same(exact[name], problem["exact"][name], local):
             found.append(f"exact {name}")
 
-    electro = {line.split()[0]: float(line.split()[-1].rstrip(";")) for line in _body(snippets[ELECTRO], commit)}
-    if (electro["chi"], electro["cm"]) != (problem["parameters"]["chi"], problem["parameters"]["Cm"]):
+    electro = {line.split()[0]: line.split()[-1].rstrip(";") for line in _body(snippets[ELECTRO], commit)}
+    if (float(electro["chi"]), float(electro["cm"])) != (problem["parameters"]["chi"], problem["parameters"]["Cm"]):
         found.append("electroProperties chi/cm")
-    (end_time,) = _body(snippets[CONTROL], commit)
-    if float(end_time.split()[-1].rstrip(";")) != problem["time"]["end"]:
-        found.append("endTime")
+    found += _time_drift(snippets, problem, commit)
+    found += _norms_drift(snippets, problem, commit)
 
     conductivity, *ladder = _body(snippets[SWEEP], commit)
     xx, _, _, yy, _, zz = (float(v) for v in conductivity.split("(")[1].split(")")[0].split())
@@ -128,12 +302,33 @@ def test_the_problem_data_matches_cardiacfoam():
     [
         (IONIC, "CONSTANTS[Cm]  = 2.0", "CONSTANTS[Cm]  = 2.5", "ionic Cm"),
         (IONIC, "CONSTANTS[Beta] = -8.6", "CONSTANTS[Beta] = -8.7", "ionic Beta"),
+        (IONIC, "RATES[V] = 0.0", "RATES[V] = 1.0", "cell model integrates V"),
         (IONIC, "pow(STATES[u2], 3)", "pow(STATES[u2], 2)", "rate u2"),
         (IONIC, "/ CONSTANTS[Chi]", "* CONSTANTS[Chi]", "Iion"),
+        (SOLVER, "+ domain.sourceField()", "- domain.sourceField()", "pde"),
+        (SOLVER, "- domain.chi()*domain.Cm()*tIionExtrap()", "- domain.chi()*tIionExtrap()", "pde"),
+        (SOLVER, "fvm::laplacian(tGf(), domain.Vm())", "fvm::laplacian(tGf(), domain.Vm())/domain.chi()", "pde"),
+        (SOLVER, "solveDiffusionImplicit", "solveDiffusionExplicit", "solution algorithm"),
+        (IONIC_CURRENT, "A[Iion]/CONSTANTS_[Cm]", "A[Iion]", "pde"),
+        (DOMAIN, "dimVoltage/dimTime", "dimCurrent/dimArea", "units Iion"),
+        (DOMAIN, '"chi", dimArea/dimVolume', '"chi", dimArea', "units chi"),
+        (ELECTRO, "[ -1 -4 4 0 0 2 0 ]", "[ -1 -2 4 0 0 2 0 ]", "units Cm"),
+        (ELECTRO, "zeroGradient;", "conormal;", "boundary"),
+        (WALL, ': word("zeroGradient")', ': word("fixedValue")', "boundary"),
+        (WALL, "? t : physicalType", "? t : word(\"fixedValue\")", "boundary"),
+        (BLOCKMESH[2], "(1 1 0)", "(1 2 0)", "domain 2D"),
         (REFERENCE, "cos(3.0*", "cos(4.0*", "field F 3D"),
         (REFERENCE, "Foam::pow(Gx[i], -0.5)", "Foam::pow(Gx[i], 0.5)", "exact u2"),
         (ELECTRO, "] 3;", "] 4;", "electroProperties chi/cm"),
         (CONTROL, "0.2;", "0.3;", "endTime"),
+        (UTILS, "0.5*time.deltaTValue()", "time.deltaTValue()", "report rule"),
+        (UTILS, "Foam::sqrt(weightedSq/totalVolume)", "Foam::sqrt(weightedSq)", "norm L2"),
+        (UTILS, "weightedAbs += volumes[i]*diff;", "weightedAbs += diff;", "norm weight"),
+        (UTILS, "totalVolume += volumes[i];", "totalVolume += 1;", "norm normalisation"),
+        (VERIFIER, "& centres = mesh.C()", "& centres = mesh.Cf()", "norm points"),
+        (VERIFIER, "& centres = Vm.mesh().C()", "& centres = Vm.mesh().Cf()", "initial points"),
+        (VERIFIER, "t = mesh.time().value()", "t = mesh.time().endTime().value()", "norm time"),
+        (VERIFIER, "u2Norms =", "u3Norms =", "norm fields"),
         (SWEEP, "0.121585420", "0.121585", "conductivity"),
         (SWEEP, "0.000140174", "0.000140", "hex refinement"),
     ],
@@ -143,3 +338,19 @@ def test_a_changed_snippet_is_reported(snippet, old, new, reported):
     assert old in snippets[snippet]
     snippets[snippet] = snippets[snippet].replace(old, new, 1)
     assert drift(snippets, load_problem("fda_monodomain")) == [reported]
+
+
+@pytest.mark.parametrize(
+    ("block", "key", "value", "reported"),
+    [
+        ("pde", "equation", "chi*Cm*(Derivative(V, t) + Iion) - div(sigma*grad(V)) = source", "pde"),
+        ("units", "Iion", "per_unit_capacitance", "units Iion"),
+        ("time", "report_when", "t + dt >= end", "report rule"),
+        ("norms", "points", "nodes", "norm points"),
+        ("domain", "box", [[0, 1], [0, 2], [0, 1]], "domain 2D"),
+    ],
+)
+def test_a_changed_datum_is_reported(block, key, value, reported):
+    problem = load_problem("fda_monodomain")
+    problem[block][key] = value
+    assert reported in drift(_snippets(), problem)

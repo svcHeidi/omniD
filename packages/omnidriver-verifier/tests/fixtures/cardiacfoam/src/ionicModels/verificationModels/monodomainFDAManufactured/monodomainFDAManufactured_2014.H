@@ -1,4 +1,4 @@
-// cardiacFOAM 277dfeb1933990da366d4b30dd9ef40b3e94c87c src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H, verbatim lines 52-53, 57, 61, 65, 81-84
+// cardiacFOAM 277dfeb1933990da366d4b30dd9ef40b3e94c87c src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H, verbatim lines 52-53, 57, 61, 65, 80-84
     CONSTANTS[Cm]  = 2.0;
     CONSTANTS[Chi] = 3.0;
 // ...
@@ -8,6 +8,7 @@
 // ...
         CONSTANTS[Beta] = -8.6;
 // ...
+    RATES[V] = 0.0;
     RATES[u1] = pow(STATES[u1] + STATES[u3] - STATES[V], 2.0) * pow(STATES[u2], 2.0) + 0.5 * (STATES[u1] + STATES[u3] - STATES[V]) * pow(STATES[u2], 2.0) * (STATES[V] - STATES[u3]);
     RATES[u2] = - (STATES[u1] + STATES[u3] - STATES[V]) *  pow(STATES[u2], 3);
     RATES[u3] = 0;

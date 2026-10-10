@@ -1,0 +1,9 @@
+// cardiacFOAM 277dfeb1933990da366d4b30dd9ef40b3e94c87c tutorials/manufacturedSolutions/monodomainPseudoECG/system/blockMeshDict.1D, verbatim lines 21-28
+    (0 0 0)
+    (1 0 0)
+    (1 0.1 0)
+    (0 0.1 0)
+    (0 0 0.1)
+    (1 0 0.1)
+    (1 0.1 0.1)
+    (0 0.1 0.1)
