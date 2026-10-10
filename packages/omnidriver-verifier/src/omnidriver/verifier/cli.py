@@ -1,21 +1,47 @@
 """``omnidriver-verify``: the problem library and its deterministic checks, as JSON."""
 from __future__ import annotations
 
-from typing import Sequence
+import json
+from typing import Any, Sequence
 
 from omnidriver.core.refusal import Refusal, RefusingParser, print_refusal
+
+from .problem import load_problem, problem_ids
 
 
 def _parser() -> RefusingParser:
     parser = RefusingParser(prog="omnidriver-verify", description=__doc__)
-    parser.add_subparsers(dest="command", required=True, parser_class=RefusingParser)
+    commands = parser.add_subparsers(dest="command", required=True, parser_class=RefusingParser)
+    commands.add_parser("problems", help="list each problem: id, title, dimensions, mesh progression")
+    for name, help_text in (
+        ("show", "print a problem's definition"),
+        ("residual", "substitute a problem's exact fields into its equations (needs the symbolic extra)"),
+    ):
+        commands.add_parser(name, help=help_text).add_argument("problem_id")
     return parser
 
 
+def _answer(args: Any) -> dict[str, Any]:
+    if args.command == "problems":
+        listed = []
+        for problem_id in problem_ids():
+            problem = load_problem(problem_id)
+            listed.append({key: problem[key] for key in ("id", "title", "dimensions", "mesh_progression")})
+        return {"status": "ok", "problems": listed}
+    problem = load_problem(args.problem_id)
+    if args.command == "show":
+        return {"status": "ok", "problem": problem}
+    from .residual import residual_verdict
+
+    return residual_verdict(problem)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run one ``omnidriver-verify`` command; every answer, and every refusal, is JSON on stdout."""
+    """Run one ``omnidriver-verify`` command; every answer, and every refusal, is JSON on stdout. Exit 1 on a
+    refusal or a failed check."""
     try:
-        _parser().parse_args(argv)
+        answer = _answer(_parser().parse_args(argv))
     except Refusal as refusal:
         return print_refusal(refusal)
-    return 0
+    print(json.dumps(answer, indent=2))
+    return 0 if answer["status"] in ("ok", "passed") else 1
