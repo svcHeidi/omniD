@@ -92,3 +92,14 @@ def test_a_result_missing_its_levels_is_refused_by_name():
     with pytest.raises(ProblemError) as caught:
         comparison_table(load_problem("fda_monodomain"), [{"solver": "a", "problem": "fda_monodomain", "mesh": "hex"}])
     assert caught.value.code == "results_invalid"
+
+
+@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
+@pytest.mark.parametrize("where", ["values", "exact"])
+def test_a_non_finite_value_is_refused_not_reported_as_zero_error(bad, where):
+    problem = load_problem("fda_monodomain")
+    values, exact = [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]
+    {"values": values, "exact": exact}[where][1] = bad
+    with pytest.raises(ProblemError) as caught:
+        error_norms(problem, values, exact, [1.0, 1.0, 1.0])
+    assert caught.value.code == "non_finite_values"

@@ -39,13 +39,18 @@ def error_norms(problem: Mapping[str, Any], values: Sequence[float], exact: Sequ
                 weights: Sequence[float]) -> dict[str, float]:
     """Each norm of ``problem``'s ``[norms]`` of ``values - exact``: L1 and L2 weighted by ``weights`` (the cell
     volume for a finite-volume solver, the nodal control volume for a finite-element one) and normalised by their
-    total, Linf the largest pointwise difference."""
+    total, Linf the largest pointwise difference. :class:`ProblemError` for a non-finite value."""
     if not len(values) == len(exact) == len(weights) or not values:
         raise ProblemError(f"values, exact and weights must be non-empty and of one length "
                            f"({len(values)}, {len(exact)}, {len(weights)})")
     total = math.fsum(weights)
     if total <= 0 or any(weight < 0 for weight in weights):
         raise ProblemError("weights must be nonnegative with a positive total")
+    for label, series in (("values", values), ("exact", exact)):
+        bad = [index for index, item in enumerate(series) if not math.isfinite(item)]
+        if bad:
+            raise ProblemError(f"{label} hold a non-finite number at {len(bad)} points (first index {bad[0]}); "
+                               f"a diverged field has no error norm", code="non_finite_values")
     errors = [abs(value - reference) for value, reference in zip(values, exact)]
     norms = {
         "L1": math.fsum(w * e for w, e in zip(weights, errors)) / total,
