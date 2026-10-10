@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult
+from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult, TutorialRecordError
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
 
 #: One ``blockMeshDict`` per dimension; none of these cases has a plain ``system/blockMeshDict``.
@@ -57,7 +57,7 @@ def dimension_axis(
     def resolve(value: Any, staged_case_root: Path) -> AxisResult:
         del staged_case_root  # this axis reads nothing from the staged case
         if value not in DIMENSIONS:
-            raise ValueError(f"dimension axis {name!r}: {value!r} is not one of {DIMENSIONS}")
+            raise TutorialRecordError(f"dimension axis {name!r}: {value!r} is not one of {DIMENSIONS}")
         patches: tuple[AxisPatch, ...] = ()
         if solver_coefficients is not None:
             document, scope = solver_coefficients

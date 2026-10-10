@@ -529,7 +529,7 @@ def test_a_value_that_does_not_fit_an_axis_names_the_kind_as_its_rule():
 
 def test_a_value_an_axis_refuses_is_an_axis_rule_refusal():
     def resolve(value, staged_case_root):
-        raise ValueError(f"{value} does not divide the extent")
+        raise TutorialRecordError(f"{value} does not divide the extent")
 
     axis = toy_axis(name="dx", value_kind="scalar", unit="m", resolve=resolve)
     with pytest.raises(TutorialRecordError, match="axis 'dx': 0.3 does not divide the extent") as caught:
@@ -1979,3 +1979,17 @@ def test_a_catalog_gives_each_record_its_conformance_study_and_refuses_a_strange
     assert catalog["toyTutorial"].conformance is study
     with pytest.raises(TutorialRecordError, match="no record of this catalog"):
         build_tutorial_record_catalog((_record(),), conformance={"other": study})
+
+
+def test_a_crash_inside_an_axis_is_an_internal_error_not_the_agents_value():
+    def resolve(value, staged_case_root):
+        raise ValueError("a defect in the axis")
+
+    axis = toy_axis(name="dx", value_kind="scalar", unit="m", resolve=resolve)
+    with pytest.raises(TutorialRecordError, match="a defect in the axis") as caught:
+        resolve_case_patches(
+            _record(axes=(axis,)), study_by_source={"base": {"dx": 0.3}},
+            staged_case_root=Path("/nonexistent"), direct_key_validator=_known_catalog_validator,
+        )
+    assert caught.value.code == "internal_error"
+

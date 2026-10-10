@@ -109,7 +109,7 @@ def _s1_s2_protocol_axis(name: str, *, electro_document: str, scope: tuple[str, 
 
         if "requested_di90_ms" in protocol:
             if n_s2 != 1:
-                raise ValueError(
+                raise TutorialRecordError(
                     f"{name!r}: requested_di90_ms scheduling requires n_s2 == 1, got {n_s2!r}"
                 )
             reference_repolarization90_s = float(protocol["reference_repolarization90_s"])
@@ -126,7 +126,7 @@ def _s1_s2_protocol_axis(name: str, *, electro_document: str, scope: tuple[str, 
             end_time_s = s2_time_s + end_time_buffer_s
         else:
             if n_s2 and "s2_interval_ms" not in protocol:
-                raise ValueError(
+                raise TutorialRecordError(
                     f"{name!r}: n_s2 > 0 requires either 's2_interval_ms' or "
                     "'requested_di90_ms' + 'reference_repolarization90_s'"
                 )

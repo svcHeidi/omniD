@@ -1089,10 +1089,15 @@ def resolve_case_patches(
         before_digest = _case_root_digest(staged_case_root)
         try:
             result = axis.resolve(value, staged_case_root)
-        except ValueError as exc:
-            if isinstance(exc, TutorialRecordError) and (exc.diagnostics or exc.code not in (None, "axis_rule")):
+        except TutorialRecordError as exc:
+            if exc.diagnostics or exc.code not in (None, "axis_rule"):
                 raise
             raise _axis_refusal(name, getattr(exc, "rule", None), f"axis {name!r}: {exc}") from exc
+        except Exception as exc:
+            # An axis refuses a value with TutorialRecordError; anything else is a defect in the axis.
+            raise TutorialRecordError(
+                f"axis {name!r} crashed resolving {value!r}: {exc}", code="internal_error",
+            ) from exc
         after_digest = _case_root_digest(staged_case_root)
         if after_digest != before_digest:
             raise TutorialRecordError(
