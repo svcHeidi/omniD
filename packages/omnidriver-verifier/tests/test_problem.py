@@ -77,3 +77,9 @@ def test_a_block_without_provenance_is_refused():
     problem = _shipped()
     del problem["provenance"]["cell_model"]
     assert "cell_model" in _refused(problem)
+
+
+def test_a_parameter_the_equation_names_is_required():
+    problem = _shipped()
+    del problem["parameters"]["chi"]
+    assert "chi" in _refused(problem)

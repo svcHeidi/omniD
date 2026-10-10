@@ -8,7 +8,8 @@ from typing import Any, Iterable, Mapping
 
 from omnidriver.core.refusal import Refusal
 
-EQUATIONS = ("monodomain",)
+#: Each equation the residual check knows, and the parameters its form names.
+EQUATIONS: dict[str, tuple[str, ...]] = {"monodomain": ("Cm", "chi", "sigma_xx", "sigma_yy", "sigma_zz")}
 BOUNDARY_KINDS = ("zero_normal_gradient",)
 INITIAL_KINDS = ("exact",)
 MESH_KINDS = ("hex",)
@@ -65,7 +66,7 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
     for name, keys in _BLOCKS.items():
         if keys is not None:
             _keys(f"{name}.", _table(name, problem[name]), keys, required=True)
-    _menu("equation", problem["equation"], EQUATIONS)
+    _menu("equation", problem["equation"], tuple(EQUATIONS))
     _menu("boundary.all_faces", problem["boundary"]["all_faces"], BOUNDARY_KINDS)
     _menu("initial.fields", problem["initial"]["fields"], INITIAL_KINDS)
     for kind in problem["mesh_progression"]:
@@ -78,6 +79,9 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
     for name, value in parameters.items():
         if not isinstance(value, (int, float)):
             raise ProblemError(f"parameters.{name}: {value!r} is not a number")
+    missing = [name for name in EQUATIONS[problem["equation"]] if name not in parameters]
+    if missing:
+        raise ProblemError(f"parameters: the {problem['equation']} equation needs {missing}")
     space = SPACE[:max(dimensions)]
     derived = _table("derived", problem["derived"])
     for name, entry in derived.items():
