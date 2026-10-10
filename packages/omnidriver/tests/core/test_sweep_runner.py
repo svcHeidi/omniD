@@ -32,7 +32,7 @@ from omnidriver.core.tutorial_records import (
 # Neutral placeholder plugins, not cardiacFoam: this file proves core's own
 # sweep bookkeeping (staging, timeout, manifest), not cardiac routing, which
 # is tested against the real plugin in the cardiacfoam package.
-from plugins.toy import DeclaredCasePlugin
+from plugins.toy import DeclaredCasePlugin, toy_axis
 from plugins.toy import QUANTITY_TOY_PLUGIN, ToyProvider, write_quantity_toy_case
 
 _CTX = _driver_context(DeclaredCasePlugin(), source="test:sweep_runner")
@@ -308,7 +308,7 @@ def _record_number_cells_axis() -> AxisContract:
             ),
         )
 
-    return AxisContract(name="number_cells", value_kind="integer", resolve=resolve)
+    return toy_axis(name="number_cells", value_kind="integer", resolve=resolve)
 
 
 class _RecordSweepWriterPlugin(ToyProvider):
@@ -719,7 +719,7 @@ def test_sweep_run_case_timeout_marks_failed_and_continues(tmp_path):
     assert (result["failed_count"], result["completed_count"]) == (2, 0)
     for case in result["cases"]:
         assert case["status"] == "failed"
-        assert "timeout" in case["timeout_error"].lower()
+        assert case["code"] == "case_timeout" and "timeout" in case["error"].lower()
     assert (output_dir / "sweep_manifest.json").exists()
 
 
@@ -858,7 +858,7 @@ def test_the_stderr_fallback_of_a_case_is_redacted_with_the_stacks_patterns(tmp_
     assert "hunter2" not in result["cases"][0]["error"] and "password=[REDACTED] failed" in result["cases"][0]["error"]
 
 
-def test_a_plan_that_cannot_run_says_why_in_plan_error(tmp_path):
+def test_a_plan_that_cannot_run_says_why(tmp_path):
     real = sweep_runner._strict_plan_for_spec
 
     def blocked(*args, **kwargs):
@@ -873,7 +873,8 @@ def test_a_plan_that_cannot_run_says_why_in_plan_error(tmp_path):
 
     case = result["cases"][0]
     assert case["status"] == "failed"
-    assert case["plan_error"] == "launcher_mismatch: wrong MPI first on PATH"
+    assert (case["code"], case["error"]) == ("plan_blocked", "launcher_mismatch: wrong MPI first on PATH")
+    assert [refusal["code"] for refusal in case["refusals"]] == ["launcher_mismatch"]
 
 
 def test_the_childs_own_record_write_finds_the_sweeps_record_already_in_the_case_folder(tmp_path):
@@ -927,3 +928,22 @@ def test_the_cli_prints_the_report_of_a_sweep_a_signal_stopped(tmp_path, capsys)
 
     printed = json.loads(capsys.readouterr().out)
     assert code == 143 and printed["status"] == "failed" and printed["skipped_count"] == 1
+
+
+def test_sweep_plan_gives_a_blocked_case_its_code(tmp_path):
+    real = sweep_runner._strict_plan_for_spec
+
+    def blocked(*args, **kwargs):
+        report = real(*args, **kwargs)
+        return dataclasses.replace(
+            report, status="blocked",
+            environment_diagnostics=(diagnostic("error", "launcher_mismatch", "wrong MPI first on PATH"),),
+        )
+
+    _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=tmp_path / "native", values=(2,))))
+    with mock.patch.object(sweep_runner, "_strict_plan_for_spec", side_effect=blocked):
+        result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_record_driver_context())
+
+    assert [(case["status"], case["code"]) for case in result["cases"]] == [("blocked", "plan_blocked")]

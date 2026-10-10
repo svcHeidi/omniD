@@ -206,9 +206,9 @@ def invalid_run_document_report() -> dict:
         return json.loads(out.getvalue())
 
 
-def test_every_diagnostic_carries_the_same_five_fields(invalid_run_document_report) -> None:
+def test_every_diagnostic_carries_the_same_six_fields(invalid_run_document_report) -> None:
     """Reads the flat ``diagnostics`` list the ``--run-document`` CLI path emits, not ``StrictPlanningReport``'s three-key shape."""
-    expected = {"level", "code", "message", "source", "field"}
+    expected = {"level", "code", "message", "source", "field", "detail"}
     diagnostics = invalid_run_document_report["diagnostics"]
     assert diagnostics, invalid_run_document_report
     for item in diagnostics:

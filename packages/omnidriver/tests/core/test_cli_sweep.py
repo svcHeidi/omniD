@@ -106,13 +106,35 @@ class TestCliSweepActions(unittest.TestCase):
                 "case_count": 2,
                 "cases": [
                     {"case_id": "caseA", "status": "ok"},
-                    {"case_id": "caseB", "status": "failed", "materialization_error": "bad axis value"},
+                    {"case_id": "caseB", "status": "failed", "code": "axis_rule", "error": "bad axis value"},
                 ],
             },
         ), mock.patch("builtins.print"):
             code = main(["sweep-plan", "--plugin", _PLUGIN, "--spec", "sweep.json", "--output-dir", "/tmp/out"])
 
         assert code == 1
+
+    def _plan_report(self, *cases):
+        with mock.patch("omnidriver.cli.sweep_plan", return_value={"case_count": len(cases), "cases": list(cases)}), \
+                mock.patch("builtins.print") as printed:
+            code = main(["sweep-plan", "--plugin", _PLUGIN, "--spec", "sweep.json", "--output-dir", "/tmp/out"])
+        return code, json.loads(printed.call_args.args[0])
+
+    def test_a_sweep_plan_whose_every_failure_is_blocked_is_blocked(self):
+        code, report = self._plan_report(
+            {"case_id": "a", "status": "ok"},
+            {"case_id": "b", "status": "blocked", "code": "plan_blocked"},
+        )
+
+        assert code == 1 and (report["status"], report["code"]) == ("blocked", "cases_blocked")
+
+    def test_a_sweep_plan_with_a_failed_case_among_blocked_ones_is_failed(self):
+        code, report = self._plan_report(
+            {"case_id": "a", "status": "blocked", "code": "plan_blocked"},
+            {"case_id": "b", "status": "failed", "code": "axis_rule"},
+        )
+
+        assert code == 1 and (report["status"], report["code"]) == ("failed", "cases_failed")
 
     def test_sweep_plan_rejects_entry_flag(self):
         with mock.patch("builtins.print"):

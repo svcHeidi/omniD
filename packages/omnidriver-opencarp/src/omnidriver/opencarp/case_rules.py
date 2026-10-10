@@ -9,9 +9,10 @@ import operator
 import re
 from pathlib import Path
 
+from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
-from .catalog import load_catalog, number_of, template_name
+from .catalog import load_catalog, number_of, numeric_limits, template_name
 from .par_format import ParFormatError, parse_par, unquote
 from .records import TUTORIAL_RECORDS
 from .validation import read_documents
@@ -93,10 +94,15 @@ def case_diagnostics(case_root: Path) -> tuple[StrictDiagnostic, ...]:
             value = number_of(raw)
             if spec is None or spec.value_kind not in ("integer", "scalar") or value is None:
                 continue
+            if broken := bound_violations(numeric_limits(spec), value):
+                found.append(diagnostic(
+                    "error", "catalog_rule", f"{key} = {raw} {'; '.join(bound_reasons(broken))}",
+                    source=document, field=key, detail={"rule": broken},
+                ))
             for bound, label, beyond in (
                 (spec.minimum, "minimum", operator.lt), (spec.maximum, "maximum", operator.gt),
             ):
-                if bound is None:
+                if bound is None or number_of(bound) is not None:
                     continue
                 try:
                     limit = _evaluate(bound, key, value_of)
@@ -112,6 +118,6 @@ def case_diagnostics(case_root: Path) -> tuple[StrictDiagnostic, ...]:
                     found.append(diagnostic(
                         "error", "catalog_rule",
                         f"{key} = {raw} is beyond its {label}, {bound} = {limit:g}",
-                        source=document, field=key,
+                        source=document, field=key, detail={"rule": {f"{label}_expression": bound}},
                     ))
     return tuple(found)

@@ -110,7 +110,7 @@ under `records`); a record is the only entry kind. `plan`, `step` and `run`
 stage the record's case under `<scratch>/records/<name>` and never write the
 native case. The scratch directory is supplied (`--scratch-dir` or
 `OMNIDRIVER_SCRATCH_DIR`, outside the cases root) or the command is refused
-(`ScratchRootNotSupplied`). A single plan, step or run takes the native case
+(code `scratch_root_not_supplied`). A single plan, step or run takes the native case
 as it is, plus `--parallel` and `--input`; a study (`document:key` patches,
 axes, `parallel`) goes in a sweep spec. `describe --entry <record>` takes no
 study values; `sweep-plan` previews one.
@@ -362,10 +362,13 @@ case, and `sweep-run` writes its `run_document.json`, `workflow_state.json`,
 `workflow_logs/` and `case_record.json` beside the case files. A `caseId` dependent
 entry becomes the case's directory name (validated for uniqueness and
 path-safety); otherwise cases are named `case_0001`, `case_0002`, ... in
-expansion order. A case that cannot be staged or planned fails alone
-(`materialization_error`, or `plan_error` in `sweep-run`, which lists the plan's
-error diagnostics), not the whole sweep. `sweep-plan` reports each
-case's `status`, `record_commit_status`, `unchanged_patches` (a patch that
+expansion order. A case that cannot be staged or planned fails alone, not the
+whole sweep, in the refusal shape (below): its `code`, its `error` and, when
+rules or the plan's error diagnostics refused it, `refusals`; the sweep's own
+`code` is then `cases_failed`; a plan whose every non-ok case is blocked
+(environment not ready) reports `status: "blocked"` and `cases_blocked`, exiting
+non-zero like `plan --strict`. `sweep-plan` reports each
+case's `status`, its `code` when not ok, `record_commit_status`, `unchanged_patches` (a patch that
 already matched the case) and its full `plan`.
 
 `sweep-run` plans and runs the cases serially, each as a child
@@ -381,15 +384,15 @@ signal's code; resume that case with `step`. A sweep does not resume across
 invocations: an `--output-dir` that already holds a manifest is refused by
 name, and `--fresh` clears the `--output-dir` (it must hold a
 `sweep_manifest.json`; the spec is validated first) and starts over.
-`--case-timeout-s <seconds>` marks a case that exceeds it failed (a
-`timeout_error` in its summary), ends its running step too, and the sweep continues; `--max-cases`
+`--case-timeout-s <seconds>` marks a case that exceeds it failed (code
+`case_timeout` in its summary), ends its running step too, and the sweep continues; `--max-cases`
 (default 200) caps the expanded case count, checked before any case is
 staged. Keep a failed output directory when diagnosing; cleanup is an
 explicit, disposable-output action.
 
 `--output-dir` defaults to `<scratch>/sweeps/<spec-name>`, which needs
 `--scratch-dir` (or `OMNIDRIVER_SCRATCH_DIR`); with neither the command is
-refused by name (`ScratchRootNotSupplied`) rather than writing into the
+refused by name (code `scratch_root_not_supplied`) rather than writing into the
 checkout (see `CLAUDE.md`'s scratch-root rule).
 
 See `omnidriver/core/runtime/sweep_runner.py` for the full implementation.
@@ -690,7 +693,8 @@ the worked case (`omnidriver check`'s C13 and C14; evidence in
    x = a, y = c, z = 7 mm - b, and probe k is P(k+1). openCARP's frame is the
    reference frame (`docs/solver-learning/opencarp.md` F3).
 2. **Run both at the same resolution, long enough to reach every point.** The
-   `dx` axis is in metres for cardiacFOAM and µm for openCARP; the native
+   `dx` axis is in metres for cardiacFOAM and µm for openCARP (each axis's
+   `unit` in `describe --entry`'s `record_surface.axes`); the native
    cardiacFOAM `endTime` reaches only P1. Each solver is its own `sweep-run`
    with its own `--output-dir` and `--scratch-dir`.
 3. **Write each side's points in its solver's frame and unit**: openCARP's in
@@ -759,9 +763,9 @@ so they describe a state the binary was not built from.
 The catalogues stay the source of truth, and a key that appears in or
 disappears from the C++ never fails a plan. A plan compares them with the scan:
 - a key, sub-dictionary, menu value or selection table the C++ reads and the
-  catalogue lacks is a `plugin_catalog_uncatalogued` note carrying what was
-  scanned (type, default, whether it is required, where, and the `entry`
-  arguments to write the catalogue entry from). A literal the C++ compares a
+  catalogue lacks is a `plugin_catalog_uncatalogued` note whose `detail` is
+  what was scanned (type, default, whether it is required, where, and the
+  `entry` arguments to write the catalogue entry from). A literal the C++ compares a
   value against is a menu value, except a test against the read's own default
   in a function that accepts any other value: that asks whether the key is
   unset;
@@ -864,8 +868,55 @@ a check fails if anything under the cases root changed while it ran.
 ## Discovering what's valid
 
 Every answer below is a command, not a module to import. Each prints JSON, and a
-command a caller got wrong prints one shape, `{"status": "failed", "error": ...}`,
-on stdout with exit 1 (`--help` is argparse's own text).
+command a caller got wrong prints one shape, `{"status": "failed", "code": ...,
+"error": ...}`, on stdout with exit 1 (`--help` is argparse's own text). A
+refusal by rules adds `refusals`, one plan diagnostic per broken rule
+(`{level, code, message, source, field, detail}`: `source` the document, `field`
+the dotted key or the axis), whose `detail.rule` is the declaration it broke
+(`{"exclusive_minimum": 0}`, `{"menu": [...]}`, `{"required_when": {...}}`);
+`detail` is `null` when `code` names the rule. A bound is always a number
+(`minimum`, `exclusive_minimum`, `maximum`); a bound the solver states as an
+expression of other parameters is a string under its own key
+(openCARP's `{"maximum_expression": "tend"}`). `code` is one of these
+(`omnidriver.core.refusal.CODES`):
+
+| code | meaning |
+|---|---|
+| `usage` | a command-line flag or argument is wrong or missing |
+| `unknown_record` | no record of the stack has the --entry name |
+| `unknown_key` | a study key the solver's catalogue does not declare and its C++ does not read there |
+| `unknown_document` | a study key names a document the solver does not read |
+| `catalog_rule` | a study value breaks its catalogue entry's rule (refusals[].detail.rule) |
+| `axis_rule` | an axis value breaks the axis's kind, bound or menu, or the axis refused it |
+| `case_rule` | the resolved case breaks the stack's case rules (one refusal per rule) |
+| `cases_failed` | a sweep ran or planned, and at least one case failed; each case carries its own code |
+| `cases_blocked` | a sweep planned, and every case that is not ok is blocked (a valid plan whose environment is not ready) |
+| `benchmark_unreadable` | a --benchmarks reference could not be read or is not a point reference |
+| `scratch_root_not_supplied` | an operation that stages needs --scratch-dir or OMNIDRIVER_SCRATCH_DIR |
+| `scratch_root_inside_cases_root` | the supplied scratch root lies inside the cases root |
+| `lease_held` | another attempt owns the case or output directory |
+| `spec_unreadable` | the sweep spec is not readable JSON |
+| `plan_failed` | the case's strict plan has an error diagnostic |
+| `plan_blocked` | the case's strict plan is blocked |
+| `plan_incomplete` | the strict plan produced no workflow to run |
+| `environment_preflight_failed` | the execution environment failed its preflight |
+| `required_check_unavailable` | a check the run requires could not run |
+| `run_document_unreadable` | the run document could not be loaded |
+| `run_document_plugin_mismatch` | the run document was planned by another stack |
+| `run_document_invalid` | the run document fails validation (diagnostics) |
+| `workflow_state_failed` | the workflow state is failed; rerun a step explicitly |
+| `workflow_without_current_step` | the workflow is pending but names no current step |
+| `attempts_exhausted` | the maximum total step attempts was reached |
+| `fresh_would_delete_case` | --fresh would delete the case itself |
+| `fresh_refused` | --fresh could not empty the output directory |
+| `case_edit_interrupted` | an earlier edit of the case was interrupted; plan again |
+| `cxx_source_undeclared` | the stack declares no C++ source to scan |
+| `cxx_source_not_scanned` | the C++ source could not be scanned |
+| `run_without_report` | a child run exited without a JSON report |
+| `case_timeout` | a sweep case exceeded --case-timeout-s |
+| `sweep_stopped` | a signal stopped the sweep |
+| `internal_error` | an unexpected exception: a defect in omniD or a plugin, not in the request |
+| `unclassified` | a refusal that names no code of its own; read error |
 
 1. **What does this stack offer?** `omnidriver describe --repo <tree>` (or
    `--plugin <id>`), with no `--entry`, lists `records` (name, native case,
@@ -880,6 +931,19 @@ on stdout with exit 1 (`--help` is argparse's own text).
    `--document` or `--key`. Each entry carries `driver_path`, `value_kind`,
    `menu`, `unit`, `typical_value` and its relations (`applicable_when`,
    `forbidden_when`, `required_when`, `mutually_exclusive_with`).
+   `record_surface.axes` lists each axis's `value_kind`, `unit` (`null` for a
+   name, a count or a mapping), a `description` of what it sets, and its
+   `minimum`, `exclusive_minimum` or `maximum` where it declares one; a value outside a
+   bound is refused before the axis runs. `record_surface.conformance_quantity`
+   is the one quantity `omnidriver check` compares for the record (C13, C14), or
+   `null`: its `artifact_format`, the `study` its runs take, its `reference`,
+   and its points (`at`, `pairs`), whose unit `at_unit` is also
+   `max_sampling_offset_unit`. When `points_from` is `reference`, pass
+   `describe --benchmarks <dir>` to read the points and their unit from the
+   reference; without it they are `null`. `record_surface.readers` is, for each
+   format a step declares on its output, the reader `compare` uses
+   (`value_unit`, `sampling_rule`, `coordinate_unit`, `takes_points`,
+   `sentinels`) and the steps producing it, or `[]`.
 3. **What models can I pick?** `describe` lists each named catalog's items by
    name (`plugin_catalogs`: for cardiacFOAM the ionic and active-tension
    models). `omnidriver catalog --plugin P --named ionic_model_catalog` prints
@@ -908,8 +972,8 @@ the case holds; a read the scan cannot place in a dictionary is not noted.
 Every record case passes the stack's rules once its study is written and
 before anything runs: `plan --strict`, `run` and each case of a sweep. A rule
 that finds an error refuses the case by name (`tutorial record 'X': the
-resolved case breaks N rule(s): <field>: <message>`), with the rule's own
-message. The rules read the resolved case's files, so a direct key, an axis
+resolved case breaks N rule(s): <field>: <message>`, code `case_rule`), with
+the rule's own message, and each rule as one of its `refusals`. The rules read the resolved case's files, so a direct key, an axis
 and the native case all count.
 
 - **Catalogue relations** (cardiacFOAM's `electroProperties`, `prePacingProperties`

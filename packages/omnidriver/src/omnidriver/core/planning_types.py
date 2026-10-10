@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Mapping
 
 from .runtime.models import DataArtifact
 
@@ -13,6 +13,12 @@ class StrictDiagnostic:
     message: str
     source: str = ""
     field: str = ""
+    #: What the message states, as data: ``rule`` names the declared rule a refusal broke;
+    #: a scan note carries its scan record.
+    detail: Mapping[str, Any] | None = None
+
+    def __hash__(self) -> int:
+        return hash((self.level, self.code, self.message, self.source, self.field))
 
 
 @dataclass(frozen=True)
@@ -32,14 +38,9 @@ def diagnostic(
     *,
     source: str = "",
     field: str = "",
+    detail: Mapping[str, Any] | None = None,
 ) -> StrictDiagnostic:
-    return StrictDiagnostic(
-        level=level,
-        code=code,
-        message=message,
-        source=source,
-        field=field,
-    )
+    return StrictDiagnostic(level=level, code=code, message=message, source=source, field=field, detail=detail)
 
 
 def has_error(diagnostics: tuple[StrictDiagnostic, ...]) -> bool:

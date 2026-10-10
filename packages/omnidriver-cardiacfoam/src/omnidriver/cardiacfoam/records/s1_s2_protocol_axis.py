@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult
+from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult, TutorialRecordError
 
 # The protocol is one mapping, not four axes: `endTime` and `writeAfterTime`
 # derive from all four numbers together, and the axis must not read one back
@@ -22,7 +22,7 @@ _CONTROL_DICT_DOCUMENT = "system/controlDict"
 def _require_protocol_keys(axis_name: str, protocol: Mapping[str, Any]) -> None:
     missing = [key for key in _REQUIRED_KEYS if key not in protocol]
     if missing:
-        raise ValueError(
+        raise TutorialRecordError(
             f"S1-S2 protocol axis {axis_name!r}: the protocol mapping is "
             f"missing required key(s) {missing} (required: "
             f"{list(_REQUIRED_KEYS)}); got keys {sorted(protocol)}"
@@ -96,4 +96,11 @@ def s1_s2_protocol_axis(
         )
         return AxisResult(patches=patches)
 
-    return AxisContract(name=name, value_kind="mapping", resolve=resolve)
+    return AxisContract(
+        name=name, value_kind="mapping", unit=None, resolve=resolve,
+        description=(
+            "The S1-S2 protocol {s1_interval_ms, n_s1, s2_interval_ms, n_s2} (intervals in ms): sets "
+            "singleCellStimulus stim_period_S1, nstim1, stim_period_S2 and nstim2, and derives writeAfterTime "
+            "and system/controlDict endTime (s)."
+        ),
+    )

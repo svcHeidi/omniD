@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ..contracts.catalogue_paths import PLACEHOLDER
+from ..tutorial_records import PLAIN_FILE_FORMAT
 
 DOCUMENTATION_ROLE = "case.documentation"
 
@@ -37,14 +38,58 @@ def lists_key(entry: Mapping[str, Any], document: str, key: str) -> bool:
     return key_pattern(str(entry.get("key", ""))).fullmatch(key) is not None
 
 
+def _listed_points(points: Mapping[str, Any] | None) -> dict[str, list[float]] | None:
+    return None if points is None else {label: list(point) for label, point in points.items()}
+
+
+def conformance_quantity(record, benchmarks: Path | None = None) -> dict[str, Any] | None:
+    """The quantity ``omnidriver check`` compares for the record, or ``None``: the study its runs take, and its
+    points (``at``, in ``at_unit``, which is also ``max_sampling_offset``'s unit). Points the reference supplies
+    are read from it under ``benchmarks`` when that is given, and are ``null`` otherwise."""
+    conformance = record.conformance
+    quantity = conformance.quantity if conformance is not None else None
+    if quantity is None:
+        return None
+    points_from = "reference" if quantity.at is None else "declared"
+    if benchmarks is not None:
+        quantity = quantity.resolved(benchmarks)
+    return {
+        "compared_by": "omnidriver check (C13: serial against parallel; C14: across its sweep)",
+        "artifact_format": quantity.artifact_format, "study": {**conformance.base_study, **quantity.study},
+        "points_from": points_from, "max_sampling_offset": quantity.max_sampling_offset,
+        "reference": str(quantity.reference), "at": _listed_points(quantity.at),
+        "pairs": None if quantity.pairs is None else dict(quantity.pairs),
+        "at_unit": quantity.at_unit, "max_sampling_offset_unit": quantity.at_unit,
+    }
+
+
+def record_readers(record, stack) -> list[dict[str, Any]]:
+    """For each format the record's steps declare on what they produce, the reader the stack reads it with,
+    and the steps producing it; a format no reader takes is not listed."""
+    steps: dict[str, list[str]] = {}
+    for step in record.workflow_steps:
+        for path in step.produces:
+            artifact_format = step.produced_format(path)
+            if artifact_format != PLAIN_FILE_FORMAT and step.step_id not in steps.setdefault(artifact_format, []):
+                steps[artifact_format].append(step.step_id)
+    listed = []
+    for artifact_format, producers in steps.items():
+        reader = stack.call("get_artifact_value_reader", artifact_format)
+        if reader is None:
+            continue
+        listed.append({
+            "format": artifact_format, "steps": producers, "value_unit": reader.value_unit,
+            "sampling_rule": reader.sampling_rule, "coordinate_unit": reader.coordinate_unit,
+            "takes_points": reader.takes_points, "sentinels": sorted(reader.sentinels),
+        })
+    return listed
+
+
 def record_surface(
     record, *, native_case_root: Path, driver_context,
-    supplied: Mapping[str, Any] | None = None,
+    supplied: Mapping[str, Any] | None = None, benchmarks: Path | None = None,
 ) -> dict[str, Any]:
-    axes = [
-        {"name": axis.name, "value_kind": axis.value_kind}
-        for axis in sorted(record.axes, key=lambda axis: axis.name)
-    ]
+    axes = [axis.to_json() for axis in sorted(record.axes, key=lambda axis: axis.name)]
     stack = driver_context.stack
     documentation = []
     for rule in stack.call("get_profile").case_files:
@@ -70,6 +115,8 @@ def record_surface(
             "count": len(listed) - len(keys),
             "why": "their applicable_when rules out this case's own solver; `omnidriver catalog` lists every key",
         }} if len(keys) < len(listed) else {}),
+        "conformance_quantity": conformance_quantity(record, benchmarks),
+        "readers": record_readers(record, stack),
         "guidance": [dict(item) for item in stack.call("get_agent_guidance")],
         "case_documentation": documentation,
         "inputs": inputs,

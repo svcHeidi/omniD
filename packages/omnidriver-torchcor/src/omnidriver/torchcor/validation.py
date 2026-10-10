@@ -34,16 +34,23 @@ def validate_key(catalog: Catalog | None, document: str, key_path: tuple[str, ..
     """``(value_kind, validated)`` for one study key; raises ``TutorialRecordError`` naming a key the runner does not take."""
     key = ".".join(key_path)
     if document != CASE_DOCUMENT:
-        raise TutorialRecordError(f"{document}:{key}: the runner reads only {CASE_DOCUMENT}, never {document}")
+        raise TutorialRecordError(
+            f"{document}:{key}: the runner reads only {CASE_DOCUMENT}, never {document}", code="unknown_document",
+        )
     if catalog is None:
         return _kind_of(value), False
     kinds = _kinds(catalog, key_path)
     if not kinds:
-        raise TutorialRecordError(f"{document}:{key}: not a key {catalog.runner} takes, nor a field of any ionic model's")
+        raise TutorialRecordError(
+            f"{document}:{key}: not a key {catalog.runner} takes, nor a field of any ionic model's", code="unknown_key",
+        )
     for kind in sorted(kinds):
         if not validate_value_shape(kind, value):
             return kind, True
-    raise TutorialRecordError(f"{document}:{key}: {value!r} is not a {' or '.join(sorted(kinds))}")
+    raise TutorialRecordError(
+        f"{document}:{key}: {value!r} is not a {' or '.join(sorted(kinds))}", code="catalog_rule",
+        rule={"value_kind": sorted(kinds)},
+    )
 
 
 def _kind_of(value: Any) -> str:

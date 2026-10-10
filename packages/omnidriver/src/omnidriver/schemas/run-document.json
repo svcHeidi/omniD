@@ -364,7 +364,8 @@
         "code": {"type": "string"},
         "field": {"type": "string"},
         "message": {"type": "string"},
-        "source": {"type": "string"}
+        "source": {"type": "string"},
+        "detail": {"type": ["object", "null"]}
       },
       "additionalProperties": true
     },

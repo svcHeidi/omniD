@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from omnidriver.core.tutorial_records import TutorialRecordError
 from omnidriver.cardiaccore.record_key_validation import record_key_catalog, record_key_validator
 
 DOCUMENT = "system/setCardiacConductivityDict"
@@ -44,10 +45,11 @@ def test_a_catalogued_key_is_checked_against_its_value_kind():
 
 
 def test_a_key_the_catalogue_lacks_is_refused_naming_the_catalogue_and_how_to_list_what_the_cxx_reads():
-    with pytest.raises(KeyError) as refused:
+    with pytest.raises(TutorialRecordError) as refused:
         record_key_validator(DOCUMENT, ("nonsense",), 1)
     assert "not declared by the cardiacCore key catalog" in refused.value.args[0]
     assert "omnidriver catalog --uncatalogued" in refused.value.args[0]
+    assert refused.value.code == "unknown_key"
 
 
 def test_a_key_the_supplied_cxx_reads_is_accepted_at_the_type_it_reads(tmp_path, monkeypatch):
@@ -61,8 +63,9 @@ def test_a_key_the_supplied_cxx_reads_is_accepted_at_the_type_it_reads(tmp_path,
 
 
 def test_a_document_the_catalogue_does_not_hold_is_refused_unless_it_is_a_system_file():
-    with pytest.raises(KeyError, match="neither a cardiacCore-catalogued document"):
+    with pytest.raises(TutorialRecordError, match="neither a cardiacCore-catalogued document") as refused:
         record_key_validator("constant/anything", ("a",), 1)
+    assert refused.value.code == "unknown_document"
     assert record_key_validator("system/fvSchemes", ("default",), "Gauss linear") == ("string", False)
 
 

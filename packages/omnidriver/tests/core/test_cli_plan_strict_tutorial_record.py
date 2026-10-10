@@ -116,7 +116,7 @@ def _one_case_sweep(tmp_path, cases_root):
     "plugins.toy:RefusingReaderPlugin",
 ])
 def test_a_renderer_resolver_or_reader_refusal_comes_back_as_the_cases_structured_error(tmp_path, capsys, plugin):
-    """A refusal the plugin raises (a `ValueError` subclass, like openCARP's `ParFormatError`) while a case is committed -- from its case writer, or from the config-value reader reached through `split_unchanged` -- is that case's `materialization_error`, never a traceback."""
+    """A refusal the plugin raises (a `ValueError` subclass, like openCARP's `ParFormatError`) while a case is committed -- from its case writer, or from the config-value reader reached through `split_unchanged` -- is that case's `error`, never a traceback."""
     from plugins.toy import TOY_REFUSAL
 
     cases_root = _native_toy_case(tmp_path)
@@ -127,8 +127,46 @@ def test_a_renderer_resolver_or_reader_refusal_comes_back_as_the_cases_structure
     assert exit_code == 1
     (case,) = json.loads(capsys.readouterr().out)["cases"]
     assert case["status"] == "failed"
-    assert "constant/mesh.json" in case["materialization_error"]
-    assert TOY_REFUSAL in case["materialization_error"]
+    assert "constant/mesh.json" in case["error"]
+    assert TOY_REFUSAL in case["error"]
+    assert case["code"] == "unclassified"
+
+
+def test_a_sweep_whose_cases_failed_says_so_by_code_and_a_crash_is_an_internal_error(tmp_path, capsys, monkeypatch):
+    import omnidriver.core.runtime.sweep_runner as sweep_runner
+
+    def crash(*args, **kwargs):
+        raise KeyError("boom")
+
+    monkeypatch.setattr(sweep_runner, "commit_and_build_record_spec", crash)
+    cases_root = _native_toy_case(tmp_path)
+    assert main([
+        "sweep-plan", "--plugin", "plugins.toy:ToyStack", "--spec", str(_one_case_sweep(tmp_path, cases_root)),
+        "--output-dir", str(tmp_path / "out"),
+    ]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["code"] == "cases_failed"
+    assert [case["code"] for case in payload["cases"]] == ["internal_error"]
+
+
+def test_a_case_that_breaks_a_rule_carries_each_refusal_as_data(tmp_path, capsys):
+    cases_root = _native_toy_case(tmp_path)
+    spec = tmp_path / "study.json"
+    spec.write_text(json.dumps({
+        "base": {"entry": "toyTutorial", "cases_root": str(cases_root)},
+        "sweep": {"mode": "zip", "independent": {"constant/mesh.json:cells": [12]}},
+    }))
+    assert main([
+        "sweep-plan", "--plugin", "plugins.toy:RuleCheckingPlugin", "--spec", str(spec),
+        "--output-dir", str(tmp_path / "out"),
+    ]) == 1
+    (case,) = json.loads(capsys.readouterr().out)["cases"]
+    assert case["code"] == "case_rule"
+    assert case["refusals"] == [{
+        "level": "error", "code": "too_many_cells", "message": "12 cells exceed 10", "source": "", "field": "cells",
+        "detail": None,
+    }]
+    assert "12 cells exceed 10" in case["error"]
 
 
 def test_plan_strict_against_a_read_only_tree_without_a_scratch_dir_refuses_as_json_S_I3(

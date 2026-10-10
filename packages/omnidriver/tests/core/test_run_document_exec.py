@@ -141,11 +141,11 @@ class TestBuildExecutionInputsDiagnostics(unittest.TestCase):
 
     def test_every_diagnostic_has_required_keys(self) -> None:
         # The canonical shape is core.planning_types.StrictDiagnostic
-        # (level, code, message, source, field); see also
-        # test_cli_run_document.py::test_every_diagnostic_carries_the_same_five_fields.
+        # (level, code, message, source, field, detail); see also
+        # test_cli_run_document.py::test_every_diagnostic_carries_the_same_six_fields.
         doc = _minimal_doc(workflowDag=None, launch={})
         _inputs, diagnostics = build_execution_inputs(doc, driver_context=_CTX)
-        expected = {"level", "code", "message", "source", "field"}
+        expected = {"level", "code", "message", "source", "field", "detail"}
         for d in diagnostics:
             self.assertIsInstance(d, StrictDiagnostic)
             self.assertEqual({f.name for f in fields(d)}, expected)

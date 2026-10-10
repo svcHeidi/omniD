@@ -5,7 +5,6 @@ case keys nothing catalogues, and the notes the rules have for the case."""
 from __future__ import annotations
 
 import fnmatch
-import json
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -100,25 +99,6 @@ def _owned_dict_relpaths(case_root: Path, driver_context: Any) -> tuple[str, ...
     return tuple(relpaths)
 
 
-def _describe_uncatalogued(item: dict) -> str:
-    """One scanned read the catalogue lacks, as a sentence an agent can act on."""
-    if item.get("kind") == "compared_value":
-        return (
-            f"the C++ compares {item['path']!r} against {item['value']!r} at {item['source']}, which the "
-            "catalogue's menu lacks; the value is accepted"
-        )
-    if item.get("kind") != "key":
-        return f"the C++ reads {json.dumps(item, sort_keys=True)}, which the catalogue lacks"
-    how = "with no default, so it is required" if item["required"] else (
-        f"with default {item['default']}" if item.get("default") is not None else "optionally"
-    )
-    return (
-        f"the C++ reads {item['path']!r} as {item['method']}<{item['type'] or 'an unresolved type'}> {how}, at "
-        f"{item['source']} ({item['function']}), and the catalogue lacks it; the scan fills "
-        f"{json.dumps(item['entry'], sort_keys=True)}"
-    )
-
-
 def cxx_source_not_supplied(mapping: Any, *, source: str) -> StrictDiagnostic:
     """Supplied, never discovered: an unsupplied root is reported as info, not
     a warning, so an operation that needs no C++ scanning isn't flagged."""
@@ -179,9 +159,10 @@ def _catalog_diagnostics(
     )
     notes = tuple(
         diagnostic(
-            "info", "plugin_catalog_uncatalogued", _describe_uncatalogued(item) +
-            " (omnidriver catalog --uncatalogued lists every one)",
-            source=source, field=item.get("path", ""),
+            "info", "plugin_catalog_uncatalogued",
+            f"the C++ {'compares' if item.get('kind') == 'compared_value' else 'reads'} {item.get('path')!r}, which the "
+            "catalogue lacks (detail: what the scan found; omnidriver catalog --uncatalogued lists every one)",
+            source=source, field=item.get("path", ""), detail=item,
         )
         for item in report.get("uncatalogued", ())
         if held.intersection(item.get("documents", ()))

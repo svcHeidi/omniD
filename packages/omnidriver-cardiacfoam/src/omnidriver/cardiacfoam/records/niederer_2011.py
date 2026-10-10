@@ -41,15 +41,12 @@ def _hex_cell_counts_from_dx(
 ) -> tuple[int, int, int]:
     """``dx`` (metres) to the slab's hex cell counts, over the extent read live from ``blockMeshDict``."""
     del current
-    dx = float(dx_m)
-    if dx <= 0:
-        raise ValueError(f"dx-axis {DX_AXIS_NAME!r}: dx must be positive, got {dx_m!r}")
     if extents is None:
         raise ValueError(
             f"dx-axis {DX_AXIS_NAME!r}: {_BLOCK_MESH_DICT_DOCUMENT!r} has no "
             "parseable vertices/scale to read a physical extent from"
         )
-    return cell_counts_from_dx(dx, extents)
+    return cell_counts_from_dx(float(dx_m), extents)
 
 
 def _tet_dx_axis(name: str) -> AxisContract:
@@ -57,12 +54,15 @@ def _tet_dx_axis(name: str) -> AxisContract:
 
     def resolve(value: Any, staged_case_root) -> AxisResult:
         del staged_case_root  # this axis reads nothing from the staged case
-        dx = float(value)
-        if dx <= 0:
-            raise ValueError(f"tet-dx axis {name!r}: dx must be positive, got {value!r}")
-        return AxisResult(command_arguments={"gmsh": GMSH_LC_KEY + (str(dx),)})
+        return AxisResult(command_arguments={"gmsh": GMSH_LC_KEY + (str(float(value)),)})
 
-    return AxisContract(name=name, value_kind="scalar", resolve=resolve)
+    return AxisContract(
+        name=name, value_kind="scalar", unit="m", exclusive_minimum=0, resolve=resolve,
+        description=(
+            f"The tet route's mesh size: the characteristic length lc of {_TET_GEO_TEMPLATE_RELPATH} "
+            "(-setnumber lc on the gmsh step); unset, the template's default 0.0005 applies."
+        ),
+    )
 
 
 #: This record's own axes (``TutorialRecord.axes``).
@@ -71,8 +71,14 @@ AXES = (
         DX_AXIS_NAME,
         documents=(_BLOCK_MESH_DICT_DOCUMENT,),
         resolution=_hex_cell_counts_from_dx,
+        unit="m",
+        description=(
+            "The hex route's isotropic cell size: each blockMesh cell count is the slab's extent along that "
+            "direction (system/blockMeshDict's vertices times its scale) over dx, which must divide it evenly."
+        ),
         expected_blocks=1,
         value_kind="scalar",
+        exclusive_minimum=0,
     ),
     _tet_dx_axis(TET_DX_AXIS_NAME),
 )

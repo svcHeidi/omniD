@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
-from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult
+from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult, TutorialRecordError
 
 
 def ionic_model_axis(
@@ -29,24 +29,24 @@ def ionic_model_axis(
     manufactured-tissue-only model).
     """
 
+    menu = {"menu": sorted(model for model, entry in IONIC_MODEL_CATALOG.items() if entry.single_cell_stimulus_amplitude is not None)}
+
     def resolve(value: Any, staged_case_root: Path) -> AxisResult:
         del staged_case_root  # this axis reads nothing from the staged case
         model_name = value
         entry = IONIC_MODEL_CATALOG.get(model_name)
         if entry is None:
-            raise ValueError(
-                f"ionic-model axis {name!r}: {model_name!r} is not a model "
-                f"the ionic model catalog knows (known models: "
-                f"{sorted(IONIC_MODEL_CATALOG)})"
+            raise TutorialRecordError(
+                f"{model_name!r} is not a model the ionic model catalog knows (models this axis takes: {menu['menu']})",
+                code="axis_rule", rule=menu,
             )
         amplitude = entry.single_cell_stimulus_amplitude
         if amplitude is None:
-            raise ValueError(
-                f"ionic-model axis {name!r}: {model_name!r} declares no "
-                "single_cell_stimulus_amplitude in the ionic model catalog "
-                "(typically a manufactured-only verification model, which "
-                "has no single-cell case) -- there is no stimulus amplitude "
-                "to derive, so this model cannot be used with this axis"
+            raise TutorialRecordError(
+                f"{model_name!r} declares no single_cell_stimulus_amplitude in the ionic model catalog "
+                "(typically a manufactured-only verification model, which has no single-cell case), so this "
+                f"axis cannot derive its stimulus (models this axis takes: {menu['menu']})",
+                code="axis_rule", rule=menu,
             )
         ionic_model_patch = AxisPatch(
             document=document,
@@ -62,4 +62,10 @@ def ionic_model_axis(
         )
         return AxisResult(patches=(ionic_model_patch, stim_amplitude_patch))
 
-    return AxisContract(name=name, value_kind="word", resolve=resolve)
+    return AxisContract(
+        name=name, value_kind="word", unit=None, resolve=resolve,
+        description=(
+            "The ionic model (ionicModel in the solver's coefficients); singleCellStimulus.stim_amplitude "
+            "is set to the model's own amplitude from the ionic model catalog."
+        ),
+    )

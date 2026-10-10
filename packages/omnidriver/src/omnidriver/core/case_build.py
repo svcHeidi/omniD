@@ -9,7 +9,7 @@ import json
 from importlib.metadata import entry_points
 from pathlib import Path
 
-from .refusal import Refusal, RefusingParser, print_refusal
+from .refusal import Refusal, RefusingParser, failure, print_refusal
 
 BUILDERS_GROUP = "omnidriver.builders"
 
@@ -62,6 +62,6 @@ def _build(argv: list[str]) -> int:
             options=_pairs(parser, "--option", args.option), overwrite=args.overwrite,
         )
     except (ValueError, OSError) as exc:
-        result = {"status": "failed", "error": str(exc)}
+        result = failure(exc)
     print(json.dumps({"action": "build", "plugin": args.plugin, **result}, indent=2))
     return 0 if result["status"] == "ok" else 1

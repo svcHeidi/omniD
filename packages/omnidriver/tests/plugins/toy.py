@@ -153,7 +153,16 @@ def _number_cells_axis() -> AxisContract:
             document="constant/mesh.json", key_path=("cells",), value=int(value), value_kind="integer",
         ),))
 
-    return AxisContract(name="number_cells", value_kind="integer", resolve=resolve)
+    return AxisContract(
+        name="number_cells", value_kind="integer", unit=None,
+        description="the toy mesh's cell count, written to constant/mesh.json:cells", exclusive_minimum=0, resolve=resolve,
+    )
+
+
+def toy_axis(*, name: str, value_kind: str, resolve, unit: str | None = None, description: str = "a test axis",
+             **bounds) -> AxisContract:
+    """An axis for a test: what it sets is not the point, so its unit and description default."""
+    return AxisContract(name=name, value_kind=value_kind, unit=unit, description=description, resolve=resolve, **bounds)
 
 
 def _solve(command, *, consumes=("constant/mesh.json",), produces=("solved.marker",), **fields) -> WorkflowStep:
@@ -456,7 +465,10 @@ def _marker_axis() -> AxisContract:
     def resolve(value, staged_case_root):
         return AxisResult(command_arguments={"solve": ("--marker", f"{value}.marker")})
 
-    return AxisContract(name="marker", value_kind="word", resolve=resolve)
+    return AxisContract(
+        name="marker", value_kind="word", unit=None,
+        description="the stem of the marker file the solve step writes (--marker <stem>.marker)", resolve=resolve,
+    )
 
 
 class DefaultArgumentPlugin(ToyStack):
@@ -903,6 +915,22 @@ class QuantityToyPlugin(ToyStack):
 
     def get_artifact_value_reader(self, artifact_format: str):
         return self._READERS.get(artifact_format)
+
+
+class DescribedQuantityPlugin(QuantityToyPlugin):
+    """``toyQuantities`` declaring the quantity its conformance study compares, its points taken from the
+    reference, so describe can list it."""
+
+    RECORDS = {"toyQuantities": dataclasses.replace(TOY_QUANTITY_RECORD, conformance=ConformanceStudy(
+        base_study={"number_cells": 2}, patch=("constant/mesh.json:cells", 7), untouched=("constant/mesh.json", ("label",)),
+        sweep_name="number_cells", sweep_values=(2, 3), unknown_name="cell_count",
+        quantity=QuantityTarget(
+            artifact_format=VALUES_FORMAT, reference=Path("toy/reference.json"), at_unit=None, max_sampling_offset=0.001,
+            study={"constant/mesh.json:label": "long"}, sweep_values=(2, 3), tolerance=5.0, tolerance_unit="ms",
+            parallel_tolerance=1e-9,
+            rank_evidence=RankEvidence(log_pattern=r"nRanks=(\d+)"),
+        ),
+    ))}
 
 
 class RaisingReaderPlugin(QuantityToyPlugin):

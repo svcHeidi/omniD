@@ -11,10 +11,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-from omnidriver.core.contracts.dictionary import validate_value_shape
+from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations, numeric_bounds, validate_value_shape
+from omnidriver.core.tutorial_records import TutorialRecordError
 from omnidriver.core.runtime.record_surface import ANY_KEY
 
-from .case_rules import bound_reasons
 from .dict_keys_scanner import cxx_value_kind, document_scans, supplied_scan
 
 from .mutators import check_dictionary_word_is_safe
@@ -233,9 +233,9 @@ def make_validator(
                 except KeyError as exc:
                     if catalogued.open:
                         return infer_unvalidated_value_kind(value), False
-                    raise KeyError(
+                    raise TutorialRecordError(
                         f"{document}:{dotted} is not declared by the {catalogued.label} key catalog, and "
-                        f"{exc.args[0]} (omnidriver catalog --uncatalogued lists what it reads)"
+                        f"{exc.args[0]} (omnidriver catalog --uncatalogued lists what it reads)", code="unknown_key",
                     ) from None
             entry, binding = match
             for placeholder, bound_value in binding.items():
@@ -252,24 +252,28 @@ def make_validator(
             if computed:
                 return kind, True
             reasons = validate_value_shape(kind, value)
-            if not reasons and (bounded := bound_reasons(entry, value)):
-                raise ValueError(f"{document}:{dotted} = {value!r} is outside the catalogue's bounds: {'; '.join(bounded)}")
+            if not reasons and (broken := bound_violations(numeric_bounds(entry), value)):
+                raise TutorialRecordError(
+                    f"{document}:{dotted} = {value!r} is outside the catalogue's bounds: " + "; ".join(bound_reasons(broken)),
+                    code="catalog_rule", rule=broken,
+                )
             if reasons:
-                raise ValueError(
+                raise TutorialRecordError(
                     f"{document}:{dotted} does not fit "
                     + (
                         f"value_kind {kind!r}, which the supplied C++ reads it as (the catalogue says {entry.value_kind!r})"
                         if kind != entry.value_kind else f"catalogued value_kind {entry.value_kind!r}"
                     )
-                    + f": {'; '.join(reasons)}"
+                    + f": {'; '.join(reasons)}",
+                    code="catalog_rule", rule={"value_kind": kind},
                 )
             return kind, True
         if document.startswith("system/"):
             return infer_unvalidated_value_kind(value), False
-        raise KeyError(
+        raise TutorialRecordError(
             f"{document}:{dotted} is neither a {owner}-catalogued document ({', '.join(sorted(documents))}) "
             "nor an OpenFOAM-owned 'system/' document; refusing rather than silently treating an "
-            "unrecognised document as an unvalidated OpenFOAM key"
+            "unrecognised document as an unvalidated OpenFOAM key", code="unknown_document",
         )
 
     return validate

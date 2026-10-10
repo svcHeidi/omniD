@@ -1237,7 +1237,9 @@ def test_a_negative_root_stimulus_node_breaks_the_catalogue_bound(tmp_path):
     from omnidriver.cardiacfoam.validation import case_diagnostics
 
     _build_pvj_case(tmp_path, set_rpvj=True, graph_present=True, root_node="-1")
-    assert [(item.code, item.field) for item in case_diagnostics(tmp_path)] == [("catalog_rule", _ROOT_NODE)]
+    assert [(item.code, item.field) for item in case_diagnostics(tmp_path)] == [
+        ("catalog_rule", f"monodomainSolverCoeffs.{_ROOT_NODE}"),
+    ]
 
 
 @pytest.mark.parametrize("rpvj,refused", [("150.0", False), ("0", True), ("-10", True)])
@@ -1245,7 +1247,7 @@ def test_a_coupling_resistance_that_is_not_positive_breaks_the_catalogue_bound(t
     from omnidriver.cardiacfoam.validation import case_diagnostics
 
     _build_pvj_case(tmp_path, set_rpvj=True, rpvj=rpvj)
-    assert [item.field for item in case_diagnostics(tmp_path)] == (["domainCouplings.pvj.rPvj"] if refused else [])
+    assert [item.field for item in case_diagnostics(tmp_path)] == (["monodomainSolverCoeffs.domainCouplings.pvj.rPvj"] if refused else [])
 
 
 #: blockMesh's points for monodomain1D3D's unit-cube mesh (system/blockMeshDict.3D), as OpenFOAM lays out the file.
@@ -1579,3 +1581,21 @@ def test_an_empty_external_stimulus_block_still_needs_its_corners(tmp_path):
     assert "one of externalStimulus.stimulusLocationMin, externalStimulus.stimulusLocationMinList is required." in (
         _external_stimulus_case(tmp_path, "")
     )
+
+
+@pytest.mark.parametrize("key", ["conductivity", "conductivityIntracellular", "conductivityExtracellular"])
+def test_a_uniform_conductivity_tensor_has_no_negative_diagonal_component(key):
+    from foamlib import Dimensioned, DimensionSet
+
+    siemens_per_metre = DimensionSet(mass=-1, length=-3, time=3, current=2)
+
+    def judged(components):
+        return cross_field_diagnostics({"myocardiumSolver": "monodomainSolver", key: Dimensioned(components, siemens_per_metre)})
+
+    assert judged([0.1334, 0, 0, 0.0176, 0, 0.0176]) == []
+    assert judged([0.1334, 0, 0, 0, 0.0176, 0, 0, 0, 0.0176]) == []
+    (found,) = judged([0.1334, 0, 0, -0.0176, 0, 0.0176])
+    assert (found.level, found.source, found.field) == ("error", "constant/electroProperties", f"monodomainSolverCoeffs.{key}")
+    assert found.detail == {"rule": {"diagonal_minimum": 0}}
+    assert "diagonal" in found.message and "-0.0176" in found.message
+    assert judged([0.1, 0, 0, 0, 0, 0]) == []

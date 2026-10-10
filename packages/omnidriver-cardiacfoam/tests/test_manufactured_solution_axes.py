@@ -67,10 +67,12 @@ def test_the_dimension_axis_refuses_a_dimension_by_name(tmp_path):
 
 
 @pytest.mark.parametrize("value", [0, -3, True])
-def test_the_tet_axis_refuses_a_cell_count_that_is_not_positive(value, tmp_path):
+def test_the_tet_axis_declares_only_a_positive_cell_count(value):
+    """Core refuses what the declaration rules out before ``resolve`` runs."""
+    from omnidriver.core.contracts.dictionary import bound_violations, numeric_bounds, validate_value_shape
+
     axis = tet_number_cells_axis("tetNumberCells")
-    with pytest.raises(ValueError, match="N must be a positive integer"):
-        axis.resolve(value, tmp_path)
+    assert validate_value_shape(axis.value_kind, value) or bound_violations(numeric_bounds(axis), value)
 
 
 def test_a_record_refuses_an_axis_only_another_record_declares():
@@ -187,3 +189,13 @@ def test_every_gmsh_to_foam_step_declares_the_zone_files_it_writes():
         # One cell set per Physical Volume; its name is the template's own
         # (`internal` for these three, others for a multi-volume template).
         assert any(path.startswith("constant/polyMesh/sets/") for path in produced), record.name
+
+
+def test_every_axis_of_every_record_says_what_it_sets_and_the_niederer_lengths_are_metres():
+    records = _CTX.stack.call("get_tutorial_records")
+    for record in records.values():
+        for axis in record.axes:
+            assert axis.description.strip(), (record.name, axis.name)
+    niederer = {axis.name: axis.to_json() for axis in records["niederer2011"].axes}
+    for name in ("dx", "tetDx"):
+        assert (niederer[name]["unit"], niederer[name]["exclusive_minimum"]) == ("m", 0)

@@ -61,10 +61,10 @@ class StrictPlanReport:
     configuration_diagnostics: tuple[StrictDiagnostic, ...] = ()
     plugin: dict[str, str] = field(default_factory=dict)
 
-    def error_messages(self) -> list[str]:
-        """``code: message`` of every error-level diagnostic the plan carries."""
+    def errors(self) -> list[StrictDiagnostic]:
+        """Every error-level diagnostic the plan carries."""
         return [
-            f"{d.code}: {d.message}"
+            d
             for group in (
                 self.workflow_diagnostics, self.command_diagnostics, self.environment_diagnostics,
                 self.plugin_diagnostics, self.configuration_diagnostics,
@@ -72,6 +72,10 @@ class StrictPlanReport:
             for d in group
             if d.level == "error"
         ]
+
+    def error_messages(self) -> list[str]:
+        """``code: message`` of every error-level diagnostic the plan carries."""
+        return [f"{d.code}: {d.message}" for d in self.errors()]
 
     def to_json(self) -> dict[str, Any]:
         return {

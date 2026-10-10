@@ -111,7 +111,12 @@ def test_what_the_cxx_disagrees_with_never_fails_the_plan(tmp_path):
         ("info", "plugin_catalog_uncatalogued"),
     ]
     assert "no longer reads it" in diagnostics[1].message and "has no effect" in diagnostics[1].message
-    assert "'c' as get<word> with no default, so it is required, at x.C:3 (f)" in diagnostics[2].message
+    assert diagnostics[0].message == "a.c: catalogue value_kind 'word'; the C++ reads scalar (x.C:3)"
+    assert diagnostics[2].message == (
+        "the C++ reads 'c', which the catalogue lacks (detail: what the scan found; "
+        "omnidriver catalog --uncatalogued lists every one)"
+    )
+    assert diagnostics[2].detail == report["uncatalogued"][0]
 
 
 def test_notes_about_a_dictionary_the_case_does_not_hold_or_a_read_with_no_known_one_are_left_to_the_catalog_command(tmp_path):

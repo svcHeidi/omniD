@@ -8,11 +8,11 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable, Mapping
-from numbers import Real
 from pathlib import Path
 from typing import Any
 
 from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
+from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations, numeric_bounds
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
 from .literals import switch_value
@@ -44,16 +44,10 @@ def read_leaves(path: Path, scope: tuple[str, ...] = ()) -> dict[str, Any]:
     return flatten(node)
 
 
-def bound_reasons(entry: Any, value: Any) -> tuple[str, ...]:
-    """Reasons a number lies outside the entry's declared bounds; empty when it fits, none is declared or the value is no number."""
-    if entry.value_kind not in ("scalar", "integer") or isinstance(value, bool) or not isinstance(value, Real):
-        return ()
-    reasons = []
-    if entry.minimum is not None and value < entry.minimum:
-        reasons.append(f"must be at least {entry.minimum:g}")
-    if entry.exclusive_minimum is not None and value <= entry.exclusive_minimum:
-        reasons.append(f"must be more than {entry.exclusive_minimum:g}")
-    return tuple(reasons)
+def _magnitude(value: Any) -> Any:
+    from foamlib import Dimensioned
+
+    return value.value if isinstance(value, Dimensioned) else value
 
 
 def _present(value: Any) -> bool:
@@ -72,6 +66,10 @@ def _matches(actual: Any, expected: str | bool | tuple) -> bool:
     if isinstance(actual, bool):
         return any(switch_value(option) is actual for option in options)
     return actual in tuple(_word(option) for option in options)
+
+
+def _listed(predicate: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: list(value) if isinstance(value, tuple) else value for key, value in predicate.items()}
 
 
 def _format(predicate: Mapping[str, Any]) -> str:
@@ -311,8 +309,8 @@ def rule_diagnostics(
     found: list[StrictDiagnostic] = []
     unmet_groups: set[frozenset[str]] = set()
 
-    def violated(field: str, message: str) -> None:
-        found.append(diagnostic("error", "catalog_rule", message, source=document, field=field))
+    def violated(field: str, message: str, rule: Mapping[str, Any]) -> None:
+        found.append(diagnostic("error", "catalog_rule", message, source=document, field=field, detail={"rule": rule}))
 
     for entry in entries:
         key = slot_key(entry.driver_path)
@@ -337,7 +335,7 @@ def rule_diagnostics(
             set_here = instance.is_set(entry.driver_path)
             forbidden = instance.forbidden_by(entry)
             if set_here and forbidden:
-                violated(concrete, f"{concrete} is forbidden when {_format(forbidden)}.")
+                violated(concrete, f"{concrete} is forbidden when {_format(forbidden)}.", {"forbidden_when": _listed(forbidden)})
             if not instance.applies(entry):
                 continue
             if entry.required_one_of:
@@ -345,10 +343,13 @@ def rule_diagnostics(
                 group = frozenset(instance.resolve(member) for member in members)
                 if group not in unmet_groups and not any(instance.is_set(member) for member in members):
                     unmet_groups.add(group)
-                    violated(concrete, f"one of {', '.join(sorted(group))} is required.")
+                    violated(concrete, f"one of {', '.join(sorted(group))} is required.", {"required_one_of": sorted(group)})
             if instance.requires(entry) and not set_here and entry.driver_path not in unread:
                 condition = f" when {_format(entry.required_when)}" if entry.required_when else ""
-                violated(concrete, f"{concrete} is required{condition}.")
+                violated(
+                    concrete, f"{concrete} is required{condition}.",
+                    {"required_when": _listed(entry.required_when)} if entry.required_when else {"required": True},
+                )
             if not set_here:
                 continue
             named = compared.get(entry.driver_path, frozenset())
@@ -359,15 +360,28 @@ def rule_diagnostics(
                     "the supplied C++ registers" if entry.driver_path in registered
                     else "the catalogue lists or the supplied C++ compares" if named else "the catalogue lists"
                 )
-                violated(concrete, f"{concrete} is {value!r}, not one of the values {source}: {sorted(menu)}.")
-            if reasons := bound_reasons(entry, value):
-                violated(concrete, f"{concrete} is {value!r}, outside the catalogue's bounds: {'; '.join(reasons)}.")
+                violated(
+                    concrete, f"{concrete} is {value!r}, not one of the values {source}: {sorted(menu)}.",
+                    {"menu": sorted(menu)},
+                )
+            number = _magnitude(value)
+            if broken := bound_violations(numeric_bounds(entry), number):
+                violated(
+                    concrete, f"{concrete} is {number!r}, outside the catalogue's bounds: {'; '.join(bound_reasons(broken))}.",
+                    broken,
+                )
             for sibling in entry.mutually_exclusive_with:
                 if instance.is_set(sibling):
-                    violated(concrete, f"{concrete} is mutually exclusive with {instance.resolve(sibling)}.")
+                    violated(
+                        concrete, f"{concrete} is mutually exclusive with {instance.resolve(sibling)}.",
+                        {"mutually_exclusive_with": [instance.resolve(sibling)]},
+                    )
             for sibling in entry.co_required_with:
                 if not instance.is_set(sibling):
-                    violated(concrete, f"{concrete} requires {instance.resolve(sibling)} to be set as well.")
+                    violated(
+                        concrete, f"{concrete} requires {instance.resolve(sibling)} to be set as well.",
+                        {"co_required_with": [instance.resolve(sibling)]},
+                    )
     for path, reads in requirements.items():
         found += _scan_requirement(path, reads, context, document, built)
     return found

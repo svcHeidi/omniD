@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Literal, Mapping
 
+from ..refusal import caught_code, failure
 from .attempt_lease import attempt_lease_is_held, case_lease_is_held
 from .execution_context import ReplannedExecution, StepExecutionContext
 from .failure_context import build_failure_context
@@ -113,12 +114,9 @@ def execute_step_owned(
             if not state_path.exists() and replanned:
                 workflow_state = replanned[0].planned_state
         except (OSError, ValueError, CaseTransactionError) as exc:
-            return StepResult("rejected", {
-                "status": "failed",
-                "entry": context.entry_label,
-                "step": step_id,
-                "error": f"candidate rejected: {exc}",
-            })
+            return StepResult("rejected", failure(
+                exc, error=f"candidate rejected: {exc}", entry=context.entry_label, step=step_id,
+            ))
 
     try:
         run_result = run_step(
@@ -139,13 +137,9 @@ def execute_step_owned(
                 output_dir, step_id=step_id, attempt=_attempt(workflow_state, step_id),
                 applied_patches=list(applied), resulting_status="rerun_error",
             )
-        return StepResult("failed", {
-            "status": "failed",
-            "entry": context.entry_label,
-            "step": step_id,
-            "error": str(exc),
-            "workflow_state": workflow_state.to_json(),
-        })
+        return StepResult("failed", failure(
+            exc, code=caught_code(exc), entry=context.entry_label, step=step_id, workflow_state=workflow_state.to_json(),
+        ))
 
     step_state = _step_state_by_id(run_result.state, step_id)
     successful = is_execution_successful(step_state.status)
@@ -161,11 +155,11 @@ def execute_step_owned(
         "workflow_state": run_result.state.to_json(),
     }
     if not successful:
-        failure = build_failure_context(step_state, max_lines=tail_lines)
-        failure["candidate_remediations"] = [
-            hint.to_json() for hint in build_candidate_remediations(failure)
+        context_bundle = build_failure_context(step_state, max_lines=tail_lines)
+        context_bundle["candidate_remediations"] = [
+            hint.to_json() for hint in build_candidate_remediations(context_bundle)
         ]
-        payload["failure_context"] = failure
+        payload["failure_context"] = context_bundle
     if study is not None:
         append_remediation_record(
             output_dir, step_id=step_id, attempt=step_state.attempt,

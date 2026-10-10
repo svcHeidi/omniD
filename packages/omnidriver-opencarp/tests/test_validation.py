@@ -17,16 +17,28 @@ def test_known_keys_get_their_kind():
     assert record_key_validator("nversion.par", ("compute_APD",), True) == ("boolean", True)
 
 
-@pytest.mark.parametrize(("document", "key_path", "value", "named"), [
-    ("nversion.par", ("gregion[0]", "g_ill"), 0.2, "gregion[0].g_ill"),        # misspelled
-    ("nversion.par", ("compute_APD",), "no", "compute_APD"),                    # not a bool
-    ("nversion.par", ("bidomain",), 5, "bidomain"),                             # outside its menu
-    ("nversion.par", ("num_stim",), -1, "num_stim"),                           # below its literal min
-    ("mesh.pts", ("tend",), 1.0, "mesh.pts"),                                   # not a .par document
+@pytest.mark.parametrize(("document", "key_path", "value", "named", "code"), [
+    ("nversion.par", ("gregion[0]", "g_ill"), 0.2, "gregion[0].g_ill", "unknown_key"),     # misspelled
+    ("nversion.par", ("compute_APD",), "no", "compute_APD", "catalog_rule"),               # not a bool
+    ("nversion.par", ("bidomain",), 5, "bidomain", "catalog_rule"),                        # outside its menu
+    ("nversion.par", ("num_stim",), -1, "num_stim", "catalog_rule"),                       # below its literal min
+    ("mesh.pts", ("tend",), 1.0, "mesh.pts", "unknown_document"),                          # not a .par document
 ])
-def test_refusals_name_the_key(document, key_path, value, named):
-    with pytest.raises(TutorialRecordError, match=named.replace("[", r"\[").replace("]", r"\]")):
+def test_refusals_name_the_key(document, key_path, value, named, code):
+    with pytest.raises(TutorialRecordError, match=named.replace("[", r"\[").replace("]", r"\]")) as caught:
         record_key_validator(document, key_path, value)
+    assert caught.value.code == code
+
+
+@pytest.mark.parametrize(("key_path", "value", "rule"), [
+    (("gregion[0]", "g_il"), -1, {"minimum": 0.0}),
+    (("bidomain",), 5, {"menu": ["2", "1", "0"]}),
+    (("compute_APD",), "no", {"value_kind": "boolean"}),
+])
+def test_a_catalogue_refusal_names_the_rule_it_breaks(key_path, value, rule):
+    with pytest.raises(TutorialRecordError) as caught:
+        record_key_validator("nversion.par", key_path, value)
+    assert (caught.value.code, caught.value.rule) == ("catalog_rule", rule)
 
 
 def test_whole_array_shorthand_asks_for_elements():

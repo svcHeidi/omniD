@@ -40,3 +40,12 @@ def test_the_replaced_imbrication_keeps_its_declared_slot_before_the_resolution(
     argv = _mesh_argv({"dx": 500.0, "fibers.imbrication": 90})
     assert argv[-8:] == ("-fibers.imbrication", "90.0", "-resolution[0]", "500.0", "-resolution[1]", "500.0", "-resolution[2]", "500.0")
     assert argv[:-8][-2:] == ("-mesh", "slab")
+
+
+def test_the_axes_state_their_units_and_a_positive_resolution():
+    axes = {axis.name: axis.to_json() for axis in RECORD.axes}
+    assert (axes["dx"]["unit"], axes["dx"]["exclusive_minimum"]) == ("um", 0)
+    assert axes["fibers.imbrication"]["unit"] == "deg"
+    for value in (0, -500.0):
+        with pytest.raises(TutorialRecordError, match=r"axis 'dx' is .*outside its bounds: must be more than 0"):
+            _mesh_argv({"dx": value})

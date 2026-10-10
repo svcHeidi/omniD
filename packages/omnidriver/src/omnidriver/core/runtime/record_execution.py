@@ -414,7 +414,8 @@ def refuse_a_case_that_breaks_a_rule(
             f"{len(broken)} rule(s): "
             + "; ".join(f"{item.field or item.source}: {item.message}" for item in broken)
             + (" Also noted: " + "; ".join(item.message for item in noted) if noted else "")
-            + then
+            + then,
+            code="case_rule", diagnostics=broken,
         )
 
 

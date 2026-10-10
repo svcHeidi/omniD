@@ -85,6 +85,34 @@ def test_a_number_outside_the_entrys_bounds_is_refused_and_a_value_that_is_no_nu
     assert _violations(entries, {"dt": "$step", "n": "#calc \"2*3\""}) == set()
 
 
+def test_a_dimensioned_number_is_judged_by_its_magnitude():
+    from foamlib import Dimensioned, DimensionSet
+
+    entries = [_entry("$S.chi", value_kind="scalar", exclusive_minimum=0)]
+    assert _violations(entries, {"chi": Dimensioned(-1.0, DimensionSet(length=-1))}) == {
+        ("chi", "chi is -1.0, outside the catalogue's bounds: must be more than 0."),
+    }
+    assert _violations(entries, {"chi": Dimensioned(140000.0, DimensionSet(length=-1))}) == set()
+
+
+def test_each_violation_names_the_catalogue_rule_it_breaks():
+    entries = [
+        _entry("$S.dt", value_kind="scalar", exclusive_minimum=0),
+        _entry("$S.mode", value_kind="enum", enum_values=("a", "b")),
+        _entry("$S.need", required_when={"mode": "a"}),
+        _entry("$S.x", mutually_exclusive_with=("$S.y",)), _entry("$S.y"),
+    ]
+    rules = {
+        item.field: item.detail["rule"]
+        for item in rule_diagnostics(entries, {"dt": -1, "mode": "c", "x": "1", "y": "2"}, document="doc")
+    }
+    assert rules == {
+        "dt": {"exclusive_minimum": 0}, "mode": {"menu": ["a", "b"]}, "x": {"mutually_exclusive_with": ["y"]},
+    }
+    (required,) = rule_diagnostics(entries, {"mode": "a"}, document="doc")
+    assert required.detail == {"rule": {"required_when": {"mode": "a"}}}
+
+
 def test_a_switch_is_compared_by_meaning_not_spelling():
     entries = [_entry("$S.scale", required=True, applicable_when={"enabled": "true"})]
     assert _violations(entries, {"enabled": True}) == {("scale", "scale is required.")}

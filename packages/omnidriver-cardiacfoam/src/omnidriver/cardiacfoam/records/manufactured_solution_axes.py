@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult
+from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult, TutorialRecordError
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
 
 #: One ``blockMeshDict`` per dimension; none of these cases has a plain ``system/blockMeshDict``.
@@ -57,7 +57,7 @@ def dimension_axis(
     def resolve(value: Any, staged_case_root: Path) -> AxisResult:
         del staged_case_root  # this axis reads nothing from the staged case
         if value not in DIMENSIONS:
-            raise ValueError(f"dimension axis {name!r}: {value!r} is not one of {DIMENSIONS}")
+            raise TutorialRecordError(f"dimension axis {name!r}: {value!r} is not one of {DIMENSIONS}")
         patches: tuple[AxisPatch, ...] = ()
         if solver_coefficients is not None:
             document, scope = solver_coefficients
@@ -77,7 +77,13 @@ def dimension_axis(
             command_arguments={mesh_step_id: MESH_DICT_KEY + (block_mesh_dict_document(value),)},
         )
 
-    return AxisContract(name=name, value_kind="enum", resolve=resolve)
+    return AxisContract(
+        name=name, value_kind="enum", unit=None, resolve=resolve,
+        description=(
+            f"The dimension, one of {list(DIMENSIONS)}: the mesh step reads system/blockMeshDict.<dimension> (-dict)"
+            + (", and the solver's own dimension key is set to it." if solver_coefficients is not None else ".")
+        ),
+    )
 
 
 def _keep_ones_fixed(
@@ -100,7 +106,10 @@ def hex_number_cells_axis(name: str, *, expected_blocks: int = 1) -> AxisContrac
     """
     return block_mesh_resolution_axis(
         name, documents=BLOCK_MESH_DICT_DOCUMENTS, resolution=_keep_ones_fixed,
-        expected_blocks=expected_blocks, value_kind="integer",
+        expected_blocks=expected_blocks, value_kind="integer", unit=None, exclusive_minimum=0,
+        description=(
+            "Cells along each direction of every system/blockMeshDict.<dimension> whose cell count is not 1."
+        ),
     )
 
 
@@ -122,10 +131,12 @@ def tet_number_cells_axis(name: str, *, gmsh_step_id: str = "gmsh") -> AxisContr
 
     def resolve(value: Any, staged_case_root: Path) -> AxisResult:
         del staged_case_root  # this axis reads nothing from the staged case
-        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-            raise ValueError(
-                f"tet-number-cells axis {name!r}: N must be a positive integer, got {value!r}"
-            )
         return AxisResult(command_arguments={gmsh_step_id: GMSH_LC_KEY + (str(1.0 / value),)})
 
-    return AxisContract(name=name, value_kind="integer", resolve=resolve)
+    return AxisContract(
+        name=name, value_kind="integer", unit=None, exclusive_minimum=0, resolve=resolve,
+        description=(
+            "Cells N along the unit cube's edge for the tet route: the gmsh step gets -setnumber lc 1/N; "
+            "unset, the template's own default applies."
+        ),
+    )

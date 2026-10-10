@@ -7,10 +7,10 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
-from omnidriver.core.contracts.dictionary import validate_value_shape
+from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations, validate_value_shape
 from omnidriver.core.tutorial_records import TutorialRecord, TutorialRecordError
 
-from .catalog import load_catalog, number_of, template_name
+from .catalog import load_catalog, numeric_limits, template_name
 from .par_format import ParFormatError, parse_par, unquote
 from .records import TUTORIAL_RECORDS
 
@@ -79,7 +79,7 @@ def make_record_key_validator(
         if document not in documents:
             raise TutorialRecordError(
                 f"{document}:{key}: no record step passes {document!r} to openCARP with +F, so "
-                f"openCARP would never read it (documents it reads: {sorted(documents)})"
+                f"openCARP would never read it (documents it reads: {sorted(documents)})", code="unknown_document",
             )
         owner = documents[document].get(key)
         if owner is not None:
@@ -97,7 +97,9 @@ def _catalog_check(document: str, key: str, value: Any) -> tuple[str, bool]:
     catalog = load_catalog()
     spec = catalog.parameters.get(template_name(key))
     if spec is None:
-        raise TutorialRecordError(f"{document}:{key} is not an openCARP {catalog.identity['tag']} parameter")
+        raise TutorialRecordError(
+            f"{document}:{key} is not an openCARP {catalog.identity['tag']} parameter", code="unknown_key",
+        )
     if spec.value_kind is None:
         raise TutorialRecordError(
             f"{document}:{key} is openCARP's whole-array form ({spec.opencarp_type}); set each element, e.g. {key}[0]"
@@ -105,15 +107,20 @@ def _catalog_check(document: str, key: str, value: Any) -> tuple[str, bool]:
     problems = validate_value_shape(spec.value_kind, value)
     if problems:
         hint = " (openCARP reads 'no' and 'off' as on: F1)" if spec.value_kind == "boolean" else ""
-        raise TutorialRecordError(f"{document}:{key}: {'; '.join(problems)}{hint}")
+        raise TutorialRecordError(
+            f"{document}:{key}: {'; '.join(problems)}{hint}", code="catalog_rule", rule={"value_kind": spec.value_kind},
+        )
     if spec.menu:
         spelled = str(int(value)) if isinstance(value, bool) else str(value)
         if spelled not in spec.menu:
-            raise TutorialRecordError(f"{document}:{key} = {value!r} is not one of {list(spec.menu)}")
-    for bound, label, outside in ((spec.minimum, "minimum", lambda v, b: v < b), (spec.maximum, "maximum", lambda v, b: v > b)):
-        if number_of(bound) is not None and spec.value_kind in ("integer", "scalar"):
-            if outside(float(value), number_of(bound)):
-                raise TutorialRecordError(f"{document}:{key} = {value!r} is beyond its {label} {bound}")
+            raise TutorialRecordError(
+                f"{document}:{key} = {value!r} is not one of {list(spec.menu)}", code="catalog_rule",
+                rule={"menu": list(spec.menu)},
+            )
+    if spec.value_kind in ("integer", "scalar") and (broken := bound_violations(numeric_limits(spec), value)):
+        raise TutorialRecordError(
+            f"{document}:{key} = {value!r} {'; '.join(bound_reasons(broken))}", code="catalog_rule", rule=broken,
+        )
     return spec.value_kind, True
 
 

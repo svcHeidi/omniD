@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.core.tutorial_records import (
-    AxisContract, AxisPatch, AxisResult, TutorialRecord, WorkflowStep,
+    AxisContract, AxisPatch, AxisResult, TutorialRecord, TutorialRecordError, WorkflowStep,
 )
 from omnidriver.openfoam.axes import block_mesh_resolution_axis
 
@@ -49,7 +49,7 @@ def _graph_file_axis(name: str) -> AxisContract:
         graph_file = str(value)
         candidate = Path(staged_case_root) / "constant" / graph_file
         if not candidate.is_file():
-            raise ValueError(
+            raise TutorialRecordError(
                 f"graph-file axis {name!r}: no constant/{graph_file!r} in the staged case"
             )
         return AxisResult(patches=(
@@ -60,7 +60,10 @@ def _graph_file_axis(name: str) -> AxisContract:
             ),
         ))
 
-    return AxisContract(name=name, value_kind="word", resolve=resolve)
+    return AxisContract(
+        name=name, value_kind="word", unit=None, resolve=resolve,
+        description="The Purkinje graph file under constant/ that purkinjeGraphModelCoeffs.graphFile names.",
+    )
 
 
 def _isotropic_cell_counts(
@@ -76,6 +79,8 @@ AXES = (
     block_mesh_resolution_axis(
         NUMBER_CELLS_AXIS_NAME, documents=(_BLOCK_MESH_DICT_DOCUMENT,),
         resolution=_isotropic_cell_counts, expected_blocks=1, value_kind="integer",
+        unit=None, exclusive_minimum=0,
+        description="Cells N along each edge of system/blockMeshDict's one hex block (N N N).",
     ),
 )
 

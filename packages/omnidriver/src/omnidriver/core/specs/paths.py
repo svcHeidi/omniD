@@ -14,10 +14,14 @@ class ScratchRootNotSupplied(TutorialRecordError):
     A ``TutorialRecordError`` so the CLI's existing refusal handlers print it
     as structured JSON, never a traceback."""
 
+    code = "scratch_root_not_supplied"
+
 
 class ScratchRootInsideCasesRoot(TutorialRecordError):
     """A supplied scratch root lies inside the cases root being planned, so
     staging there would write the native tree."""
+
+    code = "scratch_root_inside_cases_root"
 
 
 def resolve_scratch_root(

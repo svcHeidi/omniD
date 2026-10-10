@@ -11,14 +11,33 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from .case_write import _check_case_relative
-from .contracts.dictionary import validate_value_shape
+from .contracts.dictionary import bound_reasons, bound_violations, numeric_bounds, validate_value_shape
+from .planning_types import StrictDiagnostic, diagnostic
+from .refusal import refusal_code
 
 if TYPE_CHECKING:
     from .conformance_study import ConformanceStudy
 
 
 class TutorialRecordError(ValueError):
-    """A tutorial-record study refused a name, a conflict, or a missing case; the message names the offending key or source."""
+    """A tutorial-record study refused a name, a conflict, or a missing case; the message names the offending key or source.
+
+    ``code`` is one of :data:`omnidriver.core.refusal.CODES`; ``rule`` is the declared
+    rule a refused value broke, as ``{field: declared value}``; ``diagnostics`` are the
+    broken rules behind it.
+    """
+
+    code: str | None = None
+
+    def __init__(
+        self, message: str, *, code: str | None = None, rule: Mapping[str, Any] | None = None,
+        diagnostics: Sequence[StrictDiagnostic] = (),
+    ) -> None:
+        super().__init__(message)
+        if code is not None:
+            self.code = code
+        self.rule = rule
+        self.diagnostics = tuple(diagnostics)
 
 
 # ---------------------------------------------------------------------------
@@ -730,20 +749,43 @@ AxisFunction = Callable[[Any, Path], AxisResult]
 
 @dataclass(frozen=True)
 class AxisContract:
-    """A named axis: what value it accepts, and the pure function computing its patches and command arguments.
+    """A named axis: what value it accepts, what it sets, and the pure function computing its patches and command arguments.
 
-    Core ships no axis; an adapter declares each on the record that uses it.
+    ``unit`` is the unit of the study value (``None`` for a value that has
+    none: a name, a count, a mapping); ``description`` says what the axis sets,
+    in the solver's terms. ``minimum``, ``exclusive_minimum`` and ``maximum``
+    bound a ``scalar`` or ``integer`` value as a catalogue entry's do, and core
+    refuses a value outside them before ``resolve`` runs. Core ships no axis; an
+    adapter declares each on the record that uses it.
     """
 
     name: str
     value_kind: str
+    unit: str | None
+    description: str
     resolve: AxisFunction
+    minimum: float | None = None
+    exclusive_minimum: float | None = None
+    maximum: float | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
             raise TutorialRecordError("an axis must have a non-empty name")
         if not callable(self.resolve):
             raise TutorialRecordError(f"axis {self.name!r}'s resolve must be callable")
+        if not self.description.strip():
+            raise TutorialRecordError(f"axis {self.name!r} must say what it sets (description)")
+        if numeric_bounds(self) and self.value_kind not in ("scalar", "integer"):
+            raise TutorialRecordError(
+                f"axis {self.name!r} declares a numeric bound but its value_kind is {self.value_kind!r}, not scalar or integer"
+            )
+
+    def to_json(self) -> dict[str, Any]:
+        """What ``describe`` lists of the axis; a bound it does not declare is not listed."""
+        return {
+            "name": self.name, "value_kind": self.value_kind, "unit": self.unit, "description": self.description,
+            **numeric_bounds(self),
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -930,9 +972,21 @@ def _validate_or_wrap(
         return direct_key_validator(document, key_path, value)
     except Exception as exc:
         dotted = ".".join(key_path)
+        code = refusal_code(exc)
+        reason = exc.args[0] if exc.args and isinstance(exc.args[0], str) else str(exc)
+        raised = f": {exc}" if isinstance(exc, TutorialRecordError) else f" raised {type(exc).__name__}: {exc}"
         raise TutorialRecordError(
-            f"validating {document}:{dotted} raised {type(exc).__name__}: {exc}"
+            f"validating {document}:{dotted}{raised}", code=code,
+            diagnostics=(_broken("error", code, reason, document, dotted, getattr(exc, "rule", None)),),
         ) from exc
+
+
+def _broken(level: str, code: str, message: str, source: str, field: str, rule: Mapping[str, Any] | None) -> StrictDiagnostic:
+    return diagnostic(level, code, message, source=source, field=field, detail=None if rule is None else {"rule": dict(rule)})
+
+
+def _axis_refusal(name: str, rule: Mapping[str, Any] | None, message: str) -> TutorialRecordError:
+    return TutorialRecordError(message, code="axis_rule", diagnostics=(_broken("error", "axis_rule", message, "", name, rule),))
 
 
 def _check_step_is_run(
@@ -1023,14 +1077,28 @@ def resolve_case_patches(
         # kind must not reach it and surface as a native coercion error.
         value_kind_reasons = validate_value_shape(axis.value_kind, value)
         if value_kind_reasons:
-            raise TutorialRecordError(
+            raise _axis_refusal(
+                name, {"value_kind": axis.value_kind},
                 f"axis {name!r} declares value_kind {axis.value_kind!r}, "
-                f"but the value {value!r} does not fit it: "
-                f"{'; '.join(value_kind_reasons)}"
+                f"but the value {value!r} does not fit it: {'; '.join(value_kind_reasons)}",
+            )
+        if broken := bound_violations(numeric_bounds(axis), value):
+            raise _axis_refusal(
+                name, broken, f"axis {name!r} is {value!r}, outside its bounds: {'; '.join(bound_reasons(broken))}",
             )
         # An axis must not write the staged case outside `commit_case_write`.
         before_digest = _case_root_digest(staged_case_root)
-        result = axis.resolve(value, staged_case_root)
+        try:
+            result = axis.resolve(value, staged_case_root)
+        except TutorialRecordError as exc:
+            if exc.diagnostics or exc.code not in (None, "axis_rule"):
+                raise
+            raise _axis_refusal(name, getattr(exc, "rule", None), f"axis {name!r}: {exc}") from exc
+        except Exception as exc:
+            # An axis refuses a value with TutorialRecordError; anything else is a defect in the axis.
+            raise TutorialRecordError(
+                f"axis {name!r} crashed resolving {value!r}: {exc}", code="internal_error",
+            ) from exc
         after_digest = _case_root_digest(staged_case_root)
         if after_digest != before_digest:
             raise TutorialRecordError(
@@ -1243,7 +1311,7 @@ def lookup_record(entry: "str | TutorialRecord", *, driver_context: Any) -> Tuto
         raise TutorialRecordError(
             f"unknown tutorial record {entry!r}; the composed stack registers "
             f"{sorted(catalog) or 'none'}. To run a case folder that is not a "
-            "record, pass it with --case"
+            "record, pass it with --case", code="unknown_record",
         )
     return record
 

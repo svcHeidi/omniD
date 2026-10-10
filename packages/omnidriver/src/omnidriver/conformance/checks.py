@@ -76,7 +76,7 @@ def _why_a_run_stopped(ctx, proc: subprocess.CompletedProcess, state_path: Path)
     return "; ".join(_with_recorded_failure([said], state_path, "the workflow state"))
 
 
-_CASE_REASON_KEYS = ("plan_error", "materialization_error", "timeout_error", "error")
+
 
 
 def _failed_cases(ctx, payload: Mapping[str, Any], out: Path) -> list[str]:
@@ -86,7 +86,7 @@ def _failed_cases(ctx, payload: Mapping[str, Any], out: Path) -> list[str]:
     for case in payload.get("cases", ()):
         if case.get("status") == "completed":
             continue
-        reason = next((str(case[key]) for key in _CASE_REASON_KEYS if case.get(key)), "no reason reported")
+        reason = str(case.get("error") or "no reason reported")
         said = f"case {case.get('case_id')} is {case.get('status')}: {redact_text(reason, patterns)[-OUTPUT_TAIL_CHARS:]}"
         problems += _with_recorded_failure([said], out / case.get("workflow_state_path", ""), "its workflow state")
     return problems

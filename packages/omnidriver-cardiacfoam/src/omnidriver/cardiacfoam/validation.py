@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
@@ -1102,6 +1103,37 @@ def _evaluate_pvj_stability(
     return found
 
 
+#: The uniform conductivity tensors, and where a tensor's diagonal sits in its six (symmetric) or nine components.
+_CONDUCTIVITY_TENSORS = ("conductivity", "conductivityIntracellular", "conductivityExtracellular")
+_DIAGONAL = {6: (0, 3, 5), 9: (0, 4, 8)}
+
+
+def _evaluate_conductivity_diagonal(context: dict[str, Any]) -> list["StrictDiagnostic"]:
+    """A conductivity is never negative along an axis: every diagonal component of a uniform tensor is at least 0
+    (0 along an axis is an insulating direction, as openCARP's g_* minimum 0 allows)."""
+    from .record_key_validation import ELECTRO_DOCUMENT
+
+    errors: list["StrictDiagnostic"] = []
+    coeffs = f"{context['myocardiumSolver']}Coeffs." if context.get("myocardiumSolver") else ""
+    for key in _CONDUCTIVITY_TENSORS:
+        value = context.get(key)
+        components = getattr(value, "value", value)
+        try:
+            components = [float(item) for item in components]
+        except (TypeError, ValueError):
+            continue
+        indices = _DIAGONAL.get(len(components))
+        if indices is None:
+            continue
+        diagonal = [components[i] for i in indices]
+        if any(item < 0 for item in diagonal):
+            errors.append(diagnostic(
+                "error", "run_validation", f"{coeffs}{key} has diagonal {diagonal}; each diagonal component must be at least 0.",
+                source=ELECTRO_DOCUMENT, field=f"{coeffs}{key}", detail={"rule": {"diagonal_minimum": 0}},
+            ))
+    return errors
+
+
 def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]:
     """The rules between values that no single catalogue entry states.
     ``context`` is the active ``<solver>Coeffs`` block's leaves, keyed by
@@ -1113,6 +1145,7 @@ def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]
         + _evaluate_personalized_templates(context)
         + _evaluate_tissue_compatibility(context)
         + _evaluate_ecg_anisotropic_consistency(context)
+        + _evaluate_conductivity_diagonal(context)
     )
 
 
@@ -1153,7 +1186,10 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDi
     # The C++ takes the stimulus boxes from externalStimulus whenever it is found, empty or not.
     held = frozenset(name for name in ("externalStimulus",) if hasattr(parsed[f"{solver}Coeffs"].get(name), "keys"))
     infer_virtual_presence(rule_context, empty_blocks=held)
-    found = rule_diagnostics(entries, rule_context, document=document, mapping=mapping, catalogue=catalogue)
+    found = [
+        item if item.field in ("", "myocardiumSolver") else replace(item, field=f"{solver}Coeffs.{item.field}")
+        for item in rule_diagnostics(entries, rule_context, document=document, mapping=mapping, catalogue=catalogue)
+    ]
     found += control_dict_diagnostics(case_root)
     pre_pacing = region_document(case_root, "electro", "prePacingProperties")
     if pre_pacing is not None:
