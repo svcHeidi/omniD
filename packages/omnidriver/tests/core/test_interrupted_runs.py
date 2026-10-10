@@ -290,6 +290,10 @@ def test_a_second_signal_kills_a_step_that_ignores_the_first(tmp_path, capsys):
     step_pid = None
     try:
         step_pid = _wait_for_running_pid(case / "workflow_state.json")
+        # A SIGTERM before sh has run `trap` would end the step at once.
+        deadline = time.monotonic() + 30
+        while not (case / "trapped").exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
         run.send_signal(signal.SIGTERM)
         time.sleep(0.4)
         assert group_alive(step_pid), "the step should still be inside its grace period"

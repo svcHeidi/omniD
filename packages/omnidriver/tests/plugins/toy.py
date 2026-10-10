@@ -732,10 +732,10 @@ class SleepingPlugin(ToyStack):
 
 
 class StubbornSleepingPlugin(ToyStack):
-    """Its step ignores SIGTERM, so only SIGKILL ends it."""
+    """Its step ignores SIGTERM, so only SIGKILL ends it; it writes ``trapped`` once the trap is set."""
 
     SOLVER_COMMANDS = frozenset({"sh"})
-    RECORDS = {"toyTutorial": _toy_record(_solve(("sh", "-c", "trap '' TERM; sleep 60"), produces=()))}
+    RECORDS = {"toyTutorial": _toy_record(_solve(("sh", "-c", "trap '' TERM; : > trapped; sleep 60"), produces=()))}
 
 
 class TwoStepPlugin(ToyStack):
