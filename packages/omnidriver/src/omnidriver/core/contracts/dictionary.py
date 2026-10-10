@@ -210,6 +210,10 @@ class DictEntry:
     # of an entry's placeholders is refused. An open binding still validates as
     # a word; only a closed domain restricts membership.
     allowed_bindings: dict[str, tuple[str, ...] | None] = field(default_factory=dict)
+    # Facts a plugin states about individual menu values, keyed by value. Core
+    # carries and lists them without reading them: the consumer that owns an
+    # attribute owns its schema.
+    menu_attributes: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @property
     def dynamic_path(self) -> bool:
@@ -231,6 +235,11 @@ class DictEntry:
             raise ValueError(
                 f"{self.driver_path!r} declares default {self.default!r}, "
                 f"which is not one of its enum_values"
+            )
+        if (stray := sorted(set(self.menu_attributes) - set(self.enum_values))):
+            raise ValueError(
+                f"{self.driver_path!r} declares menu_attributes for {stray}, "
+                f"which are not values of its menu {list(self.enum_values)}"
             )
         if self.allowed_bindings and not self.dynamic_path:
             raise ValueError(

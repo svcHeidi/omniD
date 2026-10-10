@@ -219,6 +219,8 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      decision.
    - *The scanner* does not read a `found()`-guarded one-of, as in
      `stimulusIO.C`.
+   - *fvSchemes interpolation tables* are one menu: OpenFOAM's Mesh and MeshFlux tables are merged, so `Gauss upwind`
+     in gradSchemes (upwind needs a flux) passes, and `multivariateSelection` gets a false note.
    - *Study values on a single `plan`/`run`.* Today even one change needs a sweep
      spec. Every staged `humanSlab` copies its 333 MB anatomy bundle.
    - *After `step --apply` changes a swept key,* the case record still shows the

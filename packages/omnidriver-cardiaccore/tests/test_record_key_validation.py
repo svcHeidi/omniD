@@ -76,6 +76,12 @@ def test_control_dict_is_validated_as_for_every_openfoam_solver_and_otherwise_op
     assert record_key_validator("system/controlDict", ("writePrecision",), 8) == ("integer", False)
 
 
+def test_fv_schemes_is_validated_as_for_every_openfoam_solver_and_otherwise_open():
+    assert record_key_validator("system/fvSchemes", ("ddtSchemes", "default"), "backward") == ("string", True)
+    assert record_key_validator("system/fvSchemes", ("laplacianSchemes", "laplacian(D,Vm)"), "Gauss linear corrected") == ("string", True)
+    assert record_key_validator("system/fvSchemes", ("fluxRequired", "default"), "no")[1] is False
+
+
 def test_the_catalogue_lists_the_control_dict_keys_beside_the_open_row_when_the_case_holds_one(tmp_path):
     (tmp_path / "system").mkdir()
     (tmp_path / "system" / "controlDict").write_text("")

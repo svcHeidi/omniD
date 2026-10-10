@@ -896,11 +896,6 @@ def _evaluate_graph_placement(
     return found
 
 
-#: The largest ``rate * deltaT`` for which the ``ddtSchemes`` operator stays stable when a linear decay ``rate`` acts
-#: on the old time level: Euler's ``|1 - a| < 1``, and backward's ``3z^2 + (2a - 4)z + 1 = 0`` with ``|z| < 1``.
-_DDT_STABILITY_LIMIT = {"Euler": 2.0, "backward": 4.0}
-
-
 def _scalar(value: Any) -> float | None:
     try:
         return float(getattr(value, "value", value))
@@ -985,12 +980,13 @@ def _evaluate_pvj_stability(
     That is a rank-one operator per junction, and the junctions whose cells overlap form one
     operator: its largest decay rate ``k`` is the largest eigenvalue of ``N_lk = sum_j w_lj w_kj V_j / (V_l V_k R_k chi cm)``
     (for a junction alone, ``sum(w^2 V) / (R chi cm V_s^2)``). The tissue's ``ddtSchemes`` operator keeps it stable
-    while ``k dt`` stays below 2 (``Euler``) or 4 (``backward``), and decays it with an alternating ripple above
-    half of that. The inputs are ``deltaT``, ``ddtSchemes``, the tissue's ``chi`` and ``cm``, the resistances and
+    while ``k dt`` stays below the scheme's bound, the OpenFOAM layer's ddt stability attribute
+    (``fv_schemes.ddt_stability_limits``), and decays it with an alternating ripple above half of that. The inputs are ``deltaT``, ``ddtSchemes``, the tissue's ``chi`` and ``cm``, the resistances and
     the weights, volumes and labels of the cells ``pvjMapper`` gathers. The cells need the mesh, so a case without
     one is reported as not judged."""
     from foamlib import FoamFile
 
+    from omnidriver.openfoam.fv_schemes import ddt_stability_limits
     from omnidriver.openfoam.literals import list_elements
     from omnidriver.openfoam.polymesh import cells_around
 
@@ -1011,21 +1007,23 @@ def _evaluate_pvj_stability(
     try:
         dt = _scalar(FoamFile(case_root / "system" / "controlDict")["deltaT"])
         ddt = FoamFile(case_root / "system" / "fvSchemes")["ddtSchemes"]
-        scheme = str(ddt.get("ddt(Vm)", ddt["default"]))
+        written = ddt.get("ddt(Vm)", ddt["default"])
+        scheme = str(written.split()[0] if isinstance(written, str) else written[0] if isinstance(written, (tuple, list)) else written)
     except (OSError, ValueError, KeyError):
         return []
     chi, cm = _scalar(context.get("chi")), _scalar(context.get("cm"))
     if dt is None or chi is None or cm is None or not (dt > 0 and chi * cm > 0):
         return []
     document = electro_path.relative_to(case_root).as_posix()
-    if scheme not in _DDT_STABILITY_LIMIT:
+    stability_limits = ddt_stability_limits()
+    if scheme not in stability_limits:
         return [diagnostic(
             "info", "pvj_stability_unjudged",
             f"{document}: the junction resistance is not judged against a stability bound, since ddtSchemes {scheme!r} "
-            f"is not one whose limit omniD knows ({', '.join(_DDT_STABILITY_LIMIT)}).",
+            f"is not one whose limit omniD knows ({', '.join(stability_limits)}).",
             source=document, field="ddtSchemes",
         )]
-    limit = _DDT_STABILITY_LIMIT[scheme]
+    limit = stability_limits[scheme]
     scale = dt / (chi * cm)
     default_radius = float(_ELECTRO_ENTRIES_BY_PATH[_PVJ_RADIUS_PATH].default)
     form = (

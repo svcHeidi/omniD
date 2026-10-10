@@ -47,4 +47,4 @@ where = ["src"]
 include = ["omnidriver*"]
 
 [tool.setuptools.package-data]
-"omnidriver.openfoam" = ["openfoam-environment.yaml"]
+"omnidriver.openfoam" = ["openfoam-environment.yaml", "openfoam_menus.json", "openfoam_scheme_numerics.json"]

@@ -1,7 +1,9 @@
 from typing import Final, Any
 from omnidriver.core.contracts.dictionary import DictEntry, build_group
+from omnidriver.openfoam.scheme_tables import ODE_TABLE, openfoam_table_entry
 
 from .ionic_model_catalog import BATCHED_MODELS, IONIC_MODEL_CATALOG
+from .numerics import BATCHED_INTEGRATOR, SOLUTION_ALGORITHM, TIME_COUPLING_SCHEME
 
 HETEROGENEITY_MODELS: tuple[str, ...] = (
     "BuenoOrovio", "TNNP", "TWorld", "ToRORd_dynCl",
@@ -52,10 +54,11 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.solutionAlgorithm',
             phases=frozenset({'solver'}),
-            description="Diffusion step time-discretisation for monodomain and bidomain solvers. 'explicit' uses an operator-split forward-Euler diffusion step; 'implicit' uses a pimple-controlled implicit solve. Not applicable to eikonalSolver (steady BVP) or singleCellSolver (no diffusion).",
+            description="Diffusion step of the monodomain and bidomain solvers. 'explicit' evaluates the diffusion term at the old time level; 'implicit' solves it implicitly under the pimple controls. Not applicable to eikonalSolver (steady BVP) or singleCellSolver (no diffusion).",
             source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C',),
             value_kind='enum',
             enum_values=('implicit', 'explicit'),
+            menu_attributes=SOLUTION_ALGORITHM,
             constraints=('Only applicable when myocardiumSolver is monodomainSolver or bidomainSolver.',),
             typical_value='explicit',
             forbidden_when={"myocardiumSolver": ("eikonalSolver", "singleCellSolver")},
@@ -382,6 +385,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             notes='Read only via lookupOrDefault (batchedIonicModel.H:200) -- never required. Ionic models only: batched active-tension models always integrate with explicit Euler and do not read this key, so it places no constraint on activeTensionModel.',
             value_kind='enum',
             enum_values=('euler', 'rushLarsen'),
+            menu_attributes=BATCHED_INTEGRATOR,
             typical_value='euler',
         ),
         DictEntry(
@@ -416,13 +420,12 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
     "ode_solver_passthrough": build_group(
         defaults={"phases": frozenset({'solver'}), "applicable_when": {"myocardiumSolver": ("monodomainSolver", "bidomainSolver", "singleCellSolver")}},
         entries=(
-        DictEntry(
+        openfoam_table_entry(
+            ODE_TABLE,
             driver_path='$ELECTRO_MODEL_COEFFS.solver',
             description="ODE solver selector passed through to OpenFOAM's ODESolver factory.",
             source_refs=('src/ionicModels/ionicModel/ionicModel.H', 'src/activeTensionModels/NashPanfilov/NashPanfilov.C'),
             notes='The repository source shows pass-through to ODESolver::New(*this, dict_). Additional ODESolver-specific keys may exist beyond the commonly used entries listed here. The active-tension models NashPanfilov, LandNiederer and LandNiedererTWorld read it from this block too, so a batched ionic model with one of them still needs it; the LandNiederer pair read it only without an ODESolver sub-dictionary.',
-            value_kind='enum',
-            enum_values=('RKF45', 'Euler'),
             required=True,
             required_when={
                 "ionicModel": ODE_SOLVER_MODELS,
@@ -781,11 +784,12 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.timeCouplingScheme',
             phases=frozenset({'solver'}),
-            description='Operator-splitting scheme coupling the ionic ODEs to the diffusion solve. godunov is first-order Lie splitting; sbdf2 is second-order semi-implicit backward differentiation.',
+            description='Scheme coupling the ionic ODEs to the diffusion solve: godunov splits them, sbdf2 couples them semi-implicitly by extrapolating the ionic current.',
             source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C',),
             notes='Read at myocardiumDomain.C:351, lookupOrDefault default "godunov"; anything other than godunov/sbdf2 is a FatalError (:359-365). sbdf2 additionally requires the ionic model to support BOTH supportsVmRateCoupling and supportsIonicCurrentEvaluation, else fatal (:366-385). Only myocardiumDomain reads it, so eikonalSolver and singleCellSolver ignore it.',
             value_kind='enum',
             enum_values=('godunov', 'sbdf2'),
+            menu_attributes=TIME_COUPLING_SCHEME,
             typical_value='godunov',
             forbidden_when={"myocardiumSolver": ("eikonalSolver", "singleCellSolver")},
         ),
@@ -1024,14 +1028,13 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
         ),
-        DictEntry(
+        openfoam_table_entry(
+            ODE_TABLE,
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.solver',
             phases=frozenset({'physics'}),
             description='ODE solver used while pacing personalized-template anchors.',
             source_refs=('src/electroModels/ecgModels/eikonalECG/eikonalTemplateGenerator.C',),
             notes='eikonalTemplateGenerator hands ionicModelConfig to ionicModel::New; ionicModel::odeSolver passes it to ODESolver::New, which reads it with dict.get<word>("solver") (ODESolverNew.C), so it is required whenever the ionic model builds an ODESolver: every non-batched model.',
-            value_kind='enum',
-            enum_values=('RKF45', 'Euler'),
             allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
             required_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.ionicModel": ODE_SOLVER_MODELS},
@@ -1431,13 +1434,13 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             typical_value='1e-6',
             allowed_bindings={"<name>": None},
         ),
-        DictEntry(
+        openfoam_table_entry(
+            ODE_TABLE,
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.solver',
             phases=frozenset({'physics'}),
             description='ODE solver used for the 1D Purkinje ionic model.',
             source_refs=('src/electroModels/electroDomains/conductionSystemDomain/conductionSystemDomain.C', 'src/ionicModels/ionicModel/ionicModel.H'),
             notes='Pass-through key: conductionSystemDomain hands this sub-dict to ionicModel::New, and ionicModel::odeSolver (ionicModel.H) passes it to ODESolver::New, which reads it upstream with dict.get<word>("solver") (ODESolverNew.C), so it is required whenever the ionic model builds an ODESolver: every non-batched model. Not visible to the C++ key scanner.',
-            value_kind='word',
             typical_value='RKF45',
             allowed_bindings={"<name>": None},
             required_when={"$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.ionicModel": ODE_SOLVER_MODELS},
@@ -1720,7 +1723,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             enum_values=('explicit', 'implicit'),
             allowed_bindings={"<name>": None},
             typical_value='explicit',
-            notes="eikonalPvjCoupler has no junction current and does not read this key. Where the tissue receives the term explicitly (a unidirectional coupling, or eikonalMonodomainPvjCoupler in either mode) the tissue's Vm near the junction alternates in sign and grows once R is below dt*Sw2V/(chi*cm*SwV^2*A): A is 2 for ddtSchemes Euler and 4 for backward, chi and cm the myocardium's, SwV the sum of w*cell volume over the junction's cells and Sw2V the sum of w^2*cell volume. The implicit scheme has no such bound, and neither has a bidirectional reactionDiffusionPvjCoupler, which ran stably from 1 ohm to 1e7 ohm.",
+            notes="eikonalPvjCoupler has no junction current and does not read this key. Where the tissue receives the term explicitly (a unidirectional coupling, or eikonalMonodomainPvjCoupler in either mode) the tissue's Vm near the junction alternates in sign and grows once R is below dt*Sw2V/(chi*cm*SwV^2*A): A the stability bound of the tissue's ddtSchemes scheme (the OpenFOAM layer's ddtSchemes attribute stability.decay_on_old_level_rate_dt_max), chi and cm the myocardium's, SwV the sum of w*cell volume over the junction's cells and Sw2V the sum of w^2*cell volume. The implicit scheme has no such bound, and neither has a bidirectional reactionDiffusionPvjCoupler, which ran stably from 1 ohm to 1e7 ohm.",
             constraints=("Only applicable to reactionDiffusionPvjCoupler and eikonalMonodomainPvjCoupler.",),
             applicable_when={"$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.electroDomainCoupler": ("reactionDiffusionPvjCoupler", "eikonalMonodomainPvjCoupler")},
         ),

@@ -1,0 +1,6 @@
+// cardiacFOAM a7b8e845c76579aec8fa0ff7b5e13a21547c1242 src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C, verbatim lines 409, 886, 897
+            << "supports both second-order couplings, but "
+// ...
+    setDeltaT_ = false;
+// ...
+             << " (explicit stability limit, maxCo = " << maxCo << ")"

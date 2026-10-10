@@ -1487,6 +1487,11 @@ def test_a_time_scheme_whose_limit_is_unknown_is_not_judged(tmp_path):
     assert (level, code) == ("info", "pvj_stability_unjudged") and "'CrankNicolson'" in message
 
 
+def test_a_time_scheme_with_an_argument_is_named_by_its_scheme(tmp_path):
+    (_, code, message), = _stability_findings(tmp_path, rpvj="1", ddt="CrankNicolson 0.9", graph=_slab_graph(_CORNER))
+    assert code == "pvj_stability_unjudged" and "'CrankNicolson'" in message and "0.9" not in message
+
+
 def test_a_graph_without_a_key_the_solver_reads_is_refused(tmp_path):
     text = _NATIVE_GRAPH.read_text().replace("rootNode\n0;\n", "")
     assert _graph_diagnostics(tmp_path, text) == [
