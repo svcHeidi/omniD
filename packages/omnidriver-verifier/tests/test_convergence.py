@@ -121,3 +121,25 @@ def test_a_spacing_that_repeats_or_is_not_positive_is_refused_by_name():
 
 def test_one_level_has_no_order():
     assert observed_orders([0.1], [1e-2]) == {"successive": [], "least_squares": None}
+
+
+def test_a_level_listed_twice_is_refused_by_name():
+    problem = load_problem("fda_monodomain")
+    result = _result(problem, "a", 1.0, 2)
+    result["levels"].append(dict(result["levels"][0]))
+    with pytest.raises(ProblemError) as caught:
+        comparison_table(problem, [result])
+    assert caught.value.code == "results_invalid"
+    assert "twice" in str(caught.value)
+
+
+def test_a_field_present_at_only_some_levels_is_refused_not_dropped():
+    problem = load_problem("fda_monodomain")
+    result = _result(problem, "a", 1.0, 2)
+    for level in result["levels"]:
+        level["errors"]["u1"] = dict(level["errors"]["V"])
+    del result["levels"][1]["errors"]["u1"]
+    with pytest.raises(ProblemError) as caught:
+        comparison_table(problem, [result])
+    assert caught.value.code == "results_invalid"
+    assert "u1" in str(caught.value)

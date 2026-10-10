@@ -89,7 +89,7 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
 
     Each result is ``{"solver", "problem", "mesh", "stated", "levels": [{"dimension", "cells_per_axis", "dt",
     "steps", "errors": {field: {kind: value}}}]}``. :class:`ProblemError` for a result of another problem, a mesh
-    kind or level off the problem's ladder, or a norm the problem does not name."""
+    kind or level off the problem's ladder, a level listed twice, a field given at only some of a dimension's levels, or a norm the problem does not name."""
     fields, kinds = problem["norms"]["fields"], problem["norms"]["kinds"]
     rows = []
     for result in results:
@@ -114,9 +114,15 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
             if missing or stray or not level["errors"]:
                 raise ProblemError(f"{solver}: level {d}D N={cells} misses {missing} or names fields {stray} "
                                    f"outside norms.fields {fields}")
+            if any(other["cells_per_axis"] == cells for other in by_dimension.get(d, [])):
+                raise ProblemError(f"{solver}: level {d}D N={cells} is listed twice", code="results_invalid")
             by_dimension.setdefault(d, []).append(level)
         for d, levels in sorted(by_dimension.items()):
             levels = sorted(levels, key=lambda level: level["cells_per_axis"])
+            partial = [field for field in fields if 0 < sum(field in level["errors"] for level in levels) < len(levels)]
+            if partial:
+                raise ProblemError(f"{solver}: {d}D field(s) {partial} are given at only some of the levels",
+                                   code="results_invalid")
             edge = problem["domain"]["box"][0][1] - problem["domain"]["box"][0][0]
             spacings = [edge / level["cells_per_axis"] for level in levels]
             orders = {field: {kind: observed_orders(spacings, [level["errors"][field][kind] for level in levels])
