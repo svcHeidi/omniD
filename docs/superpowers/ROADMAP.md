@@ -265,7 +265,7 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - an iterated bidirectional coupling (both sides implicit, the same current),
      deferred by the owner: an outer loop around today's conservative pass, with
      the solves made repeatable (about 15 files); the design and its cost are in
-     `.superpowers/sdd/pvj-outer-loop-assessment.md`;
+     `docs/superpowers/reports/pvj-outer-loop-assessment.md`;
    - on the bath-bidomain branch only: its reaction/diffusion split skips the
      SBDF2 `VmRate` and `Iion` refresh that `advance()` does, so bath with SBDF2
      differs from the normal advance.

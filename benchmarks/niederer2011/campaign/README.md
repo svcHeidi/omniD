@@ -485,7 +485,7 @@ It does the following:
 
 It took 473 s here (2026-09-27), nearly all of it cardiacFOAM. The tables
 are in `docs/solver-learning/cardiacfoam.md` section Y and in
-`.superpowers/sdd/campaign-report.md`. What it showed:
+`docs/superpowers/reports/campaign-report.md`. What it showed:
 - every case `completed`, and every report `run_verified` against both
   cases it names;
 - the three cross-solver reports `failed`: only P1 is within 5 ms, and P8
