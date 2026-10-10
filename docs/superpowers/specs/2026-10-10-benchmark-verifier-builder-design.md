@@ -104,6 +104,20 @@ routine for any solver.
 4. **A record of each run:** the generated code and its digest go into the
    run's provenance.
 
+**Progression (owner):** verification starts from hexahedral elements, the
+configuration with the fewest possible error sources, and builds up from there
+(more dimensions, then other element types). That is why cardiacFOAM ships
+three manufactured problems.
+
+**Solver knowledge grows with the tests.** What is built now is the
+architecture: a declared place for each kind of knowledge, filled solver by
+solver as verification runs. For the OpenFOAM family, most numerics options
+(`fvSchemes`: gradient, divergence, laplacian, snGrad, interpolation, ddt) ship
+with OpenFOAM itself. Their knowledge belongs to the shared OpenFOAM layer, one
+reality for cardiacFOAM and cardiacCore. Each solver's own numerics stay in its
+plugin, for example cardiacFOAM's time coupling, solution algorithm and
+batched ionic integrator.
+
 **What the verifier reports, per solver and problem:**
 - the observed order;
 - the order this solver's own numerics should give;
