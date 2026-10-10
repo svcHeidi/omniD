@@ -2,7 +2,7 @@
 
 Thank you for considering contributing to **OmniDriver**!
 
-This project is a typed planning, validation, provenance, and workflow orchestration layer for reproducible OpenFOAM and openCARP simulation studies.
+This project is a typed planning, validation, provenance, and workflow orchestration layer for reproducible OpenFOAM, openCARP and TorchCor simulation studies.
 
 ## How Can I Contribute?
 

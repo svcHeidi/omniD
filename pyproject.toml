@@ -20,9 +20,7 @@ pythonpath = [
     # own `tests/` root must be listed here. Each package's own pyproject sets
     # `pythonpath = ["tests"]`, but that only applies when *that* package is the
     # rootdir; a whole-repo run resolves its config here and would otherwise not
-    # find, say, `openfoam_assertions`. Added 2026-09-18 when integrating
-    # core/adapter-boundaries, which relocated OpenFOAM-dependent tests into
-    # packages/omnidriver-openfoam/tests/core/ alongside such a helper.
+    # find, say, `openfoam_assertions`.
     "packages/omnidriver/tests",
     "packages/omnidriver-openfoam/tests",
     "packages/omnidriver-cardiacfoam/tests",
