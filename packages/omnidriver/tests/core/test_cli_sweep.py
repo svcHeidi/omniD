@@ -33,13 +33,13 @@ class TestCliSweepActions(unittest.TestCase):
             return_value={"case_count": 0, "cases": []},
         ) as mock_fn, mock.patch("builtins.print"):
             assert main([
-                "sweep-plan", "--plugin", _PLUGIN, "--spec", "paperI_methods.json", "--scratch-dir", "/tmp/od-scratch",
+                "sweep-plan", "--plugin", _PLUGIN, "--spec", "methods_study.json", "--scratch-dir", "/tmp/od-scratch",
             ]) == 0
 
         # Not the OS temp directory by default: sweep outputs default under
         # the scratch root, so having the OS reap it would be worse.
         assert str(mock_fn.call_args.kwargs["output_dir"]) == str(
-            Path("/tmp/od-scratch") / "sweeps" / "paperI_methods"
+            Path("/tmp/od-scratch") / "sweeps" / "methods_study"
         )
 
     def test_sweep_run_defaults_to_the_supplied_scratch_output_dir(self):
@@ -48,13 +48,13 @@ class TestCliSweepActions(unittest.TestCase):
             return_value={"case_count": 0, "completed_count": 0, "failed_count": 0},
         ) as mock_fn, mock.patch("builtins.print"):
             assert main([
-                "sweep-run", "--plugin", _PLUGIN, "--spec", "paperI_methods.json", "--scratch-dir", "/tmp/od-scratch",
+                "sweep-run", "--plugin", _PLUGIN, "--spec", "methods_study.json", "--scratch-dir", "/tmp/od-scratch",
             ]) == 0
 
         # Not the OS temp directory by default: sweep outputs default under
         # the scratch root, so having the OS reap it would be worse.
         assert str(mock_fn.call_args.kwargs["output_dir"]) == str(
-            Path("/tmp/od-scratch") / "sweeps" / "paperI_methods"
+            Path("/tmp/od-scratch") / "sweeps" / "methods_study"
         )
 
     def test_sweep_run_passes_max_cases(self):

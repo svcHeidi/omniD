@@ -257,7 +257,7 @@ def test_the_mesh_table_does_not_take_the_temporal_ladder_for_a_mesh():
     assert "not in ['hex', 'tet']" in str(caught.value)
 
 
-# V.L2 of the paper-ladder runs (dt 0.025 halved, N = 640), from the comparison table of the temporal study.
+# Recorded V.L2 of runs on the temporal ladder (dt 0.025 halved, N = 640).
 CF_SBDF2_BACKWARD_2D = {
     "exact": [4.360236897346161e-04, 1.1130944548673546e-04, 2.7643958181182363e-05, 6.412715007400837e-06,
               1.0742290817422945e-06],

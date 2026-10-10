@@ -222,3 +222,9 @@ def test_a_finer_temporal_mesh_must_be_finer_than_the_ladders():
     validate_problem(problem)
     problem["refinement"]["temporal"]["finer_cells_per_axis"] = {"3": 40}
     assert "finer_cells_per_axis" in _refused(problem)
+
+
+def test_the_temporal_ladders_steps_reach_the_end_time_at_every_dt():
+    problem = load_problem("fda_monodomain")
+    ladder = problem["refinement"]["temporal"]
+    assert all(steps * dt == pytest.approx(problem["time"]["end"]) for dt, steps in zip(ladder["dt"], ladder["steps"]))
