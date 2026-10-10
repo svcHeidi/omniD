@@ -46,6 +46,8 @@ CODES: dict[str, str] = {
     "run_without_report": "a child run exited without a JSON report",
     "case_timeout": "a sweep case exceeded --case-timeout-s",
     "sweep_stopped": "a signal stopped the sweep",
+    "unknown_problem": "the verifier's problem library holds no problem of that id",
+    "problem_invalid": "a problem definition breaks the verifier's problem schema",
     "internal_error": "an unexpected exception: a defect in omniD or a plugin, not in the request",
     "unclassified": "a refusal that names no code of its own; read error",
 }

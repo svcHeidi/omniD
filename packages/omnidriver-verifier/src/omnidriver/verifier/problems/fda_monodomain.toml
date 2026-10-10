@@ -1,0 +1,85 @@
+# Transcribed from the owner's cardiacFOAM implementation; every block names
+# its source under [provenance]. Paths are relative to the cardiacFOAM
+# repository at native.cardiacfoam.commit.
+
+id = "fda_monodomain"
+title = "Monodomain manufactured solution of Pathmanathan & Gray (FDA RST24CV03.01)"
+equation = "monodomain"
+dimensions = [1, 2, 3]
+mesh_progression = ["hex"]
+cites = ["doi:10.1002/cnm.2615", "https://cdrh-rst.fda.gov/node/1576"]
+
+[native.cardiacfoam]
+commit = "277dfeb1933990da366d4b30dd9ef40b3e94c87c"
+ionic_model = "monodomainFDAManufactured"
+verification_model = "manufacturedFDAMonodomainVerifier"
+record = "manufacturedMonodomainPseudoECG"
+
+[domain]
+box = [[0, 1], [0, 1], [0, 1]]
+
+[time]
+start = 0
+end = 0.2
+
+[parameters]
+Cm = 2
+chi = 3
+sigma_xx = 0.111453302
+sigma_yy = 0.121585420
+sigma_zz = 0.030396355
+
+[derived.Beta]
+expression = { 1 = "-pi**2*sigma_xx", 2 = "-pi**2*(sigma_xx + 4*sigma_yy)", 3 = "-pi**2*(sigma_xx + 4*sigma_yy + 9*sigma_zz)" }
+native = { 1 = -1.1, 2 = -5.9, 3 = -8.6 }
+
+[fields]
+F = { 1 = "cos(pi*x)", 2 = "cos(pi*x)*cos(2*pi*y)", 3 = "cos(pi*x)*cos(2*pi*y)*cos(3*pi*z)" }
+G = { 1 = "1 + x", 2 = "1 + x*y**2", 3 = "1 + x*y**2*z**3" }
+
+[exact]
+V = "sqrt(1 + t)*F"
+u1 = "(1 + t)*G + sqrt(1 + t)*F"
+u2 = "1/((1 + t)*sqrt(G))"
+u3 = "0"
+
+[cell_model]
+states = ["u1", "u2", "u3"]
+rates = { u1 = "(u1 + u3 - V)**2*u2**2 + (u1 + u3 - V)*u2**2*(V - u3)/2", u2 = "-(u1 + u3 - V)*u2**3", u3 = "0" }
+Iion = "-(Cm/2)*(u1 + u3 - V)*u2**2*(V - u3) + Beta*(V - u3)/chi"
+
+[source]
+expression = "0"
+
+[boundary]
+all_faces = "zero_normal_gradient"
+
+[initial]
+fields = "exact"
+
+[refinement.hex]
+cells = [10, 20, 40, 80]
+dt = [0.00892857, 0.00224215, 0.000560538, 0.000140174]
+
+[norms]
+fields = ["V", "u1", "u2"]
+kinds = ["L1", "L2", "Linf"]
+points = "cell_centres"
+weight = "cell_volume"
+normalised_by = "total_volume"
+at = "first_step_within_half_dt_of_end"
+
+[provenance]
+equation = ["src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C", "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured.C"]
+domain = ["tutorials/manufacturedSolutions/monodomainPseudoECG/system/blockMeshDict.1D", "tutorials/manufacturedSolutions/monodomainPseudoECG/system/blockMeshDict.2D", "tutorials/manufacturedSolutions/monodomainPseudoECG/system/blockMeshDict.3D"]
+time = ["tutorials/manufacturedSolutions/monodomainPseudoECG/system/controlDict"]
+parameters = ["src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json"]
+derived = ["derived: div(sigma*grad(F)) = Beta*F for the diagonal sigma above", "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H"]
+fields = ["src/verificationModels/monodomainVerification/manufacturedFDAReference.H"]
+exact = ["src/verificationModels/monodomainVerification/manufacturedFDAReference.H"]
+cell_model = ["src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H"]
+source = ["tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties", "https://cdrh-rst.fda.gov/node/1576"]
+boundary = ["src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties"]
+initial = ["src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.C"]
+refinement = ["tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json"]
+norms = ["src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.C", "src/verificationModels/verificationUtils.H"]
