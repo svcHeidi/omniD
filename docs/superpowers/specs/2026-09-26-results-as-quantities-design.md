@@ -8,7 +8,7 @@ benchmark on openCARP and cardiacFOAM and compare activation times at P1–P9.
 **Evidence:** a read-only map of result handling (2026-09-26) and
 `docs/solver-learning/opencarp.md` (F6, G4). The reference comes from the
 paper, researched separately into
-`.superpowers/sdd/niederer-benchmark-definition.md`.
+`docs/superpowers/reports/niederer-benchmark-definition.md`.
 
 **Status, 2026-09-26:** plan `docs/superpowers/plans/2026-09-26-results-as-quantities.md`;
 Tasks 1–6 landed (Task 1 `26a8da6`; Task 2 `3f16fe8`; Task 3 `13ba8b6`,
@@ -79,7 +79,7 @@ tolerances" for P1–P9. Neither is quite true of the committed
    file's convention; the P2/P3 (and hence P6/P7) naming order is that
    appendix's convention, not independently checked against niederer2011's
    own ESM (not retrieved). See the reference's own `sources` and Controller
-   resolution recorded in `.superpowers/sdd/niederer-benchmark-definition.md`,
+   resolution recorded in `docs/superpowers/reports/niederer-benchmark-definition.md`,
    section "Resolution of P2-P7".
 2. **The paper states no tolerance.** Tolerances live only in the agent's
    comparison request, pre-registered with a rationale, never in the
