@@ -933,7 +933,7 @@ expression of other parameters is a string under its own key
    `forbidden_when`, `required_when`, `mutually_exclusive_with`).
    `record_surface.axes` lists each axis's `value_kind`, `unit` (`null` for a
    name, a count or a mapping), a `description` of what it sets, and its
-   `minimum` or `exclusive_minimum` where it declares one; a value outside a
+   `minimum`, `exclusive_minimum` or `maximum` where it declares one; a value outside a
    bound is refused before the axis runs. `record_surface.conformance_quantity`
    is the one quantity `omnidriver check` compares for the record (C13, C14), or
    `null`: its `artifact_format`, the `study` its runs take, its `reference`,

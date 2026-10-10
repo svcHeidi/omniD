@@ -974,8 +974,9 @@ def _validate_or_wrap(
         dotted = ".".join(key_path)
         code = refusal_code(exc)
         reason = exc.args[0] if exc.args and isinstance(exc.args[0], str) else str(exc)
+        raised = f": {exc}" if isinstance(exc, TutorialRecordError) else f" raised {type(exc).__name__}: {exc}"
         raise TutorialRecordError(
-            f"validating {document}:{dotted} raised {type(exc).__name__}: {exc}", code=code,
+            f"validating {document}:{dotted}{raised}", code=code,
             diagnostics=(_broken("error", code, reason, document, dotted, getattr(exc, "rule", None)),),
         ) from exc
 

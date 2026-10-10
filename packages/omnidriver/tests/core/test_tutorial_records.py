@@ -1993,3 +1993,15 @@ def test_a_crash_inside_an_axis_is_an_internal_error_not_the_agents_value():
         )
     assert caught.value.code == "internal_error"
 
+
+def test_a_validator_refusal_names_its_class_once():
+    from omnidriver.core.tutorial_records import _validate_or_wrap
+
+    def refusing(document, key_path, value):
+        raise TutorialRecordError("0 is below the minimum", code="catalog_rule")
+
+    with pytest.raises(TutorialRecordError) as caught:
+        _validate_or_wrap(refusing, "constant/mesh.json", ("n",), 0)
+
+    assert "TutorialRecordError" not in str(caught.value)
+    assert str(caught.value).startswith("validating constant/mesh.json:n") and "0 is below the minimum" in str(caught.value)
