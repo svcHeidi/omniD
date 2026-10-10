@@ -15,7 +15,7 @@ from typing import Any, Final, Mapping
 from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
-from .case_rules import scheme_diagnostics, scheme_parts
+from .case_rules import SCHEME_ARGUMENTS, scheme_diagnostics, scheme_parts
 from .record_key_validation import CataloguedDocument, listed_entry
 from .scheme_tables import SOURCE_ROOT_VARIABLE, cached_selection_tables, foam_source_root, openfoam_table_entry
 
@@ -43,8 +43,23 @@ NUMERICS_FILE: Final = Path(__file__).with_name("openfoam_scheme_numerics.json")
 
 @lru_cache(maxsize=1)
 def _attributes() -> dict[str, dict[str, dict[str, Any]]]:
-    """``{table: {scheme name: attributes}}``: what OpenFOAM's authors state of a scheme (``openfoam_scheme_numerics.json``)."""
-    return json.loads(NUMERICS_FILE.read_text())["attributes"]
+    """``{table: {scheme name: attributes}}``: what OpenFOAM's authors state of a scheme (``openfoam_scheme_numerics.json``),
+    with a ``composes`` for each scheme with an order that reads other schemes (:data:`case_rules.SCHEME_ARGUMENTS`)."""
+    attributes = json.loads(NUMERICS_FILE.read_text())["attributes"]
+    for table, schemes in attributes.items():
+        for name, stated in schemes.items():
+            reads = SCHEME_ARGUMENTS.get(table, {}).get(name)
+            if reads and "formal_order" in stated:
+                stated["composes"] = {
+                    "kind": "inferred",
+                    "reads": list(reads),
+                    "statement": (
+                        f"the order is bounded by the orders of the {' and '.join(reads)} schemes the value names after "
+                        f"{name}; the header's order assumes them"
+                    ),
+                    "basis": next(source["text"] for source in stated["stated_by"] if source["kind"] == "header"),
+                }
+    return attributes
 
 
 def _entry(table: str, key: str) -> DictEntry:

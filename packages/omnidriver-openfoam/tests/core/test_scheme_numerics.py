@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from omnidriver.openfoam.case_rules import SCHEME_ARGUMENTS
 from omnidriver.openfoam.fv_schemes import FV_SCHEMES_ENTRIES_BY_PATH, ddt_stability_limits, stated_numerics
 from omnidriver.openfoam.record_key_validation import listed_entry
 from omnidriver.openfoam.scheme_tables import snapshot
@@ -98,3 +99,16 @@ def test_a_composite_value_resolves_each_part_through_its_own_table():
     assert [(part["table"], part["name"]) for part in parts] == [
         ("laplacianSchemes", "Gauss"), ("interpolationSchemes", "linear"), ("snGradSchemes", "corrected"),
     ]
+
+
+@pytest.mark.parametrize("table", ["gradSchemes", "divSchemes", "laplacianSchemes"])
+def test_gauss_composes_with_the_schemes_it_reads(table):
+    gauss = FV_SCHEMES_ENTRIES_BY_PATH[f"{table}.default"].menu_attributes["Gauss"]
+    composes = gauss["composes"]
+    assert composes["kind"] == "inferred" and composes["reads"] == list(SCHEME_ARGUMENTS[table]["Gauss"])
+    assert composes["basis"] in [source["text"] for source in gauss["stated_by"] if source["kind"] == "header"]
+
+
+def test_the_gauss_gradient_rests_on_face_interpolation_and_upwind_carries_no_order():
+    assert "face-interpolation" in FV_SCHEMES_ENTRIES_BY_PATH["gradSchemes.default"].menu_attributes["Gauss"]["composes"]["basis"]
+    assert "upwind" not in FV_SCHEMES_ENTRIES_BY_PATH["interpolationSchemes.default"].menu_attributes
