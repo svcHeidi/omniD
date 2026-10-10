@@ -284,8 +284,10 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      `gmsh -setnumber lc`, so gmsh writes a 14-node mesh, exits 0, and `gmshToFoam` fails.
      Native `60805b27` (take `lc` via `DefineConstant`) is only on the `omnid/*` branches,
      not an ancestor of native main, and the template comment on main names
-     `render_tet_geo`, which exists on neither. Which side moves is the owner's decision;
-     omniD's strict plan refuses a `-setnumber` name a template does not declare;
+     `render_tet_geo`, which exists on neither. The owner chose the native
+     `DefineConstant` templates (`60805b27`, being prepared on a native branch to merge) and a
+     README note on generating the tet meshes; omniD's records stay, and its tet routes fail
+     against native main until that merge. omniD's strict plan refuses a `-setnumber` name a template does not declare;
    - cardiacFOAM with `gradSchemes Gauss linear` does not converge on gmsh tets
      (FDA and rotated problems alike); the tutorial's base case uses `leastSquares`
      and converges at second order. The paper's `fullMatrix` cases set Gauss linear on hex,
