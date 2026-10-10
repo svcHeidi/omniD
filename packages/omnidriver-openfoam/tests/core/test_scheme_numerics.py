@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.openfoam.fv_schemes import FV_SCHEMES_ENTRIES_BY_PATH, ddt_stability_limit
+from omnidriver.openfoam.fv_schemes import FV_SCHEMES_ENTRIES_BY_PATH, ddt_stability_limits
 from omnidriver.openfoam.record_key_validation import listed_entry
 from omnidriver.openfoam.scheme_tables import committed_menus
 
@@ -68,9 +68,8 @@ def test_the_citations_are_for_the_schemes_whose_header_states_no_order():
         assert "citation" in kinds
 
 
-def test_the_stability_limit_of_a_ddt_scheme_is_read_from_its_attributes():
-    assert (ddt_stability_limit("Euler"), ddt_stability_limit("backward")) == (2.0, 4.0)
-    assert ddt_stability_limit("CrankNicolson") is None and ddt_stability_limit("noSuchScheme") is None
+def test_the_stability_limits_of_the_ddt_schemes_are_read_from_their_attributes():
+    assert ddt_stability_limits() == {"Euler": 2.0, "backward": 4.0}
 
 
 def test_a_listing_carries_the_attributes_beside_the_menu():

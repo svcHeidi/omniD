@@ -896,11 +896,6 @@ def _evaluate_graph_placement(
     return found
 
 
-#: The largest ``rate * deltaT`` for which the ``ddtSchemes`` operator stays stable when a linear decay ``rate`` acts
-#: on the old time level: Euler's ``|1 - a| < 1``, and backward's ``3z^2 + (2a - 4)z + 1 = 0`` with ``|z| < 1``.
-_DDT_STABILITY_LIMIT = {"Euler": 2.0, "backward": 4.0}
-
-
 def _scalar(value: Any) -> float | None:
     try:
         return float(getattr(value, "value", value))
@@ -991,6 +986,7 @@ def _evaluate_pvj_stability(
     one is reported as not judged."""
     from foamlib import FoamFile
 
+    from omnidriver.openfoam.fv_schemes import ddt_stability_limits
     from omnidriver.openfoam.literals import list_elements
     from omnidriver.openfoam.polymesh import cells_around
 
@@ -1018,14 +1014,15 @@ def _evaluate_pvj_stability(
     if dt is None or chi is None or cm is None or not (dt > 0 and chi * cm > 0):
         return []
     document = electro_path.relative_to(case_root).as_posix()
-    if scheme not in _DDT_STABILITY_LIMIT:
+    stability_limits = ddt_stability_limits()
+    if scheme not in stability_limits:
         return [diagnostic(
             "info", "pvj_stability_unjudged",
             f"{document}: the junction resistance is not judged against a stability bound, since ddtSchemes {scheme!r} "
-            f"is not one whose limit omniD knows ({', '.join(_DDT_STABILITY_LIMIT)}).",
+            f"is not one whose limit omniD knows ({', '.join(stability_limits)}).",
             source=document, field="ddtSchemes",
         )]
-    limit = _DDT_STABILITY_LIMIT[scheme]
+    limit = stability_limits[scheme]
     scale = dt / (chi * cm)
     default_radius = float(_ELECTRO_ENTRIES_BY_PATH[_PVJ_RADIUS_PATH].default)
     form = (

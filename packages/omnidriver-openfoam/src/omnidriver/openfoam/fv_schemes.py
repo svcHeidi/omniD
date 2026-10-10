@@ -85,11 +85,14 @@ FV_SCHEMES_ENTRIES: Final[tuple[DictEntry, ...]] = tuple(
 FV_SCHEMES_ENTRIES_BY_PATH: Final = {entry.driver_path: entry for entry in FV_SCHEMES_ENTRIES}
 
 
-def ddt_stability_limit(scheme: str) -> float | None:
-    """The largest ``rate * deltaT`` for which ``scheme``'s operator stays stable when a linear decay ``rate`` acts on the
-    old time level, or ``None`` when no limit is recorded for it."""
-    stability = FV_SCHEMES_ENTRIES_BY_PATH["ddtSchemes.default"].menu_attributes.get(scheme, {}).get("stability", {})
-    return stability.get("decay_on_old_level_rate_dt_max")
+def ddt_stability_limits() -> dict[str, float]:
+    """``{ddt scheme: the largest rate * deltaT}`` for which the scheme's operator stays stable when a linear decay ``rate``
+    acts on the old time level, for each scheme that has a limit recorded."""
+    return {
+        name: attributes["stability"]["decay_on_old_level_rate_dt_max"]
+        for name, attributes in FV_SCHEMES_ENTRIES_BY_PATH["ddtSchemes.default"].menu_attributes.items()
+        if "decay_on_old_level_rate_dt_max" in attributes.get("stability", {})
+    }
 
 
 def _match(key_path: tuple[str, ...]) -> tuple[DictEntry, dict[str, str]] | None:

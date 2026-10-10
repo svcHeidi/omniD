@@ -110,6 +110,11 @@ def committed_menus() -> dict:
     return json.loads(MENUS_FILE.read_text())
 
 
+#: The names OpenFOAM's ``ODESolver`` table registers, as the committed scan read them: the menu of every ``solver`` key
+#: that an OpenFOAM-based solver hands to ``ODESolver::New``.
+ODE_SOLVER_MENU: tuple[str, ...] = tuple(committed_menus()["tables"][ODE_TABLE])
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
         print("usage: python -m omnidriver.openfoam.scheme_tables <path to OpenFOAM src>", file=sys.stderr)

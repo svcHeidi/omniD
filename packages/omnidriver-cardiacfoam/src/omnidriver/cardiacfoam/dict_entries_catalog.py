@@ -1,5 +1,6 @@
 from typing import Final, Any
 from omnidriver.core.contracts.dictionary import DictEntry, build_group
+from omnidriver.openfoam.scheme_tables import ODE_SOLVER_MENU
 
 from .ionic_model_catalog import BATCHED_MODELS, IONIC_MODEL_CATALOG
 
@@ -422,7 +423,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             source_refs=('src/ionicModels/ionicModel/ionicModel.H', 'src/activeTensionModels/NashPanfilov/NashPanfilov.C'),
             notes='The repository source shows pass-through to ODESolver::New(*this, dict_). Additional ODESolver-specific keys may exist beyond the commonly used entries listed here. The active-tension models NashPanfilov, LandNiederer and LandNiedererTWorld read it from this block too, so a batched ionic model with one of them still needs it; the LandNiederer pair read it only without an ODESolver sub-dictionary.',
             value_kind='enum',
-            enum_values=('RKF45', 'Euler'),
+            enum_values=ODE_SOLVER_MENU,
             required=True,
             required_when={
                 "ionicModel": ODE_SOLVER_MODELS,
@@ -1031,7 +1032,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             source_refs=('src/electroModels/ecgModels/eikonalECG/eikonalTemplateGenerator.C',),
             notes='eikonalTemplateGenerator hands ionicModelConfig to ionicModel::New; ionicModel::odeSolver passes it to ODESolver::New, which reads it with dict.get<word>("solver") (ODESolverNew.C), so it is required whenever the ionic model builds an ODESolver: every non-batched model.',
             value_kind='enum',
-            enum_values=('RKF45', 'Euler'),
+            enum_values=ODE_SOLVER_MENU,
             allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
             required_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.ionicModel": ODE_SOLVER_MODELS},
