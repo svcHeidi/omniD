@@ -299,3 +299,13 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - region-aware key validation;
    - the licence. There is no `LICENSE`, and `CLAUDE.md` says not to add one
      without asking.
+   - three defects that predate the knowledge-as-data branch (found probing it,
+     2026-10-09), held as notes:
+     - a study's dimensioned `chi` (`{"dimensions": ..., "value": ...}`) is
+       refused as "must be a number", though the C++ reads a `dimensionedScalar`
+       and the native file writes one;
+     - the `configurationChecks` variants `...Bidirectional` and
+       `monodomainVerificationNone` are refused when checked without the C++
+       mapping (`purkinjeFibreRadius` required; `verificationModel.type none`);
+     - `tetNumberCells`' description says "unit cube", but bathBidomain's mesh
+       is three unit boxes.
