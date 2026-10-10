@@ -48,6 +48,11 @@ CODES: dict[str, str] = {
     "sweep_stopped": "a signal stopped the sweep",
     "unknown_problem": "a problem library holds no problem of that id",
     "problem_invalid": "a problem definition breaks its library's schema",
+    "results_invalid": "a solver's results for a verification problem are malformed, repeat a level or give a field at only some levels",
+    "non_finite_values": "a field to be compared holds a NaN or an infinity, so it has no error norm",
+    "errors_unusable": "an error that is not finite and positive has no convergence order",
+    "spacings_unusable": "a grid spacing that is not finite, positive and successively distinct has no convergence order",
+    "weights_invalid": "the weights of an error norm cannot be built from the grid or elements given",
     "internal_error": "an unexpected exception: a defect in omniD or a plugin, not in the request",
     "unclassified": "a refusal that names no code of its own; read error",
 }
