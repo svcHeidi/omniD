@@ -3,6 +3,7 @@ from omnidriver.core.contracts.dictionary import DictEntry, build_group
 from omnidriver.openfoam.scheme_tables import ODE_SOLVER_MENU
 
 from .ionic_model_catalog import BATCHED_MODELS, IONIC_MODEL_CATALOG
+from .numerics import BATCHED_INTEGRATOR, SOLUTION_ALGORITHM, TIME_COUPLING_SCHEME
 
 HETEROGENEITY_MODELS: tuple[str, ...] = (
     "BuenoOrovio", "TNNP", "TWorld", "ToRORd_dynCl",
@@ -53,10 +54,11 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.solutionAlgorithm',
             phases=frozenset({'solver'}),
-            description="Diffusion step time-discretisation for monodomain and bidomain solvers. 'explicit' uses an operator-split forward-Euler diffusion step; 'implicit' uses a pimple-controlled implicit solve. Not applicable to eikonalSolver (steady BVP) or singleCellSolver (no diffusion).",
+            description="Diffusion step of the monodomain and bidomain solvers. 'explicit' evaluates the diffusion term at the old time level; 'implicit' solves it implicitly under the pimple controls. Not applicable to eikonalSolver (steady BVP) or singleCellSolver (no diffusion).",
             source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C',),
             value_kind='enum',
             enum_values=('implicit', 'explicit'),
+            menu_attributes=SOLUTION_ALGORITHM,
             constraints=('Only applicable when myocardiumSolver is monodomainSolver or bidomainSolver.',),
             typical_value='explicit',
             forbidden_when={"myocardiumSolver": ("eikonalSolver", "singleCellSolver")},
@@ -383,6 +385,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             notes='Read only via lookupOrDefault (batchedIonicModel.H:200) -- never required. Ionic models only: batched active-tension models always integrate with explicit Euler and do not read this key, so it places no constraint on activeTensionModel.',
             value_kind='enum',
             enum_values=('euler', 'rushLarsen'),
+            menu_attributes=BATCHED_INTEGRATOR,
             typical_value='euler',
         ),
         DictEntry(
@@ -782,11 +785,12 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.timeCouplingScheme',
             phases=frozenset({'solver'}),
-            description='Operator-splitting scheme coupling the ionic ODEs to the diffusion solve. godunov is first-order Lie splitting; sbdf2 is second-order semi-implicit backward differentiation.',
+            description='Scheme coupling the ionic ODEs to the diffusion solve: godunov splits them, sbdf2 couples them semi-implicitly by extrapolating the ionic current.',
             source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C',),
             notes='Read at myocardiumDomain.C:351, lookupOrDefault default "godunov"; anything other than godunov/sbdf2 is a FatalError (:359-365). sbdf2 additionally requires the ionic model to support BOTH supportsVmRateCoupling and supportsIonicCurrentEvaluation, else fatal (:366-385). Only myocardiumDomain reads it, so eikonalSolver and singleCellSolver ignore it.',
             value_kind='enum',
             enum_values=('godunov', 'sbdf2'),
+            menu_attributes=TIME_COUPLING_SCHEME,
             typical_value='godunov',
             forbidden_when={"myocardiumSolver": ("eikonalSolver", "singleCellSolver")},
         ),

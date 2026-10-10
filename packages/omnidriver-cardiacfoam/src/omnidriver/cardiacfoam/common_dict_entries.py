@@ -9,6 +9,7 @@ from omnidriver.core.contracts.catalogue_paths import slot_key
 from omnidriver.core.contracts.dictionary import DictEntry
 
 from .dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS, IONIC_MODEL_MENU
+from .numerics import BATCHED_INTEGRATOR
 
 
 PHYSICS_PROPERTY_ENTRIES: Final[tuple[DictEntry, ...]] = (
@@ -109,7 +110,7 @@ def _pre_pacing_entries(scope: str) -> tuple[DictEntry, ...]:
             ),
         ),
         entry(
-            "batchedIntegrator", value_kind="enum", enum_values=("euler", "rushLarsen"),
+            "batchedIntegrator", value_kind="enum", enum_values=("euler", "rushLarsen"), menu_attributes=BATCHED_INTEGRATOR,
             description=(
                 "Integration scheme of the single cell, in place of the tissue's batchedIntegrator. "
                 "Left unset, the cell uses the tissue's."
