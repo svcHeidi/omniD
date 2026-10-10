@@ -90,3 +90,32 @@ def test_a_derived_constant_states_which_value_a_solver_uses_and_its_tolerance(k
     problem = _shipped()
     problem["derived"]["Beta"][key] = value
     assert f"derived.Beta.{key}" in _refused(problem)
+
+
+@pytest.mark.parametrize(
+    ("block", "key", "value", "reported"),
+    [
+        ("pde", "equation", "chi*(Cm*Derivative(V, t) + Iion) - div(kappa*grad(V)) = source", "kappa"),
+        ("pde", "equation", "chi*(Cm*Derivative(V, t) + Iion) - div(sigma*grad(V))", "pde.equation"),
+        ("pde", "equation", "chi*(Cm*Derivative(V, t) + Iion) = div(sigma*grad(V))", "pde.equation"),
+        ("pde", "parameters", ["Cm", "chi"], "pde.parameters"),
+        ("pde", "unknown", "u1", "pde.unknown"),
+        ("cell_model", "inputs", ["u1"], "cell_model.inputs"),
+        ("cell_model", "parameters", ["Cm", "Beta"], "cell_model.parameters"),
+        ("cell_model", "shares_with_pde", ["Cm", "Beta"], "cell_model.shares_with_pde"),
+        ("units", "Iion", "per_unit_volume", "units.Iion"),
+        ("units", "system", "SI", "units.system"),
+        ("domain", "dimension_d_uses", "last_d_intervals", "domain.dimension_d_uses"),
+        ("initial", "points", {"cardiacfoam": "vertices"}, "initial.points"),
+    ],
+)
+def test_the_self_description_is_checked(block, key, value, reported):
+    problem = _shipped()
+    problem[block][key] = value
+    assert reported in _refused(problem)
+
+
+def test_a_diagonal_tensor_names_parameters():
+    problem = _shipped()
+    problem["pde"]["tensors"]["sigma"]["diagonal"] = ["sigma_xx", "sigma_yy", "sigma_qq"]
+    assert "pde.tensors.sigma" in _refused(problem)

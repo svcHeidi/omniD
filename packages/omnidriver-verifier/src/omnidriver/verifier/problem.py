@@ -8,30 +8,45 @@ from typing import Any, Iterable, Mapping
 
 from omnidriver.core.refusal import Refusal
 
-#: Each equation the residual check knows, and the parameters its form names.
-EQUATIONS: dict[str, tuple[str, ...]] = {"monodomain": ("Cm", "chi", "sigma_xx", "sigma_yy", "sigma_zz")}
+EQUATIONS = ("monodomain",)
 BOUNDARY_KINDS = ("zero_normal_gradient",)
 INITIAL_KINDS = ("exact",)
+INITIAL_TIMES = ("start",)
 MESH_KINDS = ("hex",)
+#: Where a solver holds its unknowns, and so where an exact field is evaluated against it.
+POINTS = ("cell_centres", "nodes")
 #: Which value of a derived constant a solver is given: the native literal, or the value derived from the data.
 DERIVED_USES = ("native", "derived")
+UNIT_SYSTEMS = ("dimensionless",)
+#: What the cell model's current is per: the PDE form decides it.
+CURRENT_BASES = ("per_unit_membrane_area", "per_unit_capacitance")
+DIMENSION_RULES = ("first_d_intervals",)
+TENSOR_KINDS = ("diagonal",)
 
 FUNCTIONS = frozenset({"sqrt", "cos", "sin", "exp", "log"})
+#: The differential operators a PDE may name: ``Derivative(f, t)``, ``grad(f)``, ``div(v)``.
+OPERATORS = frozenset({"Derivative", "grad", "div"})
 CONSTANTS = frozenset({"pi"})
 SPACE = ("x", "y", "z")
 TIME = "t"
-POTENTIAL = "V"
+#: The PDE's name for the cell model's current and for the source on its right-hand side.
+CURRENT = "Iion"
+SOURCE = "source"
 
 _BLOCKS: dict[str, frozenset[str] | None] = {
     "id": None, "title": None, "equation": None, "dimensions": None, "mesh_progression": None, "cites": None,
-    "native": None, "domain": frozenset({"box"}), "time": frozenset({"start", "end"}), "parameters": None,
-    "derived": None, "fields": None, "exact": None, "cell_model": frozenset({"states", "rates", "Iion"}),
-    "source": frozenset({"expression"}), "boundary": frozenset({"all_faces"}), "initial": frozenset({"fields"}),
+    "native": None, "pde": frozenset({"equation", "unknown", "parameters", "tensors"}),
+    "units": frozenset({"system", "system_reason", "native", "Iion", "Iion_reason", "fixed_capacitance"}),
+    "domain": frozenset({"box", "dimension_d_uses"}), "time": frozenset({"start", "end"}), "parameters": None,
+    "derived": None, "fields": None, "exact": None,
+    "cell_model": frozenset({"inputs", "states", "parameters", "shares_with_pde", "rates", "Iion"}),
+    "source": frozenset({"expression"}), "boundary": frozenset({"all_faces"}),
+    "initial": frozenset({"fields", "time", "points"}),
     "refinement": None, "norms": frozenset({"fields", "kinds", "points", "weight", "normalised_by", "at"}),
     "provenance": None,
 }
 _DERIVED_KEYS = frozenset({"expression", "native", "use", "use_reason", "tolerance", "tolerance_reason"})
-_TRACED = ("equation", "domain", "time", "parameters", "derived", "fields", "exact", "cell_model", "source",
+_TRACED = ("pde", "units", "domain", "time", "parameters", "derived", "fields", "exact", "cell_model", "source",
            "boundary", "initial", "refinement", "norms")
 _ALLOWED_NODES = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Call, ast.Name, ast.Load, ast.Constant,
                   ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.USub, ast.UAdd)
@@ -62,30 +77,40 @@ def load_problem(problem_id: str) -> dict[str, Any]:
     return problem
 
 
+def pde_sides(equation: str) -> tuple[str, str]:
+    """The left- and right-hand side of a PDE written ``lhs = rhs``."""
+    lhs, separator, rhs = equation.partition("=")
+    if not separator or "=" in rhs:
+        raise ProblemError(f"pde.equation: {equation!r} is not one 'lhs = rhs'")
+    return lhs.strip(), rhs.strip()
+
+
 def validate_problem(problem: Mapping[str, Any]) -> None:
     """Refuse a definition with an unknown or missing key, an off-menu kind, a per-dimension map that misses a
-    dimension, an expression that does not parse or names a symbol out of its scope, or a block with no source."""
+    dimension, an expression that does not parse or names a symbol out of its scope, a declared name list that is
+    not the one its expressions use, or a block with no source."""
     _keys("", problem, frozenset(_BLOCKS), required=True)
     for name, keys in _BLOCKS.items():
         if keys is not None:
             _keys(f"{name}.", _table(name, problem[name]), keys, required=True)
-    _menu("equation", problem["equation"], tuple(EQUATIONS))
+    _menu("equation", problem["equation"], EQUATIONS)
     _menu("boundary.all_faces", problem["boundary"]["all_faces"], BOUNDARY_KINDS)
     _menu("initial.fields", problem["initial"]["fields"], INITIAL_KINDS)
+    _menu("initial.time", problem["initial"]["time"], INITIAL_TIMES)
+    for solver, points in _table("initial.points", problem["initial"]["points"]).items():
+        _menu(f"initial.points.{solver}", points, POINTS)
+    _menu("domain.dimension_d_uses", problem["domain"]["dimension_d_uses"], DIMENSION_RULES)
     for kind in problem["mesh_progression"]:
         _menu("mesh_progression", kind, MESH_KINDS)
     dimensions = problem["dimensions"]
     if not dimensions or any(d not in (1, 2, 3) for d in dimensions):
         raise ProblemError(f"dimensions: {dimensions!r} is not a non-empty subset of [1, 2, 3]")
+    space = SPACE[:max(dimensions)]
 
     parameters = _table("parameters", problem["parameters"])
     for name, value in parameters.items():
         if not isinstance(value, (int, float)):
             raise ProblemError(f"parameters.{name}: {value!r} is not a number")
-    missing = [name for name in EQUATIONS[problem["equation"]] if name not in parameters]
-    if missing:
-        raise ProblemError(f"parameters: the {problem['equation']} equation needs {missing}")
-    space = SPACE[:max(dimensions)]
     derived = _table("derived", problem["derived"])
     for name, entry in derived.items():
         _keys(f"derived.{name}.", _table(f"derived.{name}", entry), _DERIVED_KEYS, required=True)
@@ -96,36 +121,74 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
         if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)) or tolerance <= 0:
             raise ProblemError(f"derived.{name}.tolerance: {tolerance!r} is not a positive number")
         for reason in ("use_reason", "tolerance_reason"):
-            if not isinstance(entry[reason], str) or not entry[reason]:
-                raise ProblemError(f"derived.{name}.{reason}: states no reason")
+            _reason(f"derived.{name}.{reason}", entry[reason])
     fields = _table("fields", problem["fields"])
     for name, by_dimension in fields.items():
         _per_dimension(f"fields.{name}", by_dimension, dimensions, {*space, *parameters})
 
+    pde = problem["pde"]
+    tensors = _table("pde.tensors", pde["tensors"])
+    for name, tensor in tensors.items():
+        tensor = _table(f"pde.tensors.{name}", tensor)
+        if len(tensor) != 1 or next(iter(tensor)) not in TENSOR_KINDS:
+            raise ProblemError(f"pde.tensors.{name}: must be one of {list(TENSOR_KINDS)}")
+        entries = tensor["diagonal"]
+        if len(entries) < len(space) or any(entry not in parameters for entry in entries):
+            raise ProblemError(f"pde.tensors.{name}: {entries} is not one parameter per axis {list(space)}")
     cell = problem["cell_model"]
     states = list(cell["states"])
+    unknown = pde["unknown"]
+    if unknown in states or unknown in parameters or unknown in SPACE or unknown == TIME:
+        raise ProblemError(f"pde.unknown: {unknown!r} must name neither a state, a parameter nor a coordinate")
+    lhs, rhs = pde_sides(_string("pde.equation", pde["equation"]))
+    if rhs != SOURCE:
+        raise ProblemError(f"pde.equation: the right-hand side must be {SOURCE!r}, not {rhs!r}")
+    pde_scope = {unknown, CURRENT, TIME, *parameters, *tensors}
+    used = _expression("pde.equation", lhs, pde_scope, OPERATORS)
+    _declares("pde.parameters", pde["parameters"], used & {*parameters, *tensors})
+
     exact = _table("exact", problem["exact"])
-    if set(exact) != {POTENTIAL, *states}:
-        raise ProblemError(f"exact: names {sorted(exact)}, but the unknowns are {[POTENTIAL, *states]}")
+    if set(exact) != {unknown, *states}:
+        raise ProblemError(f"exact: names {sorted(exact)}, but the unknowns are {[unknown, *states]}")
     solution_scope = {*space, TIME, *parameters, *derived, *fields}
     for name, text in exact.items():
         _expression(f"exact.{name}", text, solution_scope)
     _expression("source.expression", problem["source"]["expression"], solution_scope)
+
+    if list(cell["inputs"]) != [unknown]:
+        raise ProblemError(f"cell_model.inputs: {cell['inputs']} must be the PDE's unknown [{unknown!r}]")
     rates = _table("cell_model.rates", cell["rates"])
     if set(rates) != set(states):
         raise ProblemError(f"cell_model.rates: names {sorted(rates)}, but the states are {states}")
-    cell_scope = {POTENTIAL, *states, *parameters, *derived}
+    cell_scope = {unknown, *states, *parameters, *derived}
+    used = set()
     for name, text in rates.items():
-        _expression(f"cell_model.rates.{name}", text, cell_scope)
-    _expression("cell_model.Iion", cell["Iion"], cell_scope)
+        used |= _expression(f"cell_model.rates.{name}", text, cell_scope)
+    used |= _expression(f"cell_model.{CURRENT}", cell[CURRENT], cell_scope)
+    _declares("cell_model.parameters", cell["parameters"], used & {*parameters, *derived})
+    shared = set(cell["shares_with_pde"])
+    if not shared <= set(cell["parameters"]) & set(pde["parameters"]):
+        raise ProblemError(f"cell_model.shares_with_pde: {sorted(shared)} must be parameters of both the cell "
+                           "model and the PDE")
+
+    units = problem["units"]
+    _menu("units.system", units["system"], UNIT_SYSTEMS)
+    _menu("units.Iion", units["Iion"], CURRENT_BASES)
+    for key in ("system_reason", "Iion_reason", "fixed_capacitance"):
+        _reason(f"units.{key}", units[key])
+    unit_names = _table("units.native", units["native"])
+    stray = sorted(set(unit_names) - {*space, TIME, unknown, *parameters, *tensors})
+    if stray or not all(isinstance(unit, str) and unit for unit in unit_names.values()):
+        raise ProblemError(f"units.native: {stray or 'an empty unit'} names no coordinate, unknown or parameter")
 
     refinement = _table("refinement", problem["refinement"])
     if set(refinement) != set(problem["mesh_progression"]):
         raise ProblemError(f"refinement: has {sorted(refinement)}, the progression is {problem['mesh_progression']}")
     for kind, ladder in refinement.items():
-        _keys(f"refinement.{kind}.", _table(f"refinement.{kind}", ladder), frozenset({"cells", "dt"}), required=True)
-        if not ladder["cells"] or len(ladder["cells"]) != len(ladder["dt"]):
-            raise ProblemError(f"refinement.{kind}: cells and dt must be non-empty and of equal length")
+        ladder = _table(f"refinement.{kind}", ladder)
+        _keys(f"refinement.{kind}.", ladder, frozenset({"cells_per_axis", "dt"}), required=True)
+        if not ladder["cells_per_axis"] or len(ladder["cells_per_axis"]) != len(ladder["dt"]):
+            raise ProblemError(f"refinement.{kind}: cells_per_axis and dt must be non-empty and of equal length")
 
     provenance = _table("provenance", problem["provenance"])
     _keys("provenance.", provenance, frozenset(_TRACED), required=True)
@@ -144,6 +207,17 @@ def _table(where: str, value: Any) -> Mapping[str, Any]:
     return value
 
 
+def _string(where: str, value: Any) -> str:
+    if not isinstance(value, str):
+        raise ProblemError(f"{where}: {value!r} is not a string")
+    return value
+
+
+def _reason(where: str, value: Any) -> None:
+    if not isinstance(value, str) or not value:
+        raise ProblemError(f"{where}: states no reason")
+
+
 def _keys(prefix: str, table: Mapping[str, Any], known: Iterable[str], *, required: bool) -> None:
     known = frozenset(known)
     unknown = sorted(set(table) - known)
@@ -159,6 +233,11 @@ def _menu(where: str, value: Any, menu: tuple[str, ...]) -> None:
         raise ProblemError(f"{where}: {value!r} is not one of {list(menu)}")
 
 
+def _declares(where: str, declared: Any, used: set[str]) -> None:
+    if not isinstance(declared, list) or len(set(declared)) != len(declared) or set(declared) != used:
+        raise ProblemError(f"{where}: declares {declared!r}, but its expressions use {sorted(used)}")
+
+
 def _per_dimension(where: str, value: Any, dimensions: list[int], scope: Iterable[str] | None) -> None:
     table = _table(where, value)
     if set(table) != {str(d) for d in dimensions}:
@@ -171,22 +250,27 @@ def _per_dimension(where: str, value: Any, dimensions: list[int], scope: Iterabl
             _expression(f"{where}.{dimension}", item, scope)
 
 
-def _expression(where: str, text: Any, scope: Iterable[str]) -> None:
-    if not isinstance(text, str):
-        raise ProblemError(f"{where}: {text!r} is not an expression string")
+def _expression(where: str, text: Any, scope: Iterable[str], operators: frozenset[str] = frozenset()) -> set[str]:
+    """Refuse ``text`` unless it is arithmetic over ``scope``; return the names it uses."""
+    text = _string(where, text)
     try:
         tree = ast.parse(text, mode="eval")
     except SyntaxError as exc:
         raise ProblemError(f"{where}: {text!r} does not parse ({exc.msg})") from None
     allowed = {*scope, *CONSTANTS}
+    callable_names = FUNCTIONS | operators
     callees = {id(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    used = set()
     for node in ast.walk(tree):
         if not isinstance(node, _ALLOWED_NODES):
             raise ProblemError(f"{where}: {type(node).__name__} is not allowed in an expression")
-        if isinstance(node, ast.Call) and not (isinstance(node.func, ast.Name) and node.func.id in FUNCTIONS
+        if isinstance(node, ast.Call) and not (isinstance(node.func, ast.Name) and node.func.id in callable_names
                                                and not node.keywords):
-            raise ProblemError(f"{where}: only {sorted(FUNCTIONS)} may be called")
+            raise ProblemError(f"{where}: only {sorted(callable_names)} may be called")
         if isinstance(node, ast.Constant) and not isinstance(node.value, (int, float)):
             raise ProblemError(f"{where}: {node.value!r} is not a number")
-        if isinstance(node, ast.Name) and id(node) not in callees and node.id not in allowed:
-            raise ProblemError(f"{where}: {node.id!r} is not in scope here ({sorted(allowed)})")
+        if isinstance(node, ast.Name) and id(node) not in callees:
+            if node.id not in allowed:
+                raise ProblemError(f"{where}: {node.id!r} is not in scope here ({sorted(allowed)})")
+            used.add(node.id)
+    return used

@@ -114,7 +114,7 @@ def drift(snippets: dict[str, str], problem: dict) -> list[str]:
         found.append("conductivity")
     values = [float(line) for line in ladder]
     hex_ladder = problem["refinement"]["hex"]
-    if values != [*hex_ladder["cells"], *hex_ladder["dt"]]:
+    if values != [*hex_ladder["cells_per_axis"], *hex_ladder["dt"]]:
         found.append("hex refinement")
     return found
 

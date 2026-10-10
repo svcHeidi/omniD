@@ -15,8 +15,23 @@ ionic_model = "monodomainFDAManufactured"
 verification_model = "manufacturedFDAMonodomainVerifier"
 record = "manufacturedMonodomainPseudoECG"
 
+[pde]
+equation = "chi*(Cm*Derivative(V, t) + Iion) - div(sigma*grad(V)) = source"
+unknown = "V"
+parameters = ["Cm", "chi", "sigma"]
+tensors = { sigma = { diagonal = ["sigma_xx", "sigma_yy", "sigma_zz"] } }
+
+[units]
+system = "dimensionless"
+system_reason = "the exact fields add t to 1 and x*y**2 to 1, so x, t and V are pure numbers; cardiacFOAM reads each value in the SI unit of its dimension set (native)"
+native = { x = "m", t = "s", V = "V", Cm = "F/m^2", chi = "1/m", sigma = "S/m" }
+Iion = "per_unit_membrane_area"
+Iion_reason = "derived: the PDE's term chi*Iion has the units of chi*Cm*V/t, so Iion has those of Cm*V/t, a current per unit membrane area; cardiacFOAM's domain field ionicCurrent = A[Iion]/Cm is per unit capacitance (V/s)"
+fixed_capacitance = "derived: a solver whose Cm is fixed at Cm_s keeps chi*Cm and chi*Iion, so it takes chi_s = chi*Cm/Cm_s and Iion_s = Iion*Cm_s/Cm"
+
 [domain]
 box = [[0, 1], [0, 1], [0, 1]]
+dimension_d_uses = "first_d_intervals"
 
 [time]
 start = 0
@@ -48,7 +63,10 @@ u2 = "1/((1 + t)*sqrt(G))"
 u3 = "0"
 
 [cell_model]
+inputs = ["V"]
 states = ["u1", "u2", "u3"]
+parameters = ["Cm", "chi", "Beta"]
+shares_with_pde = ["Cm", "chi"]
 rates = { u1 = "(u1 + u3 - V)**2*u2**2 + (u1 + u3 - V)*u2**2*(V - u3)/2", u2 = "-(u1 + u3 - V)*u2**3", u3 = "0" }
 Iion = "-(Cm/2)*(u1 + u3 - V)*u2**2*(V - u3) + Beta*(V - u3)/chi"
 
@@ -60,9 +78,11 @@ all_faces = "zero_normal_gradient"
 
 [initial]
 fields = "exact"
+time = "start"
+points = { cardiacfoam = "cell_centres", nodal = "nodes" }
 
 [refinement.hex]
-cells = [10, 20, 40, 80]
+cells_per_axis = [10, 20, 40, 80]
 dt = [0.00892857, 0.00224215, 0.000560538, 0.000140174]
 
 [norms]
@@ -74,14 +94,15 @@ normalised_by = "total_volume"
 at = "first_step_within_half_dt_of_end"
 
 [provenance]
-equation = ["src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C", "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured.C"]
+pde = ["src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C", "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured.C"]
+units = ["tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties", "src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C", "src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C"]
 domain = ["tutorials/manufacturedSolutions/monodomainPseudoECG/system/blockMeshDict.1D", "tutorials/manufacturedSolutions/monodomainPseudoECG/system/blockMeshDict.2D", "tutorials/manufacturedSolutions/monodomainPseudoECG/system/blockMeshDict.3D"]
 time = ["tutorials/manufacturedSolutions/monodomainPseudoECG/system/controlDict"]
 parameters = ["src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json"]
 derived = ["derived: div(sigma*grad(F)) = Beta*F for the diagonal sigma above", "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H"]
 fields = ["src/verificationModels/monodomainVerification/manufacturedFDAReference.H"]
 exact = ["src/verificationModels/monodomainVerification/manufacturedFDAReference.H"]
-cell_model = ["src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H"]
+cell_model = ["src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H", "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured.C"]
 source = ["tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties", "https://cdrh-rst.fda.gov/node/1576"]
 boundary = ["src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties"]
 initial = ["src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.C"]

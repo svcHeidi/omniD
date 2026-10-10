@@ -19,6 +19,7 @@ def test_the_fda_monodomain_problem_has_zero_residual_in_every_dimension():
     for entry in verdict["dimensions"]:
         assert entry["status"] == "passed"
         assert entry["residuals"] == {"pde": "0", "u1": "0", "u2": "0", "u3": "0"}
+        assert set(entry["initial"]) == {"V", "u1", "u2", "u3"}
         assert entry["source"] == {"derived": "0", "declared": "0"}
         assert set(entry["boundary"].values()) == {"0"}
         assert len(entry["boundary"]) == 2 * entry["dimension"]
@@ -85,3 +86,17 @@ def test_without_sympy_the_check_is_refused_by_name(monkeypatch):
     with pytest.raises(Exception) as caught:
         residual_verdict(load_problem("fda_monodomain"))
     assert failure(caught.value)["code"] == "required_check_unavailable"
+
+
+def test_the_residual_reads_the_equation_from_the_data():
+    problem = load_problem("fda_monodomain")
+    problem["pde"]["equation"] = "chi*Cm*Derivative(V, t) + Iion - div(sigma*grad(V)) = source"
+    verdict = residual_verdict(problem)
+    assert verdict["status"] == "failed"
+    assert all(entry["residuals"]["pde"] != "0" for entry in verdict["dimensions"])
+
+
+def test_the_initial_fields_are_the_exact_fields_at_the_start():
+    entry = residual_verdict(load_problem("fda_monodomain"))["dimensions"][0]
+    assert entry["initial"]["u3"] == "0"
+    assert entry["initial"]["V"] == "cos(pi*x)"
