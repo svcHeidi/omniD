@@ -22,7 +22,7 @@
 **Evidence:**
 - `docs/solver-learning/opencarp.md`: F3, F5, F6, D5, G4, plus F16 and F17 added by Task 5;
 - the code map `.superpowers/sdd/map-B.md`;
-- the paper research `docs/superpowers/reports/niederer-benchmark-definition.md`, which is not committed (the directory is git-ignored). Task 4 transcribes from it.
+- the paper research `docs/superpowers/reports/niederer-benchmark-definition.md`. Task 4 transcribes from it.
 **Runs alongside:** topic A, `docs/superpowers/specs/2026-09-26-core-generality-design.md`. See "Coordination with topic A" below.
 
 
