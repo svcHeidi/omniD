@@ -76,11 +76,11 @@ def caught_code(exc: BaseException) -> str:
 
 def failure(
     exc: BaseException | None, *, code: str | None = None, error: str | None = None,
-    diagnostics: Sequence[Any] | None = None, **extra: Any,
+    broken: Sequence[Any] | None = None, **extra: Any,
 ) -> dict[str, Any]:
     """The refusal payload for ``exc``, or for a refusal with no exception (``code`` and ``error`` given).
-    ``refusals`` are ``diagnostics``, else the ones ``exc`` carries."""
-    refusals = [asdict(item) for item in (getattr(exc, "diagnostics", ()) if diagnostics is None else diagnostics)]
+    ``refusals`` are the ``broken`` diagnostics, else the ones ``exc`` carries."""
+    refusals = [asdict(item) for item in (getattr(exc, "diagnostics", ()) if broken is None else broken)]
     return {
         "status": "failed", **extra, "code": code or refusal_code(exc), **({"refusals": refusals} if refusals else {}),
         "error": str(exc) if error is None else error,

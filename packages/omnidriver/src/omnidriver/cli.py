@@ -343,12 +343,10 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
         execution_env=execution_env,
     )
     if inputs is None:
-        print(json.dumps({
-            "status": "failed",
-            "run_document": args.run_document,
-            "code": "run_document_invalid",
-            "diagnostics": [asdict(d) for d in diagnostics],
-        }, indent=2))
+        print(json.dumps(failure(
+            None, code="run_document_invalid", error="the run document fails validation; see diagnostics",
+            run_document=args.run_document, diagnostics=[asdict(d) for d in diagnostics],
+        ), indent=2))
         return None
     record = driver_context.stack.call("get_tutorial_records").get(run_doc.name)
     if record is not None and args.apply is None:

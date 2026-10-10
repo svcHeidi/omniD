@@ -294,7 +294,7 @@ def _record_sweep_run(
                 reason = _case_failure(
                     None, code="plan_blocked" if report.status == "blocked" else "plan_failed",
                     error="; ".join(report.error_messages()) or f"strict_plan reported {report.status} status",
-                    diagnostics=report.errors(),
+                    broken=report.errors(),
                 )
             else:
                 run_document = payload["run_document"]

@@ -78,3 +78,18 @@ def test_a_structured_refusal_keeps_its_diagnostics_beside_the_text():
 def test_print_refusal_prints_the_code(capsys):
     assert print_refusal(Refusal("bad flag")) == 1
     assert json.loads(capsys.readouterr().out) == {"status": "failed", "code": "usage", "error": "bad flag"}
+
+
+def test_an_unreadable_run_document_is_refused_in_the_one_shape(tmp_path, capsys):
+    from omnidriver.cli import main
+
+    assert main(["run", "--plugin", "plugins.toy:ToyStack", "--run-document", str(tmp_path / "absent.json")]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert (payload["status"], payload["code"]) == ("failed", "run_document_unreadable")
+    assert [item["code"] for item in payload["diagnostics"]] == ["run_document_unreadable"]
+
+
+def test_a_diagnostic_with_detail_hashes():
+    from omnidriver.core.planning_types import diagnostic
+
+    assert hash(diagnostic("error", "c", "m", detail={"rule": {"minimum": 0}})) == hash(diagnostic("error", "c", "m"))

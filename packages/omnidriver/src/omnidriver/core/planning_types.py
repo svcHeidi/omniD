@@ -17,6 +17,9 @@ class StrictDiagnostic:
     #: a scan note carries its scan record.
     detail: Mapping[str, Any] | None = None
 
+    def __hash__(self) -> int:
+        return hash((self.level, self.code, self.message, self.source, self.field))
+
 
 @dataclass(frozen=True)
 class SimulationAuditItem:

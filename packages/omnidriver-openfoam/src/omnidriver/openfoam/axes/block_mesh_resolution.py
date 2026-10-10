@@ -137,10 +137,6 @@ def block_mesh_resolution_axis(
     must declare, all sharing one current resolution; refused by name
     otherwise at resolve time.
 
-    ``unit``, ``description`` and ``exclusive_minimum`` are the axis's own
-    (:class:`AxisContract`): the unit of the study value, what it sets, and
-    the bound core checks before ``resolve`` runs.
-
     ``value_kind`` declares the shape of the study value this axis's
     ``resolve`` accepts. Defaults to ``"integer"`` (a bare resolution count);
     a record whose study value is already the three cell counts passes
