@@ -118,6 +118,38 @@ reality for cardiacFOAM and cardiacCore. Each solver's own numerics stay in its
 plugin, for example cardiacFOAM's time coupling, solution algorithm and
 batched ionic integrator.
 
+**Where numerics knowledge lives (owner, 2026-10-10):** inside each solver's
+catalogue, on the keys themselves, like any variable. There is no separate
+numerics catalogue.
+
+- **One generic addition to core's catalogue entry:** an optional mapping from
+  each menu value to attributes that core does not interpret. The verifier
+  package owns their schema: formal order (space and time), conditions,
+  stability, composition rules, and where each claim comes from.
+- **OpenFOAM layer** (one reality for cardiacFOAM and cardiacCore):
+  - `system/fvSchemes` stops being an unvalidated `<any>` entry. Its keys
+    (`ddtSchemes`, `gradSchemes`, `laplacianSchemes`, `snGradSchemes`,
+    `interpolationSchemes`, `divSchemes`) are catalogued, with menus read from
+    OpenFOAM's own source at `$FOAM_SRC`, supplied by the sourced bashrc.
+  - The C++ scanner learns OpenFOAM's `make*Scheme` registration macros and
+    `TypeName` names. Today it finds the 13 ODE solvers but no scheme table.
+  - A composite value such as `Gauss linear corrected` is catalogued through
+    its parts.
+- **Each solver's own keys** carry their numerics the same way. For example,
+  cardiacFOAM `timeCouplingScheme sbdf2` gives time order 2, composed with the
+  order of `ddt(Vm)`, as `monodomainSolver::solveDiffusionImplicit` shows.
+  openCARP `parab_solve` keeps its `+Help` labels ("Crank-Nicolson"), with its
+  order and the condition θ = 0.5.
+- **What settles an order:** for now, what the authors state, recorded as
+  stated. The rule for "settled" is decided once the manufactured-solution
+  results are in.
+- **Fixes when this work starts:**
+  1. cardiacFOAM's ddt stability limits and the ODE solver menu move to the
+     OpenFOAM layer.
+  2. The openCARP catalogue generator keeps `+Help`'s menu labels.
+  3. cardiacFOAM descriptions stop restating orders as prose.
+- **Evidence:** `docs/superpowers/reports/mms-injection-2026-10-10/numerics-knowledge.md`.
+
 **What the verifier reports, per solver and problem:**
 - the observed order;
 - the order this solver's own numerics should give;
