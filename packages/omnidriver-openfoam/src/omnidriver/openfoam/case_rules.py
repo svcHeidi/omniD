@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -16,6 +17,7 @@ from omnidriver.core.contracts.dictionary import bound_reasons, bound_violations
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
 from .literals import switch_value
+from .scheme_tables import SOURCE_ROOT_VARIABLE, OpenFoamTableEntry, table_menu
 
 
 def flatten(node: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
@@ -377,6 +379,17 @@ def scheme_diagnostics(
     return found
 
 
+def _openfoam_table_check(entry: Any, concrete: str, value: Any, violated: Any) -> None:
+    # Without a supplied source the menu is the snapshot's, which nothing is refused against; the listing says so.
+    names, root = table_menu(entry.table, os.environ)
+    if root is not None and str(value) not in names:
+        violated(
+            concrete, f"{concrete} is {value!r}, not one of the names OpenFOAM's {entry.table} table registers in "
+            f"{SOURCE_ROOT_VARIABLE}={root}: {sorted(names)}.",
+            {"menu": sorted(names)},
+        )
+
+
 def rule_diagnostics(
     entries: Iterable[Any], context: Mapping[str, Any], *, document: str, mapping: Any = None,
     catalogue: Any = None,
@@ -456,6 +469,8 @@ def rule_diagnostics(
                     concrete, f"{concrete} is {value!r}, not one of the values {source}: {sorted(menu)}.",
                     {"menu": sorted(menu)},
                 )
+            if isinstance(entry, OpenFoamTableEntry) and _present(value):
+                _openfoam_table_check(entry, concrete, value, violated)
             number = _magnitude(value)
             if broken := bound_violations(numeric_bounds(entry), number):
                 violated(

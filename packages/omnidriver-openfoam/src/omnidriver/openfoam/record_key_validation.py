@@ -5,6 +5,7 @@ A plugin supplies how a key path finds its catalogue entry (:class:`CataloguedDo
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -75,6 +76,10 @@ def listed_entry(document: str, key: str, entry: Any) -> dict[str, Any]:
         "examples": list(entry.examples),
         "notes": entry.notes,
     }
+    from .scheme_tables import OpenFoamTableEntry, listed_menu
+
+    if isinstance(entry, OpenFoamTableEntry):
+        listing["menu"], listing["menu_source"] = listed_menu(entry, os.environ)
     bounds = {"minimum": entry.minimum, "exclusive_minimum": entry.exclusive_minimum}
     return {
         **listing, **{name: value for name, value in extras.items() if value},

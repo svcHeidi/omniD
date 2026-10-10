@@ -8,7 +8,7 @@ import pytest
 
 from omnidriver.openfoam.fv_schemes import FV_SCHEMES_ENTRIES_BY_PATH, ddt_stability_limits, stated_numerics
 from omnidriver.openfoam.record_key_validation import listed_entry
-from omnidriver.openfoam.scheme_tables import committed_menus
+from omnidriver.openfoam.scheme_tables import snapshot
 
 _SOURCE = Path(__file__).parent / "fixtures" / "openfoam_v2412_src"
 _ATTRIBUTED = [
@@ -29,7 +29,7 @@ def test_the_schemes_the_manufactured_cases_use_are_attributed():
 
 @pytest.mark.parametrize("table,name,attributes", _ATTRIBUTED)
 def test_every_attributed_value_is_a_name_the_table_registers(table, name, attributes):
-    assert name in committed_menus()["tables"][table]
+    assert name in snapshot()["tables"][table]
 
 
 @pytest.mark.parametrize("table,name,attributes", _ATTRIBUTED)

@@ -1,6 +1,6 @@
 from typing import Final, Any
 from omnidriver.core.contracts.dictionary import DictEntry, build_group
-from omnidriver.openfoam.scheme_tables import ODE_SOLVER_MENU
+from omnidriver.openfoam.scheme_tables import ODE_TABLE, openfoam_table_entry
 
 from .ionic_model_catalog import BATCHED_MODELS, IONIC_MODEL_CATALOG
 from .numerics import BATCHED_INTEGRATOR, SOLUTION_ALGORITHM, TIME_COUPLING_SCHEME
@@ -420,13 +420,12 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
     "ode_solver_passthrough": build_group(
         defaults={"phases": frozenset({'solver'}), "applicable_when": {"myocardiumSolver": ("monodomainSolver", "bidomainSolver", "singleCellSolver")}},
         entries=(
-        DictEntry(
+        openfoam_table_entry(
+            ODE_TABLE,
             driver_path='$ELECTRO_MODEL_COEFFS.solver',
             description="ODE solver selector passed through to OpenFOAM's ODESolver factory.",
             source_refs=('src/ionicModels/ionicModel/ionicModel.H', 'src/activeTensionModels/NashPanfilov/NashPanfilov.C'),
             notes='The repository source shows pass-through to ODESolver::New(*this, dict_). Additional ODESolver-specific keys may exist beyond the commonly used entries listed here. The active-tension models NashPanfilov, LandNiederer and LandNiedererTWorld read it from this block too, so a batched ionic model with one of them still needs it; the LandNiederer pair read it only without an ODESolver sub-dictionary.',
-            value_kind='enum',
-            enum_values=ODE_SOLVER_MENU,
             required=True,
             required_when={
                 "ionicModel": ODE_SOLVER_MODELS,
@@ -1029,14 +1028,13 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
         ),
-        DictEntry(
+        openfoam_table_entry(
+            ODE_TABLE,
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.solver',
             phases=frozenset({'physics'}),
             description='ODE solver used while pacing personalized-template anchors.',
             source_refs=('src/electroModels/ecgModels/eikonalECG/eikonalTemplateGenerator.C',),
             notes='eikonalTemplateGenerator hands ionicModelConfig to ionicModel::New; ionicModel::odeSolver passes it to ODESolver::New, which reads it with dict.get<word>("solver") (ODESolverNew.C), so it is required whenever the ionic model builds an ODESolver: every non-batched model.',
-            value_kind='enum',
-            enum_values=ODE_SOLVER_MENU,
             allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.ecgSolver": "eikonalECG"},
             required_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.ionicModel": ODE_SOLVER_MODELS},
@@ -1436,13 +1434,13 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             typical_value='1e-6',
             allowed_bindings={"<name>": None},
         ),
-        DictEntry(
+        openfoam_table_entry(
+            ODE_TABLE,
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.solver',
             phases=frozenset({'physics'}),
             description='ODE solver used for the 1D Purkinje ionic model.',
             source_refs=('src/electroModels/electroDomains/conductionSystemDomain/conductionSystemDomain.C', 'src/ionicModels/ionicModel/ionicModel.H'),
             notes='Pass-through key: conductionSystemDomain hands this sub-dict to ionicModel::New, and ionicModel::odeSolver (ionicModel.H) passes it to ODESolver::New, which reads it upstream with dict.get<word>("solver") (ODESolverNew.C), so it is required whenever the ionic model builds an ODESolver: every non-batched model. Not visible to the C++ key scanner.',
-            value_kind='word',
             typical_value='RKF45',
             allowed_bindings={"<name>": None},
             required_when={"$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.ionicModel": ODE_SOLVER_MODELS},

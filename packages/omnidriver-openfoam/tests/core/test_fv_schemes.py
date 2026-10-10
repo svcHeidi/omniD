@@ -12,7 +12,7 @@ from omnidriver.openfoam.fv_schemes import (
     fv_schemes_listing,
 )
 from omnidriver.openfoam.record_key_validation import make_validator
-from omnidriver.openfoam.scheme_tables import committed_menus
+from omnidriver.openfoam.scheme_tables import snapshot
 
 _SOURCE = Path(__file__).parent / "fixtures" / "openfoam_v2412_src"
 
@@ -37,7 +37,7 @@ def test_each_scheme_table_has_a_default_and_a_per_term_entry_whose_menu_is_the_
         f"{table}.{key}" for table in TABLES for key in ("default", "<term>")
     }
     for table in TABLES:
-        menu = tuple(committed_menus()["tables"][table])
+        menu = tuple(snapshot()["tables"][table])
         assert FV_SCHEMES_ENTRIES_BY_PATH[f"{table}.<term>"].enum_values == menu
         assert FV_SCHEMES_ENTRIES_BY_PATH[f"{table}.default"].enum_values == (*menu, "none")
 

@@ -1,5 +1,7 @@
 {
+ "description": "A snapshot of OpenFOAM's scheme and ODESolver tables, scanned from the source whose version and digest it records. A listing shows it, labelled, when no $FOAM_SRC is supplied; nothing is judged against it.",
  "openfoam_version": "v2412",
+ "source_digest": "f80de82b0690ae7705fa20d85fa10bd0cad50bd2566dbe02b28ceeed395ab38b",
  "tables": {
   "ODESolver": [
    "Euler",

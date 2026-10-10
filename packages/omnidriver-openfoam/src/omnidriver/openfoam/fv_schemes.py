@@ -17,7 +17,7 @@ from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
 from .case_rules import scheme_diagnostics, scheme_parts
 from .record_key_validation import CataloguedDocument, listed_entry
-from .scheme_tables import committed_menus, cached_selection_tables, foam_source_root, SOURCE_ROOT_VARIABLE
+from .scheme_tables import SOURCE_ROOT_VARIABLE, cached_selection_tables, foam_source_root, openfoam_table_entry
 
 FV_SCHEMES_DOCUMENT: Final = "system/fvSchemes"
 TERM: Final = "<term>"
@@ -49,30 +49,28 @@ def _attributes() -> dict[str, dict[str, dict[str, Any]]]:
 
 def _entry(table: str, key: str) -> DictEntry:
     example, does = _TABLES[table]
-    menu = tuple(committed_menus()["tables"][table])
     if key == "default":
         description = (
             f"The scheme for the {does} of {table} that have no key of their own; `{NO_DEFAULT}` leaves each to a key of its own. "
             "A value is a scheme's name followed by the words that scheme reads."
         )
-        names = (*menu, NO_DEFAULT)
     else:
         description = (
             f"The scheme for one of the {does} in {table}, the key spelling the term as the solver names it, e.g. `{example}`. "
             "A value is a scheme's name followed by the words that scheme reads."
         )
-        names = menu
-    return DictEntry(
+    return openfoam_table_entry(
+        table,
+        value_kind="string",
+        extra_values=(NO_DEFAULT,) if key == "default" else (),
         driver_path=f"{table}.{key}",
         description=description,
         source_refs=_SOURCE,
-        value_kind="string",
-        enum_values=names,
         menu_attributes={name: attributes for name, attributes in _attributes().get(table, {}).items()},
         notes=(
-            "The menu is the head of the value: the names OpenFOAM's own source registers for this table "
-            "(src/finiteVolume), from openfoam_menus.json; a plan with $FOAM_SRC supplied judges the value against a fresh "
-            "scan, each part through its own table. A value outside the menu is noted, never refused."
+            "The menu is the head of the value: the names OpenFOAM's source registers for this table (src/finiteVolume). "
+            "A plan judges each part of the value through its own table when $FOAM_SRC is supplied; a value outside the menu "
+            "is a warning, never a refusal."
         ),
         phases=frozenset({"solver"}),
         allowed_bindings={TERM: None} if key == TERM else {},
