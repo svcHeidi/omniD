@@ -187,8 +187,9 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
     units = problem["units"]
     _menu("units.system", units["system"], UNIT_SYSTEMS)
     _menu("units.Iion", units["Iion"], CURRENT_BASES)
-    for key in ("system_reason", "Iion_reason", "fixed_capacitance"):
+    for key in ("system_reason", "Iion_reason"):
         _reason(f"units.{key}", units[key])
+    _fixed_capacitance(_table("units.fixed_capacitance", units["fixed_capacitance"]), pde, parameters, tensors)
     unit_names = _table("units.native", units["native"])
     stray = sorted(set(unit_names) - {*space, TIME, unknown, *parameters, *tensors})
     if stray or not all(isinstance(unit, str) and unit for unit in unit_names.values()):
@@ -217,6 +218,29 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
     for name, sources in provenance.items():
         if not sources or not all(isinstance(source, str) and source for source in sources):
             raise ProblemError(f"provenance.{name}: names no source")
+
+
+def _fixed_capacitance(mapping: Mapping[str, Any], pde: Mapping[str, Any], parameters: Mapping[str, Any],
+                       tensors: Mapping[str, Any]) -> None:
+    where = "units.fixed_capacitance"
+    _keys(f"{where}.", mapping, frozenset({"parameter", "value", "keeps", "maps", "reason"}), required=True)
+    _reason(f"{where}.reason", mapping["reason"])
+    fixed, value = mapping["parameter"], _string(f"{where}.value", mapping["value"])
+    if fixed not in pde["parameters"]:
+        raise ProblemError(f"{where}.parameter: {fixed!r} is not a parameter of the PDE {pde['parameters']}")
+    if value in {*parameters, *tensors, *SPACE, TIME, CURRENT, pde["unknown"]} or not value.isidentifier():
+        raise ProblemError(f"{where}.value: {value!r} must be a new name")
+    maps = _table(f"{where}.maps", mapping["maps"])
+    if not set(maps) <= {*pde["parameters"], CURRENT} - {fixed} or CURRENT not in maps:
+        raise ProblemError(f"{where}.maps: maps {sorted(maps)}; it must map {CURRENT!r} and only the PDE's other "
+                           "parameters")
+    for name, text in maps.items():
+        _expression(f"{where}.maps.{name}", text, {*parameters, value, CURRENT})
+    keeps = mapping["keeps"]
+    if not isinstance(keeps, list) or not keeps:
+        raise ProblemError(f"{where}.keeps: names no product the mapping keeps")
+    for index, text in enumerate(keeps):
+        _expression(f"{where}.keeps.{index}", text, {*parameters, CURRENT})
 
 
 def _rule(where: str, text: Any) -> Any:

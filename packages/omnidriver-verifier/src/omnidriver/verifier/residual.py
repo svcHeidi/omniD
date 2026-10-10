@@ -2,11 +2,16 @@
 from __future__ import annotations
 
 import copy
+import math
 from typing import Any, Mapping
 
 from omnidriver.core.refusal import Refusal
 
 from .problem import CURRENT, FUNCTIONS, SOURCE, SPACE, TIME, ProblemError, pde_sides, validate_problem
+
+
+# A mapped value is a ratio of the problem's decimals: equal to the given one up to the float's own rounding.
+_SAME = 1e-12
 
 
 class SymbolicUnavailable(Refusal):
@@ -26,7 +31,7 @@ def residual_verdict(problem: Mapping[str, Any]) -> dict[str, Any]:
         if name in problem["derived"]:
             entry = problem["derived"][name]
             given[name] = entry["native"] if entry["use"] == "native" else None
-    return _verdict(problem, cell, given, problem["parameters"])
+    return _verdict(problem, cell, given, {}, None)
 
 
 def cell_model_verdict(
@@ -34,6 +39,7 @@ def cell_model_verdict(
     cell_model: Mapping[str, Any],
     *,
     pde_parameters: Mapping[str, float] | None = None,
+    fixed_capacitance: float | None = None,
 ) -> dict[str, Any]:
     """Gate 1 on a generated cell model, in the shape of :func:`residual_verdict`.
 
@@ -43,7 +49,12 @@ def cell_model_verdict(
     model's own values enter its expressions, so a pair it does not share with the PDE (``shares_with_pde``)
     leaves a PDE residual; each value given either side is also reported beside the problem's, and fails when
     it differs. A derived constant is judged against its derived value within the stated tolerance.
-    :class:`ProblemError` when the cell model is malformed or gives no value to a parameter it names."""
+
+    ``fixed_capacitance`` is the value a solver fixes the capacitance at: the PDE then takes the values the
+    problem's ``units.fixed_capacitance`` maps to (unless ``pde_parameters`` says otherwise, which is then judged
+    against them), the cell model's current is the solver's mapped one, and each product the mapping ``keeps``
+    must be unchanged by it. :class:`ProblemError` when the cell model is malformed or gives no value to a
+    parameter it names."""
     values = dict(cell_model.get("parameters", {}))
     candidate = copy.deepcopy(dict(problem))
     candidate["cell_model"].update(rates=cell_model.get("rates"), Iion=cell_model.get(CURRENT),
@@ -58,13 +69,13 @@ def cell_model_verdict(
     stray = sorted(set(pde_parameters or {}) - set(problem["parameters"]))
     if stray:
         raise ProblemError(f"pde_parameters: {stray} are not parameters of {problem['id']!r}")
-    return _verdict(candidate, candidate["cell_model"], values, {**problem["parameters"], **(pde_parameters or {})})
+    return _verdict(candidate, candidate["cell_model"], values, pde_parameters or {}, fixed_capacitance)
 
 
 def _verdict(problem: Mapping[str, Any], cell: Mapping[str, Any], given: Mapping[str, Any],
-             pde_given: Mapping[str, float]) -> dict[str, Any]:
+             pde_overrides: Mapping[str, float], fixed: float | None) -> dict[str, Any]:
     sympy = _sympy()
-    entries = [_dimension(sympy, problem, cell, given, pde_given, d) for d in problem["dimensions"]]
+    entries = [_dimension(sympy, problem, cell, given, pde_overrides, fixed, d) for d in problem["dimensions"]]
     return {
         "problem": problem["id"],
         "equation": problem["equation"],
@@ -89,7 +100,7 @@ def _symbol(sympy: Any, name: str, lower: float) -> Any:
 
 
 def _dimension(sympy: Any, problem: Mapping[str, Any], cell: Mapping[str, Any], given: Mapping[str, Any],
-               pde_given: Mapping[str, float], d: int) -> dict[str, Any]:
+               pde_overrides: Mapping[str, float], fixed: float | None, d: int) -> dict[str, Any]:
     key = str(d)
 
     def at(value: Any) -> Any:
@@ -104,10 +115,13 @@ def _dimension(sympy: Any, problem: Mapping[str, Any], cell: Mapping[str, Any], 
     # Exact decimals: a float coefficient would leave round-off where the residual should cancel.
     for name, value in problem["parameters"].items():
         names[name] = sympy.Rational(str(value))
-    pde_names = {**names, **{name: sympy.Rational(str(value)) for name, value in pde_given.items()}}
 
     def parse(text: str, local: Mapping[str, Any] = names) -> Any:
         return sympy.parse_expr(text, local_dict=dict(local), evaluate=True)
+
+    mapped, fixed_report = _mapped(sympy, problem, names, parse, fixed)
+    pde_given = {**problem["parameters"], **mapped, **pde_overrides}
+    pde_names = {**names, **{name: sympy.Rational(str(value)) for name, value in pde_given.items()}}
 
     derived = {}
     for name, entry in problem["derived"].items():
@@ -163,16 +177,21 @@ def _dimension(sympy: Any, problem: Mapping[str, Any], cell: Mapping[str, Any], 
     pde_scalars |= {name for name in pde["parameters"] if name in problem["parameters"]}
     for name in sorted(pde_scalars | set(own)):
         report = {"problem": problem["parameters"][name]}
+        agrees = True
         if name in pde_scalars:
             report["pde"] = pde_given[name]
+            if name in mapped:
+                report["mapped"] = mapped[name]
+            agrees = math.isclose(report["pde"], mapped.get(name, report["problem"]), rel_tol=_SAME)
         if name in own:
             report["cell_model"] = at(given[name])
-        values = [value for side, value in report.items() if side != "problem"]
-        report["status"] = "passed" if all(value == report["problem"] for value in values) else "failed"
+            agrees = agrees and report["cell_model"] == report["problem"]
+        report["status"] = "passed" if agrees else "failed"
         parameters[name] = report
+    checks = (*derived.values(), *parameters.values(), *([fixed_report] if fixed_report else []))
     passed = all(value == "0" for value in (*residuals.values(), *boundary.values())) and all(
-        entry["status"] == "passed" for entry in (*derived.values(), *parameters.values()))
-    return {
+        entry["status"] == "passed" for entry in checks)
+    entry = {
         "dimension": d,
         "status": "passed" if passed else "failed",
         "residuals": residuals,
@@ -182,6 +201,31 @@ def _dimension(sympy: Any, problem: Mapping[str, Any], cell: Mapping[str, Any], 
         "derived": derived,
         "parameters": parameters,
     }
+    if fixed_report:
+        entry["fixed_capacitance"] = fixed_report
+    return entry
+
+
+def _mapped(sympy: Any, problem: Mapping[str, Any], names: Mapping[str, Any], parse: Any,
+            fixed: float | None) -> tuple[dict[str, float], dict[str, Any] | None]:
+    """The PDE values ``units.fixed_capacitance`` maps to for a capacitance fixed at ``fixed``, and its report:
+    each product it keeps, as the mapped minus the original (``"0"`` when kept)."""
+    if fixed is None:
+        return {}, None
+    mapping = problem["units"]["fixed_capacitance"]
+    current = sympy.Symbol(CURRENT)
+    value = sympy.Rational(str(fixed))
+    scope = {**names, mapping["value"]: value, CURRENT: current}
+    after = {mapping["parameter"]: value, **{name: parse(text, scope) for name, text in mapping["maps"].items()}}
+    keeps = {text: _simplified(sympy, parse(text, {**names, **after}) - parse(text, {**names, CURRENT: current}))
+             for text in mapping["keeps"]}
+    report = {
+        mapping["value"]: fixed,
+        "maps": {name: str(expression) for name, expression in after.items()},
+        "keeps": keeps,
+        "status": "passed" if set(keeps.values()) == {"0"} else "failed",
+    }
+    return {name: float(expression) for name, expression in after.items() if name != CURRENT}, report
 
 
 def _simplified(sympy: Any, expression: Any) -> str:

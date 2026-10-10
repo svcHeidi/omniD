@@ -149,3 +149,12 @@ def test_the_time_rule_ladder_and_norms_are_checked(edit, reported):
     problem = _shipped()
     edit(problem)
     assert reported in _refused(problem)
+
+
+def test_a_fixed_capacitance_mapping_that_maps_no_current_or_a_stray_name_is_refused():
+    problem = _shipped()
+    del problem["units"]["fixed_capacitance"]["maps"]["Iion"]
+    assert "units.fixed_capacitance.maps" in _refused(problem)
+    problem = _shipped()
+    problem["units"]["fixed_capacitance"]["maps"]["chi"] = "chi*Cm/C_s"
+    assert "C_s" in _refused(problem)

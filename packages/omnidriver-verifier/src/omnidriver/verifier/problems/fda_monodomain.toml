@@ -27,7 +27,7 @@ system_reason = "the exact fields add t to 1 and x*y**2 to 1, so x, t and V are 
 native = { x = "m", t = "s", V = "V", Cm = "F/m^2", chi = "1/m", sigma = "S/m" }
 Iion = "per_unit_membrane_area"
 Iion_reason = "derived: the PDE's term chi*Iion has the units of chi*Cm*V/t, so Iion has those of Cm*V/t, a current per unit membrane area; cardiacFOAM's domain field ionicCurrent = A[Iion]/Cm is per unit capacitance (V/s)"
-fixed_capacitance = "derived: a solver whose Cm is fixed at Cm_s keeps chi*Cm and chi*Iion, so it takes chi_s = chi*Cm/Cm_s and Iion_s = Iion*Cm_s/Cm"
+fixed_capacitance = { parameter = "Cm", value = "Cm_s", keeps = ["chi*Cm", "chi*Iion"], maps = { chi = "chi*Cm/Cm_s", Iion = "Iion*Cm_s/Cm" }, reason = "derived: a solver whose Cm is fixed at Cm_s keeps the products chi*Cm and chi*Iion the PDE uses, so it takes the mapped chi and Iion" }
 
 [domain]
 box = [[0, 1], [0, 1], [0, 1]]

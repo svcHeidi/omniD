@@ -169,3 +169,47 @@ def test_a_box_below_zero_gives_its_coordinates_no_sign():
     entry = residual_verdict(problem)["dimensions"][0]
     assert entry["residuals"] == {"pde": "0", "u1": "0", "u2": "0", "u3": "0"}
     assert set(entry["boundary"]) == {"x=-1", "x=1"}
+
+
+def _fixed_capacitance(problem: dict, iion: str) -> dict:
+    """A cell model generated for a solver whose Cm is fixed at 1: the problem's own parameter values, and ``iion``."""
+    return {**_generated(problem), "Iion": iion}
+
+
+def test_a_model_mapped_to_a_fixed_capacitance_passes():
+    problem = load_problem("fda_monodomain")
+    model = _fixed_capacitance(problem, f"({problem['cell_model']['Iion']})*1/Cm")
+    verdict = cell_model_verdict(problem, model, pde_parameters={"Cm": 1, "chi": 6}, fixed_capacitance=1)
+    assert verdict["status"] == "passed"
+    for entry in verdict["dimensions"]:
+        assert entry["residuals"]["pde"] == "0"
+        assert entry["parameters"]["chi"] == {"problem": 3, "pde": 6, "mapped": 6, "cell_model": 3,
+                                              "status": "passed"}
+        assert entry["fixed_capacitance"]["status"] == "passed"
+
+
+def test_a_mapping_that_forgets_the_current_scaling_fails():
+    problem = load_problem("fda_monodomain")
+    model = _fixed_capacitance(problem, problem["cell_model"]["Iion"])
+    verdict = cell_model_verdict(problem, model, pde_parameters={"Cm": 1, "chi": 6}, fixed_capacitance=1)
+    assert verdict["status"] == "failed"
+    assert all(entry["residuals"]["pde"] != "0" for entry in verdict["dimensions"])
+
+
+def test_a_pde_given_the_unmapped_chi_under_a_fixed_capacitance_fails():
+    problem = load_problem("fda_monodomain")
+    model = _fixed_capacitance(problem, f"({problem['cell_model']['Iion']})/Cm")
+    verdict = cell_model_verdict(problem, model, pde_parameters={"Cm": 1, "chi": 3}, fixed_capacitance=1)
+    assert verdict["status"] == "failed"
+    for entry in verdict["dimensions"]:
+        assert entry["parameters"]["chi"]["status"] == "failed"
+
+
+def test_the_mapping_is_read_from_the_problem_data():
+    problem = load_problem("fda_monodomain")
+    problem["units"]["fixed_capacitance"]["maps"]["chi"] = "chi*Cm"
+    model = _fixed_capacitance(problem, f"({problem['cell_model']['Iion']})/Cm")
+    verdict = cell_model_verdict(problem, model, pde_parameters={"Cm": 1, "chi": 6}, fixed_capacitance=0.5)
+    for entry in verdict["dimensions"]:
+        assert entry["fixed_capacitance"]["status"] == "failed"
+        assert entry["parameters"]["chi"]["mapped"] == 6
