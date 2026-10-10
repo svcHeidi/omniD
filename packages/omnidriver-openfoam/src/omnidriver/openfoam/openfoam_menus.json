@@ -84,6 +84,7 @@
    "filteredLinear3",
    "filteredLinear3V",
    "fixedBlended",
+   "harmonic",
    "limitWith",
    "limitedCubic",
    "limitedCubic01",

@@ -59,6 +59,10 @@ def test_the_fit_macros_written_across_lines_register_their_first_argument(table
     assert tables["snGradSchemes"]["linearFit"] == "linearFit"
 
 
+def test_a_scheme_added_to_its_table_without_a_macro_registers_too(tables):
+    assert tables["interpolationSchemes"]["harmonic"] == "harmonic"
+
+
 def test_a_macro_inside_a_define_registers_nothing(texts):
     # cellLimitedGrads.C calls makeFvLimitedGradTypeScheme(SS, scalar, Limiter) inside its own #define.
     assert not any("SS" in name or "Limiter" == name for names in scan_scheme_registrations(texts).values() for name in names)

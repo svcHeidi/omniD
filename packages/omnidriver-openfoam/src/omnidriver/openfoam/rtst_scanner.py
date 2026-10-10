@@ -68,6 +68,11 @@ def scan_rtst_registrations(texts: Mapping[str, str]) -> dict[str, dict[str, str
 
 
 _TYPENAME_RE = re.compile(r'\bTypeName\s*\(\s*"([^"]+)"\s*\)')
+# A scheme added to its table by hand, without a macro: `surfaceInterpolationScheme<scalar>::addMeshConstructorToTable<harmonic>`.
+_TABLE_ADDITION_RE = re.compile(
+    r"\b(?P<base>surfaceInterpolationScheme)\s*<\s*\w+\s*>\s*::\s*add\w*ConstructorToTable\s*<\s*(?P<derived>\w+)\s*>",
+)
+_ADDED_TABLES = {"surfaceInterpolationScheme": "interpolationSchemes"}
 _MACRO_CALL_RE = re.compile(r'\b(make\w*Scheme\w*)\s*\(((?:[^()"]|"[^"]*")*)\)')
 
 #: The registered name a scheme macro gives, by where it is written: ``type_name`` is the ``TypeName`` of the class
@@ -113,7 +118,7 @@ def scan_scheme_registrations(texts: Mapping[str, str]) -> dict[str, dict[str, s
     comment-stripped sources keyed by relative path, a table being the fvSchemes sub-dictionary that names its
     schemes (``ddtSchemes``, ``gradSchemes``, ...). A name is the ``TypeName`` of the class a macro names, or what the
     macro writes itself; the value is the macro's first argument, the scheme's class where it is one.
-    Only ``*.C`` files register, and only a call a ``#define`` does not enclose."""
+    A macro call a ``#define`` encloses registers nothing; a scheme added to its table by hand registers under its class's ``TypeName`` too."""
     type_names = _declared_names(texts, _TYPENAME_RE)
     tables: dict[str, dict[str, str]] = {}
     for relative, text in sorted(texts.items()):
@@ -127,6 +132,9 @@ def scan_scheme_registrations(texts: Mapping[str, str]) -> dict[str, dict[str, s
             table, how = rule
             name = _NAME_FROM[how](args, type_names)
             tables.setdefault(table, {})[name] = args[0]
+        for match in _TABLE_ADDITION_RE.finditer(text):
+            derived = match.group("derived")
+            tables.setdefault(_ADDED_TABLES[match.group("base")], {})[type_names.get(derived, derived)] = derived
     return {table: dict(sorted(names.items())) for table, names in sorted(tables.items())}
 
 
