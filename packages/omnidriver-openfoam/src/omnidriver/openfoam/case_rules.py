@@ -285,6 +285,87 @@ def _scan_requirement(
     return found
 
 
+#: What follows a scheme's name in an ``fvSchemes`` value, by table and name: the table each following scheme word belongs to,
+#: read from the constructors of the named schemes in OpenFOAM's source (``Foam::fv::gaussGrad`` reads an interpolation
+#: scheme, ``cellLimitedGrad`` a gradient scheme, ``gaussLaplacianScheme`` an interpolation scheme and then an snGrad scheme).
+#: A word no listed table follows is not judged, and a number is skipped: an interpolation scheme's own arguments are not
+#: told apart from the schemes after it.
+SCHEME_ARGUMENTS: dict[str, dict[str, tuple[str, ...]]] = {
+    "ddtSchemes": {"bounded": ("ddtSchemes",)},
+    "gradSchemes": {
+        "Gauss": ("interpolationSchemes",), "iterativeGauss": ("interpolationSchemes",),
+        **{name: ("gradSchemes",) for name in ("cellLimited", "faceLimited", "cellMDLimited", "faceMDLimited")},
+    },
+    "divSchemes": {"Gauss": ("interpolationSchemes",), "bounded": ("divSchemes",)},
+    "laplacianSchemes": {name: ("interpolationSchemes", "snGradSchemes") for name in ("Gauss", "relaxedNonOrthoGauss")},
+    "snGradSchemes": {"limited": ("snGradSchemes",)},
+    "interpolationSchemes": {"skewCorrected": ("interpolationSchemes",)},
+}
+
+
+def _scheme_words(value: Any) -> list[str] | None:
+    if isinstance(value, str):
+        return value.split()
+    if isinstance(value, (tuple, list)):
+        return [str(word) for word in value]
+    return None
+
+
+def _is_number(word: str) -> bool:
+    try:
+        float(word)
+    except ValueError:
+        return False
+    return True
+
+
+def _scheme_parts(table: str, words: list[str], at: int = 0) -> tuple[list[tuple[str, str]], int]:
+    """``(table, name)`` for the scheme that opens ``words`` at ``at``, and for each scheme it reads, with the index after them."""
+    while at < len(words) and _is_number(words[at]):
+        at += 1
+    if at == len(words):
+        return [], at
+    name = words[at]
+    parts, at = [(table, name)], at + 1
+    for follower in SCHEME_ARGUMENTS.get(table, {}).get(name.split("<")[0], ()):
+        nested, at = _scheme_parts(follower, words, at)
+        parts += nested
+    return parts, at
+
+
+def scheme_diagnostics(
+    values: Mapping[str, Mapping[str, Any]], menus: Mapping[str, Iterable[str]], *, document: str, source_root: str,
+) -> list[StrictDiagnostic]:
+    """A note for each scheme name in an ``fvSchemes`` dictionary that the table it belongs to does not register.
+
+    ``values`` is ``{table: {key: value}}`` as read, ``menus`` the names each table registers in OpenFOAM's source at
+    ``source_root``. A composite value (``Gauss linear corrected``) is judged by its parts: the name against its table, then
+    each scheme it reads against that scheme's table (:data:`SCHEME_ARGUMENTS`). A note is information, never a refusal,
+    and a ``default`` of ``none`` is OpenFOAM's own."""
+    from difflib import get_close_matches
+
+    found = []
+    for table, entries in values.items():
+        for key, value in entries.items():
+            words = _scheme_words(value)
+            if not words or (key == "default" and words == ["none"]):
+                continue
+            for part_table, name in _scheme_parts(table, words)[0]:
+                menu = sorted(set(menus.get(part_table, ())))
+                if not menu or name in menu:
+                    continue
+                near = get_close_matches(name, menu, n=3)
+                found.append(diagnostic(
+                    "info", "openfoam_scheme_uncatalogued",
+                    f"{table}.{key} names {name!r}, which OpenFOAM's {part_table} table ({source_root}) does not register"
+                    + (f"; did you mean {', '.join(repr(item) for item in near)}?" if near else "")
+                    + f" Its menu: {', '.join(menu)}.",
+                    source=document, field=f"{table}.{key}",
+                    detail={"table": part_table, "value": name, "menu": menu},
+                ))
+    return found
+
+
 def rule_diagnostics(
     entries: Iterable[Any], context: Mapping[str, Any], *, document: str, mapping: Any = None,
     catalogue: Any = None,

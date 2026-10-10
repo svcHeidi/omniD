@@ -46,6 +46,8 @@ def test_every_listed_key_the_case_holds_is_accepted_by_the_validator_with_its_k
             value = FoamFile(CASE / entry["document"])[key_path]
         except KeyError:
             continue
+        if entry["value_kind"] == "string" and isinstance(value, tuple):
+            value = " ".join(str(word) for word in value)  # a scheme phrase is written as text; foamlib reads its words
         assert record_key_validator(entry["document"], key_path, value) == (entry["value_kind"], True), entry
         checked.append(entry["key"])
     assert "singleCellSolverCoeffs.tissue" in checked and "myocardiumSolver" in checked
@@ -57,6 +59,14 @@ def test_the_catalogued_control_dict_keys_are_listed_with_their_bounds_beside_th
     assert delta_t["exclusive_minimum"] == 0 and delta_t["value_kind"] == "scalar"
     assert "minimum" not in next(e for e in control if e["key"] == "endTime")
     assert [e for e in control if e["key"] == ANY_KEY] == [{"document": "system/controlDict", "key": ANY_KEY, "validated": False}]
+
+
+def test_the_fv_schemes_keys_are_listed_with_their_menus_beside_the_open_row():
+    fv = [e for e in _catalogue() if e["document"] == "system/fvSchemes"]
+    ddt = next(e for e in fv if e["key"] == "ddtSchemes.default")
+    assert {"Euler", "backward", "steadyState", "none"} <= set(ddt["menu"]) and ddt["value_kind"] == "string"
+    assert any(e["key"] == "gradSchemes.<term>" for e in fv)
+    assert [e for e in fv if e["key"] == ANY_KEY] == [{"document": "system/fvSchemes", "key": ANY_KEY, "validated": False}]
 
 
 def test_a_pre_pacing_file_the_case_holds_is_listed_by_the_keys_a_study_may_set(tmp_path):

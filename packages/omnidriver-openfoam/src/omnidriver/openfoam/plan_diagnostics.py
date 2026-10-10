@@ -16,6 +16,7 @@ from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from .case_dict_keys import case_dict_key_diagnostics
 from .dict_keys_scanner import cached_scan, locate, reads_at
 from .function_object_fields import function_object_field_diagnostics
+from .fv_schemes import fv_schemes_diagnostics
 
 
 def plan_diagnostics(
@@ -53,7 +54,8 @@ def plan_diagnostics(
         item for item in driver_context.stack.call("validate_run_semantics", case_root, driver_context=driver_context)
         if item.level != "error"
     )
-    return catalog + function_objects + keys + rules
+    schemes = fv_schemes_diagnostics(case_root, env=env, scratch_root=scratch_root)
+    return catalog + function_objects + keys + schemes + rules
 
 
 def _scanned_reader(driver_context: Any, source_root: Path, scratch_root: Path | None):
