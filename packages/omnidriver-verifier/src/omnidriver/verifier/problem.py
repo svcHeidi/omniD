@@ -13,7 +13,8 @@ EQUATIONS = ("monodomain",)
 BOUNDARY_KINDS = ("zero_normal_gradient",)
 INITIAL_KINDS = ("exact",)
 INITIAL_TIMES = ("start",)
-MESH_KINDS = ("hex",)
+#: A structured hexahedral ladder, or a tetrahedral one meshed at a target element size.
+MESH_KINDS = ("hex", "tet")
 #: Where a solver holds its unknowns, and so where an exact field is evaluated against it.
 POINTS = ("cell_centres", "nodes")
 #: Which value of a derived constant a solver is given: the native literal, or the value derived from the data.
@@ -28,7 +29,8 @@ NORM_WEIGHTS = ("cell_volume",)
 NORM_NORMALISATIONS = ("total_volume",)
 #: When a level is judged: after its ``steps`` steps of ``dt``, the first time ``time.report_when`` holds.
 NORM_TIMES = ("steps*dt",)
-#: How each level's ``dt`` scales with its spacing ``h``, the box edge over ``cells_per_axis``.
+#: How each level's ``dt`` scales with its spacing ``h``, the box edge over ``cells_per_axis`` (on a tet ladder the
+#: target element size the mesher is given).
 DT_SCALINGS = {"h": 1, "h**2": 2}
 #: The names a report rule may use: the time reached, the step and the end time.
 REPORT_SCOPE = frozenset({"t", "dt", "end"})
@@ -201,7 +203,7 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
     if set(refinement) != set(problem["mesh_progression"]):
         raise ProblemError(f"refinement: has {sorted(refinement)}, the progression is {problem['mesh_progression']}")
     for kind, ladder in refinement.items():
-        _ladder(f"refinement.{kind}", _table(f"refinement.{kind}", ladder), time, report_when)
+        _ladder(f"refinement.{kind}", _table(f"refinement.{kind}", ladder), time, report_when, dimensions)
 
     norms = problem["norms"]
     _menu("norms.at", norms["at"], NORM_TIMES)
@@ -258,8 +260,12 @@ def _rule(where: str, text: Any) -> Any:
     return compile(tree, where, "eval")
 
 
-def _ladder(where: str, ladder: Mapping[str, Any], time: Mapping[str, Any], report_when: Any) -> None:
-    _keys(f"{where}.", ladder, frozenset({"cells_per_axis", "dt", "steps", "dt_scales_as"}), required=True)
+def _ladder(where: str, ladder: Mapping[str, Any], time: Mapping[str, Any], report_when: Any,
+            dimensions: list[int]) -> None:
+    _keys(f"{where}.", ladder, frozenset({"dimensions", "cells_per_axis", "dt", "steps", "dt_scales_as"}), required=True)
+    if not ladder["dimensions"] or not set(ladder["dimensions"]) <= set(dimensions):
+        raise ProblemError(f"{where}.dimensions: {ladder['dimensions']!r} is not a non-empty subset of the "
+                           f"problem's {dimensions}")
     cells, dts, steps = ladder["cells_per_axis"], ladder["dt"], ladder["steps"]
     if not cells or not len(cells) == len(dts) == len(steps):
         raise ProblemError(f"{where}: cells_per_axis, dt and steps must be non-empty and of equal length")

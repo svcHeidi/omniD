@@ -105,7 +105,7 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
         for level in result["levels"]:
             _require(f"{solver}: a level", level, ("dimension", "cells_per_axis", "dt", "steps", "errors"))
             cells, d = level["cells_per_axis"], level["dimension"]
-            if d not in problem["dimensions"] or rungs.get(cells) != (level["dt"], level["steps"]):
+            if d not in ladder["dimensions"] or rungs.get(cells) != (level["dt"], level["steps"]):
                 raise ProblemError(f"{solver}: level {d}D N={cells} dt={level['dt']} steps={level['steps']} is off "
                                    f"the problem's {result['mesh']} ladder")
             missing = [f"{field}.{kind}" for field in fields if field in level["errors"]

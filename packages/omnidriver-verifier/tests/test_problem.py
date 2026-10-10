@@ -119,9 +119,10 @@ def test_a_diagonal_tensor_names_parameters():
     assert "pde.tensors.sigma" in _refused(problem)
 
 
-def test_each_level_is_judged_at_its_report_step():
+@pytest.mark.parametrize("mesh", ["hex", "tet"])
+def test_each_level_is_judged_at_its_report_step(mesh):
     problem = load_problem("fda_monodomain")
-    ladder = problem["refinement"]["hex"]
+    ladder = problem["refinement"][mesh]
     for steps, dt in zip(ladder["steps"], ladder["dt"]):
         assert steps * dt + dt / 2 >= problem["time"]["end"] > (steps - 1) * dt + dt / 2
 
@@ -133,6 +134,11 @@ def test_each_level_is_judged_at_its_report_step():
         (lambda p: p["refinement"]["hex"]["steps"].pop(), "refinement.hex"),
         (lambda p: p["refinement"]["hex"].update(dt=[0.00892857, 0.00224215, 0.000560538, 0.0003],
                                                  steps=[22, 89, 357, 667]), "refinement.hex.dt_scales_as"),
+        (lambda p: p["refinement"]["tet"]["steps"].__setitem__(3, 1428), "refinement.tet.steps"),
+        (lambda p: p["refinement"]["tet"].__setitem__("dimensions", [3, 4]), "refinement.tet.dimensions"),
+        (lambda p: p["refinement"]["tet"].__setitem__("dimensions", []), "refinement.tet.dimensions"),
+        (lambda p: p["refinement"].pop("tet"), "refinement"),
+        (lambda p: p.__setitem__("mesh_progression", ["hex", "prism"]), "mesh_progression"),
         (lambda p: p["time"].__setitem__("report_when", "t >= end + 1"), "time.report_when"),
         (lambda p: p["refinement"]["hex"].__setitem__("dt_scales_as", "h**3"), "refinement.hex.dt_scales_as"),
         (lambda p: p["time"].__setitem__("report_when", "t + dt/2"), "time.report_when"),

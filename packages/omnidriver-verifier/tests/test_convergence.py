@@ -46,12 +46,12 @@ def test_a_second_order_error_has_order_two():
     assert orders["least_squares"] == pytest.approx(2)
 
 
-def _result(problem: dict, solver: str, scale: float, power: float) -> dict:
-    ladder = problem["refinement"]["hex"]
+def _result(problem: dict, solver: str, scale: float, power: float, mesh: str = "hex", dimension: int = 1) -> dict:
+    ladder = problem["refinement"][mesh]
     return {
-        "solver": solver, "problem": problem["id"], "mesh": "hex", "stated": {"space": 2},
+        "solver": solver, "problem": problem["id"], "mesh": mesh, "stated": {"space": 2},
         "levels": [
-            {"dimension": 1, "cells_per_axis": n, "dt": dt, "steps": steps,
+            {"dimension": dimension, "cells_per_axis": n, "dt": dt, "steps": steps,
              "errors": {"V": {kind: scale * (1 / n) ** power for kind in ("L1", "L2", "Linf")}}}
             for n, dt, steps in zip(ladder["cells_per_axis"], ladder["dt"], ladder["steps"])
         ],
@@ -78,6 +78,15 @@ def test_a_level_off_the_ladder_is_refused():
     with pytest.raises(ProblemError) as caught:
         comparison_table(problem, [result])
     assert "off the problem's hex ladder" in str(caught.value)
+
+
+def test_a_tet_level_is_judged_on_the_tet_ladder_and_only_in_its_dimensions():
+    problem = load_problem("fda_monodomain")
+    (row,) = comparison_table(problem, [_result(problem, "a", 1.0, 2, mesh="tet", dimension=3)])["rows"]
+    assert row["mesh"] == "tet" and row["least_squares_order"]["V"]["L2"] == pytest.approx(2)
+    with pytest.raises(ProblemError) as caught:
+        comparison_table(problem, [_result(problem, "a", 1.0, 2, mesh="tet", dimension=2)])
+    assert "off the problem's tet ladder" in str(caught.value)
 
 
 def test_a_norm_the_problem_does_not_name_is_refused():

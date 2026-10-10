@@ -28,8 +28,10 @@ ELECTRO = f"{CASE}/constant/electroProperties"
 CONTROL = f"{CASE}/system/controlDict"
 BLOCKMESH = {d: f"{CASE}/system/blockMeshDict.{d}D" for d in (1, 2, 3)}
 SWEEP = f"{CASE}/setup/studies/cartesianConvergence/sweep_hex_convergence.json"
+TET_SWEEP = f"{CASE}/setup/studies/tetConvergence/sweep_tet_generic.json"
+TET_GEO = f"{CASE}/setup/studies/tetConvergence/box.geo.template"
 SNIPPETS = (IONIC, IONIC_CURRENT, SOLVER, DOMAIN, WALL, REFERENCE, VERIFIER, UTILS, ELECTRO, CONTROL, SWEEP,
-            *BLOCKMESH.values())
+            TET_SWEEP, TET_GEO, *BLOCKMESH.values())
 
 # The C++ names its constants and state indices; the data names them so.
 CXX_NAMES = {"Chi": "chi", "Fx": "F", "Gx": "G"}
@@ -290,6 +292,31 @@ def drift(snippets: dict[str, str], problem: dict) -> list[str]:
     hex_ladder = problem["refinement"]["hex"]
     if values != [*hex_ladder["cells_per_axis"], *hex_ladder["dt"]]:
         found.append("hex refinement")
+    found += _tet_drift(snippets, problem, commit)
+    return found
+
+
+def _tet_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
+    """The tet study's FDA rows (its first four, one per level) against the tet ladder; its mesh size against the
+    spacing the ladder implies, lc = edge/cells_per_axis."""
+    dimension, conductivity, verifier, *ladder = _body(snippets[TET_SWEEP], commit)
+    tet = problem["refinement"]["tet"]
+    parameters = problem["parameters"]
+    found = []
+    if [int(dimension.strip().strip('"').removesuffix("D"))] != tet["dimensions"]:
+        found.append("tet dimensions")
+    xx, _, _, yy, _, zz = (float(v) for v in conductivity.split("(")[1].split(")")[0].split())
+    if (xx, yy, zz) != (parameters["sigma_xx"], parameters["sigma_yy"], parameters["sigma_zz"]):
+        found.append("tet conductivity")
+    if verifier.strip().strip('",') != problem["native"]["cardiacfoam"]["verification_model"]:
+        found.append("tet verifier")
+    if [float(line) for line in ladder] != [*tet["cells_per_axis"], *tet["dt"]]:
+        found.append("tet refinement")
+    geo = " ".join(_body(snippets[TET_GEO], commit))
+    edge = problem["domain"]["box"][0][1] - problem["domain"]["box"][0][0]
+    if (edge != 1 or "(lc = 1/N)" not in geo
+            or not all(f"Mesh.MeshSize{bound} = lc;" in geo for bound in ("Min", "Max"))):
+        found.append("tet mesh size")
     return found
 
 
@@ -331,6 +358,12 @@ def test_the_problem_data_matches_cardiacfoam():
         (VERIFIER, "u2Norms =", "u3Norms =", "norm fields"),
         (SWEEP, "0.121585420", "0.121585", "conductivity"),
         (SWEEP, "0.000140174", "0.000140", "hex refinement"),
+        (TET_SWEEP, '"3D"', '"2D"', "tet dimensions"),
+        (TET_SWEEP, "0.030396355", "0.0398782", "tet conductivity"),
+        (TET_SWEEP, "manufacturedFDAMonodomainVerifier", "manufacturedAnisotropicMonodomainVerifier", "tet verifier"),
+        (TET_SWEEP, "0.000560538", "0.00056", "tet refinement"),
+        (TET_GEO, "(lc = 1/N)", "(lc = 2/N)", "tet mesh size"),
+        (TET_GEO, "MeshSizeMax = lc;", "MeshSizeMax = 2*lc;", "tet mesh size"),
     ],
 )
 def test_a_changed_snippet_is_reported(snippet, old, new, reported):

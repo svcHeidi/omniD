@@ -6,7 +6,7 @@ id = "fda_monodomain"
 title = "Monodomain manufactured solution of Pathmanathan & Gray (FDA RST24CV03.01)"
 equation = "monodomain"
 dimensions = [1, 2, 3]
-mesh_progression = ["hex"]
+mesh_progression = ["hex", "tet"]
 cites = ["doi:10.1002/cnm.2615", "https://cdrh-rst.fda.gov/node/1576"]
 
 [native.cardiacfoam]
@@ -83,6 +83,16 @@ time = "start"
 points = { cardiacfoam = "cell_centres", nodal = "nodes" }
 
 [refinement.hex]
+dimensions = [1, 2, 3]
+cells_per_axis = [10, 20, 40, 80]
+dt = [0.00892857, 0.00224215, 0.000560538, 0.000140174]
+steps = [22, 89, 357, 1427]
+dt_scales_as = "h**2"
+
+# gmsh Delaunay tetrahedra of the unit cube at target element size lc = 1/cells_per_axis; the native study runs
+# the FDA verifier on this ladder with the diagonal sigma above.
+[refinement.tet]
+dimensions = [3]
 cells_per_axis = [10, 20, 40, 80]
 dt = [0.00892857, 0.00224215, 0.000560538, 0.000140174]
 steps = [22, 89, 357, 1427]
@@ -109,5 +119,5 @@ cell_model = ["src/ionicModels/verificationModels/monodomainFDAManufactured/mono
 source = ["tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties", "https://cdrh-rst.fda.gov/node/1576"]
 boundary = ["src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties"]
 initial = ["src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.C"]
-refinement = ["tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json", "derived: steps from time.report_when and dt; dt_scales_as from the ladder"]
+refinement = ["tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/sweep_tet_generic.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/box.geo.template", "derived: steps from time.report_when and dt; dt_scales_as from the ladder"]
 norms = ["src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.C", "src/verificationModels/verificationUtils.H"]
