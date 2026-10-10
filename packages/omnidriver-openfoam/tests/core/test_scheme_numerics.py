@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.openfoam.fv_schemes import FV_SCHEMES_ENTRIES_BY_PATH, ddt_stability_limits
+from omnidriver.openfoam.fv_schemes import FV_SCHEMES_ENTRIES_BY_PATH, ddt_stability_limits, stated_numerics
 from omnidriver.openfoam.record_key_validation import listed_entry
 from omnidriver.openfoam.scheme_tables import committed_menus
 
@@ -76,3 +76,25 @@ def test_a_listing_carries_the_attributes_beside_the_menu():
     listed = listed_entry("system/fvSchemes", "ddtSchemes.default", FV_SCHEMES_ENTRIES_BY_PATH["ddtSchemes.default"])
     assert listed["menu_attributes"]["backward"]["formal_order"] == {"time": 2}
     assert set(listed["menu_attributes"]) <= set(listed["menu"])
+
+
+def test_crank_nicolson_states_its_second_order_only_for_a_coefficient_of_one():
+    crank = FV_SCHEMES_ENTRIES_BY_PATH["ddtSchemes.default"].menu_attributes["CrankNicolson"]
+    assert "formal_order" not in crank
+    assert stated_numerics("ddtSchemes", "CrankNicolson 1")[0]["formal_order"] == {"time": 2}
+    off_centred = stated_numerics("ddtSchemes", ("CrankNicolson", 0.9))[0]
+    assert off_centred["arguments"] == {"ocCoeff": 0.9} and "formal_order" not in off_centred
+    assert any("below 1" in condition for condition in off_centred["conditions"])
+    assert stated_numerics("ddtSchemes", "CrankNicolson 0")[0]["equivalent_to"] == "Euler"
+
+
+def test_a_coefficient_given_as_a_dictionary_resolves_no_order():
+    (ramped,) = stated_numerics("ddtSchemes", ("CrankNicolson",))
+    assert "formal_order" not in ramped and ramped["arguments"] == {}
+
+
+def test_a_composite_value_resolves_each_part_through_its_own_table():
+    parts = stated_numerics("laplacianSchemes", "Gauss linear corrected")
+    assert [(part["table"], part["name"]) for part in parts] == [
+        ("laplacianSchemes", "Gauss"), ("interpolationSchemes", "linear"), ("snGradSchemes", "corrected"),
+    ]

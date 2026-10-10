@@ -15,7 +15,7 @@ from typing import Any, Final, Mapping
 from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 
-from .case_rules import scheme_diagnostics
+from .case_rules import scheme_diagnostics, scheme_parts
 from .record_key_validation import CataloguedDocument, listed_entry
 from .scheme_tables import committed_menus, cached_selection_tables, foam_source_root, SOURCE_ROOT_VARIABLE
 
@@ -93,6 +93,22 @@ def ddt_stability_limits() -> dict[str, float]:
         for name, attributes in FV_SCHEMES_ENTRIES_BY_PATH["ddtSchemes.default"].menu_attributes.items()
         if "decay_on_old_level_rate_dt_max" in attributes.get("stability", {})
     }
+
+
+def stated_numerics(table: str, value: Any) -> list[dict[str, Any]]:
+    """What is stated of each scheme an ``fvSchemes`` value names (:func:`case_rules.scheme_parts`), its argument
+    conditions applied: ``{"table", "name", "arguments"}`` and the scheme's attributes, with ``formal_order`` and
+    ``equivalent_to`` only where a ``when`` of its ``by_argument`` holds for the arguments written."""
+    resolved = []
+    for part_table, name, words in scheme_parts(table, value):
+        attributes = dict(_attributes().get(part_table, {}).get(name, {}))
+        names = attributes.pop("arguments", [])
+        arguments = {argument: float(word) for argument, word in zip(names, words)}
+        for case in attributes.pop("by_argument", []):
+            if all(arguments.get(argument) == expected for argument, expected in case["when"].items()):
+                attributes.update({key: item for key, item in case.items() if key != "when"})
+        resolved.append({"table": part_table, "name": name, "arguments": arguments, **attributes})
+    return resolved
 
 
 def _match(key_path: tuple[str, ...]) -> tuple[DictEntry, dict[str, str]] | None:

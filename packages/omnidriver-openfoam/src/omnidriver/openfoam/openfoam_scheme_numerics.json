@@ -59,17 +59,39 @@
     "settled_by": null
    },
    "CrankNicolson": {
-    "formal_order": {
-     "time": 2
-    },
+    "arguments": [
+     "ocCoeff"
+    ],
+    "by_argument": [
+     {
+      "when": {
+       "ocCoeff": 1
+      },
+      "formal_order": {
+       "time": 2
+      }
+     },
+     {
+      "when": {
+       "ocCoeff": 0
+      },
+      "equivalent_to": "Euler"
+     }
+    ],
     "conditions": [
-     "the mandatory off-centring coefficient ocCoeff in [0,1] follows the name; the header states the second order for the scheme and, for an off-centred one, only 'greater temporal accuracy than the first-order Euler-implicit scheme'"
+     "the off-centring coefficient ocCoeff in [0,1] follows the name, or is given as a dictionary (a ramp function)",
+     "no formal order is stated for a coefficient below 1: the header states the second order only for a coefficient of 1, and Euler-implicit for 0"
     ],
     "stated_by": [
      {
       "kind": "header",
       "file": "src/finiteVolume/finiteVolume/ddtSchemes/CrankNicolsonDdtScheme/CrankNicolsonDdtScheme.H",
       "text": "Second-oder Crank-Nicolson implicit ddt using the current and previous time-step fields as well as the previous time-step ddt."
+     },
+     {
+      "kind": "header",
+      "file": "src/finiteVolume/finiteVolume/ddtSchemes/CrankNicolsonDdtScheme/CrankNicolsonDdtScheme.H",
+      "text": "With a coefficient of 1 the scheme is fully centred and second-order, with a coefficient of 0 the scheme is equivalent to Euler-implicit."
      }
     ],
     "settled_by": null

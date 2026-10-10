@@ -307,7 +307,7 @@ def _scheme_words(value: Any) -> list[str] | None:
     if isinstance(value, str):
         return value.split()
     if isinstance(value, (tuple, list)):
-        return [str(word) for word in value]
+        return [str(word) for word in value if not isinstance(word, Mapping)]
     return None
 
 
@@ -319,14 +319,25 @@ def _is_number(word: str) -> bool:
     return True
 
 
-def _scheme_parts(table: str, words: list[str], at: int = 0) -> tuple[list[tuple[str, str]], int]:
-    """``(table, name)`` for the scheme that opens ``words`` at ``at``, and for each scheme it reads, with the index after them."""
+def scheme_parts(table: str, value: Any) -> list[tuple[str, str, tuple[str, ...]]]:
+    """``(table, name, arguments)`` for the scheme that opens an ``fvSchemes`` value and for each scheme it reads
+    (:data:`SCHEME_ARGUMENTS`), ``arguments`` being the numbers written right after the name. A scheme that reads a
+    number after the schemes it reads (``cellLimited Gauss linear 1``) has it taken for the last of those."""
+    words = _scheme_words(value)
+    return _scheme_parts(table, words)[0] if words else []
+
+
+def _scheme_parts(table: str, words: list[str], at: int = 0) -> tuple[list[tuple[str, str, tuple[str, ...]]], int]:
     while at < len(words) and _is_number(words[at]):
         at += 1
     if at == len(words):
         return [], at
-    name = words[at]
-    parts, at = [(table, name)], at + 1
+    name, at = words[at], at + 1
+    arguments = []
+    while at < len(words) and _is_number(words[at]):
+        arguments.append(words[at])
+        at += 1
+    parts = [(table, name, tuple(arguments))]
     for follower in SCHEME_ARGUMENTS.get(table, {}).get(name.split("<")[0], ()):
         nested, at = _scheme_parts(follower, words, at)
         parts += nested
@@ -350,7 +361,7 @@ def scheme_diagnostics(
             words = _scheme_words(value)
             if not words or (key == "default" and words == ["none"]):
                 continue
-            for part_table, name in _scheme_parts(table, words)[0]:
+            for part_table, name, _arguments in _scheme_parts(table, words)[0]:
                 menu = sorted(set(menus.get(part_table, ())))
                 if not menu or name in menu:
                     continue
