@@ -209,6 +209,13 @@ class CardiacFoamPlugin:
 
         return case_diagnostics(case_root, mapping=self.get_profile().cxx_mapping)
 
+    def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
+        """A gmsh step's ``-setnumber`` names against the template they set."""
+        del env, scratch_root, driver_context
+        from omnidriver.cardiacfoam.gmsh_templates import undeclared_setnumber_diagnostics
+
+        return undeclared_setnumber_diagnostics(case_root, workflow_dag)
+
     def predict_data_artifacts(self, case_root: Path, spec: TutorialSpec) -> tuple[DataArtifact, ...]:
         from omnidriver.cardiacfoam.artifacts_predictor import predict_cardiac_artifacts
         return predict_cardiac_artifacts(case_root, spec)

@@ -1,0 +1,23 @@
+// Unit-cube [0,1]^3 tetrahedral mesh, identical to the eikonal and bidomain tet
+// templates so every solver refines on the same mesh sequence.
+//
+// lc is a DefineConstant, set per resolution with `gmsh -setnumber lc <value>`
+// (lc = 1/N); the default is the coarsest study level.
+//
+// The meshing settings must stay identical in all three templates; gmsh 4.15.2
+// gives 4874 tetrahedra at N=10 and 37040 at N=20.
+
+SetFactory("OpenCASCADE");
+
+DefineConstant[ lc = { 0.1, Name "lc" } ];
+
+Box(1) = {0, 0, 0, 1, 1, 1};
+
+Physical Volume("internal") = {1};
+Physical Surface("boundary") = {1, 2, 3, 4, 5, 6};
+
+Mesh.MeshSizeMin = lc;
+Mesh.MeshSizeMax = lc;
+Mesh.Algorithm3D = 1;      // Delaunay: near-uniform, isotropic tets
+Mesh.Optimize = 1;
+Mesh.MshFileVersion = 2.2; // gmshToFoam requires the legacy msh2 format
