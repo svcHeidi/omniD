@@ -386,3 +386,19 @@ v18.1, installed source under `share/openCARP`.
 **Decision.** Use `Hx` (and `Qd`, `Hx`) for any verification and never a
 `Ln` mesh for a result that depends on the end nodes; whether to report the
 defect upstream is the owner's call (`docs/superpowers/ROADMAP.md` §5).
+
+## O. The FDA manufactured monodomain on tetrahedra (2026-10-10)
+
+openCARP's side of `cardiacfoam.md` AC. The hex run's generated model and
+mapping were reused (sha checked). Every level of cardiacFOAM's gmsh
+`box.msh` was converted to `.pts`/`.elem` (`Tt`, region 1)/`.lon` by
+`<runs>/2026-10-10/fda-tet/opencarp/generate_tet.py`, with nodal initial
+states and the same dt and steps. Norms use the lumped P1 nodal volumes
+(`omnidriver.verifier.weights.tetrahedron_nodal_volumes`).
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| O1 | read `SF_fem_utils.h` (`reference_shape`, `general_integration_points`, `invert_jacobian_matrix`) and `dense_mat.hpp` `invert_3x3` | Tetra: λ0 = 1-ξ-η-ζ, λ1..3 = ξ, η, ζ; order-1 weight 1/6 (the reference volume, unlike the Line of N1); in 3D the Jacobian determinant is used signed (no `fabs`) | a `Tt` must list its nodes with det[x1-x0, x2-x0, x3-x0] > 0. Every gmsh and mesher tet already does (0 flips) |
+| O2 | `run_level.sh tet_<N>` on cardiacFOAM's meshes | 1184, 7408, 51 853, 385 251 nodes; wall 0.6, 0.4, 3.6, 96 s; L2(V) 2.027e-2, 6.820e-3, 1.763e-3, 4.321e-4, orders 1.57, 1.95, 2.03 | P1 converges at second order on the same tets, with a slow pre-asymptotic start. Float32 output is irrelevant here (N7: 1e-7 against 4e-4) |
+| O3 | openCARP `mesher` cubes (5 tets per cube, resolution 1000/N µm), `mtet_<N>`; a different mesh | 1331 to 531 441 nodes; L2(V) 1.456e-2, 3.569e-3, 8.837e-4, 2.203e-4, orders 2.03, 2.01, 2.00 | lower error, clean order 2: see O4 |
+| O4 | why the mesher mesh does better (`probes/mesh_quality.py`, `probes/rayleigh.py`, and `mesher -perturb 0.25` as `ptet_<N>`: interior nodes moved by 0.24 h on average, connectivity kept) | at N = 40, mesher has 1.33 times gmsh's nodes and 1.11 times its tets. Mean edge 1.205/N against gmsh's 1.34/N (and gmsh's grows with N: 1.27, 1.31, 1.34). Dihedral angles: mesher 54.7-125.3°, gmsh 12-167°, perturbed 26-152°. Minimum radius ratio 0.73, 0.25, 0.22. The lumped-P1 nodal consistency error ‖M_L⁻¹K I_hF − div σ∇F‖ is O(1) on all three (1.1-1.5 interior, not falling). The lumped Rayleigh-quotient error is smaller on gmsh (-0.11%) than on mesher (-0.41%). Perturbed L2(V): 1.592e-2, 4.101e-3, 1.007e-3, orders 1.96, 2.03 | **shown:** part of the gap is resolution. Per node (err·nodes^(2/3)) or per mean edge (err/edge²), gmsh is still 1.6 times worse. Against mean edge length, gmsh's orders are 1.66 and 2.01, not 1.57 and 1.95. Breaking the lattice's regularity costs only 14% and keeps order 2. The nodal truncation error is no smaller on the regular lattice, so nodal superconvergence is not the reason. The mode's eigenvalue error does not explain it either. **Inferred, not settled:** the remaining 1.6 comes from the Delaunay mesh's irregularity at every scale (slivers, no underlying lattice), which a perturbed lattice does not reproduce |

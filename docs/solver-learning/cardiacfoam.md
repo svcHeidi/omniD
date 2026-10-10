@@ -898,3 +898,32 @@ openCARP on a structured finite-element mesh. Runs under
 | AB2 | `compare` over the hex ladder, N = 10, 20, 40, 80: L2 of V, observed orders, least-squares order | 1D: 2.176e-4, 5.439e-5, 1.356e-5, 3.386e-6, orders 2.0, 2.0, 2.0 (2.002). 2D: 2.289e-3, 5.947e-4, 1.500e-4, 3.753e-5, orders 1.94, 1.99, 2.0 (1.978). 3D: 3.907e-3, 1.022e-3, 2.580e-4, 6.459e-5, orders 1.94, 1.99, 2.0 (1.974) | cardiacFOAM converges at second order to the manufactured solution in 1D, 2D and 3D |
 | AB3 | the same on openCARP, `Hx` strip 1D, `Qd` 2D, `Hx` 3D | 1D 2.341e-4 to 3.736e-6 (orders 1.97, 2.0, 2.0); 2D 4.787e-3 to 7.812e-5; 3D 1.796e-2 to 3.082e-4 | both solvers solve the same continuous problem, to second order; the finite-element error is larger in 2D and 3D by 2.1 and 4.8 at N = 80, as the lumped Q1 against 7-point finite-volume eigenvalue error predicts (about 1.9 and 4.4) |
 | AB4 | the sweep the tutorial exports, `tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json`, against the same file at native `277dfeb19` | the native file has `dt_values` per level (0.00892857 down to 0.000140174); omniD's commit `b6a2ccbc1` on `omnid/tutorials-are-pointers` ("rewrite to record vocabulary", 2026-09-27) dropped them, and its message lists other dropped keys but not this. The base `controlDict` has `deltaT 0.000140174`, so every level of the exported sweep runs at the finest dt. The verifier run supplies `system/controlDict:deltaT` on each row, so AB2 is not affected | **F2, an omniD defect**: a convergence sweep exported from the record runs time-step-limited at every level. The fix is to restore `dt_values` on the omniD native branch; the native branch is the owner's to push |
+
+## AC. The FDA manufactured monodomain, tet verification (2026-10-10)
+
+The second step after AB: the same problem on the tetrahedral ladder
+(`refinement.tet`: 3D, gmsh `lc = 1/N`, N = 10, 20, 40, dt and steps as hex),
+cardiacFOAM's native tet route against openCARP on the same meshes
+(`opencarp.md` O). Runs under `<runs>/2026-10-10/fda-tet/`
+(`compare/table.json`). OpenFOAM v2412, serial.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| AC1 | the native `tetConvergence/sweep_tet_generic.json` (exported tree, and `277dfeb19` via `git show`) | 16 rows: {Gauss linear, leastSquares} × {FDA verifier with diagonal σ (the problem's), anisotropic verifier with rotated σ} × N 10-80; 3D only; per-level `deltaT` kept (the hex study's F2 loss, AB4, did not reach the tet studies); the base case's `fvSchemes` already sets `gradSchemes leastSquares` and the study's overlay equals it; `fvSolution` `nNonOrthogonalCorrectors 1` | the first eight rows are the FDA problem; `make_specs.py` slices them unchanged, no study of our own needed |
+| AC2 | `omnidriver sweep-run` over those rows, N = 10, 20, 40 | `ok`, 272 s for six cases; solve 4, 7, 89 s (Gauss linear) and 4, 7, 96 s (leastSquares); 4874, 37 040, 289 388 cells; checkMesh non-orthogonality max 62-69° (average 21°), skewness max 0.71-0.90, `Mesh OK` | gmsh 4.15.2 gives the template's stated counts; the mesh is identical for both schemes (same sha) |
+| AC3 | N = 80 (2 278 889 cells) | about 11 GB per case. Two at once swapped; leastSquares alone ran at 2.6 s per step and was stopped at t = 0.1155 of 0.2 by the owner's decision (N = 40 is enough) | not run to the end. Expect about 65 min serial per scheme on this machine |
+| AC4 | gate 3 on tets: the shared norm on Vm, u1, u2 at cell centres and `writeCellVolumes` volumes at steps*dt, against `postProcessing/3D_<n>_cells.dat` (`cardiacfoam/gate3_small.json`) | `passed` on all six; largest relative difference 3.8e-6 (< 5e-6 print) | the shared norm reproduces the native verifier on unstructured cells too. The native file is named by its own N = round(cells^(1/3)) = 17, 33, 66 and prints dx = 1/that, not the ladder's lc |
+| AC5 | `compare`, L2 of V | Gauss linear: 2.265e-2, 1.320e-2, 1.119e-2, orders 0.78, 0.24. leastSquares: 1.084e-2, 2.838e-3, 6.816e-4, orders 1.93, 2.06 (least squares 2.00); Linf orders 1.60, 1.41 | **with `Gauss linear` the error stagnates on tets**; with `leastSquares` (the native default) it converges at second order in L2, lower in Linf |
+
+**Stated against observed.** The catalogue states 2 for every spatial entry,
+with conditions: `linear` only where the face centre lies on the line
+joining the cell centres, `corrected` the order the non-orthogonal correction
+restores. Neither holds on these tets (skewness to 0.90). The correction uses
+the cell gradient that `gradSchemes` names. Gauss linear is face interpolation
+without a skewness correction, so on skewed cells it carries an error that
+does not shrink with h. leastSquares is exact for linear fields on any stencil.
+The stagnation fits this explanation, but nothing here isolates the term.
+Time: `godunov` is first order, and dt ~ h² keeps that O(h²). Against openCARP
+on the same mesh, cardiacFOAM with leastSquares has a lower error at every
+level: 2.6 times lower at N = 40, with about 5.6 times the unknowns
+(cells against nodes).
