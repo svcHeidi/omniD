@@ -62,15 +62,21 @@ def error_norms(problem: Mapping[str, Any], values: Sequence[float], exact: Sequ
 
 def observed_orders(spacings: Sequence[float], errors: Sequence[float]) -> dict[str, Any]:
     """The observed order between each pair of successive levels, ``log(e_c/e_f)/log(h_c/h_f)``, and the
-    least-squares slope of ``log e`` against ``log h`` over all levels (null below two levels or for a zero
-    error)."""
+    least-squares slope of ``log e`` against ``log h`` over all levels (null for a single level).
+    :class:`ProblemError` for an error that is not finite and positive, or a spacing that is not finite and
+    positive or repeats its predecessor."""
     if len(spacings) != len(errors):
         raise ProblemError("spacings and errors must be of one length")
-    usable = all(error > 0 for error in errors)
-    pairs = [math.log(ec / ef) / math.log(hc / hf) if usable else None
+    if not all(math.isfinite(h) and h > 0 for h in spacings) or any(a == b for a, b in zip(spacings, spacings[1:])):
+        raise ProblemError(f"spacings must be finite, positive and successively distinct: {list(spacings)}",
+                           code="spacings_unusable")
+    if not all(math.isfinite(e) and e > 0 for e in errors):
+        raise ProblemError(f"errors must be finite and positive to have an order: {list(errors)}",
+                           code="errors_unusable")
+    pairs = [math.log(ec / ef) / math.log(hc / hf)
              for (hc, ec), (hf, ef) in zip(zip(spacings, errors), zip(spacings[1:], errors[1:]))]
     slope = None
-    if usable and len(spacings) >= 2:
+    if len(spacings) >= 2:
         xs, ys = [math.log(h) for h in spacings], [math.log(e) for e in errors]
         mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
         slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sum((x - mx) ** 2 for x in xs)

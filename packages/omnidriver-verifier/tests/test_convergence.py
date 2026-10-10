@@ -103,3 +103,21 @@ def test_a_non_finite_value_is_refused_not_reported_as_zero_error(bad, where):
     with pytest.raises(ProblemError) as caught:
         error_norms(problem, values, exact, [1.0, 1.0, 1.0])
     assert caught.value.code == "non_finite_values"
+
+
+@pytest.mark.parametrize("bad", [math.nan, math.inf, 0.0, -1e-3])
+def test_an_error_that_has_no_logarithm_is_refused_by_name(bad):
+    with pytest.raises(ProblemError) as caught:
+        observed_orders([0.1, 0.05, 0.025], [1e-2, bad, 1e-4])
+    assert caught.value.code == "errors_unusable"
+
+
+def test_a_spacing_that_repeats_or_is_not_positive_is_refused_by_name():
+    for spacings in ([0.1, 0.1], [0.1, 0.0], [0.1, math.nan]):
+        with pytest.raises(ProblemError) as caught:
+            observed_orders(spacings, [1e-2, 1e-3])
+        assert caught.value.code == "spacings_unusable"
+
+
+def test_one_level_has_no_order():
+    assert observed_orders([0.1], [1e-2]) == {"successive": [], "least_squares": None}
