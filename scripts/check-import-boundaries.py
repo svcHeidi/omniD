@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail when a package imports across the layering ARCHITECTURE.md forbids; ``if TYPE_CHECKING:`` imports are exempt.
 
-Core imports no adapter nor foamlib; openfoam no cardiac adapter; opencarp and torchcor no other adapter nor foamlib, and none imports them.
+Core imports no adapter nor foamlib; openfoam no cardiac adapter; opencarp and torchcor no other adapter nor foamlib, and none imports them; the verifier imports core only, and nothing imports it.
 """
 
 from __future__ import annotations
@@ -29,6 +29,9 @@ CARDIACFOAM_SRC = REPO_ROOT / "packages/omnidriver-cardiacfoam/src/omnidriver/ca
 AGENTS_SRC = REPO_ROOT / "packages/omnidriver-agents/src/omnidriver_agents"
 # TorchCor is a Python API run in its own venv: it depends on core only.
 TORCHCOR_SRC = REPO_ROOT / "packages/omnidriver-torchcor/src/omnidriver/torchcor"
+# The verifier reaches a solver only through core's plugin contract, and no
+# plugin may depend on the checks that judge it.
+VERIFIER_SRC = REPO_ROOT / "packages/omnidriver-verifier/src/omnidriver/verifier"
 
 
 def _adapter_package_roots() -> dict[str, Path]:
@@ -108,7 +111,11 @@ def main() -> int:
         CARDIACCORE_SRC: ("omnidriver.cardiacfoam", "omnidriver.opencarp", "omnidriver.torchcor"),
         OPENCARP_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.torchcor"),
         TORCHCOR_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.opencarp"),
+        VERIFIER_SRC: ("foamlib", *sorted(name for name in adapters if name != "omnidriver.verifier")),
     }
+    for root in adapter_rules:
+        if root != VERIFIER_SRC:
+            adapter_rules[root] = (*adapter_rules[root], "omnidriver.verifier")
     unruled = sorted(name for name, root in adapters.items() if root not in adapter_rules)
     if unruled:
         print(
@@ -170,6 +177,7 @@ def main() -> int:
             "A cardiac adapter importing omnidriver.openfoam is allowed -- that "
             "is the direction the layering permits. "
             "omnidriver_agents imports no omnidriver package and none imports it. "
+            "omnidriver.verifier imports core only, and nothing imports it. "
             "See ARCHITECTURE.md's Architectural Rules."
         )
         return 1

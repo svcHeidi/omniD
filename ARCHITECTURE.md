@@ -1,6 +1,6 @@
 # OmniDriver architecture
 
-This repository is **OmniDriver**: a solver-agnostic workflow engine in six packages, one per concern, and a seventh, `omnidriver-agents`, that measures agents driving it through the CLI and imports none of them.
+This repository is **OmniDriver**: a solver-agnostic workflow engine in six packages, one per concern; a seventh, `omnidriver-agents`, that measures agents driving it through the CLI and imports none of them; and an eighth, `omnidriver-verifier`, that holds manufactured problems as data and checks them, depending on core only.
 
 ## The Grand Vision: Monorepo + Namespace Packages
 The engine orchestrates deterministic continuous simulations (OpenFOAM, openCARP and TorchCor today) and can steer optimization loops through autonomous agents.
@@ -35,8 +35,12 @@ omnidriver/ (GitHub Root)
 │   ├── omnidriver-opencarp/             (import omnidriver.opencarp)
 │   │   └── src/omnidriver/opencarp/     <-- openCARP adapter; depends on core only (Rule 5)
 │   │
-│   └── omnidriver-torchcor/             (import omnidriver.torchcor)
-│       └── src/omnidriver/torchcor/     <-- TorchCor adapter; depends on core only (Rule 5)
+│   ├── omnidriver-torchcor/             (import omnidriver.torchcor)
+│   │   └── src/omnidriver/torchcor/     <-- TorchCor adapter; depends on core only (Rule 5)
+│   │
+│   └── omnidriver-verifier/             (import omnidriver.verifier)
+│       └── src/omnidriver/verifier/     <-- Manufactured problems as data and their checks;
+│                                            depends on core only (Rule 6)
 │
 ├── benchmarks/                      <-- Published, solver-neutral reference definitions
 │                                        (e.g. niederer2011.json); scripts/check-benchmark-
@@ -54,7 +58,10 @@ omnidriver/ (GitHub Root)
 5. **Independent adapters:** `omnidriver.opencarp` and `omnidriver.torchcor`
    depend on core only and MUST NOT import `omnidriver.openfoam`, either
    cardiac adapter or each other, nor may any of them import either.
-   `scripts/check-import-boundaries.py` enforces all five rules.
+6. **The verifier:** `omnidriver.verifier` depends on core only and reaches a
+   solver through the plugin contract; no other package imports it, so no
+   plugin depends on the checks that judge it.
+   `scripts/check-import-boundaries.py` enforces all six rules.
 
 ## Verification
 

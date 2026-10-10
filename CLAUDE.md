@@ -10,8 +10,8 @@ re-deriving what the last five sessions established.
 
 ## What this is
 
-A solver-agnostic orchestrator, split into six packages under `packages/`, and
-a seventh that measures agents using it:
+A solver-agnostic orchestrator, split into six packages under `packages/`, a
+seventh that measures agents using it, and an eighth that verifies solvers:
 
 | package | may know about | must not know about |
 |---|---|---|
@@ -22,6 +22,7 @@ a seventh that measures agents using it:
 | `omnidriver-opencarp` | the openCARP binary, `.par` format, `mesher`, IGB/LAT outputs | OpenFOAM, cardiacFoam |
 | `omnidriver-torchcor` | TorchCor, its solver repository's runner (`run_case.py`) and `case.json` | OpenFOAM, openCARP |
 | `omnidriver-agents` | the `omnidriver` CLI and its JSON, agent CLIs, task records | every `omnidriver` import: it measures omniD from outside |
+| `omnidriver-verifier` | manufactured problems as data, `sympy` (extra `symbolic`), core | any plugin; no package imports it |
 
 Core containing **zero** cardiac vocabulary is not aspirational — it is
 enforced. `scripts/check-import-boundaries.py` exits non-zero on any cardiac
@@ -41,7 +42,8 @@ of defect is only visible from a wheel.
 uv venv --python 3.11 /tmp/od311 && VIRTUAL_ENV=/tmp/od311 uv pip install -q \
   -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam \
   -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiaccore \
-  -e packages/omnidriver-opencarp -e packages/omnidriver-torchcor -e packages/omnidriver-agents pytest
+  -e packages/omnidriver-opencarp -e packages/omnidriver-torchcor -e packages/omnidriver-agents \
+  -e "packages/omnidriver-verifier[symbolic]" pytest
 uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
   -e "packages/omnidriver[post]" pytest
 ```

@@ -166,6 +166,33 @@ jobs:
       - name: Run tests
         run: python -m pytest packages/omnidriver-agents/tests -q
 
+  test-verifier:
+    name: test-verifier (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            packages/omnidriver/pyproject.toml
+            packages/omnidriver-verifier/pyproject.toml
+
+      - name: Install omnidriver + omnidriver-verifier
+        run: |
+          pip install -e packages/omnidriver \
+                      -e "packages/omnidriver-verifier[symbolic]" \
+                      pytest
+
+      - name: Run tests
+        run: python -m pytest packages/omnidriver-verifier/tests -q
+
   # TorchCor runs in its own venv and is never installed here: the plugin's
   # tests read committed runner output, so this job installs core and the
   # torchcor adapter only.

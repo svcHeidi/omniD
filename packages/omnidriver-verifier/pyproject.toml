@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnidriver-verifier"
+version = "0.1.0"
+description = "Manufactured problems as data, and the deterministic checks that tie each to the code it was transcribed from."
+requires-python = ">=3.11"
+dependencies = ["omnidriver~=0.1.0"]
+
+[project.optional-dependencies]
+symbolic = ["sympy>=1.12"]
+
+[project.scripts]
+omnidriver-verify = "omnidriver.verifier.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"omnidriver.verifier" = ["problems/*.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = "--import-mode=importlib"
