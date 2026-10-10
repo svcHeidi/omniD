@@ -407,3 +407,71 @@ def test_a_field_the_expression_does_not_name_is_not_evaluated():
     assert exact_values(problem, 3, "V", 0.0, [(0.5, 0.5, 0.5)]) == pytest.approx([1.0])
     with pytest.raises(ZeroDivisionError):
         source_values(problem, 3, 0.0, [(0.5, 0.5, 0.5)])
+
+
+def _anisotropic(reference: str, series: list[float], *, cells: int = 40) -> dict:
+    ladder = load_problem("anisotropic_monodomain")["refinement"]["temporal"]
+    rungs = list(zip(ladder["dt"], ladder["steps"]))
+    if reference == "finest_dt":
+        rungs = rungs[:-1]
+    return {
+        "solver": "s", "problem": "anisotropic_monodomain", "configuration": "c", "reference": reference,
+        "stated": None,
+        "levels": [{"dimension": 3, "cells_per_axis": cells, "dt": dt, "steps": steps,
+                    "errors": {"V": {kind: error for kind in ("L1", "L2", "Linf")}}}
+                   for (dt, steps), error in zip(rungs, series)],
+    }
+
+
+# A spatial error of 1e-4 under a temporal error of 8e-3 * dt**2: the exact-reference error reaches the floor, the
+# error against the dt -> 0 limit does not.
+DTS = [0.025, 0.0125, 0.00625, 0.003125, 0.0015625]
+ON_A_FLOOR = [1e-4 + 8e-3 * dt**2 for dt in DTS]
+FLOOR_FREE = [8e-3 * dt**2 for dt in DTS]
+
+
+def test_an_extrapolated_row_orders_every_level_and_says_the_spatial_floor_is_out():
+    problem = load_problem("anisotropic_monodomain")
+    exact, extrapolated = temporal_table(problem, [_anisotropic("exact", ON_A_FLOOR),
+                                                   _anisotropic("extrapolated", FLOOR_FREE)])["rows"]
+    assert (exact["spatial_floor_removed"], extrapolated["spatial_floor_removed"]) == (False, True)
+    assert len(extrapolated["levels"]) == len(DTS) and extrapolated["reference_dt"] is None
+    assert extrapolated["least_squares_order"]["V"]["L2"] == pytest.approx(2, abs=1e-3)
+    assert exact["least_squares_order"]["V"]["L2"] < 1
+    assert extrapolated["converges"] is True and extrapolated["extrapolation"] is None
+
+
+def test_a_finest_dt_row_takes_the_extrapolated_verdict_over_the_exact_one():
+    problem = load_problem("anisotropic_monodomain")
+    finest = [e - FLOOR_FREE[-1] for e in FLOOR_FREE[:-1]]
+    rows = temporal_table(problem, [_anisotropic("exact", [1e-3] * 5), _anisotropic("finest_dt", finest)])["rows"]
+    assert rows[1]["converges_to_reference"] is False and rows[1]["verdict_from"] == "exact"
+    rows = temporal_table(problem, [_anisotropic("exact", [1e-3] * 5), _anisotropic("finest_dt", finest),
+                                    _anisotropic("extrapolated", FLOOR_FREE)])["rows"]
+    row = next(r for r in rows if r["reference"] == "finest_dt")
+    assert row["converges_to_reference"] is True and row["verdict_from"] == "extrapolated"
+    assert row["spatial_floor_removed"] is True
+    (alone,) = temporal_table(problem, [_anisotropic("finest_dt", finest)])["rows"]
+    assert alone["converges_to_reference"] is None and alone["verdict_from"] is None
+
+
+def test_the_finer_mesh_of_the_ladder_makes_rows_of_its_own_and_no_other_mesh_does():
+    problem = load_problem("anisotropic_monodomain")
+    rows = temporal_table(problem, [_anisotropic("exact", ON_A_FLOOR), _anisotropic("exact", FLOOR_FREE, cells=80)])["rows"]
+    assert [row["cells_per_axis"] for row in rows] == [40, 80]
+    assert rows[0]["converges"] is False and rows[1]["converges"] is True
+    with pytest.raises(ProblemError) as caught:
+        temporal_table(problem, [_anisotropic("exact", FLOOR_FREE, cells=60)])
+    assert caught.value.code == "results_invalid"
+
+
+def test_an_extrapolated_result_carries_how_its_limit_was_obtained():
+    problem = load_problem("anisotropic_monodomain")
+    result = _anisotropic("extrapolated", FLOOR_FREE)
+    result["extrapolation"] = {"method": "fit in 1, dt, dt^2"}
+    (row,) = temporal_table(problem, [result])["rows"]
+    assert row["extrapolation"] == {"method": "fit in 1, dt, dt^2"}
+    result["reference_dt"] = 0.0015625
+    with pytest.raises(ProblemError) as caught:
+        temporal_table(problem, [result])
+    assert "reference_dt" in str(caught.value)

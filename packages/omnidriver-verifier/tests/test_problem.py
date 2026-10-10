@@ -215,3 +215,10 @@ def test_a_tensor_of_an_unknown_kind_is_refused():
     problem = _shipped()
     problem["pde"]["tensors"]["sigma"] = {"full": ["sigma_xx", "sigma_yy", "sigma_zz"]}
     assert "pde.tensors.sigma" in _refused(problem)
+
+
+def test_a_finer_temporal_mesh_must_be_finer_than_the_ladders():
+    problem = load_problem("anisotropic_monodomain")
+    validate_problem(problem)
+    problem["refinement"]["temporal"]["finer_cells_per_axis"] = {"3": 40}
+    assert "finer_cells_per_axis" in _refused(problem)

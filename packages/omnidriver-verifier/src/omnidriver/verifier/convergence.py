@@ -172,7 +172,7 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
             raise ProblemError(f"{solver}: mesh {result['mesh']!r} is not in {problem['mesh_progression']}")
         ladder = problem["refinement"][result["mesh"]]
         rungs = {cells: (dt, steps) for cells, dt, steps in zip(ladder["cells_per_axis"], ladder["dt"], ladder["steps"])}
-        by_dimension: dict[tuple[int, int], list[Mapping[str, Any]]] = {}
+        by_dimension: dict[int, list[Mapping[str, Any]]] = {}
         for level in result["levels"]:
             _require(f"{solver}: a level", level, ("dimension", "cells_per_axis", "dt", "steps", "errors"))
             cells, d = level["cells_per_axis"], level["dimension"]
@@ -187,8 +187,8 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
                                    f"outside norms.fields {fields}")
             if any(other["cells_per_axis"] == cells for other in by_dimension.get(d, [])):
                 raise ProblemError(f"{solver}: level {d}D N={cells} is listed twice", code="results_invalid")
-            by_dimension.setdefault(key, []).append(level)
-        for (d, n), levels in sorted(by_dimension.items()):
+            by_dimension.setdefault(d, []).append(level)
+        for d, levels in sorted(by_dimension.items()):
             levels = sorted(levels, key=lambda level: level["cells_per_axis"])
             partial = [field for field in fields if 0 < sum(field in level["errors"] for level in levels) < len(levels)]
             if partial:

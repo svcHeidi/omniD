@@ -103,11 +103,13 @@ steps = [22, 89, 357, 1427]
 dt_scales_as = "h**2"
 
 # The FDA matrix's design (fda_monodomain): the mesh fixed, dt halved at each level, to settle the time order apart
-# from the space order. The mesh is the third level of the hex ladder; the owner's 3D temporal row is N = 80.
+# from the space order. The mesh is the third level of the hex ladder; the owner's 3D temporal row is N = 80, which
+# lowers the spatial error four-fold and is the second mesh of the same dt ladder.
 [refinement.temporal]
 mesh = "hex"
 dimensions = [3]
 cells_per_axis = { 3 = 40 }
+finer_cells_per_axis = { 3 = 80 }
 dt = [0.025, 0.0125, 0.00625, 0.003125, 0.0015625]
 steps = [8, 16, 32, 64, 128]
 
