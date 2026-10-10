@@ -75,40 +75,48 @@ reader declaration), `reading.py`, `units.py` and `errors.py`.
 
 ## omnidriver-verifier
 
-**Role:** verification, in two levels, independent of any one solver and of
-how it discretises (FEM, FVM or anything else).
+**Role:** the verifier is an agent plus capabilities (owner, 2026-10-10). Given
+a solver it knows through omniD and a set of manufactured problems that should
+pass, the agent writes the verification code for that solver from scratch,
+runs refinement studies, and reports what the solver's numerics deliver.
+Convergence is rarely checked on real problems; the verifier makes checking it
+routine for any solver.
 
-1. **Model parity, across solvers, with no run.** Do two solvers implement the
-   same mathematical model, meaning the same equations, terms and definitions?
-   The verdict is "same model", or the term or definition that differs. For
-   example:
-   - how the reaction term is scaled (χ·Cm);
-   - how conductivity reduces to the monodomain;
-   - what a stimulus strength is normalised by;
-   - the boundary conditions;
-   - the cell model and its version.
+**What the agent is given (data and tools, not generated per solver by hand):**
+1. **A problem library (data),** for example monodomain in 1D, 2D and 3D, and
+   pseudo-ECG. Each problem gives its equation, exact fields, cell model as
+   expressions, parameters, domain, boundary conditions, refinement path and
+   provenance. The library is transcribed from the owner's cardiacFOAM
+   manufactured models and Pathmanathan & Gray / FDA.
+2. **Solver knowledge, per plugin, as data.** How to inject a cell model, set a
+   per-node state, apply a source f(x,t), read results, whether a full
+   conductivity tensor is supported, whether a pseudo-ECG is output, and the
+   numerics: spatial discretisation, time scheme, mass lumping, operator
+   splitting.
+3. **Deterministic tools, as code.**
+   - A symbolic residual check of the generated cell model. It must be zero
+     before any run, so a bug in the agent's own code is never reported as a
+     solver defect.
+   - The refinement sweep through omniD.
+   - One error norm.
+   - An order fit.
+   - A cross-solver table.
+4. **A record of each run:** the generated code and its digest go into the
+   run's provenance.
 
-   For this, each solver declares its model as data an agent can act on, not
-   prose. The variable-mapping evidence
-   (`docs/solver-learning/cross-solver-variables.md`) shows what such a
-   declaration must cover: it found a stimulus normalised differently and two
-   versions of one cell model.
-2. **Numerical verification, per solver.** A manufactured problem with an
-   analytical solution, run over refinement levels. The check is whether the
-   observed order of convergence matches the formal order the solver's
-   discretisation claims, within a stated tolerance on the slope. That claim
-   is data too: each scheme a solver offers declares its formal order.
+**What the verifier reports, per solver and problem:**
+- the observed order;
+- the order this solver's own numerics should give;
+- the agent's explanation of any difference. Different numerical methods can
+  legitimately give different orders, and that is a result, not a failure.
 
-Every verdict is JSON with a code, like every refusal. Frame and mesh alignment
-stays the agent's reasoning (owner, 2026-10-09).
+When most solvers behave as their numerics predict and one does not, the
+evidence localises a defect in that solver.
 
-**What the plugins supply,** as data through the plugin contract:
-- a declaration of the model each record solves;
-- the formal order of each scheme;
-- the manufactured cases and the reader for their error norms.
+**cardiacFOAM runs its native manufactured models as they are.** The agent
+generates for the other solvers.
 
-Their exact shape is written from the owner's verification code, not invented
-ahead of it.
+**Frame and mesh alignment** stays the agent's reasoning (owner, 2026-10-09).
 
 ## omnidriver-builder
 
@@ -161,10 +169,10 @@ Four places in core reach into comparison today. Each is resolved as follows.
 2. **Builder by relocation.** Move the build command, the generators and the
    guidance, with no behaviour change. Then write the procedure, one solver
    (openCARP) at a time.
-3. **Verifier,** from the owner's verification code. The model declaration,
-   the formal orders and the manufactured-case readers are written from that
-   code, not invented ahead of it. The numerical level can start from
-   manufactured cases that solvers already ship.
+3. **Verifier,** as an agent plus capabilities: the problem library (from the
+   owner's cardiacFOAM manufactured models), per-plugin solver knowledge
+   (injection points and numerics), and the deterministic tools. The agent
+   generates each solver's verification code.
 
 ## Open questions for the owner
 

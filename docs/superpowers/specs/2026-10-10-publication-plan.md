@@ -24,14 +24,20 @@ the owner's decision, to be made later.
 
 **Claim, as narrow as the evidence allows:**
 
-> To our knowledge, the first framework that generates the same
-> manufactured-solution problem, injects it into independent finite-element
-> and finite-volume solvers through per-solver plugins, runs them, and
-> compares observed orders of convergence, preceded by a model-parity check,
-> applied to cardiac electrophysiology.
+> An agentic verifier for cardiac electrophysiology solvers. Given a solver
+> known through omniD and a library of manufactured problems, an LLM agent
+> writes the verification code for that solver from scratch, runs refinement
+> studies, and reports the observed orders against what the solver's own
+> numerics predict, explaining any difference. Comparing solvers localises
+> defects; finite-element and finite-volume solvers are treated alike.
 
-It does not claim that automating manufactured solutions is new: MASA, MOOSE
-and Ramoa et al. 2022 for OpenFOAM all exist, each within one code.
+It does not claim that automating manufactured solutions is new (MASA, MOOSE,
+Ramoa et al. 2022). What is new is an agent generating the verification for
+solvers it knows only through their declared knowledge, and interpreting the
+results against each solver's numerics. cardiacFOAM runs its native
+manufactured models as they are; the agent generates for openCARP, TorchCor
+and MonoAlg3D. One deterministic gate stays: the generated model's symbolic
+residual must be zero before any run.
 
 **Problem set:** the nine cardiac manufactured-solution problems of Pathmanathan
 & Gray 2014, republished by the FDA as RST24CV03.01. They are published and
