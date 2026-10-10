@@ -883,3 +883,18 @@ Solve times: hex 0.5 112-132 s, hex 0.2 787 s (`0`) and 838 s (`AB`). At dx
 (51.84, 59.75, 46.90, 55.33): closer than `AB` (7.6-9.4 ms), because the
 uniform front of AA3 runs faster along x. Agreement at the corners is not
 evidence of the same problem here.
+
+## AB. The FDA manufactured monodomain, hex verification (2026-10-10)
+
+The first run of the shared verifier (`omnidriver-verify compare`) on
+cardiacFOAM's `manufacturedSolutions/monodomainPseudoECG` hex ladder, against
+openCARP on a structured finite-element mesh. Runs under
+`<runs>/2026-10-10/fda-compare/` (`compare/table.json`); openCARP's side is
+`opencarp.md` N.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| AB1 | gate 3: the shared norm on cardiacFOAM's own Vm, u1 and u2 at cell centres and volumes at steps*dt, against `postProcessing/<d>D_<N>_cells.dat` (`compare/gate3.json`) | status `passed`; largest relative difference 4.3e-6, against a print of six significant digits (5e-6) | the shared norm and the native verifier compute the same error on the finite-volume path |
+| AB2 | `compare` over the hex ladder, N = 10, 20, 40, 80: L2 of V, observed orders, least-squares order | 1D: 2.176e-4, 5.439e-5, 1.356e-5, 3.386e-6, orders 2.0, 2.0, 2.0 (2.002). 2D: 2.289e-3, 5.947e-4, 1.500e-4, 3.753e-5, orders 1.94, 1.99, 2.0 (1.978). 3D: 3.907e-3, 1.022e-3, 2.580e-4, 6.459e-5, orders 1.94, 1.99, 2.0 (1.974) | cardiacFOAM converges at second order to the manufactured solution in 1D, 2D and 3D |
+| AB3 | the same on openCARP, `Hx` strip 1D, `Qd` 2D, `Hx` 3D | 1D 2.341e-4 to 3.736e-6 (orders 1.97, 2.0, 2.0); 2D 4.787e-3 to 7.812e-5; 3D 1.796e-2 to 3.082e-4 | both solvers solve the same continuous problem, to second order; the finite-element error is larger in 2D and 3D by 2.1 and 4.8 at N = 80, as the lumped Q1 against 7-point finite-volume eigenvalue error predicts (about 1.9 and 4.4) |
+| AB4 | the sweep the tutorial exports, `tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json`, against the same file at native `277dfeb19` | the native file has `dt_values` per level (0.00892857 down to 0.000140174); omniD's commit `b6a2ccbc1` on `omnid/tutorials-are-pointers` ("rewrite to record vocabulary", 2026-09-27) dropped them, and its message lists other dropped keys but not this. The base `controlDict` has `deltaT 0.000140174`, so every level of the exported sweep runs at the finest dt. The verifier run supplies `system/controlDict:deltaT` on each row, so AB2 is not affected | **F2, an omniD defect**: a convergence sweep exported from the record runs time-step-limited at every level. The fix is to restore `dt_values` on the omniD native branch; the native branch is the owner's to push |

@@ -365,3 +365,24 @@ study). The fibre at 45° delays P8 by 14.7 ms at dx 0.2 mm, the delay the
 native oblique README states, and P3/P7 by 15-21 ms; P5 (across the 3 mm from
 the stimulus) comes earlier. P2 and P6 barely move: across the 7 mm the
 conductivity is σt in both problems.
+
+## N. The Line element (2026-10-10)
+
+Found while verifying openCARP against the FDA manufactured monodomain
+problem (`cardiacfoam.md` AB). Probes under `<runs>/2026-10-10/fda-review/`,
+the verification runs under `<runs>/2026-10-10/fda-compare/opencarp/`. openCARP
+v18.1, installed source under `share/openCARP`.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| N1 | read `fem/slimfem/src/SF_fem_utils.h` (`general_integration_points`, `reference_shape`) and `physics/electric_integrators.cc` (`get_preferred_int_order`, `assemble_lumped_matrix`) | for a Line, `general_integration_points` gives order 1 the point x = 0, weight 2, and order 2 the points ±0.577, weights 1: the reference interval is [-1, 1]. `reference_shape` gives N0 = 1 - x, N1 = x, dN = -1, +1: the reference interval is [0, 1]. The Jacobian comes from `get_transformed_pts`, (0, \|p1 - p0\|), so detJ = h. Mass uses order 2, Line stiffness order 1; the lumped matrix is the row sum | the quadrature weights sum to 2 on an element whose shape functions and Jacobian assume length 1: every Line integral is taken over twice the element, from points at [-1, 1] on shape functions defined on [0, 1] |
+| N2 | the same, derived for one Line element of length h | stiffness K_e = 2/h (the correct value is 1/h); lumped mass 2h at node 0 and 0 at node 1 (the correct value is h/2 at each) | the defect follows the element's own node order, not the geometry. The interior is consistent (K and M both twice the correct value, so their ratio is right), the first and last nodes are wrong: the first carries twice the flux, the last no mass |
+| N3 | `fda-review/mk.py` then `fda-review/run.sh ln`, `lnrev`, `hx`: a 4-element line (L = 1000 µm), initial Vm = -80 + 10 cos(2πx/L) (mirror-symmetric), Plonsey passive membrane, all six conductivities 0.2, Crank-Nicolson, lumped mass, 0.2 ms. `lnrev` writes each element as `Ln i+1 i`; `hx` is a one-cell-thick hexahedral strip of the same line | Vm at 0.2 ms, node 0 to 4. `Ln`: -70.6035, -78.2523, -84.7849, -80.0226, -70.2206. `Ln` reversed: the exact mirror of that. `Hx`: -72.2103, -78.4158, -84.6213, -78.4158, -72.2103 | a symmetric problem on `Ln` gives an asymmetric answer, and reversing the element order reverses the answer, which is the node-order dependence of N2. The `Hx` strip is symmetric. Not a `.elem` ordering mistake: it is wrong in either orientation |
+| N4 | `bidm_eqv_mono` (default 1) and `para_cond` in `electric_integrators.cc`, against N3's six equal conductivities | `para_cond = gi*ge/(gi+ge)`, so g_i = g_e = 2σ gives σ | the mapping in N3 and the FDA runs is right; the difference is the element, not the conductivity |
+| N5 | the FDA 1D manufactured problem on `Ln` at N = 10, 20, 40, 80; table in `<runs>/2026-10-10/fda-compare/compare/table.json` (row "Ln 1D, flagged") | L2 of V: 7.2e-3, 7.6e-3, 2.7e-3, 1.2e-3; observed orders -0.07, 1.50, 1.17 (least squares 0.93). The same problem on the `Hx` strip: 2.3e-4, 6.0e-5, 1.5e-5, 3.7e-6, orders 1.97, 2.00, 2.00 | `Ln` does not converge at second order and sits 320 times above `Hx` at N = 80, which N2 predicts for wrong end nodes. A wrong conductivity would plateau instead (sigma times 1.1 on the `Hx` path: L2 2.5e-3 to 2.8e-3 over the four levels), and the 1D `Ln` error falls, so the mapping is not the cause |
+| N6 | the tutorial cable `02_EP_tissue/03_study_prep_APD/Mesh_1.5cm_Cable` under openCARP's installed tutorials | its `.elem` lines read `Ln i i+1 1`, the format of N3 | not a format misuse: the shipped example uses the same elements. A propagating wave away from the ends would not show a defect that sits at the first and last node |
+| N7 | the verification of the FE path at N = 80 on `Hx`, V at 1D; one float32 step | openCARP writes IGB as float32. A one-step rounding of 1.2e-7 (2^-23 at 1) moves L2(V) at N = 80 by about 1%: 3.714e-6 on the y = z = 0 row against 3.736e-6 over all nodes of the strip, a one-ulp spread | the output limits what a level finer than N = 80 can show: the discretisation error there is 3.7e-6 and rounding is already 1% of it |
+
+**Decision.** Use `Hx` (and `Qd`, `Hx`) for any verification and never a
+`Ln` mesh for a result that depends on the end nodes; whether to report the
+defect upstream is the owner's call (`docs/superpowers/ROADMAP.md` §5).

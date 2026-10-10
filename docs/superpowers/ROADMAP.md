@@ -266,6 +266,13 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - on the bath-bidomain branch only: its reaction/diffusion split skips the
      SBDF2 `VmRate` and `Iion` refresh that `advance()` does, so bath with SBDF2
      differs from the normal advance.
+4a. **Verifier findings, owner's calls** (2026-10-10, `cardiacfoam.md` AB,
+   `opencarp.md` N):
+   - restore `dt_values` in `sweep_hex_convergence.json` on
+     the omniD native branch (dropped by `b6a2ccbc1`, present at native
+     `277dfeb19`; the exported sweep runs every level at the finest dt);
+   - whether to report openCARP v18.1's Line-element defect upstream (quadrature
+     on [-1, 1] against shape functions on [0, 1]).
 5. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the
    solver changed.
