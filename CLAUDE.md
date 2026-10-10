@@ -87,6 +87,7 @@ export `DYLD_LIBRARY_PATH`, which macOS strips when bash starts).
 omnidriver check --repo <cardiacFOAM> --scratch-dir <scratch> --record singleCell --benchmarks <omnidriver>/benchmarks
 omnidriver check --plugin opencarp --cases-root <opencarp>/share/tutorials --scratch-dir <scratch> --benchmarks <omnidriver>/benchmarks
 omnidriver check --plugin cardiaccore --cases-root <cardiacCore> --scratch-dir <scratch> --input anatomy=<humanSlab bundle>
+omnidriver check --repo <torchcor-cases> --scratch-dir <scratch> --record nversion --benchmarks <omnidriver>/benchmarks
 ```
 
 The tree under check should be clean (a `git archive` of the branch), since C11
@@ -178,8 +179,10 @@ is not a count of concepts. Delete on evidence from every package and script.
 - `ARCHITECTURE.md` — the layer map, the package-independence rules and what
   core may name.
 - `docs/superpowers/ROADMAP.md` — **start here for the current state**: the clean state of all three repositories (omniD, native cardiacFOAM, native cardiacCore), exactly how the owner's native branches relate to ours, and what is next. `docs/superpowers/specs/` and
-  `plans/` are the design reasoning and the executed record; the newest plan,
-  `plans/2026-10-01-pass2-convergence.md`, holds the owner's decisions.
+  `plans/` are the design reasoning and the executed record. The owner's
+  decisions sit with the work they settle: `plans/2026-10-01-pass2-convergence.md`
+  for pass 2, and each later spec for its own (for example
+  `specs/2026-10-09-torchcor-plugin-design.md`).
 - `docs/solver-learning/` — evidence about each solver, one probe at a time.
 - `AGENT_GUIDE.md` — the domain guide: planning, sweeping, post-processing,
   and authoring a plugin or a tutorial. Its minimal plugin is a tested fixture
