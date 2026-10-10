@@ -298,7 +298,12 @@ def drift(snippets: dict[str, str], problem: dict) -> list[str]:
 
 def _tet_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
     """The tet study's FDA rows (its first four, one per level) against the tet ladder; its mesh size against the
-    spacing the ladder implies, lc = edge/cells_per_axis."""
+    spacing the ladder implies, lc = edge/cells_per_axis.
+
+    The mesh size is read from the template's stated rule (``lc = 1/N`` in its comment) and its use in both
+    ``Mesh.MeshSize`` bounds. How ``lc`` is set is not read: the template on native main leaves the placeholder
+    ``lc = __LC__;`` and the branch's declares it with ``DefineConstant``; a strict plan refuses the step that
+    would not set it (``gmsh_setnumber_not_declared``)."""
     dimension, conductivity, verifier, *ladder = _body(snippets[TET_SWEEP], commit)
     tet = problem["refinement"]["tet"]
     parameters = problem["parameters"]
