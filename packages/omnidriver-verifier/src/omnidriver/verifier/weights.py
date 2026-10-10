@@ -38,3 +38,25 @@ def nodal_control_volumes(points: Sequence[Sequence[float]], elements: Sequence[
         for i in ids:
             weights[i] += volume / len(ids)
     return weights
+
+
+def tetrahedron_nodal_volumes(points: Sequence[Sequence[float]], elements: Sequence[Sequence[int]],
+                              length_scale: float = 1.0) -> list[float]:
+    """The lumped nodal control volume of each point of a linear tetrahedral mesh: each tetrahedron's volume
+    (|det|/6 of its edge vectors) shared equally among its four nodes, the row sum of the P1 mass matrix.
+    Coordinates are divided by ``length_scale``. :class:`ProblemError` for an element that is not four points of
+    the mesh, or has no volume."""
+    weights = [0.0] * len(points)
+    for ids in elements:
+        if len(ids) != 4 or min(ids) < 0 or max(ids) >= len(points):
+            raise ProblemError(f"a tetrahedron is four of the {len(points)} given points, not {list(ids)}",
+                               code="weights_invalid")
+        p0, p1, p2, p3 = ([c / length_scale for c in points[i]] for i in ids)
+        a, b, c = ([q[k] - p0[k] for k in range(3)] for q in (p1, p2, p3))
+        det = (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
+               + a[2] * (b[0] * c[1] - b[1] * c[0]))
+        if det == 0:
+            raise ProblemError(f"the tetrahedron {list(ids)} has no volume", code="weights_invalid")
+        for i in ids:
+            weights[i] += abs(det) / 24
+    return weights
