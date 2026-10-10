@@ -32,7 +32,7 @@ from omnidriver.core.tutorial_records import (
 # Neutral placeholder plugins, not cardiacFoam: this file proves core's own
 # sweep bookkeeping (staging, timeout, manifest), not cardiac routing, which
 # is tested against the real plugin in the cardiacfoam package.
-from plugins.toy import DeclaredCasePlugin
+from plugins.toy import DeclaredCasePlugin, toy_axis
 from plugins.toy import QUANTITY_TOY_PLUGIN, ToyProvider, write_quantity_toy_case
 
 _CTX = _driver_context(DeclaredCasePlugin(), source="test:sweep_runner")
@@ -308,7 +308,7 @@ def _record_number_cells_axis() -> AxisContract:
             ),
         )
 
-    return AxisContract(unit=None, description="a test axis", name="number_cells", value_kind="integer", resolve=resolve)
+    return toy_axis(name="number_cells", value_kind="integer", resolve=resolve)
 
 
 class _RecordSweepWriterPlugin(ToyProvider):

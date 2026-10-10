@@ -159,6 +159,12 @@ def _number_cells_axis() -> AxisContract:
     )
 
 
+def toy_axis(*, name: str, value_kind: str, resolve, unit: str | None = None, description: str = "a test axis",
+             **bounds) -> AxisContract:
+    """An axis for a test: what it sets is not the point, so its unit and description default."""
+    return AxisContract(name=name, value_kind=value_kind, unit=unit, description=description, resolve=resolve, **bounds)
+
+
 def _solve(command, *, consumes=("constant/mesh.json",), produces=("solved.marker",), **fields) -> WorkflowStep:
     return WorkflowStep(step_id="solve", command=command, consumes=consumes, produces=produces, **fields)
 

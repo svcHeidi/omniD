@@ -36,7 +36,7 @@ from omnidriver.core.tutorial_records import (
     split_unchanged,
 )
 
-from plugins.toy import ToyProvider
+from plugins.toy import ToyProvider, toy_axis
 
 _FORMAT = "test_json_dictionary"
 
@@ -188,7 +188,7 @@ def _number_cells_axis() -> AxisContract:
             command_arguments={"mesh": (f"-N", str(value))},
         )
 
-    return AxisContract(unit=None, description="a test axis", name="number_cells", value_kind="integer", resolve=resolve)
+    return toy_axis(name="number_cells", value_kind="integer", resolve=resolve)
 
 
 def _record(**overrides) -> TutorialRecord:
@@ -239,7 +239,7 @@ def _patch_axis(name: str, document: str) -> AxisContract:
         del staged_case_root
         return AxisResult(patches=(AxisPatch(document, ("cells",), int(value), "integer"),))
 
-    return AxisContract(unit=None, description="a test axis", name=name, value_kind="integer", resolve=resolve)
+    return toy_axis(name=name, value_kind="integer", resolve=resolve)
 
 
 def test_a_record_refuses_two_axes_under_one_name():
@@ -446,7 +446,7 @@ def test_resolve_case_patches_validates_axis_produced_patches_too():
             patches=(AxisPatch("constant/physics.json", ("notInCatalog",), value, "word"),),
         )
 
-    axis = AxisContract(unit=None, description="a test axis", name="rogue", value_kind="word", resolve=rogue)
+    axis = toy_axis(name="rogue", value_kind="word", resolve=rogue)
     record = _record(axes=(axis,))
     with pytest.raises(TutorialRecordError, match="notInCatalog"):
         resolve_case_patches(
@@ -464,7 +464,7 @@ def test_resolve_case_patches_refuses_a_value_that_does_not_fit_the_axis_value_k
             AxisPatch("constant/mesh.json", ("cells",), int(value), "integer"),
         ))
 
-    axis = AxisContract(unit=None, description="a test axis", name="number_cells", value_kind="integer", resolve=resolve)
+    axis = toy_axis(name="number_cells", value_kind="integer", resolve=resolve)
     record = _record(axes=(axis,))
     with pytest.raises(TutorialRecordError, match="number_cells"):
         resolve_case_patches(
@@ -503,7 +503,7 @@ def test_a_value_outside_an_axis_bound_is_refused_before_the_axis_resolves(bound
         calls.append(value)
         return AxisResult()
 
-    axis = AxisContract(name="dx", value_kind="scalar", unit="m", description="d", resolve=resolve, **bounds)
+    axis = toy_axis(name="dx", value_kind="scalar", unit="m", resolve=resolve, **bounds)
     with pytest.raises(TutorialRecordError, match=rf"axis 'dx' is {value!r}, outside its bounds: {reason}") as caught:
         resolve_case_patches(
             _record(axes=(axis,)), study_by_source={"base": {"dx": value}},
@@ -517,7 +517,7 @@ def test_a_value_outside_an_axis_bound_is_refused_before_the_axis_resolves(bound
 
 
 def test_a_value_that_does_not_fit_an_axis_names_the_kind_as_its_rule():
-    axis = AxisContract(name="n", value_kind="integer", unit=None, description="d", resolve=lambda v, r: AxisResult())
+    axis = toy_axis(name="n", value_kind="integer", resolve=lambda v, r: AxisResult())
     with pytest.raises(TutorialRecordError) as caught:
         resolve_case_patches(
             _record(axes=(axis,)), study_by_source={"base": {"n": "many"}},
@@ -531,7 +531,7 @@ def test_a_value_an_axis_refuses_is_an_axis_rule_refusal():
     def resolve(value, staged_case_root):
         raise ValueError(f"{value} does not divide the extent")
 
-    axis = AxisContract(name="dx", value_kind="scalar", unit="m", description="d", resolve=resolve)
+    axis = toy_axis(name="dx", value_kind="scalar", unit="m", resolve=resolve)
     with pytest.raises(TutorialRecordError, match="axis 'dx': 0.3 does not divide the extent") as caught:
         resolve_case_patches(
             _record(axes=(axis,)), study_by_source={"base": {"dx": 0.3}},
@@ -544,7 +544,7 @@ def test_the_rule_an_axis_refuses_a_value_by_is_its_refusals_rule():
     def resolve(value, staged_case_root):
         raise TutorialRecordError(f"{value!r} is no model", code="axis_rule", rule={"menu": ["A", "B"]})
 
-    axis = AxisContract(name="model", value_kind="word", unit=None, description="d", resolve=resolve)
+    axis = toy_axis(name="model", value_kind="word", resolve=resolve)
     with pytest.raises(TutorialRecordError) as caught:
         resolve_case_patches(
             _record(axes=(axis,)), study_by_source={"base": {"model": "C"}},
@@ -586,7 +586,7 @@ def test_resolve_case_patches_refuses_an_axis_that_writes_the_staged_case(tmp_pa
         (case_root / "sneaky.txt").write_text("not through the channel")
         return AxisResult()
 
-    axis = AxisContract(unit=None, description="a test axis", name="rogue", value_kind="word", resolve=rogue)
+    axis = toy_axis(name="rogue", value_kind="word", resolve=rogue)
     record = _record(axes=(axis,))
     with pytest.raises(TutorialRecordError, match="rogue.*not pure"):
         resolve_case_patches(
@@ -605,7 +605,7 @@ def test_resolve_case_patches_validates_all_direct_keys_before_any_axis_runs():
         calls.append(value)
         return AxisResult()
 
-    axis = AxisContract(unit=None, description="a test axis", name="number_cells", value_kind="integer", resolve=tracking_resolve)
+    axis = toy_axis(name="number_cells", value_kind="integer", resolve=tracking_resolve)
     record = _record()
     with pytest.raises(TutorialRecordError):
         resolve_case_patches(
@@ -625,7 +625,7 @@ def test_resolve_case_patches_refuses_command_arguments_for_an_undeclared_step()
     def rogue(value, staged_case_root):
         return AxisResult(command_arguments={"not_a_real_step": ("-x",)})
 
-    axis = AxisContract(unit=None, description="a test axis", name="rogue_step", value_kind="integer", resolve=rogue)
+    axis = toy_axis(name="rogue_step", value_kind="integer", resolve=rogue)
     record = _record(axes=(axis,))
     with pytest.raises(TutorialRecordError, match="not_a_real_step"):
         resolve_case_patches(
@@ -645,8 +645,8 @@ def test_resolve_case_patches_refuses_conflicting_command_arguments_for_one_step
         return AxisResult(command_arguments={"mesh": ("-N", "9")})
 
     record = _record(axes=(
-        AxisContract(unit=None, description="a test axis", name="one", value_kind="integer", resolve=axis_one),
-        AxisContract(unit=None, description="a test axis", name="two", value_kind="integer", resolve=axis_two),
+        toy_axis(name="one", value_kind="integer", resolve=axis_one),
+        toy_axis(name="two", value_kind="integer", resolve=axis_two),
     ))
     with pytest.raises(TutorialRecordError, match="mesh"):
         resolve_case_patches(
@@ -673,7 +673,7 @@ def _mesh_file_axis(*arguments: str) -> AxisContract:
     def resolve(value, staged_case_root):
         return AxisResult(command_arguments={"mesh": arguments})
 
-    return AxisContract(unit=None, description="a test axis", name="meshFile", value_kind="word", resolve=resolve)
+    return toy_axis(name="meshFile", value_kind="word", resolve=resolve)
 
 
 def _record_with_two_defaults(*axes: AxisContract) -> TutorialRecord:
@@ -692,7 +692,7 @@ def _record_with_two_defaults(*axes: AxisContract) -> TutorialRecord:
 
 
 def _axis(name: str, **result: Any) -> AxisContract:
-    return AxisContract(unit=None, description="a test axis", name=name, value_kind="integer", resolve=lambda value, root: AxisResult(**result))
+    return toy_axis(name=name, value_kind="integer", resolve=lambda value, root: AxisResult(**result))
 
 
 def _resolved(record: TutorialRecord, study: dict[str, Any]) -> tuple[dict, dict]:
@@ -862,8 +862,8 @@ def test_resolve_case_patches_allows_identical_command_arguments_for_one_step():
         return AxisResult(command_arguments={"mesh": ("-N", "5")})
 
     record = _record(axes=(
-        AxisContract(unit=None, description="a test axis", name="one", value_kind="integer", resolve=axis_one),
-        AxisContract(unit=None, description="a test axis", name="two", value_kind="integer", resolve=axis_two),
+        toy_axis(name="one", value_kind="integer", resolve=axis_one),
+        toy_axis(name="two", value_kind="integer", resolve=axis_two),
     ))
     _, command_args, _ = resolve_case_patches(
         record,
@@ -882,7 +882,7 @@ def test_resolve_case_patches_refuses_before_running_any_axis():
         calls.append(value)
         return AxisResult()
 
-    good_axis = AxisContract(unit=None, description="a test axis", name="good_axis", value_kind="integer", resolve=_tracking_resolve)
+    good_axis = toy_axis(name="good_axis", value_kind="integer", resolve=_tracking_resolve)
     record = _record(axes=(good_axis,))
     with pytest.raises(TutorialRecordError):
         resolve_case_patches(
@@ -1380,7 +1380,7 @@ def _meshA_axis() -> AxisContract:
         del staged_case_root
         return AxisResult(command_arguments={"meshA": ("--cells", str(value))})
 
-    return AxisContract(unit=None, description="a test axis", name="number_cells", value_kind="integer", resolve=resolve)
+    return toy_axis(name="number_cells", value_kind="integer", resolve=resolve)
 
 
 def _preview(tmp_path, study):
@@ -1411,7 +1411,7 @@ def test_an_axis_that_also_writes_the_case_is_not_refused_for_a_step_the_route_s
 
     _native_case(tmp_path, {"constant/mesh.json": {"cells": "5"}})
     preview = record_execution.preview_record_case(
-        _record_with_variants(axes=(AxisContract(unit=None, description="a test axis", name="number_cells", value_kind="integer", resolve=resolve),)),
+        _record_with_variants(axes=(toy_axis(name="number_cells", value_kind="integer", resolve=resolve),)),
         cases_root=tmp_path / "cases", study_by_source={"base": {"mesh": "variantB", "number_cells": 7}},
         driver_context=_context_with_writer(),
     )

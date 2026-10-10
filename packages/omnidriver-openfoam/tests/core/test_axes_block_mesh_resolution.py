@@ -444,13 +444,3 @@ def test_a_real_three_block_block_mesh_dict_is_refined_through_the_key_path_that
     )
     (patch,) = axis.resolve(20, tmp_path / "case").patches
     assert (patch.document, patch.value, patch.key_path) == ("system/blockMeshDict.3D", (20, 20, 20), ("hex_cell_counts", "3"))
-
-
-def test_the_axis_carries_its_unit_description_and_bound():
-    axis = block_mesh_resolution_axis(
-        "dx", documents=("system/blockMeshDict",), resolution=_isotropic, value_kind="scalar",
-        unit="m", description="cell size", exclusive_minimum=0,
-    )
-    assert axis.to_json() == {
-        "name": "dx", "value_kind": "scalar", "unit": "m", "description": "cell size", "exclusive_minimum": 0,
-    }

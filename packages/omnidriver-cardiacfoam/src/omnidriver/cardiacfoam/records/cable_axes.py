@@ -38,6 +38,6 @@ def cable_dx_axis(name: str):
         unit="m", exclusive_minimum=0,
         description=(
             "The cable's cell size: each blockMesh cell count not fixed at 1 is that direction's extent "
-            "(system/blockMeshDict's vertices times its scale, in metres) over dx, which must divide it evenly."
+            "(system/blockMeshDict's vertices times its scale) over dx, which must divide it evenly."
         ),
     )

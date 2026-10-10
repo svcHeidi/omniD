@@ -23,7 +23,7 @@ def _dx_resolution(value: Any, staged_case_root: Path) -> AxisResult:
 
 DX_AXIS = AxisContract(
     name="dx", value_kind="scalar", unit="um", exclusive_minimum=0, resolve=_dx_resolution,
-    description="The slab's isotropic resolution: mesher -resolution[0..2], in micrometres (mesher's own unit).",
+    description="The slab's isotropic resolution: mesher -resolution[0..2].",
 )
 
 IMBRICATION_KEY = ("-fibers.imbrication",)
@@ -38,7 +38,7 @@ def _imbrication(value: Any, staged_case_root: Path) -> AxisResult:
 IMBRICATION_AXIS = AxisContract(
     name="fibers.imbrication", value_kind="scalar", unit="deg", resolve=_imbrication,
     description=(
-        "mesher -fibers.imbrication, in degrees: the fibre tilts out of the x-y plane towards +z by "
+        "mesher -fibers.imbrication: the fibre tilts out of the x-y plane towards +z by "
         "atan(sin(imbrication)), so 90 gives the 45 degree fibre of the x-z plane; 0 is mesher's default."
     ),
 )

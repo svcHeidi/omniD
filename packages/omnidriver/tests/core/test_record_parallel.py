@@ -17,11 +17,11 @@ from omnidriver.core.runtime.record_execution import (
     preview_record_case, scheduler_allocation,
 )
 from omnidriver.core.tutorial_records import (
-    PARALLEL_STUDY_NAME, AxisContract, AxisResult, TutorialRecord, TutorialRecordError, WorkflowStep,
+    PARALLEL_STUDY_NAME, AxisResult, TutorialRecord, TutorialRecordError, WorkflowStep,
 )
 
 from cli_refusal import refusal
-from plugins.toy import PARALLEL_TOY_PLUGIN
+from plugins.toy import PARALLEL_TOY_PLUGIN, toy_axis
 
 TESTS_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -68,7 +68,7 @@ def test_the_reserved_name_is_parallel():
 def test_a_record_may_not_claim_the_reserved_name(field):
     kwargs: dict = {}
     if field == "axis":
-        kwargs["axes"] = (AxisContract(unit=None, description="a test axis", name="parallel", value_kind="scalar",
+        kwargs["axes"] = (toy_axis(name="parallel", value_kind="scalar",
                                        resolve=lambda value, root: AxisResult()),)
     else:
         kwargs.update(variant_selector="parallel", default_variant="a", workflow_variants={"a": ("solve",)})

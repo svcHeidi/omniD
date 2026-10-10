@@ -59,8 +59,8 @@ def _tet_dx_axis(name: str) -> AxisContract:
     return AxisContract(
         name=name, value_kind="scalar", unit="m", exclusive_minimum=0, resolve=resolve,
         description=(
-            "The tet route's mesh size: gmsh's characteristic length lc (-setnumber lc on the gmsh step), "
-            f"in metres as {_TET_GEO_TEMPLATE_RELPATH} is built; unset, the template's default 0.0005 applies."
+            f"The tet route's mesh size: the characteristic length lc of {_TET_GEO_TEMPLATE_RELPATH} "
+            "(-setnumber lc on the gmsh step); unset, the template's default 0.0005 applies."
         ),
     )
 
@@ -74,7 +74,7 @@ AXES = (
         unit="m",
         description=(
             "The hex route's isotropic cell size: each blockMesh cell count is the slab's extent along that "
-            "direction (system/blockMeshDict's vertices times its scale, in metres) over dx, which must divide it evenly."
+            "direction (system/blockMeshDict's vertices times its scale) over dx, which must divide it evenly."
         ),
         expected_blocks=1,
         value_kind="scalar",
