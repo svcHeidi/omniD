@@ -353,7 +353,7 @@ def scheme_diagnostics(
 
     ``values`` is ``{table: {key: value}}`` as read, ``menus`` the names each table registers in OpenFOAM's source at
     ``source_root``. A composite value (``Gauss linear corrected``) is judged by its parts: the name against its table, then
-    each scheme it reads against that scheme's table (:data:`SCHEME_ARGUMENTS`). A note is information, never a refusal,
+    each scheme it reads against that scheme's table (:data:`SCHEME_ARGUMENTS`). A note is a warning, never a refusal,
     and a ``default`` of ``none`` is OpenFOAM's own."""
     from difflib import get_close_matches
 
@@ -369,7 +369,7 @@ def scheme_diagnostics(
                     continue
                 near = get_close_matches(name, menu, n=3)
                 found.append(diagnostic(
-                    "info", "openfoam_scheme_uncatalogued",
+                    "warning", "openfoam_scheme_uncatalogued",
                     f"{table}.{key} names {name!r}, which OpenFOAM's {part_table} table ({source_root}) does not register"
                     + (f"; did you mean {', '.join(repr(item) for item in near)}?" if near else "")
                     + f" Its menu: {', '.join(menu)}.",

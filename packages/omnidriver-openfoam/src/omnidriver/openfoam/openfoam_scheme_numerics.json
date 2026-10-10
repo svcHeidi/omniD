@@ -1,5 +1,5 @@
 {
- "description": "Facts stated about the values of OpenFOAM's fvSchemes menus: the authors' own statements (a header's class Description, the source it names, or a citation), recorded as stated. settled_by is null until a run of ours settles the claim. omniD reads none of it; the consumer that owns an attribute owns its schema.",
+ "description": "Facts about the values of OpenFOAM's fvSchemes menus, each with its source: a statement of OpenFOAM's authors (kind header, a class Description; source, a quoted line of code; citation, a reference not checked by omniD), recorded as stated with its conditions, or omniD's own derivation, labelled kind derived. settled_by is null until a run of ours settles the claim. omniD reads none of it; the consumer that owns an attribute owns its schema.",
  "attributes": {
   "ddtSchemes": {
    "backward": {
@@ -7,11 +7,12 @@
      "time": 2
     },
     "conditions": [
-     "the first time step takes the Euler coefficients (the previous time step is taken as infinite while timeIndex < 2)"
+     "the Euler coefficients apply while timeIndex < 2 (deltaT0_(vf) returns GREAT); timeIndex is the run's absolute time index, so a run restarted from a later index does not take them on its first step"
     ],
     "stability": {
      "decay_on_old_level_rate_dt_max": 4.0,
-     "derivation": "A linear decay rate acting on the old time level keeps the ddt operator stable while rate*deltaT stays below the bound: backward's characteristic polynomial 3z^2 + (2a - 4)z + 1 with |z| < 1 gives 4; see docs/solver-learning/cardiacfoam-pvj-coupling.md"
+     "kind": "derived",
+     "derivation": "omniD's derivation, not a statement of OpenFOAM's authors: a linear decay rate acting on the old time level keeps the ddt operator stable while a = rate*deltaT stays below the bound; backward's characteristic polynomial 3z^2 + (2a - 4)z + 1 with |z| < 1 (Jury conditions) gives 4; see docs/solver-learning/cardiacfoam-pvj-coupling.md"
     },
     "stated_by": [
      {
@@ -22,8 +23,8 @@
      {
       "kind": "source",
       "file": "src/finiteVolume/finiteVolume/ddtSchemes/backwardDdtScheme/backwardDdtScheme.C",
-      "excerpt": "if (mesh().time().timeIndex() < 2) { return GREAT; }",
-      "reading": "deltaT0_(vf) is GREAT while timeIndex < 2, so the first step takes the Euler coefficients"
+      "excerpt": "scalar backwardDdtScheme<Type>::deltaT0_(const GeoField& vf) const { if (mesh().time().timeIndex() < 2) { return GREAT; } else { return deltaT0_(); } }",
+      "reading": "deltaT0_(vf) is GREAT while timeIndex < 2, so those steps take the Euler coefficients"
      }
     ],
     "settled_by": null
@@ -34,7 +35,8 @@
     },
     "stability": {
      "decay_on_old_level_rate_dt_max": 2.0,
-     "derivation": "A linear decay rate acting on the old time level keeps the ddt operator stable while rate*deltaT stays below the bound: Euler's amplification |1 - a| < 1 gives 2; see docs/solver-learning/cardiacfoam-pvj-coupling.md"
+     "kind": "derived",
+     "derivation": "omniD's derivation, not a statement of OpenFOAM's authors: a linear decay rate acting on the old time level keeps the ddt operator stable while a = rate*deltaT stays below the bound; Euler's amplification |1 - a| < 1 gives 2; see docs/solver-learning/cardiacfoam-pvj-coupling.md"
     },
     "stated_by": [
      {
@@ -46,14 +48,12 @@
     "settled_by": null
    },
    "steadyState": {
-    "conditions": [
-     "the time derivative is zero, so the scheme has no time order"
-    ],
     "stated_by": [
      {
       "kind": "header",
       "file": "src/finiteVolume/finiteVolume/ddtSchemes/steadyStateDdtScheme/steadyStateDdtScheme.H",
-      "text": "SteadyState implicit/explicit ddt which returns 0."
+      "text": "SteadyState implicit/explicit ddt which returns 0.",
+      "reading": "the time derivative is zero, so the scheme has no time order"
      }
     ],
     "settled_by": null

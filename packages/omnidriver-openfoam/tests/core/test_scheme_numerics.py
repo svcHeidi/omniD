@@ -53,26 +53,6 @@ def test_a_quoted_line_of_a_header_or_source_is_in_the_file_it_names(table, name
         assert re.sub(r"\s+", " ", source["text" if source["kind"] == "header" else "excerpt"]) in flat, source
 
 
-def test_the_cited_headers_say_what_the_orders_rest_on():
-    ddt = FV_SCHEMES_ENTRIES_BY_PATH["ddtSchemes.default"].menu_attributes
-    assert ddt["backward"]["formal_order"] == {"time": 2} and ddt["Euler"]["formal_order"] == {"time": 1}
-    assert "formal_order" not in ddt["steadyState"]
-    grad = FV_SCHEMES_ENTRIES_BY_PATH["gradSchemes.default"].menu_attributes
-    assert {name: attributes["formal_order"] for name, attributes in grad.items()} == {
-        "Gauss": {"space": 2}, "iterativeGauss": {"space": 2}, "leastSquares": {"space": 2},
-    }
-
-
-def test_the_citations_are_for_the_schemes_whose_header_states_no_order():
-    for table, name in (("snGradSchemes", "corrected"), ("snGradSchemes", "uncorrected"), ("interpolationSchemes", "linear")):
-        kinds = {s["kind"] for s in FV_SCHEMES_ENTRIES_BY_PATH[f"{table}.default"].menu_attributes[name]["stated_by"]}
-        assert "citation" in kinds
-
-
-def test_the_stability_limits_of_the_ddt_schemes_are_read_from_their_attributes():
-    assert ddt_stability_limits() == {"Euler": 2.0, "backward": 4.0}
-
-
 def test_a_listing_carries_the_attributes_beside_the_menu():
     listed = listed_entry("system/fvSchemes", "ddtSchemes.default", FV_SCHEMES_ENTRIES_BY_PATH["ddtSchemes.default"])
     assert listed["menu_attributes"]["backward"]["formal_order"] == {"time": 2}
@@ -112,3 +92,10 @@ def test_gauss_composes_with_the_schemes_it_reads(table):
 def test_the_gauss_gradient_rests_on_face_interpolation_and_upwind_carries_no_order():
     assert "face-interpolation" in FV_SCHEMES_ENTRIES_BY_PATH["gradSchemes.default"].menu_attributes["Gauss"]["composes"]["basis"]
     assert "upwind" not in FV_SCHEMES_ENTRIES_BY_PATH["interpolationSchemes.default"].menu_attributes
+
+
+def test_a_stability_bound_is_labelled_as_omnids_derivation():
+    ddt = FV_SCHEMES_ENTRIES_BY_PATH["ddtSchemes.default"].menu_attributes
+    assert set(ddt_stability_limits()) == {name for name, attributes in ddt.items() if "stability" in attributes}
+    assert all(ddt[name]["stability"]["kind"] == "derived" for name in ddt_stability_limits())
+

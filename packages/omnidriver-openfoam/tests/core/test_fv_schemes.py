@@ -82,7 +82,7 @@ def test_the_listing_is_empty_without_the_file_and_shows_menus_with_it(tmp_path)
 def test_a_composite_value_is_judged_through_the_table_of_each_part():
     assert _notes(laplacianSchemes={"default": ("Gauss", "linear", "corrected")}) == []
     (note,) = _notes(laplacianSchemes={"default": ("Gauss", "lnear", "corrected")})
-    assert note.code == "openfoam_scheme_uncatalogued" and note.level == "info"
+    assert note.code == "openfoam_scheme_uncatalogued" and note.level == "warning"
     assert note.detail["table"] == "interpolationSchemes" and note.detail["value"] == "lnear"
     assert "did you mean 'linear'" in note.message and "limitedLinear" in note.message
     (note,) = _notes(laplacianSchemes={"default": ("Gauss", "linear", "correcetd")})

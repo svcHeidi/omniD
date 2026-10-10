@@ -84,8 +84,15 @@ SOLUTION_ALGORITHM: Final = {
                 _DOMAIN + "myocardiumDomain.C", "explicit stability limit",
                 "applyModelTimeControls caps deltaT at suggestExplicitDeltaT(maxCo) when the explicit algorithm is used",
             ),
+            _source(
+                _DOMAIN + "myocardiumDomain.C", "setDeltaT_ = false;",
+                "applyModelTimeControls clears setDeltaT_ on its first call, so the cap is applied once",
+            ),
         ],
-        stability={"deltaT": "capped at suggestExplicitDeltaT(maxCo); maxCo is read from controlDict, default 0.1"},
+        stability={
+            "deltaT": "capped once, at the first time controls are applied, at suggestExplicitDeltaT(maxCo); later steps are "
+            "not capped; maxCo is read from controlDict, default 0.1",
+        },
     ),
     "implicit": _claim(
         [
@@ -100,10 +107,10 @@ SOLUTION_ALGORITHM: Final = {
 
 BATCHED_INTEGRATOR: Final = {
     "euler": _claim(
-        [_source(
-            _BATCHED, 'kernel.useExplicitEuler = integratorName_ == "euler";',
-            "the integrator is the explicit Euler method; its first order is the method's, not a statement in the source",
-        )],
+        [
+            _source(_BATCHED, 'kernel.useExplicitEuler = integratorName_ == "euler";', "the integrator is the explicit Euler method"),
+            {"kind": "method", "claim": "formal_order", "reading": "the first order is the explicit Euler method's own; the source states no order"},
+        ],
         formal_order={"time": 1},
     ),
     "rushLarsen": _claim(
