@@ -104,10 +104,20 @@ routine for any solver.
 4. **A record of each run:** the generated code and its digest go into the
    run's provenance.
 
-**Progression (owner):** verification starts from hexahedral elements, the
-configuration with the fewest possible error sources, and builds up from there
-(more dimensions, then other element types). That is why cardiacFOAM ships
-three manufactured problems.
+**The procedure, which is the verifier's skill (owner):**
+- The verifier verifies. Its core goal is to *settle* orders, meaning to
+  establish by running what a solver's numerics actually deliver. It does not
+  fix solvers, although its findings may point at what needs fixing.
+- It works from the simple to the complex:
+  1. the FDA / Pathmanathan & Gray problems on **hexahedral** elements, the
+     configuration with the fewest possible error sources;
+  2. the same problems on **tetrahedra**;
+  3. more complex manufactured problems.
+
+  A step is only taken once the previous one is settled. That is why
+  cardiacFOAM ships three manufactured problems.
+- An order a catalogue records as stated by the solver's authors becomes
+  settled only when the verifier's runs confirm it.
 
 **Solver knowledge grows with the tests.** What is built now is the
 architecture: a declared place for each kind of knowledge, filled solver by
