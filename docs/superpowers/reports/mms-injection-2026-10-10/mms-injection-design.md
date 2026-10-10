@@ -2,7 +2,7 @@
 
 **Status:** proposal for the owner, 2026-10-10. No omniD code and no repository
 was changed. Probes ran in `~/omnid-runs/2026-10-10/mms-injection/`.
-Feeds paper 1 (`docs/superpowers/specs/2026-10-10-publication-plan.md`) and the
+Feeds the
 verifier package (`2026-10-10-benchmark-verifier-builder-design.md`).
 
 **cardiacFOAM source read:** git objects only. `HEAD` = `origin/main` =
@@ -50,7 +50,7 @@ monodomain and bidomain (§6, E9).
 | **P&G bidomain with bath** 1D/2D/3D. `manufacturedFDABathBidomainVerifier`, `bathBidomainFDAManufactured` (`manufacturedBathBidomain`) | bidomain + bath | `V = sqrt(1+t)cos(pi x) - alpha x/s_e`, `u3 = -alpha x/s_e` (a spatial constant state), piecewise phiE in bath [-1,0] and [1,2]; `sigma_bath = s_e/2`; `alpha = 0.01` | cell model + **boundary current** (`fdaBathVariant electrodePair`: flux on xMin/xMax) or a **ground** Dirichlet patch (`groundElectrode`) | [-1,2] with tissue in [0,1]; the solution varies in x only, while u1 and u2 depend on y and z through G | 1D/2D/3D x N = 10..80; electrodePair and groundElectrode sweeps; tet, coupling, gradient-scheme, temporal studies |
 | owner's: anisotropic monodomain (`manufacturedAnisotropicMonodomainVerifier`) | monodomain, full SPD tensor with off-diagonal terms | `V = sqrt(1+t) sin^2(pi x) sin^2(pi y) sin^2(pi z)` | **volumetric source** `sqrt(1+t)(Beta F - div(K grad F))` at `t0 + dt` | unit cube (checked), zero flux | the 3D rows of the monodomain sweep |
 | owner's: conormal monodomain / unequal-conormal bidomain (`insulatedWall`) | mono/bido, `sealedWallTrace conormal` | `F = Re[v(x) e^{i(wy y + wz z)}]`, quadratic `v` chosen so `n.G.grad F = 0` at x = 0 and 1 | volumetric source | conormal-insulated x-walls, periodic in y and z | tet studies |
-| owner's: pseudo-ECG, eikonal, eikonal-ECG, 1D-3D Purkinje coupling, graph, electromechanics | n/a for paper 1 | Gauss-Legendre reference integrals, etc. | in-solver verifiers | | various |
+| owner's: pseudo-ECG, eikonal, eikonal-ECG, 1D-3D Purkinje coupling, graph, electromechanics | not covered | Gauss-Legendre reference integrals, etc. | in-solver verifiers | | various |
 
 **Against the nine:** all nine P&G/FDA problems (monodomain, bidomain and bath,
 each in 1D, 2D and 3D) are implemented and swept in cardiacFOAM. None is
@@ -60,7 +60,7 @@ missing. The owner added four kinds beyond them:
 - unequal-anisotropy conormal bidomain;
 - non-EP problems (ECG, eikonal, coupling, electromechanics).
 
-Paper 1's "rotated-tensor case that exercises the wall condition" is one of the
+The rotated-tensor case that exercises the wall condition is one of the
 owner's problems, not P&G's. It needs a source term, which the nine do not.
 
 **Finding: a literal restates a relation.** `Beta` is hard-coded as
@@ -244,7 +244,7 @@ and `u3 = "-alpha*x/sigma_e_xx"` as a nodal parameter. Its boundary kinds are
 - **The owner's source-bearing problems carry a time-level choice.**
   cardiacFOAM evaluates the source at `t0 + dt`. A generator must evaluate it
   where its scheme expects it; a mismatch costs O(dt).
-- **Limits to state in the paper:**
+- **Limits:**
   - the manufactured cell model is not excitable, so there are no fronts;
   - Rush-Larsen gate integrators and lookup tables are not exercised (EasyML
     chose `rk4` here);
@@ -298,14 +298,14 @@ at N = 80 (1.72e-4 and 1.76e-4).
    an expression extractor; the gates would stay the same.
 2. **Beta or sigma primary?** Beta reads as the round number. Should sigma be
    derived from it, and should the bidomain tutorial's sigma move to 9 digits?
-3. **Your extensions** (anisotropic, conormal): are they in paper 1? The
+3. **Your extensions** (anisotropic, conormal): are they in scope? The
    rotated-tensor case needs a source and, for conormal, periodic y and z. I
    have not checked periodic BCs in openCARP and MonoAlg3D.
-4. **Bath on openCARP:** for the paper's FE side, should it use the
+4. **Bath on openCARP:** for the FE side, should it use the
    groundElectrode variant (a Dirichlet ground stimulus, simpler) or
    electrodePair?
-5. **Paper framing:** bidomain and bath can be cross-discretisation only between
+5. **Scope:** bidomain and bath can be cross-discretisation only between
    openCARP (FE) and cardiacFOAM (FV), and monodomain across all four. Is that
    acceptable?
-6. **The P&G PDF** should be read once against the data before submission. Here
+6. **The P&G PDF** should be read once against the data. Here
    the formulas trace through your code only.

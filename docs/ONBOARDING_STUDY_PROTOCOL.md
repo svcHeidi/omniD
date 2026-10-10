@@ -23,7 +23,7 @@ The resulting plan binds those declarations to staged inputs and execution
 evidence.  [The builder evidence contract](BUILDER_AGENT_EVIDENCE_CONTRACT.md)
 defines how source access strengthens, but never gates, those declarations.
 
-The paper must not claim that arbitrary OpenFOAM solvers are automatically
+The study does not claim that arbitrary OpenFOAM solvers are automatically
 understood, that every dictionary key is safely mutable, or that workflow
 completion establishes scientific validity.
 
