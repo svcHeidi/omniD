@@ -1007,7 +1007,8 @@ def _evaluate_pvj_stability(
     try:
         dt = _scalar(FoamFile(case_root / "system" / "controlDict")["deltaT"])
         ddt = FoamFile(case_root / "system" / "fvSchemes")["ddtSchemes"]
-        scheme = str(ddt.get("ddt(Vm)", ddt["default"]))
+        written = ddt.get("ddt(Vm)", ddt["default"])
+        scheme = str(written.split()[0] if isinstance(written, str) else written[0] if isinstance(written, (tuple, list)) else written)
     except (OSError, ValueError, KeyError):
         return []
     chi, cm = _scalar(context.get("chi")), _scalar(context.get("cm"))
