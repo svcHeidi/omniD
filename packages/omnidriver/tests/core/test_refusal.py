@@ -24,36 +24,71 @@ def test_a_catch_all_reports_a_crash_as_internal_error_and_a_refusal_as_its_own(
     assert caught_code(ValueError("a plugin's refusal")) == "unclassified"
 
 
-def test_every_code_the_source_names_is_in_the_vocabulary():
-    """Each code literal a refusal is raised or printed with, in every package, is one :data:`CODES` lists."""
+def _source_trees():
     import ast
     from pathlib import Path
 
     packages = Path(__file__).resolve().parents[3]
-    named = set()
-    for path in packages.glob("*/src/**/*.py"):
-        for node in ast.walk(ast.parse(path.read_text())):
-            if isinstance(node, ast.Call) and _callee(node) in _REFUSING:
-                named |= {
-                    keyword.value.value for keyword in node.keywords
-                    if keyword.arg == "code" and isinstance(keyword.value, ast.Constant)
-                }
-            if isinstance(node, ast.ClassDef):
-                named |= {
-                    item.value.value for item in node.body
-                    if isinstance(item, ast.Assign) and [t.id for t in item.targets if isinstance(t, ast.Name)] == ["code"]
-                    and isinstance(item.value, ast.Constant) and isinstance(item.value.value, str)
-                }
-    assert named and named <= set(CODES), sorted(named - set(CODES))
-
-
-_REFUSING = {"failure", "TutorialRecordError", "Refusal", "update", "print_refusal"}
+    return [(path, ast.parse(path.read_text())) for path in packages.glob("*/src/**/*.py")]
 
 
 def _callee(node):
     import ast
 
-    return node.func.id if isinstance(node.func, ast.Name) else node.func.attr if isinstance(node.func, ast.Attribute) else None
+    return node.func.id if isinstance(node.func, ast.Name) else node.func.attr if isinstance(node.func, ast.Attribute) else ""
+
+
+def _named_codes():
+    """Every code a call passes as ``code=`` to any call but a diagnostic's, a refusal-shaped dict literal (``"status": "failed"``) holds under ``"code"``, or a class declares as ``code``."""
+    import ast
+
+    named = set()
+    for _path, tree in _source_trees():
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and not _callee(node).endswith(("Diagnostic", "diagnostic")):
+                named |= {
+                    keyword.value.value for keyword in node.keywords
+                    if keyword.arg == "code" and isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str)
+                }
+            elif isinstance(node, ast.Dict) and any(
+                isinstance(key, ast.Constant) and key.value == "status"
+                and isinstance(value, ast.Constant) and value.value in ("failed", "blocked")
+                for key, value in zip(node.keys, node.values)
+            ):
+                named |= {
+                    value.value for key, value in zip(node.keys, node.values)
+                    if isinstance(key, ast.Constant) and key.value == "code"
+                    and isinstance(value, ast.Constant) and isinstance(value.value, str)
+                }
+            elif isinstance(node, ast.ClassDef):
+                named |= {
+                    item.value.value for item in node.body
+                    if isinstance(item, ast.Assign) and [t.id for t in item.targets if isinstance(t, ast.Name)] == ["code"]
+                    and isinstance(item.value, ast.Constant) and isinstance(item.value.value, str)
+                }
+    return named
+
+
+def test_every_code_the_source_names_is_in_the_vocabulary():
+    named = _named_codes()
+    assert named and named <= set(CODES), sorted(named - set(CODES))
+
+
+def test_every_code_in_the_vocabulary_is_emitted_somewhere_in_the_source():
+    import ast
+
+    literals = set()
+    for _path, tree in _source_trees():
+        vocabulary = {
+            id(inner) for node in ast.walk(tree)
+            if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", None) == "CODES"
+            for inner in ast.walk(node)
+        }
+        literals |= {
+            node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in vocabulary
+        }
+    assert [code for code in CODES if code not in literals] == []
 
 
 def test_the_agent_guide_lists_every_code():
