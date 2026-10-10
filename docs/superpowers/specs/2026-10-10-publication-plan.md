@@ -1,8 +1,8 @@
 # Publication plan: two papers from omniD
 
 **Status:** plan for the owner's review, 2026-10-10. Nothing runs until it is
-approved. Four literature searches (2026-10-10) back it. Their citations are
-below; claims marked "not found" rest on one search pass and are rechecked
+approved. Four literature searches (2026-10-10) back it, kept in
+`docs/superpowers/reports/literature-2026-10-10/`. Their citations are below; claims marked "not found" rest on one search pass and are rechecked
 before submission.
 
 ## The two papers
