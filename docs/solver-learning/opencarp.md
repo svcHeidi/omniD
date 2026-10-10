@@ -386,3 +386,43 @@ v18.1, installed source under `share/openCARP`.
 **Decision.** Use `Hx` (and `Qd`, `Hx`) for any verification and never a
 `Ln` mesh for a result that depends on the end nodes; whether to report the
 defect upstream is the owner's call (`docs/superpowers/ROADMAP.md` §5).
+
+## O. The time order, FDA manufactured monodomain (2026-10-10)
+
+The temporal ladder of `fda_monodomain` (`refinement.temporal`: N = 640 fixed,
+dt 0.025 halved to 0.0015625, the owner's paper matrix), against cardiacFOAM
+(`cardiacfoam.md` AC). The generated model, mapping and meshes are N's hex
+run's, unchanged (`cell_model_verdict` passed; the `.model`, `.cc` and `.h`
+are byte-identical to it); the cell model integrates with `.method(rk4)`, so
+the ODE is not what limits. 1D on the one-cell-thick `Hx` strip (N), 2D on
+`Qd`. Runs, generator and digests under
+`<runs>/2026-10-10/fda-temporal/opencarp/` (`manifest.json`, `table_1D.json`,
+`table_2D.json`); errors through the verifier's shared norm at steps*dt.
+
+**Stated by the source** (v18.1, `physics/electrics.cc`): `parab_solve` 1 is
+Crank-Nicolson (θ = 0.5); 2 is labelled "2nd order dt", `solve_O2dT`:
+(3/2 M − K/2) V^{n+1} = (2M + K/2) V^n − (M/2) V^{n−1}. `operator_splitting 1`
+(default) runs `ion.compute_step()` (limpet's `compute_ionic_current`:
+Vm += −dt·Iion) and then the parabolic solve: sequential, Lie, order 1.
+`operator_splitting 0` sets `extUpdateVm` (`ionics.cc`), so limpet leaves Vm
+alone and the parabolic solve must take Iion from `Irhs`.
+
+**Read further, then run:**
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| O1 | read `solve_O2dT` and `parabolic_solver::init` | `old_vm` (V^{n−1}) is created by `init_vector`, which sets 0 (`petsc_vector::init`), and is first assigned inside `solve_O2dT` after use | the first O2dT step takes V^{−1} = 0. The BDF2 recurrence then keeps a constant offset of V^0/2 (roots 1 and 1/3): O(1), whatever dt |
+| O2 | one step of dt = 0.025 from the exact V^0, fit V^1 = a·V^0 (`probes/onestep.json`) | O2dT: a = 1.3525; Crank-Nicolson: 1.012432; exact V(dt)/V^0 = 1.012423 | O1 confirmed: about 4/3 of the exact growth (4/3 × 1.012423 = 1.3499; the stiffness terms make up the rest) |
+| O3 | read `stimulate_intracellular` and the solves | `Irhs` = M·dt·(IIon − I_stim) is filled only inside the loop over active `I_tm` stimuli; `solve_O2dT` never reads `Irhs` | with `operator_splitting 0` and no stimulus, Iion never reaches Vm; with O2dT it never does |
+| O4 | config (a) `operator_splitting 1`, `parab_solve 1`, 1D and 2D | 1D L2(V) 2.122e-5, 1.047e-5, 5.214e-6, 2.623e-6, 1.333e-6, orders 1.02, 1.01, 0.99, 0.98 (LS 1.00); 2D 2.211e-3 to 1.397e-4 (LS 1.00). Against the finest dt: 1D 1.02, 2D 0.99 | **settled: order 1**, the Lie splitting's. The 2D error is about 100 times the 1D at each dt |
+| O5 | config (b) `operator_splitting 1`, `parab_solve 2` | L2(V) 1D 0.440 to 0.454, 2D 0.382 to 0.403, no convergence; against the finest dt 0.97 (1D), 0.94 (2D) | does not converge to the manufactured solution: O1's start. The dt-dependent part falls at order 1 |
+| O6 | config (c) `operator_splitting 0`, `parab_solve 2` | 1D 0.252 to 0.248, 2D 0.080 to 0.069; against the finest dt 1.00 (1D), 1.03 (2D) | does not converge: O1 and O3 together. No Iion enters, so the dt-dependent part is O2dT on diffusion alone, order 1, not 2; the zero start and the averaged diffusion (BDF2 at t^{n+1}, K at t^{n+1/2}) are not separated by these runs |
+| O7 | probe: `operator_splitting 0`, `parab_solve 1`, no stimulus; then with a zero-strength `I_tm` stimulus over the whole mesh for the whole run (`stim[0].crct.type 0`, `pulse.strength 0`, block -10..1010 µm) | without: L2(V) 0.0930 at every dt (Iion absent). With: 2.448e-4 to 1.535e-5, order 1.00; O2dT with the same stimulus is identical to O6 | O3 confirmed by run: Iion reaches the unsplit solve only through a stimulus, explicitly at t^n (order 1), and never with O2dT |
+| O8 | the same three configurations on the native study's ladder (dt 0.001121075 halved three times; `shipped_ladder/`) | (a) 9.7e-7 to 1.7e-7, order 0.8 against the exact and 0.9 against the finest dt, the spatial and float32 floor (about 6e-8) close; (b) 0.454, (c) 0.248, flat | the same verdicts on a 20 times finer dt |
+
+**Settled:** openCARP's default time step (Lie splitting, Crank-Nicolson) is
+order 1 on this problem in 1D and 2D. `parab_solve 2` does not converge to it,
+with or without splitting; `operator_splitting 0` drops the ionic current
+unless a transmembrane stimulus is active. **Not settled:** whether O2dT with a
+correct start would reach order 2; the runs show only order 1 for its
+dt-dependent part. Whether to report O1 and O3 upstream is the owner's call.
