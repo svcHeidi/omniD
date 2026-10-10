@@ -20,13 +20,28 @@ def exact_values(problem: Mapping[str, Any], dimension: int, field: str, time: f
         raise ProblemError(f"{problem['id']!r} has no dimension {dimension}")
     if field not in problem["exact"]:
         raise ProblemError(f"{problem['id']!r} has no exact field {field!r} ({sorted(problem['exact'])})")
+    return _evaluate(problem, dimension, problem["exact"][field], time, points)
+
+
+def source_values(problem: Mapping[str, Any], dimension: int, time: float,
+                  points: Iterable[Sequence[float]]) -> list[float]:
+    """The problem's ``source`` (the right-hand side of its PDE) in ``dimension`` at ``time``, at each point, for a
+    solver that must be given it."""
+    if dimension not in problem["dimensions"]:
+        raise ProblemError(f"{problem['id']!r} has no dimension {dimension}")
+    return _evaluate(problem, dimension, problem["source"]["expression"], time, points)
+
+
+def _evaluate(problem: Mapping[str, Any], dimension: int, expression: str, time: float,
+              points: Iterable[Sequence[float]]) -> list[float]:
     key = str(dimension)
     scope: dict[str, Any] = {**_MATH, **problem["parameters"], TIME: time}
     for name, entry in problem["derived"].items():
         scope[name] = entry["native"][key] if entry["use"] == "native" else _eval(entry["expression"][key], scope)
+    target = compile(expression, "expression", "eval")
+    # A field the expression does not name is not evaluated: a source field can cost far more than the unknown's.
     fields = {name: compile(by_dimension[key], f"fields.{name}", "eval")
-              for name, by_dimension in problem["fields"].items()}
-    target = compile(problem["exact"][field], f"exact.{field}", "eval")
+              for name, by_dimension in problem["fields"].items() if name in target.co_names}
     axes = SPACE[:dimension]
     values = []
     for point in points:

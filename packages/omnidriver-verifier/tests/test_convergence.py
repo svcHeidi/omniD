@@ -7,7 +7,7 @@ import pytest
 
 from omnidriver.verifier.convergence import (
     comparison_table, error_norms, exact_values, floor_contaminated, observed_orders,
-    orders_against_a_finer_level, temporal_table,
+    orders_against_a_finer_level, source_values, temporal_table,
 )
 from omnidriver.verifier.problem import ProblemError, load_problem
 
@@ -364,3 +364,46 @@ def test_a_declared_reference_dt_that_is_the_ladders_finest_is_accepted():
     result = _recorded(problem, CF_SBDF2_BACKWARD_2D, "finest_dt", dimension=2, reference_dt=0.0015625)
     (row,) = temporal_table(problem, [result])["rows"]
     assert row["reference_dt"] == 0.0015625
+
+
+def test_the_declared_source_is_evaluated_from_the_problems_expression():
+    anisotropic = load_problem("anisotropic_monodomain")
+    x, y, z, t = 0.3, 0.4, 0.5, 0.2
+    p = anisotropic["parameters"]
+    s = [math.sin(math.pi * v) ** 2 for v in (x, y, z)]
+    d = [math.pi * math.sin(2 * math.pi * v) for v in (x, y, z)]
+    dd = [2 * math.pi**2 * math.cos(2 * math.pi * v) for v in (x, y, z)]
+    divergence = (p["sigma_xx"] * dd[0] * s[1] * s[2] + p["sigma_yy"] * s[0] * dd[1] * s[2]
+                  + p["sigma_zz"] * s[0] * s[1] * dd[2] + 2 * p["sigma_xy"] * d[0] * d[1] * s[2]
+                  + 2 * p["sigma_xz"] * d[0] * s[1] * d[2] + 2 * p["sigma_yz"] * s[0] * d[1] * d[2])
+    expected = math.sqrt(1 + t) * (p["Beta"] * s[0] * s[1] * s[2] - divergence)
+    assert source_values(anisotropic, 3, t, [(x, y, z)]) == pytest.approx([expected], rel=1e-14)
+    assert source_values(load_problem("fda_monodomain"), 2, t, [(x, y)]) == [0]
+
+
+def test_a_source_in_a_dimension_the_problem_lacks_is_refused():
+    with pytest.raises(ProblemError):
+        source_values(load_problem("anisotropic_monodomain"), 2, 0.0, [(0.5, 0.5)])
+
+
+def test_the_anisotropic_ladder_is_three_dimensional_only():
+    problem = load_problem("anisotropic_monodomain")
+    ladder = problem["refinement"]["hex"]
+    levels = [{"dimension": 3, "cells_per_axis": n, "dt": dt, "steps": steps,
+               "errors": {"V": {"L1": e, "L2": e, "Linf": e}}}
+              for n, dt, steps, e in zip(ladder["cells_per_axis"], ladder["dt"], ladder["steps"],
+                                         [1e-2, 2.5e-3, 6.25e-4, 1.5625e-4])]
+    (row,) = comparison_table(problem, [{"solver": "toy", "problem": "anisotropic_monodomain", "mesh": "hex",
+                                         "levels": levels}])["rows"]
+    assert row["dimension"] == 3 and row["least_squares_order"]["V"]["L2"] == pytest.approx(2.0, abs=1e-3)
+    with pytest.raises(ProblemError):
+        comparison_table(problem, [{"solver": "toy", "problem": "anisotropic_monodomain", "mesh": "hex",
+                                    "levels": [{**levels[0], "dimension": 2}]}])
+
+
+def test_a_field_the_expression_does_not_name_is_not_evaluated():
+    problem = load_problem("anisotropic_monodomain")
+    problem["fields"]["LF"]["3"] = "1/0"
+    assert exact_values(problem, 3, "V", 0.0, [(0.5, 0.5, 0.5)]) == pytest.approx([1.0])
+    with pytest.raises(ZeroDivisionError):
+        source_values(problem, 3, 0.0, [(0.5, 0.5, 0.5)])

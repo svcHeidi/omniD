@@ -7,16 +7,17 @@ from importlib.resources import files
 import pytest
 
 from omnidriver.core.refusal import failure
-from omnidriver.verifier.problem import ProblemError, load_problem, problem_ids, validate_problem
+from omnidriver.verifier.problem import ProblemError, load_problem, problem_ids, tensor_layout, validate_problem
 
 
 def _shipped() -> dict:
     return tomllib.loads(files("omnidriver.verifier").joinpath("problems/fda_monodomain.toml").read_text())
 
 
-def test_the_library_holds_the_fda_monodomain_problem():
-    assert problem_ids() == ["fda_monodomain"]
-    assert load_problem("fda_monodomain")["id"] == "fda_monodomain"
+def test_the_library_holds_the_fda_and_the_anisotropic_monodomain_problems():
+    assert problem_ids() == ["anisotropic_monodomain", "fda_monodomain"]
+    for problem_id in problem_ids():
+        assert load_problem(problem_id)["id"] == problem_id
 
 
 def test_an_unknown_id_is_refused_by_name():
@@ -119,9 +120,10 @@ def test_a_diagonal_tensor_names_parameters():
     assert "pde.tensors.sigma" in _refused(problem)
 
 
+@pytest.mark.parametrize("problem_id", ["fda_monodomain", "anisotropic_monodomain"])
 @pytest.mark.parametrize("mesh", ["hex", "tet", "temporal"])
-def test_each_level_is_judged_at_its_report_step(mesh):
-    problem = load_problem("fda_monodomain")
+def test_each_level_is_judged_at_its_report_step(problem_id, mesh):
+    problem = load_problem(problem_id)
     ladder = problem["refinement"][mesh]
     for steps, dt in zip(ladder["steps"], ladder["dt"]):
         assert steps * dt + dt / 2 >= problem["time"]["end"] > (steps - 1) * dt + dt / 2
@@ -189,3 +191,27 @@ def test_a_fixed_capacitance_mapping_that_maps_no_current_or_a_stray_name_is_ref
     problem = _shipped()
     problem["units"]["fixed_capacitance"]["maps"]["chi"] = "chi*Cm/C_s"
     assert "C_s" in _refused(problem)
+
+
+def test_a_symmetric_tensor_names_the_six_upper_entries_by_rows():
+    problem = load_problem("anisotropic_monodomain")
+    names = problem["pde"]["tensors"]["sigma"]["symmetric"]
+    assert names == ["sigma_xx", "sigma_xy", "sigma_xz", "sigma_yy", "sigma_yz", "sigma_zz"]
+    assert tensor_layout(problem["pde"]["tensors"]["sigma"], 3) == [
+        ["sigma_xx", "sigma_xy", "sigma_xz"], ["sigma_xy", "sigma_yy", "sigma_yz"], ["sigma_xz", "sigma_yz", "sigma_zz"]]
+    assert tensor_layout({"diagonal": ["a", "b"]}, 2) == [["a", None], [None, "b"]]
+
+
+@pytest.mark.parametrize(
+    "entries", [["sigma_xx", "sigma_xy", "sigma_xz", "sigma_yy", "sigma_yz"],
+                ["sigma_xx", "sigma_xy", "sigma_xz", "sigma_yy", "sigma_yz", "sigma_qq"]])
+def test_a_symmetric_tensor_of_the_wrong_size_or_naming_a_stranger_is_refused(entries):
+    problem = tomllib.loads(files("omnidriver.verifier").joinpath("problems/anisotropic_monodomain.toml").read_text())
+    problem["pde"]["tensors"]["sigma"]["symmetric"] = entries
+    assert "pde.tensors.sigma" in _refused(problem)
+
+
+def test_a_tensor_of_an_unknown_kind_is_refused():
+    problem = _shipped()
+    problem["pde"]["tensors"]["sigma"] = {"full": ["sigma_xx", "sigma_yy", "sigma_zz"]}
+    assert "pde.tensors.sigma" in _refused(problem)

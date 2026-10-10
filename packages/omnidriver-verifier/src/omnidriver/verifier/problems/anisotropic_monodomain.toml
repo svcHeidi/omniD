@@ -1,0 +1,136 @@
+# Transcribed from the owner's cardiacFOAM implementation; every block names its source under [provenance]. Paths
+# are relative to the cardiacFOAM repository at native.cardiacfoam.commit. The cell model, the auxiliary states and
+# the ladders are those of fda_monodomain; the spatial factor, the conductivity and the source are this problem's.
+
+id = "anisotropic_monodomain"
+title = "Monodomain with a fully populated conductivity tensor: the boundary-compatible sin^2 solution (cardiacFOAM)"
+equation = "monodomain"
+dimensions = [3]
+mesh_progression = ["hex", "tet"]
+# The auxiliary states u1, u2, u3 and the cell model are the FDA tool's; the factor F and the source are the owner's.
+cites = ["doi:10.1002/cnm.2615", "https://cdrh-rst.fda.gov/node/1576"]
+
+[native.cardiacfoam]
+commit = "277dfeb1933990da366d4b30dd9ef40b3e94c87c"
+ionic_model = "monodomainFDAManufactured"
+verification_model = "manufacturedAnisotropicMonodomainVerifier"
+record = "manufacturedMonodomainPseudoECG"
+
+[pde]
+equation = "chi*(Cm*Derivative(V, t) + Iion) - div(sigma*grad(V)) = source"
+unknown = "V"
+parameters = ["Cm", "chi", "sigma"]
+tensors = { sigma = { symmetric = ["sigma_xx", "sigma_xy", "sigma_xz", "sigma_yy", "sigma_yz", "sigma_zz"] } }
+
+[units]
+system = "dimensionless"
+system_reason = "the exact fields add t to 1 and x*y**2*z**3 to 1, so x, t and V are pure numbers; cardiacFOAM reads each value in the SI unit of its dimension set (native)"
+native = { x = "m", t = "s", V = "V", Cm = "F/m^2", chi = "1/m", sigma = "S/m" }
+Iion = "per_unit_membrane_area"
+Iion_reason = "derived: the PDE's term chi*Iion has the units of chi*Cm*V/t, so Iion has those of Cm*V/t, a current per unit membrane area; cardiacFOAM's domain field ionicCurrent = A[Iion]/Cm is per unit capacitance (V/s)"
+fixed_capacitance = { parameter = "Cm", value = "Cm_s", keeps = ["chi*Cm", "chi*Iion"], maps = { chi = "chi*Cm/Cm_s", Iion = "Iion*Cm_s/Cm" }, reason = "derived: a solver whose Cm is fixed at Cm_s keeps the products chi*Cm and chi*Iion the PDE uses, so it takes the mapped chi and Iion" }
+
+[domain]
+box = [[0, 1], [0, 1], [0, 1]]
+dimension_d_uses = "first_d_intervals"
+
+[time]
+start = 0
+end = 0.2
+report_when = "t + dt/2 >= end"
+
+# Beta is the ionic model's linear coefficient. Here the source absorbs it (source = Beta*V - div(sigma*grad(V))), so
+# any value gives the same exact solution; the value is the one the FDA ionic model sets in 3D, which the verifier
+# reads from the model.
+[parameters]
+Cm = 2
+chi = 3
+sigma_xx = 0.106875
+sigma_xy = -0.0084931
+sigma_xz = -0.022561
+sigma_yy = 0.116682
+sigma_yz = -0.0130256
+sigma_zz = 0.0398782
+Beta = -8.6
+
+[derived]
+
+# F has zero gradient on every face of the unit cube, so the flux condition holds for any constant tensor. LF is
+# div(sigma*grad(F)) from the analytic Hessian (no discrete operator): the three diagonal terms and the three
+# mixed second derivatives, each counted twice.
+[fields]
+F = { 3 = "sin(pi*x)**2*sin(pi*y)**2*sin(pi*z)**2" }
+G = { 3 = "1 + x*y**2*z**3" }
+LF = { 3 = "sigma_xx*2*pi**2*cos(2*pi*x)*sin(pi*y)**2*sin(pi*z)**2 + sigma_yy*sin(pi*x)**2*2*pi**2*cos(2*pi*y)*sin(pi*z)**2 + sigma_zz*sin(pi*x)**2*sin(pi*y)**2*2*pi**2*cos(2*pi*z) + 2*sigma_xy*pi*sin(2*pi*x)*pi*sin(2*pi*y)*sin(pi*z)**2 + 2*sigma_xz*pi*sin(2*pi*x)*sin(pi*y)**2*pi*sin(2*pi*z) + 2*sigma_yz*sin(pi*x)**2*pi*sin(2*pi*y)*pi*sin(2*pi*z)" }
+
+[exact]
+V = "sqrt(1 + t)*F"
+u1 = "(1 + t)*G + sqrt(1 + t)*F"
+u2 = "1/((1 + t)*sqrt(G))"
+u3 = "0"
+
+[cell_model]
+inputs = ["V"]
+states = ["u1", "u2", "u3"]
+parameters = ["Cm", "chi", "Beta"]
+shares_with_pde = ["Cm", "chi"]
+rates = { u1 = "(u1 + u3 - V)**2*u2**2 + (u1 + u3 - V)*u2**2*(V - u3)/2", u2 = "-(u1 + u3 - V)*u2**3", u3 = "0" }
+Iion = "-(Cm/2)*(u1 + u3 - V)*u2**2*(V - u3) + Beta*(V - u3)/chi"
+
+[source]
+expression = "sqrt(1 + t)*(Beta*F - LF)"
+
+[boundary]
+all_faces = "zero_normal_gradient"
+
+[initial]
+fields = "exact"
+time = "start"
+points = { cardiacfoam = "cell_centres", nodal = "nodes" }
+
+[refinement.hex]
+dimensions = [3]
+cells_per_axis = [10, 20, 40, 80]
+dt = [0.00892857, 0.00224215, 0.000560538, 0.000140174]
+steps = [22, 89, 357, 1427]
+dt_scales_as = "h**2"
+
+[refinement.tet]
+dimensions = [3]
+cells_per_axis = [10, 20, 40, 80]
+dt = [0.00892857, 0.00224215, 0.000560538, 0.000140174]
+steps = [22, 89, 357, 1427]
+dt_scales_as = "h**2"
+
+# The FDA matrix's design (fda_monodomain): the mesh fixed, dt halved at each level, to settle the time order apart
+# from the space order. The mesh is the third level of the hex ladder; the owner's 3D temporal row is N = 80.
+[refinement.temporal]
+mesh = "hex"
+dimensions = [3]
+cells_per_axis = { 3 = 40 }
+dt = [0.025, 0.0125, 0.00625, 0.003125, 0.0015625]
+steps = [8, 16, 32, 64, 128]
+
+[norms]
+fields = ["V", "u1", "u2"]
+kinds = ["L1", "L2", "Linf"]
+points = "cell_centres"
+weight = "cell_volume"
+normalised_by = "total_volume"
+at = "steps*dt"
+
+[provenance]
+pde = ["src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C", "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured.C"]
+units = ["tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties", "src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C", "src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C"]
+domain = ["tutorials/manufacturedSolutions/monodomainPseudoECG/system/blockMeshDict.3D", "src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainVerifier.C"]
+time = ["tutorials/manufacturedSolutions/monodomainPseudoECG/system/controlDict", "src/verificationModels/verificationUtils.H"]
+parameters = ["src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties"]
+derived = ["derived: Beta is a free parameter of this problem (the source absorbs it), so none is derived"]
+fields = ["src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainReference.H"]
+exact = ["src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainReference.H"]
+cell_model = ["src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H", "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured.C"]
+source = ["src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainReference.H"]
+boundary = ["src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties"]
+initial = ["src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainVerifier.C"]
+refinement = ["tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/sweep_tet_generic.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/box.geo.template", "derived: the temporal ladder is fda_monodomain's dt halving, on the N = 40 mesh (me, to keep a 3D case within the owner's skip of N = 160); steps from time.report_when and dt"]
+norms = ["src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainVerifier.C", "src/verificationModels/verificationUtils.H"]

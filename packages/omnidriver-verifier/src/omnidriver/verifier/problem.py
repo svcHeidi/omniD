@@ -23,7 +23,9 @@ UNIT_SYSTEMS = ("dimensionless",)
 #: What the cell model's current is per: the PDE form decides it.
 CURRENT_BASES = ("per_unit_membrane_area", "per_unit_capacitance")
 DIMENSION_RULES = ("first_d_intervals",)
-TENSOR_KINDS = ("diagonal",)
+#: How a tensor's entries are named: ``diagonal``, one parameter per axis; ``symmetric``, the upper triangle of the
+#: tensor by rows (3 x 3: xx, xy, xz, yy, yz, zz, the order of OpenFOAM's symmTensor).
+TENSOR_KINDS = ("diagonal", "symmetric")
 NORM_KINDS = ("L1", "L2", "Linf")
 NORM_WEIGHTS = ("cell_volume",)
 NORM_NORMALISATIONS = ("total_volume",)
@@ -103,6 +105,18 @@ def pde_sides(equation: str) -> tuple[str, str]:
     return lhs.strip(), rhs.strip()
 
 
+def tensor_layout(tensor: Mapping[str, Any], dimension: int) -> list[list[str | None]]:
+    """The leading ``dimension`` x ``dimension`` block of a ``pde.tensors`` entry, each cell the name of the
+    parameter that fills it, or None where the tensor is zero."""
+    (kind, entries), = tensor.items()
+    if kind == "diagonal":
+        return [[entries[i] if i == j else None for j in range(dimension)] for i in range(dimension)]
+    axes = {1: 1, 3: 2, 6: 3}[len(entries)]
+    upper = iter(entries)
+    filled = {(i, j): next(upper) for i in range(axes) for j in range(i, axes)}
+    return [[filled[min(i, j), max(i, j)] for j in range(dimension)] for i in range(dimension)]
+
+
 def validate_problem(problem: Mapping[str, Any]) -> None:
     """Refuse a definition with an unknown or missing key, an off-menu kind, a per-dimension map that misses a
     dimension, an expression that does not parse or names a symbol out of its scope, a declared name list that is
@@ -150,9 +164,11 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
         tensor = _table(f"pde.tensors.{name}", tensor)
         if len(tensor) != 1 or next(iter(tensor)) not in TENSOR_KINDS:
             raise ProblemError(f"pde.tensors.{name}: must be one of {list(TENSOR_KINDS)}")
-        entries = tensor["diagonal"]
-        if len(entries) < len(space) or any(entry not in parameters for entry in entries):
-            raise ProblemError(f"pde.tensors.{name}: {entries} is not one parameter per axis {list(space)}")
+        (kind, entries), = tensor.items()
+        wanted = len(space) if kind == "diagonal" else len(space) * (len(space) + 1) // 2
+        if not isinstance(entries, list) or len(entries) != wanted or any(e not in parameters for e in entries):
+            raise ProblemError(f"pde.tensors.{name}: {entries} is not the {wanted} parameters of a {kind} tensor "
+                               f"over {list(space)}")
     cell = problem["cell_model"]
     states = list(cell["states"])
     unknown = pde["unknown"]
@@ -178,7 +194,8 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
     rates = _table("cell_model.rates", cell["rates"])
     if set(rates) != set(states):
         raise ProblemError(f"cell_model.rates: names {sorted(rates)}, but the states are {states}")
-    cell_scope = {unknown, *states, *parameters, *derived}
+    # A cell model may name time: a solver with no source term carries a time-dependent one in its current.
+    cell_scope = {unknown, TIME, *states, *parameters, *derived}
     used = set()
     for name, text in rates.items():
         used |= _expression(f"cell_model.rates.{name}", text, cell_scope)

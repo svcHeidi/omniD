@@ -7,7 +7,7 @@ from typing import Any, Mapping
 
 from omnidriver.core.refusal import Refusal
 
-from .problem import CURRENT, FUNCTIONS, SOURCE, SPACE, TIME, ProblemError, pde_sides, validate_problem
+from .problem import CURRENT, FUNCTIONS, SOURCE, SPACE, TIME, ProblemError, pde_sides, tensor_layout, validate_problem
 
 
 # A mapped value is a ratio of the problem's decimals: equal to the given one up to the float's own rounding.
@@ -157,7 +157,8 @@ def _dimension(sympy: Any, problem: Mapping[str, Any], cell: Mapping[str, Any], 
         "grad": lambda field: sympy.Matrix([sympy.diff(field, x) for x in space]),
         "div": lambda vector: sum(sympy.diff(vector[i], x) for i, x in enumerate(space)),
     }
-    tensors = {name: sympy.diag(*(pde_names[entry] for entry in tensor["diagonal"][:d]))
+    tensors = {name: sympy.Matrix([[pde_names[entry] if entry else 0 for entry in row]
+                                   for row in tensor_layout(tensor, d)])
                for name, tensor in pde["tensors"].items()}
     lhs, _ = pde_sides(pde["equation"])
     implied_source = parse(lhs, {**pde_names, **operators, **tensors, unknown: exact[unknown],
@@ -173,7 +174,8 @@ def _dimension(sympy: Any, problem: Mapping[str, Any], cell: Mapping[str, Any], 
     }
     start = sympy.Rational(str(problem["time"]["start"]))
     parameters = {}
-    pde_scalars = {entry for tensor in pde["tensors"].values() for entry in tensor["diagonal"][:d]}
+    pde_scalars = {entry for tensor in pde["tensors"].values() for row in tensor_layout(tensor, d)
+                   for entry in row if entry}
     pde_scalars |= {name for name in pde["parameters"] if name in problem["parameters"]}
     for name in sorted(pde_scalars | set(own)):
         report = {"problem": problem["parameters"][name]}

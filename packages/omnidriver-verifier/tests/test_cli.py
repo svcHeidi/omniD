@@ -17,8 +17,8 @@ def _run(capsys, *argv: str) -> tuple[int, dict]:
 def test_problems_lists_each_problem(capsys):
     code, answer = _run(capsys, "problems")
     assert code == 0 and answer["status"] == "ok"
-    assert [sorted(entry) for entry in answer["problems"]] == [["dimensions", "id", "mesh_progression", "title"]]
-    assert [entry["id"] for entry in answer["problems"]] == ["fda_monodomain"]
+    assert {tuple(sorted(entry)) for entry in answer["problems"]} == {("dimensions", "id", "mesh_progression", "title")}
+    assert [entry["id"] for entry in answer["problems"]] == ["anisotropic_monodomain", "fda_monodomain"]
 
 
 def test_show_prints_the_definition(capsys):
@@ -85,3 +85,10 @@ def test_compare_refuses_an_unreadable_results_file(capsys, tmp_path):
     path.write_text("{")
     code, answer = _run(capsys, "compare", "fda_monodomain", "--results", str(path))
     assert code == 1 and answer["code"] == "results_invalid" and str(path) in answer["error"]
+
+
+def test_residual_prints_the_anisotropic_verdict(capsys):
+    pytest.importorskip("sympy")
+    code, answer = _run(capsys, "residual", "anisotropic_monodomain")
+    assert code == 0 and answer["status"] == "passed"
+    assert [entry["dimension"] for entry in answer["dimensions"]] == [3]

@@ -1,6 +1,7 @@
 """Gate 1: the exact fields solve the problem's own equations, with the source it declares, for every dimension."""
 from __future__ import annotations
 
+import copy
 import sys
 
 import pytest
@@ -213,3 +214,82 @@ def test_the_mapping_is_read_from_the_problem_data():
     for entry in verdict["dimensions"]:
         assert entry["fixed_capacitance"]["status"] == "failed"
         assert entry["parameters"]["chi"]["mapped"] == 6
+
+
+def test_the_anisotropic_problem_has_zero_residual_with_a_nonzero_source():
+    verdict = residual_verdict(load_problem("anisotropic_monodomain"))
+    assert verdict["status"] == "passed"
+    (entry,) = verdict["dimensions"]
+    assert entry["residuals"] == {"pde": "0", "u1": "0", "u2": "0", "u3": "0"}
+    assert entry["source"]["derived"] != "0" and entry["source"]["declared"] != "0"
+    assert set(entry["boundary"].values()) == {"0"} and len(entry["boundary"]) == 6
+    assert {name for name in entry["parameters"]} >= {"sigma_xy", "sigma_xz", "sigma_yz"}
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("2*sigma_xy*pi*sin(2*pi*x)", "sigma_xy*pi*sin(2*pi*x)"),
+        ("2*sigma_xz*pi*sin(2*pi*x)", "2*sigma_yz*pi*sin(2*pi*x)"),
+        ("sigma_yy*sin(pi*x)**2*2*pi**2*cos(2*pi*y)", "sigma_yy*sin(pi*x)**2*pi**2*cos(2*pi*y)"),
+    ],
+)
+def test_a_transcription_error_in_the_hessian_shows_as_a_source_difference(old, new):
+    problem = load_problem("anisotropic_monodomain")
+    text = problem["fields"]["LF"]["3"]
+    assert old in text
+    problem["fields"]["LF"]["3"] = text.replace(old, new, 1)
+    verdict = residual_verdict(problem)
+    assert verdict["status"] == "failed"
+    assert verdict["dimensions"][0]["residuals"]["pde"] != "0"
+    assert {key: value for key, value in verdict["dimensions"][0]["residuals"].items() if key != "pde"} == {
+        "u1": "0", "u2": "0", "u3": "0"}
+
+
+def test_the_ionic_coefficient_beta_is_free_because_the_source_absorbs_it():
+    problem = load_problem("anisotropic_monodomain")
+    problem["parameters"]["Beta"] = -5.9
+    assert residual_verdict(problem)["status"] == "passed"
+
+
+def test_a_source_that_leaves_out_the_ionic_coefficient_term_fails():
+    problem = load_problem("anisotropic_monodomain")
+    problem["source"]["expression"] = "sqrt(1 + t)*(-LF)"
+    assert residual_verdict(problem)["status"] == "failed"
+
+
+def test_a_face_with_flux_fails_the_anisotropic_boundary():
+    problem = load_problem("anisotropic_monodomain")
+    problem["fields"]["F"]["3"] = "sin(pi*x)**2*sin(pi*y)**2*sin(pi*z)"
+    verdict = residual_verdict(problem)
+    assert verdict["dimensions"][0]["boundary"]["z=0"] != "0"
+
+
+def _source_in_the_current(problem: dict, carried: str) -> tuple[dict, dict]:
+    """A solver with no source term, as an injection would carry it: the source is a per-node amplitude state Sa
+    (Beta*F - LF, constant in time) times sqrt(1 + t) in a current mapped to Cm_s = 1, judged against the problem with
+    its source moved into the cell model."""
+    candidate = copy.deepcopy(problem)
+    candidate["cell_model"]["states"] = [*problem["cell_model"]["states"], "Sa"]
+    candidate["cell_model"]["rates"]["Sa"] = "0"
+    candidate["exact"]["Sa"] = "Beta*F - LF"
+    candidate["source"]["expression"] = "0"
+    cell = problem["cell_model"]
+    model = {"rates": {**cell["rates"], "Sa": "0"}, "Iion": f"({cell['Iion']})*1/Cm - {carried}",
+             "parameters": {name: problem["parameters"][name] for name in cell["parameters"]}}
+    return candidate, model
+
+
+def test_a_source_carried_in_the_current_as_amplitude_times_time_factor_passes():
+    candidate, model = _source_in_the_current(load_problem("anisotropic_monodomain"), "Sa*sqrt(t + 1)/(chi*Cm/1)")
+    verdict = cell_model_verdict(candidate, model, pde_parameters={"Cm": 1, "chi": 6}, fixed_capacitance=1)
+    assert verdict["status"] == "passed"
+    assert verdict["dimensions"][0]["residuals"] == {"pde": "0", "u1": "0", "u2": "0", "u3": "0", "Sa": "0"}
+
+
+@pytest.mark.parametrize("carried", ["Sa*sqrt(t + 1)/chi", "Sa*(t + 1)/(chi*Cm/1)", "Sa/(chi*Cm/1)", "-Sa*sqrt(t + 1)/(chi*Cm/1)"])
+def test_a_carried_source_with_a_wrong_scale_time_factor_or_sign_fails(carried):
+    candidate, model = _source_in_the_current(load_problem("anisotropic_monodomain"), carried)
+    verdict = cell_model_verdict(candidate, model, pde_parameters={"Cm": 1, "chi": 6}, fixed_capacitance=1)
+    assert verdict["status"] == "failed"
+    assert verdict["dimensions"][0]["residuals"]["pde"] != "0"
