@@ -30,8 +30,9 @@ BLOCKMESH = {d: f"{CASE}/system/blockMeshDict.{d}D" for d in (1, 2, 3)}
 SWEEP = f"{CASE}/setup/studies/cartesianConvergence/sweep_hex_convergence.json"
 TET_SWEEP = f"{CASE}/setup/studies/tetConvergence/sweep_tet_generic.json"
 TET_GEO = f"{CASE}/setup/studies/tetConvergence/box.geo.template"
+TEMPORAL_SWEEP = f"{CASE}/setup/studies/temporalConvergence/sweep_temporal_convergence.json"
 SNIPPETS = (IONIC, IONIC_CURRENT, SOLVER, DOMAIN, WALL, REFERENCE, VERIFIER, UTILS, ELECTRO, CONTROL, SWEEP,
-            TET_SWEEP, TET_GEO, *BLOCKMESH.values())
+            TET_SWEEP, TET_GEO, TEMPORAL_SWEEP, *BLOCKMESH.values())
 
 # The C++ names its constants and state indices; the data names them so.
 CXX_NAMES = {"Chi": "chi", "Fx": "F", "Gx": "G"}
@@ -293,7 +294,22 @@ def drift(snippets: dict[str, str], problem: dict) -> list[str]:
     if values != [*hex_ladder["cells_per_axis"], *hex_ladder["dt"]]:
         found.append("hex refinement")
     found += _tet_drift(snippets, problem, commit)
+    found += _temporal_drift(snippets, problem, commit)
     return found
+
+
+def _temporal_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
+    """The temporal study's rows, one per (dimension, cell count, dt), against the temporal ladder and the
+    dimensions it excludes."""
+    values = [line.strip().strip('",') for line in _body(snippets[TEMPORAL_SWEEP], commit)]
+    count = len(values) // 3
+    rows = list(zip((int(v.removesuffix("D")) for v in values[:count]), map(int, values[count:2 * count]),
+                    map(float, values[2 * count:])))
+    temporal = problem["refinement"]["temporal"]
+    expected = [(d, temporal["cells_per_axis"][str(d)], dt) for d in temporal["dimensions"] for dt in temporal["dt"]]
+    expected += [(int(d), entry["cells_per_axis"], dt)
+                 for d, entry in temporal.get("excluded", {}).items() for dt in entry["dt"]]
+    return [] if sorted(rows) == sorted(expected) else ["temporal refinement"]
 
 
 def _tet_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
@@ -362,6 +378,9 @@ def test_the_problem_data_matches_cardiacfoam():
         (TET_SWEEP, "0.030396355", "0.0398782", "tet conductivity"),
         (TET_SWEEP, "manufacturedFDAMonodomainVerifier", "manufacturedAnisotropicMonodomainVerifier", "tet verifier"),
         (TET_SWEEP, "0.000560538", "0.00056", "tet refinement"),
+        (TEMPORAL_SWEEP, "0.000280269", "0.00028", "temporal refinement"),
+        (TEMPORAL_SWEEP, "        640,", "        320,", "temporal refinement"),
+        (TEMPORAL_SWEEP, "        160,", "        80,", "temporal refinement"),
         (TET_GEO, "(lc = 1/N)", "(lc = 2/N)", "tet mesh size"),
         (TET_GEO, "MeshSizeMax = lc;", "MeshSizeMax = 2*lc;", "tet mesh size"),
     ],

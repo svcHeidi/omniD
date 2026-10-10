@@ -119,7 +119,7 @@ def test_a_diagonal_tensor_names_parameters():
     assert "pde.tensors.sigma" in _refused(problem)
 
 
-@pytest.mark.parametrize("mesh", ["hex", "tet"])
+@pytest.mark.parametrize("mesh", ["hex", "tet", "temporal"])
 def test_each_level_is_judged_at_its_report_step(mesh):
     problem = load_problem("fda_monodomain")
     ladder = problem["refinement"][mesh]
@@ -139,6 +139,24 @@ def test_each_level_is_judged_at_its_report_step(mesh):
         (lambda p: p["refinement"]["tet"].__setitem__("dimensions", []), "refinement.tet.dimensions"),
         (lambda p: p["refinement"].pop("tet"), "refinement"),
         (lambda p: p.__setitem__("mesh_progression", ["hex", "prism"]), "mesh_progression"),
+        (lambda p: p["refinement"]["temporal"]["steps"].__setitem__(0, 179), "refinement.temporal.steps"),
+        (lambda p: p["refinement"]["temporal"].update(dt=[0.000560538, 0.001121075, 0.000280269, 0.0001401345],
+                                                      steps=[357, 178, 714, 1427]), "refinement.temporal.dt"),
+        (lambda p: p["refinement"]["temporal"].update(dt=[0.001121075], steps=[178]), "refinement.temporal"),
+        (lambda p: p["refinement"]["temporal"].__setitem__("mesh", "prism"), "refinement.temporal.mesh"),
+        (lambda p: p["refinement"]["temporal"].__setitem__("dimensions", [1, 4]), "refinement.temporal.dimensions"),
+        (lambda p: p["refinement"]["temporal"]["cells_per_axis"].pop("2"), "refinement.temporal.cells_per_axis"),
+        (lambda p: p["refinement"]["temporal"]["cells_per_axis"].__setitem__("1", 0),
+         "refinement.temporal.cells_per_axis"),
+        (lambda p: p["refinement"]["temporal"].pop("steps"), "refinement.temporal.steps"),
+        (lambda p: p["refinement"]["temporal"].__setitem__("order", 1), "refinement.temporal.order"),
+        (lambda p: p["refinement"]["temporal"]["excluded"]["3"].__setitem__("reason", ""),
+         "refinement.temporal.excluded.3.reason"),
+        (lambda p: p["refinement"]["temporal"]["excluded"].__setitem__("2", {"cells_per_axis": 640, "dt": [0.001],
+                                                                             "reason": "r"}),
+         "refinement.temporal.excluded.2"),
+        (lambda p: p["refinement"]["temporal"]["excluded"]["3"].__setitem__("dt", []),
+         "refinement.temporal.excluded.3.dt"),
         (lambda p: p["time"].__setitem__("report_when", "t >= end + 1"), "time.report_when"),
         (lambda p: p["refinement"]["hex"].__setitem__("dt_scales_as", "h**3"), "refinement.hex.dt_scales_as"),
         (lambda p: p["time"].__setitem__("report_when", "t + dt/2"), "time.report_when"),
@@ -155,6 +173,14 @@ def test_the_time_rule_ladder_and_norms_are_checked(edit, reported):
     problem = _shipped()
     edit(problem)
     assert reported in _refused(problem)
+
+
+def test_the_temporal_ladder_is_optional_and_carries_no_excluded_dimension_by_default():
+    problem = _shipped()
+    del problem["refinement"]["temporal"]["excluded"]
+    validate_problem(problem)
+    del problem["refinement"]["temporal"]
+    validate_problem(problem)
 
 
 def test_a_fixed_capacitance_mapping_that_maps_no_current_or_a_stray_name_is_refused():

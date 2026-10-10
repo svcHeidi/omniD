@@ -34,6 +34,9 @@ NORM_TIMES = ("steps*dt",)
 DT_SCALINGS = {"h": 1, "h**2": 2}
 #: The names a report rule may use: the time reached, the step and the end time.
 REPORT_SCOPE = frozenset({"t", "dt", "end"})
+#: The refinement that holds the mesh fixed and refines only ``dt``, to settle a solver's time order apart from
+#: its space order.
+TEMPORAL = "temporal"
 
 FUNCTIONS = frozenset({"sqrt", "cos", "sin", "exp", "log"})
 #: The differential operators a PDE may name: ``Derivative(f, t)``, ``grad(f)``, ``div(v)``.
@@ -200,10 +203,14 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
     time = problem["time"]
     report_when = _rule("time.report_when", time["report_when"])
     refinement = _table("refinement", problem["refinement"])
-    if set(refinement) != set(problem["mesh_progression"]):
+    if set(refinement) - {TEMPORAL} != set(problem["mesh_progression"]):
         raise ProblemError(f"refinement: has {sorted(refinement)}, the progression is {problem['mesh_progression']}")
     for kind, ladder in refinement.items():
-        _ladder(f"refinement.{kind}", _table(f"refinement.{kind}", ladder), time, report_when, dimensions)
+        if kind == TEMPORAL:
+            _temporal_ladder(_table(f"refinement.{kind}", ladder), time, report_when, dimensions,
+                             problem["mesh_progression"])
+        else:
+            _ladder(f"refinement.{kind}", _table(f"refinement.{kind}", ladder), time, report_when, dimensions)
 
     norms = problem["norms"]
     _menu("norms.at", norms["at"], NORM_TIMES)
@@ -269,15 +276,7 @@ def _ladder(where: str, ladder: Mapping[str, Any], time: Mapping[str, Any], repo
     cells, dts, steps = ladder["cells_per_axis"], ladder["dt"], ladder["steps"]
     if not cells or not len(cells) == len(dts) == len(steps):
         raise ProblemError(f"{where}: cells_per_axis, dt and steps must be non-empty and of equal length")
-    for dt, given in zip(dts, steps):
-        if isinstance(dt, bool) or not isinstance(dt, (int, float)) or dt <= 0:
-            raise ProblemError(f"{where}.dt: {dt!r} is not a positive number")
-        reported = _report_step(report_when, time, dt)
-        if reported is None:
-            raise ProblemError(f"time.report_when: dt = {dt} never meets it by the end time")
-        if given != reported:
-            raise ProblemError(f"{where}.steps: dt = {dt} first meets time.report_when after {reported} steps, "
-                               f"not {given}")
+    _steps(where, dts, steps, time, report_when)
     _menu(f"{where}.dt_scales_as", ladder["dt_scales_as"], tuple(DT_SCALINGS))
     power = DT_SCALINGS[ladder["dt_scales_as"]]
     for (coarse, coarse_dt), (fine, fine_dt) in zip(zip(cells, dts), zip(cells[1:], dts[1:])):
@@ -285,6 +284,59 @@ def _ladder(where: str, ladder: Mapping[str, Any], time: Mapping[str, Any], repo
         if abs((coarse_dt / fine_dt) / expected - 1) > _LADDER_SCALING_TOLERANCE:
             raise ProblemError(f"{where}.dt_scales_as: dt {coarse_dt} -> {fine_dt} over {coarse} -> {fine} cells "
                                f"is not dt ~ {ladder['dt_scales_as']}")
+
+
+def _temporal_ladder(ladder: Mapping[str, Any], time: Mapping[str, Any], report_when: Any, dimensions: list[int],
+                     progression: list[str]) -> None:
+    where = f"refinement.{TEMPORAL}"
+    known = {"mesh", "dimensions", "cells_per_axis", "dt", "steps", "excluded"}
+    _keys(f"{where}.", ladder, known, required=False)
+    missing = sorted(known - {"excluded"} - set(ladder))
+    if missing:
+        raise ProblemError(f"missing key(s) {', '.join(f'{where}.{key}' for key in missing)}")
+    _menu(f"{where}.mesh", ladder["mesh"], tuple(progression))
+    used = ladder["dimensions"]
+    if not used or not set(used) <= set(dimensions):
+        raise ProblemError(f"{where}.dimensions: {used!r} is not a non-empty subset of the problem's {dimensions}")
+    _cells(f"{where}.cells_per_axis", ladder["cells_per_axis"], used)
+    dts, steps = ladder["dt"], ladder["steps"]
+    if len(dts) < 2 or len(dts) != len(steps):
+        raise ProblemError(f"{where}: dt and steps must be of one length, at least two levels")
+    _steps(where, dts, steps, time, report_when)
+    if any(fine >= coarse for coarse, fine in zip(dts, dts[1:])):
+        raise ProblemError(f"{where}.dt: {dts} does not refine at every level")
+    for dimension, entry in _table(f"{where}.excluded", ladder.get("excluded", {})).items():
+        here = f"{where}.excluded.{dimension}"
+        if not dimension.isdigit() or int(dimension) not in dimensions or int(dimension) in used:
+            raise ProblemError(f"{here}: excludes no dimension of the problem the ladder leaves out")
+        _keys(f"{here}.", _table(here, entry), {"cells_per_axis", "dt", "reason"}, required=True)
+        _cells(f"{here}.cells_per_axis", {dimension: entry["cells_per_axis"]}, [int(dimension)])
+        if not entry["dt"] or not all(_positive(dt) for dt in entry["dt"]):
+            raise ProblemError(f"{here}.dt: {entry['dt']!r} is not a list of positive numbers")
+        _reason(f"{here}.reason", entry["reason"])
+
+
+def _cells(where: str, value: Any, dimensions: list[int]) -> None:
+    table = _table(where, value)
+    if set(table) != {str(d) for d in dimensions} or not all(
+            isinstance(n, int) and not isinstance(n, bool) and n > 0 for n in table.values()):
+        raise ProblemError(f"{where}: {dict(table)!r} is not one positive cell count per dimension {dimensions}")
+
+
+def _steps(where: str, dts: list[Any], steps: list[Any], time: Mapping[str, Any], report_when: Any) -> None:
+    for dt, given in zip(dts, steps):
+        if not _positive(dt):
+            raise ProblemError(f"{where}.dt: {dt!r} is not a positive number")
+        reported = _report_step(report_when, time, dt)
+        if reported is None:
+            raise ProblemError(f"time.report_when: dt = {dt} never meets it by the end time")
+        if given != reported:
+            raise ProblemError(f"{where}.steps: dt = {dt} first meets time.report_when after {reported} steps, "
+                               f"not {given}")
+
+
+def _positive(value: Any) -> bool:
+    return not isinstance(value, bool) and isinstance(value, (int, float)) and value > 0
 
 
 def _report_step(report_when: Any, time: Mapping[str, Any], dt: float) -> int | None:
