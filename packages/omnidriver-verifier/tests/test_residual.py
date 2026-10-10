@@ -8,8 +8,8 @@ import pytest
 pytest.importorskip("sympy")
 
 from omnidriver.core.refusal import failure
-from omnidriver.verifier.problem import load_problem
-from omnidriver.verifier.residual import residual_verdict
+from omnidriver.verifier.problem import ProblemError, load_problem
+from omnidriver.verifier.residual import cell_model_verdict, residual_verdict
 
 
 def test_the_fda_monodomain_problem_has_zero_residual_in_every_dimension():
@@ -100,3 +100,62 @@ def test_the_initial_fields_are_the_exact_fields_at_the_start():
     entry = residual_verdict(load_problem("fda_monodomain"))["dimensions"][0]
     assert entry["initial"]["u3"] == "0"
     assert entry["initial"]["V"] == "cos(pi*x)"
+
+
+def _generated(problem: dict, **values) -> dict:
+    """A cell model as an injection would generate it: the problem's expressions with its own parameter values."""
+    cell = problem["cell_model"]
+    given = {"Cm": problem["parameters"]["Cm"], "chi": problem["parameters"]["chi"],
+             "Beta": problem["derived"]["Beta"]["native"], **values}
+    return {"rates": dict(cell["rates"]), "Iion": cell["Iion"], "parameters": given}
+
+
+def test_a_generated_cell_model_with_the_pde_pair_passes():
+    problem = load_problem("fda_monodomain")
+    verdict = cell_model_verdict(problem, _generated(problem))
+    assert verdict["status"] == "passed"
+    assert all(entry["residuals"]["pde"] == "0" for entry in verdict["dimensions"])
+
+
+def test_a_generated_cell_model_with_the_pair_swapped_is_caught():
+    problem = load_problem("fda_monodomain")
+    verdict = cell_model_verdict(problem, _generated(problem, Cm=3, chi=2))
+    assert verdict["status"] == "failed"
+    for entry in verdict["dimensions"]:
+        assert entry["residuals"]["pde"] != "0"
+        assert entry["parameters"]["Cm"] == {"problem": 2, "pde": 2, "cell_model": 3, "status": "failed"}
+
+
+def test_a_pde_given_the_pair_swapped_is_caught():
+    problem = load_problem("fda_monodomain")
+    verdict = cell_model_verdict(problem, _generated(problem), pde_parameters={"Cm": 3, "chi": 2})
+    assert verdict["status"] == "failed"
+    for entry in verdict["dimensions"]:
+        assert entry["residuals"]["pde"] != "0"
+        assert entry["parameters"]["chi"]["status"] == "failed"
+
+
+def test_a_generated_current_per_unit_capacitance_is_caught():
+    problem = load_problem("fda_monodomain")
+    model = _generated(problem)
+    model["Iion"] = f"({model['Iion']})/Cm"
+    verdict = cell_model_verdict(problem, model)
+    assert verdict["status"] == "failed"
+    assert all(entry["residuals"]["pde"] != "0" for entry in verdict["dimensions"])
+
+
+def test_a_generated_beta_off_its_derived_value_is_caught():
+    problem = load_problem("fda_monodomain")
+    verdict = cell_model_verdict(problem, _generated(problem, Beta={"1": -1.1, "2": -5.9, "3": -8.7}))
+    by_dimension = {entry["dimension"]: entry for entry in verdict["dimensions"]}
+    assert by_dimension[2]["status"] == "passed"
+    assert by_dimension[3]["derived"]["Beta"]["status"] == "failed"
+
+
+def test_a_generated_cell_model_naming_a_parameter_it_gives_no_value_is_refused():
+    problem = load_problem("fda_monodomain")
+    model = _generated(problem)
+    del model["parameters"]["chi"]
+    with pytest.raises(ProblemError) as caught:
+        cell_model_verdict(problem, model)
+    assert "cell_model.parameters" in str(caught.value)
