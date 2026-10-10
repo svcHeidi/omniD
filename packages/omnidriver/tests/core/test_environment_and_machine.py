@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -40,6 +41,24 @@ def test_the_prefix_sources_first_then_exports_then_path():
         'export PATH=/opt/mpi/bin:"$PATH"; '
     )
     assert render_prefix(_connection(), {}) == ""
+
+
+def test_a_variable_that_keeps_another_exports_it_in_front_of_the_supplied_value(tmp_path):
+    connection = EnvironmentConnection(
+        supplied=(SuppliedVariable("TOY_RC", True, "sourced"),
+                  SuppliedVariable("TOY_LIBS", False, "after the source", keeps="TOY_OWN_LIBS")),
+        source="TOY_RC",
+    )
+    prefix = render_prefix(connection, {"TOY_RC": "/rc", "TOY_LIBS": "/opt/lib"})
+    assert prefix == 'source /rc; export TOY_LIBS="${TOY_OWN_LIBS:+$TOY_OWN_LIBS:}"/opt/lib; '
+    rc = tmp_path / "rc"
+    rc.write_text("export TOY_OWN_LIBS=/own/a:/own/b\n")
+    probe = f'{prefix}printf %s "$TOY_LIBS"'.replace("source /rc", f"source {rc}")
+    kept = subprocess.run(["bash", "-c", probe], capture_output=True, text=True, check=True)
+    assert kept.stdout == "/own/a:/own/b:/opt/lib"
+    rc.write_text("")
+    bare = subprocess.run(["bash", "-c", probe], capture_output=True, text=True, check=True, env={"PATH": os.environ["PATH"]})
+    assert bare.stdout == "/opt/lib"
 
 
 def test_a_manifest_names_only_supplied_variables(tmp_path):

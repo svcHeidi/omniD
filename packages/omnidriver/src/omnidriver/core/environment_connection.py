@@ -76,13 +76,15 @@ def load_environment(driver_context: "DriverContext", environment_source: str | 
 def render_prefix(connection: EnvironmentConnection, environ: Mapping[str, str]) -> str:
     """The bash commands that prepare the shell, in the one safe order:
     source first, then every other supplied variable exported with its
-    literal value (macOS strips ``DYLD_*`` when bash starts), then ``PATH``."""
+    literal value (macOS strips ``DYLD_*`` when bash starts; a variable that
+    ``keeps`` another keeps that one's value from the sourced file first),
+    then ``PATH``."""
     parts = []
     if connection.source is not None and environ.get(connection.source):
         parts.append(f"source {shlex.quote(environ[connection.source])}")
     skip = {connection.source, *connection.path_prepend}
     exports = [
-        f"{variable.name}={shlex.quote(environ[variable.name])}"
+        f"{variable.name}={_kept(variable)}{shlex.quote(environ[variable.name])}"
         for variable in connection.supplied
         if variable.name not in skip and environ.get(variable.name)
     ]
@@ -92,6 +94,11 @@ def render_prefix(connection: EnvironmentConnection, environ: Mapping[str, str])
     if prepend:
         parts.append(f'export PATH={":".join(prepend)}:"$PATH"')
     return "".join(f"{part}; " for part in parts)
+
+
+def _kept(variable: SuppliedVariable) -> str:
+    # Empty when the sourced file left the kept variable unset: no stray ':' (the current directory).
+    return f'"${{{variable.keeps}:+${variable.keeps}:}}"' if variable.keeps else ""
 
 
 #: Prints the environment it was started with. Run by this Python, not by
