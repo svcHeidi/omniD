@@ -100,3 +100,10 @@ def test_a_flat_tetrahedron_is_refused():
     with pytest.raises(ProblemError) as caught:
         tetrahedron_nodal_volumes(points, [[0, 1, 2, 3]])
     assert caught.value.code == "weights_invalid"
+
+
+def test_a_mesh_with_no_points_has_no_weights_and_an_element_of_it_is_refused():
+    assert nodal_control_volumes([], []) == []
+    with pytest.raises(ProblemError) as caught:
+        nodal_control_volumes([], [[0, 1]])
+    assert caught.value.code == "weights_invalid"

@@ -26,12 +26,13 @@ def nodal_control_volumes(points: Sequence[Sequence[float]], elements: Sequence[
     no extent (a line's y and z, a quadrilateral's z) contributes a factor of 1. Coordinates are divided by
     ``length_scale`` to reach the problem's units. :class:`ProblemError` for an element naming a missing point."""
     weights = [0.0] * len(points)
+    axes = max((len(point) for point in points), default=0)
     for ids in elements:
         if not ids or min(ids) < 0 or max(ids) >= len(points):
             raise ProblemError(f"an element names a point outside the {len(points)} given: {list(ids)}",
                                code="weights_invalid")
         volume = 1.0
-        for axis in range(max(len(point) for point in points)):
+        for axis in range(axes):
             coordinates = [points[i][axis] for i in ids]
             extent = (max(coordinates) - min(coordinates)) / length_scale
             volume *= extent if extent > 0 else 1.0
