@@ -923,3 +923,54 @@ git-ignored there, sha256 `a10edcea…`). Every case runs through
 Run times, serial on this machine: a 1D case about 8 s; a 2D N = 640 case
 about 40 s on the paper ladder (128 steps at most); the four 2D cases of the
 native study's ladder (178 to 1427 steps) about 15 min together.
+
+## AD. The anisotropic manufactured monodomain: hex, tets and time order (2026-10-10)
+
+The next problem after AB and AC in simple-to-complex order, and the one the
+paper's discussion leaves open ("repeat the Cartesian exact-field ladder with a
+rotated conductivity tensor on the same mesh"). Native main has three
+monodomain verifiers: the FDA one (cosines, diagonal sigma: AB, AC),
+`manufacturedAnisotropicMonodomainVerifier` and
+`manufacturedConormalMonodomainVerifier`. The second adds one thing to FDA, a
+fully populated sigma, and keeps the boundary trivial: F = sin^2(pi x) sin^2(pi y)
+sin^2(pi z) has zero gradient on every face, so the flux condition holds for
+any constant tensor, and since F is no longer an eigenfunction the source
+sqrt(1+t)(Beta F - div(sigma grad F)) is not zero. The conormal one adds a
+periodic complex profile and a conormal wall on top of that. The problem is data,
+`omnidriver.verifier.problems/anisotropic_monodomain.toml` (3D only; sigma as the
+`symmetric` tensor kind; the FDA ionic model's Beta = -8.6 as a plain parameter,
+because the source absorbs it). Runs, generators, probes and the decision log
+are under `<runs>/2026-10-10/mms2/` (`LOG.md`). cardiacFOAM is a `git archive`
+of native main at `277dfeb19`, plus omniD's `omnidriver.toml`, plus one changed
+file (AD6). OpenFOAM v2412, serial, the shell `omnidriver env --plugin
+cardiacfoam` prints. openCARP's side is `opencarp.md` P.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| AD1 | gate 1: `omnidriver-verify residual anisotropic_monodomain` | `passed`: the PDE and the three state residuals simplify to "0", the six faces' normal derivatives to "0", and the declared source (written from the C++'s analytic Hessian) equals the one the PDE implies. Tests with one edit each fail it: a mixed Hessian term without its factor 2, a swapped tensor entry, a source without the Beta term; a different Beta passes | the transcription is self-consistent and Beta is free, as the verifier's comment says |
+| AD2 | gate 2: `tests/test_native_drift_anisotropic.py` against verbatim snippets of the reference, the verifier, `electroProperties`, the hex and tet sweeps (`tests/fixtures/cardiacfoam_anisotropic/`) | 26 tests: the data equals the C++ at `277dfeb19`, and each of 22 one-edit mutations of a snippet is reported once and by name | the problem data follows the code; the shared parts (cell model, PDE, units, wall, norm) are read through the FDA gate's own checks |
+| AD3 | gate 3: the shared norm on cardiacFOAM's own Vm, u1, u2 against `postProcessing/3D_N_cells.dat`, every case run here (4 hex, 4 hex Gauss linear, 6 tet, 20 temporal) | all `passed`, largest relative difference 4.6e-6 against a print of six digits (5e-6) | the shared norm computes the native verifier's error on this problem too |
+| AD4 | each tet case against the owner's rotated-tensor Vm rows in `mono_tet_convergence_161electrodes.csv` (L1, L2, Linf, Gauss linear and leastSquares, N = 10, 20, 40; `compare/paper_check.py`) | all six rows found, largest relative difference 2.8e-6 | the paper's rotated-tensor numbers reproduce from native main through omniD, beside gate 3 |
+| AD5 | `omnidriver sweep-run` of the hex ladder N = 10, 20, 40, 80 (dt per level from the problem file; rotated tensor and anisotropic verifier named in the spec, the pairing F3 showed must be explicit), base-case schemes (`gradSchemes leastSquares`, `ddt backward`, `Gauss linear corrected`), then `omnidriver-verify compare` | L2(V) 1.328e-3, 3.503e-4, 8.887e-5, 2.228e-5; successive orders 1.923, 1.979, 1.996, least squares 1.967 (u1 1.952, u2 1.953; Linf 1.967). The same with `gradSchemes Gauss linear`: 1.247e-3, 3.260e-4, 8.233e-5, 2.061e-5; 1.935, 1.986, 1.998 (1.974). Linf identical in both to five digits | **cardiacFOAM converges at second order on the hex ladder with the rotated tensor**, whichever gradient reconstruction. The owner's expectation holds on hex: a fine enough mesh, the rotated sigma and the rotated solution work. The solution error has the stated order (space 2, time 1 with dt ~ h^2 gives 2) |
+| AD6 | the tet route on native main: `omnidriver sweep-run` with `mesh: tet` | the `gmsh` step runs `gmsh -3 setup/studies/tetConvergence/box.geo.template ... -setnumber lc <1/N>`; native main's template has `lc = __LC__` (its own driver's placeholder), so gmsh prints "1602 errors", writes a 14-node box, exits 0, omniD records the step as completed, and `gmshToFoam` fails. The template at the omniD native branch (the one the FDA tet run used) is `DefineConstant[lc]`; the two files differ only in that line and the comment (sha256 `5f51caeb...` and `fd145608...`). The copy used here takes the branch's template | **finding, proven by run:** omniD's tet route and native main's template do not meet. Which side moves is the owner's call. The `gmsh` step passing on gmsh errors is an omniD workflow gap |
+| AD7 | the tet ladder N = 10, 20, 40 (4874, 37040, 289388 tets; N = 80 not run), both gradient reconstructions on byte-identical meshes | L2(V) Gauss linear 6.014e-3, 3.422e-3, 2.582e-3: orders 0.813, 0.406 (least squares 0.610; Linf 0.518, 0.488). leastSquares 2.800e-3, 7.069e-4, 1.746e-4: orders 1.986, 2.017 (2.002; Linf 1.365, 1.821). The paper's N = 80 rows (not run) continue the pattern: 2.273e-3 and 4.383e-5 | leastSquares converges at second order on tets; Gauss linear does not converge to the manufactured solution. It did not for the FDA problem either (the FDA tet run, `<runs>/2026-10-10/fda-tet/`: L2(V) 2.265e-2, 1.320e-2, 1.119e-2 on the same meshes), so the cause is not the rotated tensor |
+| AD8 | read OpenFOAM v2412 `gaussLaplacianScheme::fvmLaplacian` for a tensor gamma | Sf.gamma is split into its normal part (SfGammaSn, in the matrix) and SfGammaCorr = Sf.gamma - SfGammaSn Sn, which becomes the explicit face flux `fvc::dotInterpolate(SfGammaCorr, fvc::grad(vf))`; `fvc::grad` takes `gradSchemes`. On the orthogonal hex mesh every off-diagonal entry of sigma goes through this correction | the rotation has no key of its own: the off-diagonal entries of `conductivity` are the rotation, and the gradient scheme the correction uses is `gradSchemes` |
+| AD9 | OpenFOAM's own `postProcess -func grad(Fex)` on each run mesh, Fex = the problem's F at the cell centres (zeroGradient), against the symbolic gradient of the problem's F (`probes/gradient/gradient_probe.py`), relative L2 over all cells | hex Gauss linear 6.5e-2, 1.6e-2, 4.1e-3 (order 2); hex leastSquares 9.7e-2, 2.9e-2, 9.3e-3 (interior order 2, near a wall about 1); tet Gauss linear 0.459, 0.443, 0.445 (no convergence; Linf 1.4 to 1.7); tet leastSquares 0.124, 0.059, 0.029 (order 1) | the Gauss linear gradient is not consistent on gmsh Delaunay tets, which the catalogue's own condition on `linear` ("second order where the face centre lies on the line joining the two cell centres") predicts; the explicit correction carries that error into V. **Not settled:** why leastSquares' first-order gradient leaves V at second order; the probe measures the gradient, not its effect on V |
+| AD10 | the paper's matrix on the 3D problem: godunov/sbdf2 x `ddt(Vm)` Euler/backward, N = 40, dt 0.025 halved to 0.0015625, `compare --temporal` against the exact solution and against each configuration's own finest dt | against the finest dt (least squares, successive): godunov x Euler 0.984 (0.975, 0.986, 0.992); godunov x backward 0.996 (0.994, 0.996, 0.998); sbdf2 x Euler 1.349 (1.462, 1.330, 1.223); sbdf2 x backward 1.977 (1.963, 1.981, 1.990). Against the exact solution the spatial error at N = 40 (8.9e-5) is a floor: sbdf2 reaches it at the second or third dt, and godunov's error 1.074e-3 to 8.47e-5 is first order until it nears it | **settled:** godunov is order 1 with either ddt; sbdf2 with backward is order 2, with Euler tends to 1 (falling), as in AC. The explicit tangential correction does not degrade the time order |
+
+Stated against observed (the ladder has dt ~ h^2):
+
+| configuration | stated | observed |
+|---|---|---|
+| hex, `Gauss linear corrected`, leastSquares or Gauss linear gradient, backward, godunov | space 2 (catalogue: `Gauss`, `linear`, `corrected`, `leastSquares` each 2); time min(backward 2, godunov 1) = 1; so 2 in h | 1.967 or 1.974 |
+| tet, leastSquares | the same | 2.002 |
+| tet, Gauss linear | the same, with the stated condition on `linear` | 0.610: the condition is not met |
+| godunov x Euler, x backward | time 1 | 0.984, 0.996 |
+| sbdf2 x backward | time 2 (inferred, AC) | 1.977 |
+| sbdf2 x Euler | time 1 (bounded by Euler) | 1.349 falling toward 1 |
+
+Run times, serial, while another job used the machine: hex N = 10 about 4 s, N = 80 971 s; the
+tet ladder 575 s; a temporal case about 15 s. The `gmsh` template finding (AD6) and the
+verifier's own performance fixes (`nodal_control_volumes` was quadratic in the number of
+elements; `exact_values` evaluated every field of the problem per point) are omniD's, fixed on
+`feat/verifier-anisotropic`.

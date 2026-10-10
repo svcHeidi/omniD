@@ -277,6 +277,17 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      `277dfeb19`; the exported sweep runs every level at the finest dt);
    - whether to report openCARP v18.1's Line-element defect upstream (quadrature
      on [-1, 1] against shape functions on [0, 1]).
+   - the anisotropic monodomain (`cardiacfoam.md` AD, `opencarp.md` P): omniD's
+     tet route runs `gmsh ... -setnumber lc` on `setup/studies/tetConvergence/box.geo.template`,
+     and native main's template has the placeholder `lc = __LC__`, so gmsh writes a
+     14-node mesh and `gmshToFoam` fails; which side moves is the owner's call.
+     omniD records the `gmsh` step as completed when gmsh prints errors and exits 0;
+   - cardiacFOAM with `gradSchemes Gauss linear` does not converge on gmsh tets
+     (FDA and rotated problems alike); the tutorial's base case uses `leastSquares`
+     and converges at second order. The paper's `fullMatrix` cases set Gauss linear on hex,
+     which converges there. Whether a tet case should refuse or note `Gauss linear` is open;
+   - openCARP's generated RK4 blocks read an uninitialised `t` (`GlobalData_t t = t + dt/2;`),
+     harmless unless a rate names `t`; with N and O's defects, whether to report them upstream.
 5. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`).
    Use `check --checks C13` for N-rank evidence, and rescan first if the
    solver changed.

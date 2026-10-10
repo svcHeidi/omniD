@@ -432,3 +432,33 @@ would reach order 2; the runs show only order 1 for its dt-dependent part.
 Both options are documented menu entries (`openCARP.prm`: `parab_solve` 2 is
 "2nd order dt", "Tested by: cv_test"), so these are defects, not misuse.
 Whether to report them upstream is the owner's call (held).
+
+## P. The anisotropic manufactured monodomain: hex, tets and time order (2026-10-10)
+
+The verifier problem `anisotropic_monodomain` (`cardiacfoam.md` AD) on openCARP v18.1:
+F = sin^2 sin^2 sin^2, a fully populated sigma, a nonzero source, 3D only. Runs, the
+generator and the decision log are under `<runs>/2026-10-10/mms2/` (`opencarp/generate.py`,
+`generate_tet.py`, `opencarp_results.py`, `LOG.md`). openCARP has no source term and the
+problem has one, so the source is carried in the cell model's current (design and
+generator are mine, not omniD's): a per-node amplitude state `Sa` (rate 0, set per node by an
+`adjustment[].file`, the mechanism N and O use for the initial states) times
+sqrt(1 + t), in Iion = (the problem's Iion mapped to Cm_s = 1) - sqrt(1 + t) Sa / chi_s with
+chi_s = chi Cm / Cm_s. The mapping, the mesh node order and the shell are N's and O's.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| P1 | read `limpet_fe.py` (`GlobalData_t t = imp.get_tstp().cnt*dt`) and a probe model: forward Euler on diff_tt = t, 100 steps of 10 us (`probes/tcount`) | tt(1 ms) = 0.505 = dt^2 sum_{n=1}^{100} n | **proven by the probe:** at the step that advances t^n to t^{n+1}, the model's `t` is t^{n+1}; with the generated code computing Iion from the states at the start of the step, the carried source is evaluated at t^{n+1} with the old V |
+| P2 | read the generated `AnisoMono.cc` | the RK4 stage blocks contain `GlobalData_t t = t + dt/2;`, a variable initialised from itself | an uninitialised read in the code generator's output; no rate here names `t`, so it has no effect on this run. Not pursued |
+| P3 | gate 1 on the injected model: omniD's `cell_model_verdict` on the text parsed back from `AnisoMono.model`, against a copy of the problem whose source is 0 and which has one more state Sa = Beta F - LF (rate 0); the verifier now admits `t` in a cell model | `passed`: the PDE and the four state residuals are "0". Tests: a wrong divisor, a missing sqrt, a missing factor and a sign flip each fail | the carried source is the problem's source under the mapping to Cm_s = 1 |
+| P4 | the generator's own assertions | Sa at t = 0 equals the declared source at t = 0, and the source at t = 0.05 and 0.2 equals sqrt(1 + t) Sa, at two points, to 1e-13; the conductivity tensor rebuilt from its eigendecomposition (`.lon` carries l and t, g_l, g_t, g_n the eigenvalues) equals the problem's to 1e-15 | the factorisation the model relies on holds; the orthotropic frame is the tensor, with g_i = g_e = 2 sigma_c as in N |
+| P5 | the hex ladder N = 10, 20, 40, 80 on `Hx`, `parab_solve 1`, `operator_splitting 1`, mass lumping, theta 0.5, dt per level from the problem file; weights from omniD's `nodal_control_volumes` (total weight 1 to 1e-11) | L2(V) 3.458e-3, 9.094e-4, 2.290e-4, 5.725e-5; successive orders 1.927, 1.990, 2.000, least squares 1.974 (u1 1.931, u2 1.936; Linf 1.970). Wall 1 s, 1 s, 7 s, 187 s. The t = 0 frame differs from the exact fields by 6e-9 to 7e-9 (float32) | **second order**, as stated for lumped Q1 with Crank-Nicolson and dt ~ h^2 (the splitting's first-order time error is O(h^2) on this ladder) |
+| P6 | the same problem, cardiacFOAM's hex ladder (`cardiacfoam.md` AD5) | cardiacFOAM L2(V) 1.328e-3 to 2.228e-5; the ratio openCARP to cardiacFOAM is 2.60, 2.60, 2.58, 2.57 across the four levels | two solvers solve the same continuous problem at second order. The constant ratio is a leading error constant, not an order difference. Not attributed further: AB3 attributed the corresponding 4.8 in the FDA 3D problem to lumped Q1 against the 7-point stencil, and this run did not measure the operators |
+| P7 | the tet ladder N = 10, 20, 40 on cardiacFOAM's own gmsh meshes (byte-identical to the cardiacFOAM cases; `Tt`, each ordered so det > 0, none flipped; unit volume), nodal weights `tetrahedron_nodal_volumes` | L2(V) 5.603e-3, 1.631e-3, 4.073e-4; orders 1.780, 2.002; least squares 1.891 (u1 1.551, u2 1.569; Linf 1.304, 1.807). Wall 0.5 s, 0.6 s, 7 s | **second order on tets with the rotated tensor**: the off-diagonal entries enter the P1 stiffness integral like the diagonal ones, and the order is that of the hex mesh. cardiacFOAM's leastSquares errors are 2.0 times smaller at N = 10 and 2.3 times smaller at N = 40; Gauss linear does not converge (`cardiacfoam.md` AD7) |
+| P8 | the temporal ladder on the hex mesh N = 40, dt 0.025 halved four times, three configurations, against the exact solution and against the finest dt | (a) `parab_solve 1`, `operator_splitting 1`: against the finest dt 0.985 (0.977, 0.987, 0.993); against the exact solution 9.854e-4, 4.192e-4, 1.747e-4, 1.548e-4, 1.939e-4 (the spatial error at N = 40 is 2.29e-4). (b) `parab_solve 2`, splitting 1: L2(V) 0.1755 to 0.1887, no convergence; finest dt 0.947. (c) `parab_solve 2`, `operator_splitting 0`: 0.0666 to 0.0650; finest dt 1.034 | **(a) is order 1**, the Lie splitting's, as in O4. (b) and (c) do not converge to the manufactured solution, as in O5 and O6; they are the zero start of `old_vm` (O1) and, for (c), the `Irhs` behaviour (O3): with no stimulus active the carried source is dropped with Iion. Proven by source in O; not re-derived here, and the dt-dependent part of (b) and (c) is first order, not the "2nd order dt" the menu labels |
+
+Stated against observed (dt ~ h^2): lumped Q1 with Crank-Nicolson and a Lie splitting, second order
+in h, first in dt; observed 1.974 (hex), 1.891 (tet, a pre-asymptotic first pair), first order in dt.
+
+No new openCARP defect. P2 (the uninitialised `t` in the generated RK4 blocks) is an observation of the code
+generator's output with no effect on any result here; whether to report it upstream is the owner's call, with
+the defects of N and O.
