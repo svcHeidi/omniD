@@ -30,6 +30,7 @@ from .core.plugin_discovery import discover_plugins
 from .core.runtime.sweep_runner import SweepStopped, sweep_plan, sweep_run
 from omnidriver.core.introspection import describe_entry, describe_stack, named_catalog
 from omnidriver.core.planning_types import diagnostic
+from omnidriver.core.quantities.errors import PointReferenceError
 from omnidriver.core.provider_identity import stack_identity_mismatch
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR, default_sweep_output_dir, resolve_scratch_root
 from omnidriver.core.strict_planning import _utility_produces_by_command, strict_plan
@@ -1334,6 +1335,9 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             )
         except (TutorialRecordError, OSError) as exc:
             print(json.dumps(failure(exc, entry=entry_label, action="describe"), indent=2))
+            return 1
+        except PointReferenceError as exc:
+            print(json.dumps(failure(exc, code="benchmark_unreadable", entry=entry_label, action="describe"), indent=2))
             return 1
         print(json.dumps(description, indent=2))
         return 0

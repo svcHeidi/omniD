@@ -891,6 +891,7 @@ expression of other parameters is a string under its own key
 | `case_rule` | the resolved case breaks the stack's case rules (one refusal per rule) |
 | `cases_failed` | a sweep ran or planned, and at least one case failed; each case carries its own code |
 | `cases_blocked` | a sweep planned, and every case that is not ok is blocked (a valid plan whose environment is not ready) |
+| `benchmark_unreadable` | a --benchmarks reference could not be read or is not a point reference |
 | `scratch_root_not_supplied` | an operation that stages needs --scratch-dir or OMNIDRIVER_SCRATCH_DIR |
 | `scratch_root_inside_cases_root` | the supplied scratch root lies inside the cases root |
 | `lease_held` | another attempt owns the case or output directory |

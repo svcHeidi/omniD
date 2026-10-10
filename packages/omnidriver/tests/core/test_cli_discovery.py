@@ -9,6 +9,7 @@ import pytest
 
 from omnidriver.cli import main
 from omnidriver.core.plugin_discovery import discover_plugins
+from omnidriver.core.quantities.errors import PointReferenceError
 from omnidriver.core.repository import REPOSITORY_FILE
 from plugins.toy import write_toy_native_case
 
@@ -147,3 +148,16 @@ def test_a_named_catalog_or_item_that_is_not_there_is_refused_listing_what_is(ca
     assert "no item 'gamma'" in refusal(capsys, ["catalog", "--plugin", NAMED, "--named", "models", "--item", "gamma"])
     assert "--named" in refusal(capsys, ["catalog", "--plugin", NAMED, "--item", "alpha"])
     assert "takes no --entry" in refusal(capsys, ["catalog", "--plugin", NAMED, "--named", "models", "--entry", "x"])
+
+
+def test_a_benchmarks_folder_that_cannot_be_read_is_refused_as_json(capsys, tmp_path):
+    write_toy_native_case(tmp_path)
+    (tmp_path / "wrong").mkdir()
+    with mock.patch("omnidriver.cli.describe_entry", side_effect=PointReferenceError("cannot read the reference x")):
+        code, payload = _run(
+            capsys, "describe", "--plugin", PLUGIN, "--entry", "toyTutorial",
+            "--cases-root", str(tmp_path), "--benchmarks", str(tmp_path / "wrong"),
+        )
+
+    assert code == 1 and (payload["status"], payload["code"]) == ("failed", "benchmark_unreadable")
+    assert "cannot read the reference" in payload["error"]
