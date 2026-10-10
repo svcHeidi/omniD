@@ -23,6 +23,14 @@ The launcher may use a provider-native skill, system prompt, repository
 instruction file, or API context field. Those are delivery mechanisms, not
 separate authorities.
 
+## The launcher in this repository
+
+`omnidriver-agents` (`packages/omnidriver-agents`) is one such launcher, for
+measuring agents. A task file states its role, so step 1 is the task author's;
+`omnidriver_agents.guidance.load_guidance` does steps 2 to 4, failing on a
+missing path, and each trial's record carries the omniD commit, the role and
+every injected path with its hash (step 5). It offers no optional file.
+
 ## Limits
 
 Injected guidance proves what the agent received, not that it understood or

@@ -59,5 +59,6 @@ the committed edit in the case, says so, and never dispatches.
 ## Executable proof
 
 The patch slice is exercised end to end over the conformance toy in
-`packages/omnidriver/tests/core/test_cli_step.py` and, on each solver's real
-case, by the `test_step_apply_native.py` of its package.
+`packages/omnidriver/tests/core/test_cli_step.py`. Against a real solver,
+`omnidriver check` reports conformance C4 (a one-key patch changes that key and
+leaves the rest), and reports rather than gates.
