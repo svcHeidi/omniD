@@ -365,8 +365,10 @@ path-safety); otherwise cases are named `case_0001`, `case_0002`, ... in
 expansion order. A case that cannot be staged or planned fails alone, not the
 whole sweep, in the refusal shape (below): its `code`, its `error` and, when
 rules or the plan's error diagnostics refused it, `refusals`; the sweep's own
-`code` is then `cases_failed`. `sweep-plan` reports each
-case's `status`, `record_commit_status`, `unchanged_patches` (a patch that
+`code` is then `cases_failed`; a plan whose every non-ok case is blocked
+(environment not ready) reports `status: "blocked"` and `cases_blocked`, exiting
+non-zero like `plan --strict`. `sweep-plan` reports each
+case's `status`, its `code` when not ok, `record_commit_status`, `unchanged_patches` (a patch that
 already matched the case) and its full `plan`.
 
 `sweep-run` plans and runs the cases serially, each as a child
@@ -888,6 +890,7 @@ expression of other parameters is a string under its own key
 | `axis_rule` | an axis value breaks the axis's kind, bound or menu, or the axis refused it |
 | `case_rule` | the resolved case breaks the stack's case rules (one refusal per rule) |
 | `cases_failed` | a sweep ran or planned, and at least one case failed; each case carries its own code |
+| `cases_blocked` | a sweep planned, and every case that is not ok is blocked (a valid plan whose environment is not ready) |
 | `scratch_root_not_supplied` | an operation that stages needs --scratch-dir or OMNIDRIVER_SCRATCH_DIR |
 | `scratch_root_inside_cases_root` | the supplied scratch root lies inside the cases root |
 | `lease_held` | another attempt owns the case or output directory |

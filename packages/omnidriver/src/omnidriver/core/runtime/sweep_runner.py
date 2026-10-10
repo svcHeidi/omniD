@@ -201,6 +201,7 @@ def _record_sweep_plan(
             "case_id": case.case_id,
             "resolved_axis_values": case.resolved_axis_values,
             "status": report.status,
+            **({} if report.status == "ok" else {"code": "plan_blocked" if report.status == "blocked" else "plan_failed"}),
             "plan": report.to_json(),
             "record_commit_status": commit_result.status,
             # A patch that already matched the case is real information

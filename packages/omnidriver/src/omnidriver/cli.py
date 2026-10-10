@@ -1396,7 +1396,12 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             return _sweep_refusal(args, exc)
         # A spec that could not be read yields zero cases, so "no case
         # failed" would otherwise read as success.
-        failed = bool(result.get("spec_error")) or any(case["status"] != "ok" for case in result["cases"])
+        not_ok = [case["status"] for case in result["cases"] if case["status"] != "ok"]
+        failed = bool(result.get("spec_error")) or bool(not_ok)
+        if failed and not result.get("spec_error") and set(not_ok) == {"blocked"}:
+            # A valid plan whose environment is not ready: blocked, as `plan --strict` reports it.
+            print(json.dumps({"status": "blocked", "code": "cases_blocked", **result}, indent=2))
+            return 1
         print(json.dumps({"status": "failed" if failed else "ok", **_cases_failed(failed), **result}, indent=2))
         return 1 if failed else 0
 

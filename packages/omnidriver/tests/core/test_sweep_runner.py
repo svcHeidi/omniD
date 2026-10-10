@@ -928,3 +928,22 @@ def test_the_cli_prints_the_report_of_a_sweep_a_signal_stopped(tmp_path, capsys)
 
     printed = json.loads(capsys.readouterr().out)
     assert code == 143 and printed["status"] == "failed" and printed["skipped_count"] == 1
+
+
+def test_sweep_plan_gives_a_blocked_case_its_code(tmp_path):
+    real = sweep_runner._strict_plan_for_spec
+
+    def blocked(*args, **kwargs):
+        report = real(*args, **kwargs)
+        return dataclasses.replace(
+            report, status="blocked",
+            environment_diagnostics=(diagnostic("error", "launcher_mismatch", "wrong MPI first on PATH"),),
+        )
+
+    _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=tmp_path / "native", values=(2,))))
+    with mock.patch.object(sweep_runner, "_strict_plan_for_spec", side_effect=blocked):
+        result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_record_driver_context())
+
+    assert [(case["status"], case["code"]) for case in result["cases"]] == [("blocked", "plan_blocked")]
