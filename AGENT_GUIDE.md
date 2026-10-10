@@ -46,6 +46,10 @@ from the working directory:
   `OMNIDRIVER_CARDIACCORE_TREE` for cardiacCore) from the repository, and
   refuses a variable already set to something else. `scripts` goes onto the
   stack itself (see "Repository scripts").
+  TorchCor's repository names its runner's folder as `scripts` and the
+  TorchCor library as `source`; with `--repo`, omniD judges a study's keys
+  against the runner's `--describe` and the staged `case.json` by the runner's
+  own `--check`, while `--plugin torchcor` alone writes keys unvalidated.
 - `--cases-root <dir>` or `$OMNIDRIVER_CASES_ROOT`, when it is a repository's
   tutorials folder: the cases root itself or its parent holds an
   `omnidriver.toml` whose `tutorials` is that folder. There is no
@@ -273,7 +277,8 @@ omnidriver step --repo <cardiacFOAM> --run-document run.json --step solve   # si
    when `OMNIDRIVER_ALLOWED_RUNS_ROOT` is set, both must resolve under it.
 
 If any of these produce an error-level diagnostic, the command prints
-`{"status": "failed", "diagnostics": [...]}` and exits non-zero **without
+`{"status": "failed", "code": "run_document_invalid", "error": ..., "diagnostics": [...]}`
+and exits non-zero **without
 executing anything**. Otherwise execution, `workflow_state.json` resume,
 retry/backoff, and `failure_context` behave exactly as for an `--entry` run.
 
@@ -422,6 +427,7 @@ What each layer does with it:
 |---|---|---|
 | OpenFOAM (cardiacFOAM) | `<solve>.decompose` (`decomposePar -force`) → `<solve>` as `mpirun -np N cardiacFoam -parallel` → `<solve>.reconstruct` (`reconstructPar`); the steps after the solve (`postProcess -latestTime`) run on the reconstructed case | the staged case's `system/decomposeParDict:numberOfSubdomains`, read as the run will see it. Set N with that study key; `parallel: N` must equal it, or the plan is refused naming both. The decompose step consumes the dictionary, so provenance fingerprints it |
 | openCARP | `<solve>` as `mpirun -np N openCARP ...`; outputs keep their names, node order and location (`docs/solver-learning/opencarp.md` I7) | the scheduler's allocation for `parallel: true`, or the `N` you supply. `true` outside a scheduler is refused. The `mpirun` first on PATH must be the launcher of the MPI openCARP was built against; preflight refuses another MPI's (`opencarp_mpi_launcher_mismatch`, I2, I5) |
+| TorchCor | none: it has no MPI, and its one record, `nversion`, is `serial_only` | — |
 
 A record whose solve has nothing to split across processes declares itself
 `serial_only` (cardiacFOAM `singleCell`, one cell; `describe` with no `--entry`
