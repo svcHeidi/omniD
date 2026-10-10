@@ -127,7 +127,7 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
             spacings = [edge / level["cells_per_axis"] for level in levels]
             orders = {field: {kind: observed_orders(spacings, [level["errors"][field][kind] for level in levels])
                               for kind in kinds}
-                      for field in fields if all(field in level["errors"] for level in levels)}
+                      for field in fields if field in levels[0]["errors"]}
             rows.append({
                 "solver": solver, "dimension": d, "mesh": result["mesh"], "stated": result.get("stated"),
                 "levels": [
