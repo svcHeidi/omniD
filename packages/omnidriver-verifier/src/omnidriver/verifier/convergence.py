@@ -83,6 +83,54 @@ def observed_orders(spacings: Sequence[float], errors: Sequence[float]) -> dict[
     return {"successive": pairs, "least_squares": slope}
 
 
+#: The orders a fit against a finer level's solution can find: an error ratio outside what these orders give
+#: has no order.
+_ORDER_RANGE = (0.05, 8.0)
+
+
+def orders_against_a_finer_level(spacings: Sequence[float], errors: Sequence[float],
+                                 reference: float) -> dict[str, Any]:
+    """The observed order of errors measured against the solution at a finer ``reference`` spacing rather than the
+    exact one: for an order ``p``, the error at ``h`` is ``C*(h**p - reference**p)``, so the plain log-ratio of
+    successive errors is biased toward a higher order. Each successive order solves
+    ``(h_c**p - r**p)/(h_f**p - r**p) = e_c/e_f`` for ``p``; the least-squares order minimises the squared residual
+    of ``log e`` against ``log C + log(h**p - r**p)`` over all levels (both to 0.001, null for fewer than two levels,
+    and an order outside 0.05 to 8 is null). :class:`ProblemError` as for :func:`observed_orders`, and for a spacing
+    not above ``reference``."""
+    observed_orders(spacings, errors)
+    if not all(h > reference for h in spacings) or not reference > 0:
+        raise ProblemError(f"spacings {list(spacings)} must all exceed the reference {reference} > 0",
+                           code="spacings_unusable")
+    shape = lambda h, p: math.log(h**p - reference**p)
+    low, high = _ORDER_RANGE
+
+    def successive(hc: float, hf: float, ratio: float) -> float | None:
+        gap = lambda p: shape(hc, p) - shape(hf, p) - math.log(ratio)
+        if gap(low) > 0 or gap(high) < 0:
+            return None
+        a, b = low, high
+        while b - a > 1e-4:
+            mid = (a + b) / 2
+            a, b = (mid, b) if gap(mid) < 0 else (a, mid)
+        return round((a + b) / 2, 3)
+
+    pairs = [successive(hc, hf, ec / ef)
+             for (hc, ec), (hf, ef) in zip(zip(spacings, errors), zip(spacings[1:], errors[1:]))]
+    slope = None
+    if len(spacings) >= 2:
+        ys = [math.log(e) for e in errors]
+
+        def residual(p: float) -> float:
+            xs = [shape(h, p) for h in spacings]
+            offset = sum(y - x for x, y in zip(xs, ys)) / len(xs)
+            return sum((y - x - offset) ** 2 for x, y in zip(xs, ys))
+
+        grid = [low + k * 0.001 for k in range(int((high - low) / 0.001) + 1)]
+        best = min(grid, key=residual)
+        slope = None if best in (grid[0], grid[-1]) else round(best, 3)
+    return {"successive": pairs, "least_squares": slope}
+
+
 def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Per solver and dimension, each level's errors, evaluation time (``steps*dt``) and observed order against
     the previous level, the least-squares order over the levels, and the solver's stated orders as it gave them.
@@ -152,7 +200,8 @@ TEMPORAL_REFERENCES = ("exact", "finest_dt")
 def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Per solver, configuration, reference and dimension of the problem's temporal ladder, each level's errors,
     evaluation time (``steps*dt``) and observed order in ``dt`` against the previous level, the least-squares order
-    over the levels, and the stated orders as the result gives them.
+    over the levels, and the stated orders as the result gives them. Against the finest dt the orders are
+    :func:`orders_against_a_finer_level`'s.
 
     Each result is ``{"solver", "problem", "configuration", "reference", "stated", "levels": [{"dimension",
     "cells_per_axis", "dt", "steps", "errors": {field: {kind: value}}}]}``, ``reference`` one of
@@ -199,7 +248,9 @@ def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, An
             if any(set(level["errors"]) != set(named) for level in levels):
                 raise ProblemError(f"{label}: {d}D levels name different fields", code="results_invalid")
             dts = [level["dt"] for level in levels]
-            orders = {field: {kind: observed_orders(dts, [level["errors"][field][kind] for level in levels])
+            fit = (observed_orders if reference == "exact"
+                   else lambda h, e: orders_against_a_finer_level(h, e, finest))
+            orders = {field: {kind: fit(dts, [level["errors"][field][kind] for level in levels])
                               for kind in kinds} for field in named}
             rows.append({
                 "solver": solver, "configuration": result["configuration"], "reference": reference,

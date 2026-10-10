@@ -6,7 +6,7 @@ import math
 import pytest
 
 from omnidriver.verifier.convergence import (
-    comparison_table, error_norms, exact_values, observed_orders, temporal_table,
+    comparison_table, error_norms, exact_values, observed_orders, orders_against_a_finer_level, temporal_table,
 )
 from omnidriver.verifier.problem import ProblemError, load_problem
 
@@ -185,10 +185,33 @@ def test_the_temporal_table_fits_the_order_in_dt_at_a_fixed_mesh():
     assert first["stated"] == {"time": 1} and first["configuration"] == "godunov"
 
 
+@pytest.mark.parametrize("power", [1, 2])
+def test_an_error_against_a_finer_level_has_the_order_of_the_scheme_not_the_naive_ratio(power):
+    dts, finest = [0.008, 0.004, 0.002], 0.001
+    errors = [3 * (dt**power - finest**power) for dt in dts]
+    assert observed_orders(dts, errors)["least_squares"] > power + 0.1
+    orders = orders_against_a_finer_level(dts, errors, finest)
+    assert orders["successive"] == pytest.approx([power, power], abs=2e-3)
+    assert orders["least_squares"] == pytest.approx(power, abs=2e-3)
+
+
+def test_a_ratio_no_order_in_range_explains_has_no_order():
+    orders = orders_against_a_finer_level([0.008, 0.004], [1.0, 1.0], 0.001)
+    assert orders["successive"] == [None]
+    with pytest.raises(ProblemError) as caught:
+        orders_against_a_finer_level([0.008, 0.001], [1.0, 0.5], 0.001)
+    assert caught.value.code == "spacings_unusable"
+
+
 def test_against_the_finest_dt_the_finest_level_is_refused_and_the_rest_are_tabled():
     problem = load_problem("fda_monodomain")
-    (row,) = temporal_table(problem, [_temporal(problem, 1.0, 2, reference="finest_dt")])["rows"]
+    ladder = problem["refinement"]["temporal"]
+    result = _temporal(problem, 1.0, 1, reference="finest_dt")
+    for level in result["levels"]:
+        level["errors"]["V"] = {kind: level["dt"] - ladder["dt"][-1] for kind in ("L1", "L2", "Linf")}
+    (row,) = temporal_table(problem, [result])["rows"]
     assert row["reference"] == "finest_dt" and len(row["levels"]) == 3
+    assert row["least_squares_order"]["V"]["L2"] == pytest.approx(1, abs=2e-3)
     with_finest = _temporal(problem, 1.0, 2)
     with_finest["reference"] = "finest_dt"
     with pytest.raises(ProblemError) as caught:
