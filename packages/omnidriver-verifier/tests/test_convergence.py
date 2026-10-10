@@ -6,7 +6,8 @@ import math
 import pytest
 
 from omnidriver.verifier.convergence import (
-    comparison_table, error_norms, exact_values, observed_orders, orders_against_a_finer_level, temporal_table,
+    comparison_table, error_norms, exact_values, floor_contaminated, observed_orders,
+    orders_against_a_finer_level, temporal_table,
 )
 from omnidriver.verifier.problem import ProblemError, load_problem
 
@@ -254,3 +255,112 @@ def test_the_mesh_table_does_not_take_the_temporal_ladder_for_a_mesh():
     with pytest.raises(ProblemError) as caught:
         comparison_table(problem, [result])
     assert "not in ['hex', 'tet']" in str(caught.value)
+
+
+# V.L2 of the paper-ladder runs (dt 0.025 halved, N = 640), from the comparison table of the temporal study.
+CF_SBDF2_BACKWARD_2D = {
+    "exact": [4.360236897346161e-04, 1.1130944548673546e-04, 2.7643958181182363e-05, 6.412715007400837e-06,
+              1.0742290817422945e-06],
+    "finest_dt": [4.3496345849557984e-04, 1.1024780321217073e-04, 2.6581345806189617e-05, 5.348312979997971e-06],
+}
+OC_SPLIT_O2DT_1D = {
+    "exact": [0.44030357264930087, 0.44735868398968276, 0.45103934713634924, 0.452928114442365, 0.45388513163554495],
+    "finest_dt": [0.017818783155746754, 0.008568303442293737, 0.0037333624838518462, 0.0012550059898725995],
+}
+
+
+def _recorded(problem: dict, series: dict, reference: str, *, dimension: int = 1, **extra) -> dict:
+    ladder = problem["refinement"]["temporal"]
+    rungs = list(zip(ladder["dt"], ladder["steps"]))[:len(series[reference])]
+    return {
+        "solver": "s", "problem": problem["id"], "configuration": "c", "reference": reference, "stated": None,
+        "levels": [
+            {"dimension": dimension, "cells_per_axis": ladder["cells_per_axis"][str(dimension)], "dt": dt,
+             "steps": steps, "errors": {"V": {kind: error for kind in ("L1", "L2", "Linf")}}}
+            for (dt, steps), error in zip(rungs, series[reference])
+        ],
+        **extra,
+    }
+
+
+def _table(series: dict, *references: str, dimension: int = 1) -> dict:
+    problem = load_problem("fda_monodomain")
+    return temporal_table(problem, [_recorded(problem, series, r, dimension=dimension) for r in references])
+
+
+def test_a_finest_dt_order_is_marked_when_the_solver_does_not_converge_to_the_exact_solution():
+    exact, finest = _table(OC_SPLIT_O2DT_1D, "exact", "finest_dt")["rows"]
+    assert exact["converges"] is False and finest["converges_to_reference"] is False
+    assert finest["least_squares_order"]["V"]["L2"] == pytest.approx(0.965, abs=0.05)
+
+
+def test_a_finest_dt_order_is_confirmed_when_the_solver_converges():
+    exact, finest = _table(CF_SBDF2_BACKWARD_2D, "exact", "finest_dt", dimension=2)["rows"]
+    assert exact["converges"] is True and finest["converges_to_reference"] is True
+
+
+def test_a_finest_dt_row_without_an_exact_row_has_no_verdict():
+    (finest,) = _table(OC_SPLIT_O2DT_1D, "finest_dt")["rows"]
+    assert finest["converges_to_reference"] is None
+
+
+def test_the_reference_dt_is_recorded_in_a_finest_dt_row_only():
+    exact, finest = _table(CF_SBDF2_BACKWARD_2D, "exact", "finest_dt", dimension=2)["rows"]
+    assert finest["reference_dt"] == min(load_problem("fda_monodomain")["refinement"]["temporal"]["dt"])
+    assert exact["reference_dt"] is None
+
+
+def test_an_error_that_stops_decreasing_does_not_converge_whatever_its_fitted_order():
+    series = {"exact": [1.0e-3, 4.0e-4, 1.5e-4, 5.0e-5, 1.0e-3]}
+    (row,) = _table(series, "exact")["rows"]
+    assert row["converges"] is False
+
+
+def test_the_last_level_is_flagged_when_its_order_leaves_the_trend_and_the_fit_without_it_is_given():
+    (row,) = _table(CF_SBDF2_BACKWARD_2D, "exact", dimension=2)["rows"]
+    assert row["floor_contaminated"]["V"]["L2"] is True
+    assert row["least_squares_order"]["V"]["L2"] == pytest.approx(2.14, abs=0.01)
+    assert row["least_squares_order_without_floor"]["V"]["L2"] == pytest.approx(2.03, abs=0.01)
+
+
+def test_a_steady_drift_of_the_order_is_a_trend_not_a_floor():
+    sbdf2_euler_u1 = [2.820e-04, 8.719e-05, 2.960e-05, 1.123e-05, 4.713e-06]
+    problem = load_problem("fda_monodomain")
+    orders = observed_orders([0.025 / 2**k for k in range(5)], sbdf2_euler_u1)["successive"]
+    assert orders == pytest.approx([1.694, 1.558, 1.398, 1.253], abs=2e-3)
+    assert floor_contaminated(sbdf2_euler_u1, orders) is False
+
+
+def test_an_error_that_does_not_decrease_at_the_last_level_is_floor_contaminated():
+    assert floor_contaminated([4e-4, 1e-4, 2.5e-5, 2.6e-5], [2.0, 2.0, -0.04]) is True
+    assert floor_contaminated([4e-4, 1e-4], [2.0]) is False
+
+
+def test_orders_against_a_finer_level_are_refused_unless_the_spacings_decrease():
+    with pytest.raises(ProblemError) as caught:
+        orders_against_a_finer_level([0.002, 0.004, 0.008], [1.0, 3.0, 7.0], 0.001)
+    assert caught.value.code == "spacings_unusable" and "decrease" in str(caught.value)
+
+
+def test_both_references_round_their_orders_to_the_same_digits():
+    dts = [0.025 / 2**k for k in range(5)]
+    exact = observed_orders(dts, CF_SBDF2_BACKWARD_2D["exact"])
+    finer = orders_against_a_finer_level(dts[:-1], CF_SBDF2_BACKWARD_2D["finest_dt"], dts[-1])
+    for orders in (exact, finer):
+        assert all(round(order, 3) == order for order in [*orders["successive"], orders["least_squares"]])
+
+
+@pytest.mark.parametrize("reference, declared", [("finest_dt", 0.003125), ("exact", 0.0015625)])
+def test_a_declared_reference_dt_that_contradicts_the_reference_is_refused(reference, declared):
+    problem = load_problem("fda_monodomain")
+    result = _recorded(problem, CF_SBDF2_BACKWARD_2D, reference, dimension=2, reference_dt=declared)
+    with pytest.raises(ProblemError) as caught:
+        temporal_table(problem, [result])
+    assert caught.value.code == "results_invalid" and "reference_dt" in str(caught.value)
+
+
+def test_a_declared_reference_dt_that_is_the_ladders_finest_is_accepted():
+    problem = load_problem("fda_monodomain")
+    result = _recorded(problem, CF_SBDF2_BACKWARD_2D, "finest_dt", dimension=2, reference_dt=0.0015625)
+    (row,) = temporal_table(problem, [result])["rows"]
+    assert row["reference_dt"] == 0.0015625

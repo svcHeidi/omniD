@@ -6,6 +6,9 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from .problem import FUNCTIONS, SPACE, TEMPORAL, TIME, ProblemError
 
+#: The decimals an order is given to, for every reference.
+_DIGITS = 3
+
 _MATH = {name: getattr(math, name) for name in FUNCTIONS} | {"pi": math.pi}
 
 
@@ -63,8 +66,9 @@ def error_norms(problem: Mapping[str, Any], values: Sequence[float], exact: Sequ
 def observed_orders(spacings: Sequence[float], errors: Sequence[float]) -> dict[str, Any]:
     """The observed order between each pair of successive levels, ``log(e_c/e_f)/log(h_c/h_f)``, and the
     least-squares slope of ``log e`` against ``log h`` over all levels (null for a single level).
-    :class:`ProblemError` for an error that is not finite and positive, or a spacing that is not finite and
-    positive or repeats its predecessor."""
+    Orders are rounded to 0.001, as :func:`orders_against_a_finer_level`'s are. :class:`ProblemError` for an
+    error that is not finite and positive, or a spacing that is not finite and positive or repeats its
+    predecessor."""
     if len(spacings) != len(errors):
         raise ProblemError("spacings and errors must be of one length")
     if not all(math.isfinite(h) and h > 0 for h in spacings) or any(a == b for a, b in zip(spacings, spacings[1:])):
@@ -80,7 +84,8 @@ def observed_orders(spacings: Sequence[float], errors: Sequence[float]) -> dict[
         xs, ys = [math.log(h) for h in spacings], [math.log(e) for e in errors]
         mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
         slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sum((x - mx) ** 2 for x in xs)
-    return {"successive": pairs, "least_squares": slope}
+    return {"successive": [round(p, _DIGITS) for p in pairs], "least_squares": round(slope, _DIGITS)
+            if slope is not None else None}
 
 
 #: The orders a fit against a finer level's solution can find: an error ratio outside what these orders give
@@ -95,9 +100,12 @@ def orders_against_a_finer_level(spacings: Sequence[float], errors: Sequence[flo
     successive errors is biased toward a higher order. Each successive order solves
     ``(h_c**p - r**p)/(h_f**p - r**p) = e_c/e_f`` for ``p``; the least-squares order minimises the squared residual
     of ``log e`` against ``log C + log(h**p - r**p)`` over all levels (both to 0.001, null for fewer than two levels,
-    and an order outside 0.05 to 8 is null). :class:`ProblemError` as for :func:`observed_orders`, and for a spacing
-    not above ``reference``."""
+    and an order outside 0.05 to 8 is null). :class:`ProblemError` as for :func:`observed_orders`, for spacings
+    that are not strictly decreasing, and for a spacing not above ``reference``."""
     observed_orders(spacings, errors)
+    if any(a < b for a, b in zip(spacings, spacings[1:])):
+        raise ProblemError(f"spacings must decrease from the coarsest level: {list(spacings)}",
+                           code="spacings_unusable")
     if not all(h > reference for h in spacings) or not reference > 0:
         raise ProblemError(f"spacings {list(spacings)} must all exceed the reference {reference} > 0",
                            code="spacings_unusable")
@@ -112,7 +120,7 @@ def orders_against_a_finer_level(spacings: Sequence[float], errors: Sequence[flo
         while b - a > 1e-4:
             mid = (a + b) / 2
             a, b = (mid, b) if gap(mid) < 0 else (a, mid)
-        return round((a + b) / 2, 3)
+        return round((a + b) / 2, _DIGITS)
 
     pairs = [successive(hc, hf, ec / ef)
              for (hc, ec), (hf, ef) in zip(zip(spacings, errors), zip(spacings[1:], errors[1:]))]
@@ -127,7 +135,7 @@ def orders_against_a_finer_level(spacings: Sequence[float], errors: Sequence[flo
 
         grid = [low + k * 0.001 for k in range(int((high - low) / 0.001) + 1)]
         best = min(grid, key=residual)
-        slope = None if best in (grid[0], grid[-1]) else round(best, 3)
+        slope = None if best in (grid[0], grid[-1]) else round(best, _DIGITS)
     return {"successive": pairs, "least_squares": slope}
 
 
@@ -196,18 +204,46 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
 #: the spatial error both share and the difference between their evaluation times.
 TEMPORAL_REFERENCES = ("exact", "finest_dt")
 
+#: A configuration converges to the exact solution only if its least-squares order against it reaches this and its
+#: error at the finest dt is below the coarsest's.
+MIN_CONVERGING_ORDER = 0.5
+
+#: A successive order this far from the one before it marks the finest level floor-contaminated.
+FLOOR_JUMP = 0.25
+
+
+def floor_contaminated(errors: Sequence[float], orders: Sequence[float | None]) -> bool:
+    """Whether the finest level of a coarse-to-fine error sequence sits on a floor (the spatial or round-off error
+    the ladder does not refine) instead of the trend: its error did not decrease, or its successive order differs
+    by more than :data:`FLOOR_JUMP` from the one before it (a drift smaller than that per level is a trend, not a
+    floor). ``orders`` are the successive orders, one fewer than ``errors``; with fewer than two there is no trend
+    to depart from."""
+    if len(errors) >= 2 and errors[-1] >= errors[-2]:
+        return True
+    return len(orders) >= 2 and abs(orders[-1] - orders[-2]) > FLOOR_JUMP
+
 
 def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Per solver, configuration, reference and dimension of the problem's temporal ladder, each level's errors,
     evaluation time (``steps*dt``) and observed order in ``dt`` against the previous level, the least-squares order
     over the levels, and the stated orders as the result gives them. Against the finest dt the orders are
-    :func:`orders_against_a_finer_level`'s.
+    :func:`orders_against_a_finer_level`'s, and the row records that ``reference_dt``.
+
+    Every row of the ``exact`` reference says whether its finest level is :func:`floor_contaminated` per field and
+    norm (``floor_contaminated``), and the least-squares order without that level where it is
+    (``least_squares_order_without_floor``, else null); a contaminated order is not the scheme's. A configuration
+    ``converges`` to the exact solution only if every norm's least-squares order reaches
+    :data:`MIN_CONVERGING_ORDER` and its finest-dt error is below its coarsest. A ``finest_dt`` row carries its
+    exact row's verdict as ``converges_to_reference`` (null when no exact row of that solver, configuration and
+    dimension is given), because an order against a solution the scheme does not converge to is the order of its
+    dt-dependent part only, never a verdict by itself.
 
     Each result is ``{"solver", "problem", "configuration", "reference", "stated", "levels": [{"dimension",
     "cells_per_axis", "dt", "steps", "errors": {field: {kind: value}}}]}``, ``reference`` one of
     :data:`TEMPORAL_REFERENCES`. :class:`ProblemError` for a problem with no temporal ladder, a level off it (a
     ``finest_dt`` result's finest level among them, whose error is zero by construction), a level listed twice, a
-    norm missing, or a field given at only some of a dimension's levels."""
+    norm missing, a field given at only some of a dimension's levels, or a ``reference_dt`` the result declares
+    that is not the ladder's finest dt for ``finest_dt`` (or is declared for ``exact``)."""
     ladder = problem["refinement"].get(TEMPORAL)
     if ladder is None:
         raise ProblemError(f"{problem['id']!r} has no refinement.{TEMPORAL}")
@@ -224,6 +260,9 @@ def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, An
         if reference not in TEMPORAL_REFERENCES:
             raise ProblemError(f"{label}: reference {reference!r} is not one of {list(TEMPORAL_REFERENCES)}",
                                code="results_invalid")
+        if "reference_dt" in result and result["reference_dt"] != (finest if reference == "finest_dt" else None):
+            raise ProblemError(f"{label}: reference_dt {result['reference_dt']!r} does not match reference "
+                               f"{reference!r} (the finest dt of the ladder is {finest})", code="results_invalid")
         by_dimension: dict[int, list[Mapping[str, Any]]] = {}
         for level in result["levels"]:
             _require(f"{label}: a level", level, ("dimension", "cells_per_axis", "dt", "steps", "errors"))
@@ -252,8 +291,11 @@ def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, An
                    else lambda h, e: orders_against_a_finer_level(h, e, finest))
             orders = {field: {kind: fit(dts, [level["errors"][field][kind] for level in levels])
                               for kind in kinds} for field in named}
-            rows.append({
+            series = {field: {kind: [level["errors"][field][kind] for level in levels] for kind in kinds}
+                      for field in named}
+            row = {
                 "solver": solver, "configuration": result["configuration"], "reference": reference,
+                "reference_dt": finest if reference == "finest_dt" else None,
                 "dimension": d, "cells_per_axis": ladder["cells_per_axis"][str(d)], "stated": result.get("stated"),
                 "levels": [
                     {"dt": level["dt"], "steps": level["steps"], "time": level["steps"] * level["dt"],
@@ -264,7 +306,26 @@ def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, An
                 ],
                 "least_squares_order": {field: {kind: orders[field][kind]["least_squares"] for kind in kinds}
                                         for field in named},
-            })
+            }
+            if reference == "exact":
+                flags = {field: {kind: floor_contaminated(series[field][kind], orders[field][kind]["successive"])
+                                 for kind in kinds} for field in named}
+                row["floor_contaminated"] = flags
+                row["least_squares_order_without_floor"] = {
+                    field: {kind: (observed_orders(dts[:-1], series[field][kind][:-1])["least_squares"]
+                                   if flags[field][kind] and len(dts) > 2 else None) for kind in kinds}
+                    for field in named}
+                row["converges"] = all(
+                    orders[field][kind]["least_squares"] is not None
+                    and orders[field][kind]["least_squares"] >= MIN_CONVERGING_ORDER
+                    and series[field][kind][-1] < series[field][kind][0]
+                    for field in named for kind in kinds)
+            rows.append(row)
+    exact = {(row["solver"], row["configuration"], row["dimension"]): row["converges"]
+             for row in rows if row["reference"] == "exact"}
+    for row in rows:
+        if row["reference"] == "finest_dt":
+            row["converges_to_reference"] = exact.get((row["solver"], row["configuration"], row["dimension"]))
     return {"status": "ok", "problem": problem["id"], "refinement": TEMPORAL, "rows": rows}
 
 
