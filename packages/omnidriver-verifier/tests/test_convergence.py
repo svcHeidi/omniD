@@ -181,7 +181,7 @@ def test_the_temporal_table_fits_the_order_in_dt_at_a_fixed_mesh():
     assert second["least_squares_order"]["V"]["Linf"] == pytest.approx(2)
     assert first["levels"][0]["observed_order"]["V"]["L2"] is None
     assert first["levels"][1]["observed_order"]["V"]["L2"] == pytest.approx(1)
-    assert first["levels"][0]["time"] == pytest.approx(178 * 0.001121075)
+    assert first["levels"][0]["time"] == pytest.approx(8 * 0.025)
     assert first["stated"] == {"time": 1} and first["configuration"] == "godunov"
 
 
@@ -210,7 +210,7 @@ def test_against_the_finest_dt_the_finest_level_is_refused_and_the_rest_are_tabl
     for level in result["levels"]:
         level["errors"]["V"] = {kind: level["dt"] - ladder["dt"][-1] for kind in ("L1", "L2", "Linf")}
     (row,) = temporal_table(problem, [result])["rows"]
-    assert row["reference"] == "finest_dt" and len(row["levels"]) == 3
+    assert row["reference"] == "finest_dt" and len(row["levels"]) == len(ladder["dt"]) - 1
     assert row["least_squares_order"]["V"]["L2"] == pytest.approx(1, abs=2e-3)
     with_finest = _temporal(problem, 1.0, 2)
     with_finest["reference"] = "finest_dt"
@@ -223,7 +223,7 @@ def test_against_the_finest_dt_the_finest_level_is_refused_and_the_rest_are_tabl
     "edit",
     [
         lambda r: r["levels"][0].__setitem__("cells_per_axis", 320),
-        lambda r: r["levels"][0].__setitem__("steps", 179),
+        lambda r: r["levels"][0].__setitem__("steps", 9),
         lambda r: r["levels"][0].__setitem__("dimension", 3),
         lambda r: r.__setitem__("reference", "richardson"),
         lambda r: r["levels"].append(dict(r["levels"][0])),

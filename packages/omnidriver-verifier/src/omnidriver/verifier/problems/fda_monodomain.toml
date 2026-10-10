@@ -98,19 +98,19 @@ dt = [0.00892857, 0.00224215, 0.000560538, 0.000140174]
 steps = [22, 89, 357, 1427]
 dt_scales_as = "h**2"
 
-# The native temporal study: each dimension's mesh fixed, dt halved at each level, to settle the time order apart
-# from the space order.
+# The owner's paper temporal matrix (timeCouplingScheme x ddt(Vm), the FDA verifier with the diagonal sigma above):
+# each dimension's mesh fixed, dt halved at each level, to settle the time order apart from the space order.
 [refinement.temporal]
 mesh = "hex"
 dimensions = [1, 2]
 cells_per_axis = { 1 = 640, 2 = 640 }
-dt = [0.001121075, 0.000560538, 0.000280269, 0.0001401345]
-steps = [178, 357, 714, 1427]
+dt = [0.025, 0.0125, 0.00625, 0.003125, 0.0015625]
+steps = [8, 16, 32, 64, 128]
 
 [refinement.temporal.excluded.3]
-cells_per_axis = 160
-dt = [0.00892857, 0.00224215, 0.000560538, 0.0001401345]
-reason = "skipped by the owner: 160**3 = 4.1M cells, against a 2.28M-cell cardiacFOAM case that took about 11 GB here; its dt also falls by 4 at each level, not 2, with the mesh fixed"
+cells_per_axis = 80
+dt = [0.025, 0.0125, 0.00625, 0.003125, 0.0015625, 0.00078125, 0.000390625]
+reason = "the paper runs 3D for sbdf2 with ddt(Vm) backward only, at N = 80; the native temporalConvergence study's 3D rows (N = 160, 4.1M cells) are skipped by the owner, against a 2.28M-cell cardiacFOAM case that took about 11 GB here"
 
 [norms]
 fields = ["V", "u1", "u2"]
@@ -133,5 +133,5 @@ cell_model = ["src/ionicModels/verificationModels/monodomainFDAManufactured/mono
 source = ["tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties", "https://cdrh-rst.fda.gov/node/1576"]
 boundary = ["src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties"]
 initial = ["src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.C"]
-refinement = ["tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/temporalConvergence/sweep_temporal_convergence.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/sweep_tet_generic.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/box.geo.template", "derived: steps from time.report_when and dt; dt_scales_as from the ladder"]
+refinement = ["tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json", "paper: ElectrophysiologySolver data/paperI/solver/tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/temporalConvergence/results/fullMatrix2026/temporal_full_matrix_cases.csv (git-ignored in the paper repository, sha256 a10edcea32cc2fd2df675fb313d31e1d5bbb6f8bda24375538a5cbde4a9d1f77)", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/sweep_tet_generic.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/box.geo.template", "derived: steps from time.report_when and dt; dt_scales_as from the ladder"]
 norms = ["src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.C", "src/verificationModels/verificationUtils.H"]
