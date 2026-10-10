@@ -23,6 +23,9 @@ def _parser() -> RefusingParser:
     compare.add_argument("problem_id")
     compare.add_argument("--results", nargs="+", required=True, type=Path,
                          help="one JSON per solver: solver, problem, mesh, stated, levels")
+    compare.add_argument("--temporal", action="store_true",
+                         help="table the problem's temporal ladder instead: one JSON per solver configuration and "
+                              "reference (solver, problem, configuration, reference, stated, levels), orders in dt")
     return parser
 
 
@@ -37,9 +40,10 @@ def _answer(args: Any) -> dict[str, Any]:
     if args.command == "show":
         return {"status": "ok", "problem": problem}
     if args.command == "compare":
-        from .convergence import comparison_table
+        from .convergence import comparison_table, temporal_table
 
-        return comparison_table(problem, [_results(path) for path in args.results])
+        table = temporal_table if args.temporal else comparison_table
+        return table(problem, [_results(path) for path in args.results])
     from .residual import residual_verdict
 
     return residual_verdict(problem)

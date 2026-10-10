@@ -5,7 +5,9 @@ import math
 
 import pytest
 
-from omnidriver.verifier.convergence import comparison_table, error_norms, exact_values, observed_orders
+from omnidriver.verifier.convergence import (
+    comparison_table, error_norms, exact_values, observed_orders, temporal_table,
+)
 from omnidriver.verifier.problem import ProblemError, load_problem
 
 
@@ -152,3 +154,80 @@ def test_a_field_present_at_only_some_levels_is_refused_not_dropped():
         comparison_table(problem, [result])
     assert caught.value.code == "results_invalid"
     assert "u1" in str(caught.value)
+
+
+def _temporal(problem: dict, scale: float, power: float, *, reference: str = "exact", dimension: int = 1) -> dict:
+    ladder = problem["refinement"]["temporal"]
+    rungs = list(zip(ladder["dt"], ladder["steps"]))
+    if reference == "finest_dt":
+        rungs = rungs[:-1]
+    return {
+        "solver": "a", "problem": problem["id"], "configuration": "godunov", "reference": reference,
+        "stated": {"time": 1},
+        "levels": [
+            {"dimension": dimension, "cells_per_axis": ladder["cells_per_axis"][str(dimension)], "dt": dt,
+             "steps": steps, "errors": {"V": {kind: scale * dt**power for kind in ("L1", "L2", "Linf")}}}
+            for dt, steps in rungs
+        ],
+    }
+
+
+def test_the_temporal_table_fits_the_order_in_dt_at_a_fixed_mesh():
+    problem = load_problem("fda_monodomain")
+    table = temporal_table(problem, [_temporal(problem, 3.0, 1), _temporal(problem, 5.0, 2, dimension=2)])
+    first, second = table["rows"]
+    assert (first["dimension"], first["cells_per_axis"], second["dimension"]) == (1, 640, 2)
+    assert first["least_squares_order"]["V"]["L2"] == pytest.approx(1)
+    assert second["least_squares_order"]["V"]["Linf"] == pytest.approx(2)
+    assert first["levels"][0]["observed_order"]["V"]["L2"] is None
+    assert first["levels"][1]["observed_order"]["V"]["L2"] == pytest.approx(1)
+    assert first["levels"][0]["time"] == pytest.approx(178 * 0.001121075)
+    assert first["stated"] == {"time": 1} and first["configuration"] == "godunov"
+
+
+def test_against_the_finest_dt_the_finest_level_is_refused_and_the_rest_are_tabled():
+    problem = load_problem("fda_monodomain")
+    (row,) = temporal_table(problem, [_temporal(problem, 1.0, 2, reference="finest_dt")])["rows"]
+    assert row["reference"] == "finest_dt" and len(row["levels"]) == 3
+    with_finest = _temporal(problem, 1.0, 2)
+    with_finest["reference"] = "finest_dt"
+    with pytest.raises(ProblemError) as caught:
+        temporal_table(problem, [with_finest])
+    assert caught.value.code == "results_invalid"
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda r: r["levels"][0].__setitem__("cells_per_axis", 320),
+        lambda r: r["levels"][0].__setitem__("steps", 179),
+        lambda r: r["levels"][0].__setitem__("dimension", 3),
+        lambda r: r.__setitem__("reference", "richardson"),
+        lambda r: r["levels"].append(dict(r["levels"][0])),
+        lambda r: r["levels"][1]["errors"].__setitem__("u1", {"L1": 1.0, "L2": 1.0, "Linf": 1.0}),
+        lambda r: r["levels"][1]["errors"]["V"].pop("Linf"),
+    ],
+)
+def test_a_temporal_level_off_the_ladder_or_inconsistent_is_refused_by_name(edit):
+    problem = load_problem("fda_monodomain")
+    result = _temporal(problem, 1.0, 1)
+    edit(result)
+    with pytest.raises(ProblemError) as caught:
+        temporal_table(problem, [result])
+    assert caught.value.code == "results_invalid"
+
+
+def test_a_problem_without_a_temporal_ladder_has_no_temporal_table():
+    problem = load_problem("fda_monodomain")
+    del problem["refinement"]["temporal"]
+    with pytest.raises(ProblemError):
+        temporal_table(problem, [])
+
+
+def test_the_mesh_table_does_not_take_the_temporal_ladder_for_a_mesh():
+    problem = load_problem("fda_monodomain")
+    result = _result(problem, "a", 1.0, 2)
+    result["mesh"] = "temporal"
+    with pytest.raises(ProblemError) as caught:
+        comparison_table(problem, [result])
+    assert "not in ['hex', 'tet']" in str(caught.value)

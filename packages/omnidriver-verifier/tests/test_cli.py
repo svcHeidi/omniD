@@ -63,6 +63,23 @@ def test_compare_tables_the_results_files(capsys, tmp_path):
     assert row["solver"] == "toy" and row["least_squares_order"]["V"]["L2"] == pytest.approx(2)
 
 
+def test_compare_temporal_tables_the_temporal_ladder(capsys, tmp_path):
+    ladder = load_problem("fda_monodomain")["refinement"]["temporal"]
+    result = {
+        "solver": "toy", "problem": "fda_monodomain", "configuration": "lie", "reference": "exact",
+        "stated": {"time": 1},
+        "levels": [{"dimension": 2, "cells_per_axis": 640, "dt": dt, "steps": steps,
+                    "errors": {"V": {"L1": dt, "L2": dt, "Linf": dt}}}
+                   for dt, steps in zip(ladder["dt"], ladder["steps"])],
+    }
+    path = tmp_path / "toy.json"
+    path.write_text(json.dumps(result))
+    code, answer = _run(capsys, "compare", "fda_monodomain", "--temporal", "--results", str(path))
+    assert code == 0 and answer["refinement"] == "temporal"
+    [row] = answer["rows"]
+    assert row["least_squares_order"]["V"]["L2"] == pytest.approx(1)
+
+
 def test_compare_refuses_an_unreadable_results_file(capsys, tmp_path):
     path = tmp_path / "broken.json"
     path.write_text("{")

@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from typing import Any, Iterable, Mapping, Sequence
 
-from .problem import FUNCTIONS, SPACE, TIME, ProblemError
+from .problem import FUNCTIONS, SPACE, TEMPORAL, TIME, ProblemError
 
 _MATH = {name: getattr(math, name) for name in FUNCTIONS} | {"pi": math.pi}
 
@@ -97,9 +97,9 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
         solver = result["solver"]
         if result["problem"] != problem["id"]:
             raise ProblemError(f"{solver}: a result of {result['problem']!r}, not {problem['id']!r}")
-        ladder = problem["refinement"].get(result["mesh"])
-        if ladder is None:
-            raise ProblemError(f"{solver}: mesh {result['mesh']!r} is not in {sorted(problem['refinement'])}")
+        if result["mesh"] not in problem["mesh_progression"]:
+            raise ProblemError(f"{solver}: mesh {result['mesh']!r} is not in {problem['mesh_progression']}")
+        ladder = problem["refinement"][result["mesh"]]
         rungs = {cells: (dt, steps) for cells, dt, steps in zip(ladder["cells_per_axis"], ladder["dt"], ladder["steps"])}
         by_dimension: dict[int, list[Mapping[str, Any]]] = {}
         for level in result["levels"]:
@@ -141,6 +141,80 @@ def comparison_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, 
                                         for field in orders},
             })
     return {"status": "ok", "problem": problem["id"], "rows": rows}
+
+
+#: What a temporal level's errors are measured against: the exact solution, or the same solver's finest-dt
+#: solution on the same mesh, each level's own exact error less the finest level's, point by point, which removes
+#: the spatial error both share and the difference between their evaluation times.
+TEMPORAL_REFERENCES = ("exact", "finest_dt")
+
+
+def temporal_table(problem: Mapping[str, Any], results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Per solver, configuration, reference and dimension of the problem's temporal ladder, each level's errors,
+    evaluation time (``steps*dt``) and observed order in ``dt`` against the previous level, the least-squares order
+    over the levels, and the stated orders as the result gives them.
+
+    Each result is ``{"solver", "problem", "configuration", "reference", "stated", "levels": [{"dimension",
+    "cells_per_axis", "dt", "steps", "errors": {field: {kind: value}}}]}``, ``reference`` one of
+    :data:`TEMPORAL_REFERENCES`. :class:`ProblemError` for a problem with no temporal ladder, a level off it (a
+    ``finest_dt`` result's finest level among them, whose error is zero by construction), a level listed twice, a
+    norm missing, or a field given at only some of a dimension's levels."""
+    ladder = problem["refinement"].get(TEMPORAL)
+    if ladder is None:
+        raise ProblemError(f"{problem['id']!r} has no refinement.{TEMPORAL}")
+    fields, kinds = problem["norms"]["fields"], problem["norms"]["kinds"]
+    rungs = dict(zip(ladder["dt"], ladder["steps"]))
+    finest = min(ladder["dt"])
+    rows = []
+    for result in results:
+        _require("a result", result, ("solver", "problem", "configuration", "reference", "levels"))
+        solver, reference = result["solver"], result["reference"]
+        label = f"{solver} {result['configuration']}"
+        if result["problem"] != problem["id"]:
+            raise ProblemError(f"{label}: a result of {result['problem']!r}, not {problem['id']!r}")
+        if reference not in TEMPORAL_REFERENCES:
+            raise ProblemError(f"{label}: reference {reference!r} is not one of {list(TEMPORAL_REFERENCES)}",
+                               code="results_invalid")
+        by_dimension: dict[int, list[Mapping[str, Any]]] = {}
+        for level in result["levels"]:
+            _require(f"{label}: a level", level, ("dimension", "cells_per_axis", "dt", "steps", "errors"))
+            d, dt = level["dimension"], level["dt"]
+            on_ladder = (d in ladder["dimensions"] and level["cells_per_axis"] == ladder["cells_per_axis"][str(d)]
+                         and rungs.get(dt) == level["steps"])
+            if not on_ladder or (reference == "finest_dt" and dt == finest):
+                raise ProblemError(f"{label}: level {d}D N={level['cells_per_axis']} dt={dt} steps={level['steps']} "
+                                   f"is off the problem's {TEMPORAL} ladder for reference {reference!r}",
+                                   code="results_invalid")
+            if any(other["dt"] == dt for other in by_dimension.get(d, [])):
+                raise ProblemError(f"{label}: level {d}D dt={dt} is listed twice", code="results_invalid")
+            given = level["errors"]
+            missing = [f"{field}.{kind}" for field in given for kind in kinds if kind not in given[field]]
+            if not given or missing or not set(given) <= set(fields):
+                raise ProblemError(f"{label}: level {d}D dt={dt} misses {missing} or names fields outside "
+                                   f"norms.fields {fields}", code="results_invalid")
+            by_dimension.setdefault(d, []).append(level)
+        for d, levels in sorted(by_dimension.items()):
+            levels = sorted(levels, key=lambda level: -level["dt"])
+            named = [field for field in fields if field in levels[0]["errors"]]
+            if any(set(level["errors"]) != set(named) for level in levels):
+                raise ProblemError(f"{label}: {d}D levels name different fields", code="results_invalid")
+            dts = [level["dt"] for level in levels]
+            orders = {field: {kind: observed_orders(dts, [level["errors"][field][kind] for level in levels])
+                              for kind in kinds} for field in named}
+            rows.append({
+                "solver": solver, "configuration": result["configuration"], "reference": reference,
+                "dimension": d, "cells_per_axis": ladder["cells_per_axis"][str(d)], "stated": result.get("stated"),
+                "levels": [
+                    {"dt": level["dt"], "steps": level["steps"], "time": level["steps"] * level["dt"],
+                     "errors": {field: level["errors"][field] for field in named},
+                     "observed_order": {field: {kind: (orders[field][kind]["successive"][index - 1] if index else None)
+                                                for kind in kinds} for field in named}}
+                    for index, level in enumerate(levels)
+                ],
+                "least_squares_order": {field: {kind: orders[field][kind]["least_squares"] for kind in kinds}
+                                        for field in named},
+            })
+    return {"status": "ok", "problem": problem["id"], "refinement": TEMPORAL, "rows": rows}
 
 
 def _require(where: str, item: Any, keys: tuple[str, ...]) -> None:
