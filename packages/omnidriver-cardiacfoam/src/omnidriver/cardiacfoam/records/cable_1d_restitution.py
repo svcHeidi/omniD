@@ -11,7 +11,7 @@ from omnidriver.cardiacfoam.spatial_pacing import (
     generate_spatial_s1_s2_stimulus_lists, generate_spatial_stimulus_lists,
 )
 from omnidriver.core.tutorial_records import (
-    AxisContract, AxisPatch, AxisResult, DefaultArgument, TutorialRecord, WorkflowStep,
+    AxisContract, AxisPatch, AxisResult, DefaultArgument, TutorialRecord, TutorialRecordError, WorkflowStep,
 )
 from omnidriver.openfoam.case_planning import read_nested_entry
 from omnidriver.openfoam.literals import parse_scalar_list_literal, parse_vector3_list_literal
