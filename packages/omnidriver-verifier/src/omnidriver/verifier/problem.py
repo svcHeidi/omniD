@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import math
 import tomllib
 from importlib.resources import files
 from typing import Any, Iterable, Mapping
@@ -22,6 +23,15 @@ UNIT_SYSTEMS = ("dimensionless",)
 CURRENT_BASES = ("per_unit_membrane_area", "per_unit_capacitance")
 DIMENSION_RULES = ("first_d_intervals",)
 TENSOR_KINDS = ("diagonal",)
+NORM_KINDS = ("L1", "L2", "Linf")
+NORM_WEIGHTS = ("cell_volume",)
+NORM_NORMALISATIONS = ("total_volume",)
+#: When a level is judged: after its ``steps`` steps of ``dt``, the first time ``time.report_when`` holds.
+NORM_TIMES = ("steps*dt",)
+#: How each level's ``dt`` scales with its spacing ``h``, the box edge over ``cells_per_axis``.
+DT_SCALINGS = {"h": 1, "h**2": 2}
+#: The names a report rule may use: the time reached, the step and the end time.
+REPORT_SCOPE = frozenset({"t", "dt", "end"})
 
 FUNCTIONS = frozenset({"sqrt", "cos", "sin", "exp", "log"})
 #: The differential operators a PDE may name: ``Derivative(f, t)``, ``grad(f)``, ``div(v)``.
@@ -37,7 +47,8 @@ _BLOCKS: dict[str, frozenset[str] | None] = {
     "id": None, "title": None, "equation": None, "dimensions": None, "mesh_progression": None, "cites": None,
     "native": None, "pde": frozenset({"equation", "unknown", "parameters", "tensors"}),
     "units": frozenset({"system", "system_reason", "native", "Iion", "Iion_reason", "fixed_capacitance"}),
-    "domain": frozenset({"box", "dimension_d_uses"}), "time": frozenset({"start", "end"}), "parameters": None,
+    "domain": frozenset({"box", "dimension_d_uses"}), "time": frozenset({"start", "end", "report_when"}),
+    "parameters": None,
     "derived": None, "fields": None, "exact": None,
     "cell_model": frozenset({"inputs", "states", "parameters", "shares_with_pde", "rates", "Iion"}),
     "source": frozenset({"expression"}), "boundary": frozenset({"all_faces"}),
@@ -48,6 +59,8 @@ _BLOCKS: dict[str, frozenset[str] | None] = {
 _DERIVED_KEYS = frozenset({"expression", "native", "use", "use_reason", "tolerance", "tolerance_reason"})
 _TRACED = ("pde", "units", "domain", "time", "parameters", "derived", "fields", "exact", "cell_model", "source",
            "boundary", "initial", "refinement", "norms")
+# The owner's ladder departs from an exact h**2 scaling by 0.45% between its two coarsest levels.
+_LADDER_SCALING_TOLERANCE = 0.01
 _ALLOWED_NODES = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Call, ast.Name, ast.Load, ast.Constant,
                   ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.USub, ast.UAdd)
 
@@ -181,20 +194,76 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
     if stray or not all(isinstance(unit, str) and unit for unit in unit_names.values()):
         raise ProblemError(f"units.native: {stray or 'an empty unit'} names no coordinate, unknown or parameter")
 
+    time = problem["time"]
+    report_when = _rule("time.report_when", time["report_when"])
     refinement = _table("refinement", problem["refinement"])
     if set(refinement) != set(problem["mesh_progression"]):
         raise ProblemError(f"refinement: has {sorted(refinement)}, the progression is {problem['mesh_progression']}")
     for kind, ladder in refinement.items():
-        ladder = _table(f"refinement.{kind}", ladder)
-        _keys(f"refinement.{kind}.", ladder, frozenset({"cells_per_axis", "dt"}), required=True)
-        if not ladder["cells_per_axis"] or len(ladder["cells_per_axis"]) != len(ladder["dt"]):
-            raise ProblemError(f"refinement.{kind}: cells_per_axis and dt must be non-empty and of equal length")
+        _ladder(f"refinement.{kind}", _table(f"refinement.{kind}", ladder), time, report_when)
+
+    norms = problem["norms"]
+    _menu("norms.at", norms["at"], NORM_TIMES)
+    _menu("norms.points", norms["points"], POINTS)
+    _menu("norms.weight", norms["weight"], NORM_WEIGHTS)
+    _menu("norms.normalised_by", norms["normalised_by"], NORM_NORMALISATIONS)
+    for kind in norms["kinds"]:
+        _menu("norms.kinds", kind, NORM_KINDS)
+    if not norms["fields"] or not set(norms["fields"]) <= {unknown, *states}:
+        raise ProblemError(f"norms.fields: {norms['fields']} must be unknowns of the problem ({[unknown, *states]})")
 
     provenance = _table("provenance", problem["provenance"])
     _keys("provenance.", provenance, frozenset(_TRACED), required=True)
     for name, sources in provenance.items():
         if not sources or not all(isinstance(source, str) and source for source in sources):
             raise ProblemError(f"provenance.{name}: names no source")
+
+
+def _rule(where: str, text: Any) -> Any:
+    """Refuse ``text`` unless it is one comparison of arithmetic over :data:`REPORT_SCOPE`; return it compiled."""
+    text = _string(where, text)
+    try:
+        tree = ast.parse(text, mode="eval")
+    except SyntaxError as exc:
+        raise ProblemError(f"{where}: {text!r} does not parse ({exc.msg})") from None
+    if not (isinstance(tree.body, ast.Compare) and len(tree.body.ops) == 1
+            and isinstance(tree.body.ops[0], (ast.GtE, ast.Gt))):
+        raise ProblemError(f"{where}: {text!r} is not one comparison 'a >= b' or 'a > b'")
+    for side in (tree.body.left, tree.body.comparators[0]):
+        _expression(where, ast.unparse(side), REPORT_SCOPE)
+    return compile(tree, where, "eval")
+
+
+def _ladder(where: str, ladder: Mapping[str, Any], time: Mapping[str, Any], report_when: Any) -> None:
+    _keys(f"{where}.", ladder, frozenset({"cells_per_axis", "dt", "steps", "dt_scales_as"}), required=True)
+    cells, dts, steps = ladder["cells_per_axis"], ladder["dt"], ladder["steps"]
+    if not cells or not len(cells) == len(dts) == len(steps):
+        raise ProblemError(f"{where}: cells_per_axis, dt and steps must be non-empty and of equal length")
+    for dt, given in zip(dts, steps):
+        if isinstance(dt, bool) or not isinstance(dt, (int, float)) or dt <= 0:
+            raise ProblemError(f"{where}.dt: {dt!r} is not a positive number")
+        reported = _report_step(report_when, time, dt)
+        if reported is None:
+            raise ProblemError(f"time.report_when: dt = {dt} never meets it by the end time")
+        if given != reported:
+            raise ProblemError(f"{where}.steps: dt = {dt} first meets time.report_when after {reported} steps, "
+                               f"not {given}")
+    _menu(f"{where}.dt_scales_as", ladder["dt_scales_as"], tuple(DT_SCALINGS))
+    power = DT_SCALINGS[ladder["dt_scales_as"]]
+    for (coarse, coarse_dt), (fine, fine_dt) in zip(zip(cells, dts), zip(cells[1:], dts[1:])):
+        expected = (fine / coarse) ** power
+        if abs((coarse_dt / fine_dt) / expected - 1) > _LADDER_SCALING_TOLERANCE:
+            raise ProblemError(f"{where}.dt_scales_as: dt {coarse_dt} -> {fine_dt} over {coarse} -> {fine} cells "
+                               f"is not dt ~ {ladder['dt_scales_as']}")
+
+
+def _report_step(report_when: Any, time: Mapping[str, Any], dt: float) -> int | None:
+    last = math.ceil((time["end"] - time["start"]) / dt) + 1
+    for steps in range(last + 1):
+        # The rule was validated as arithmetic over REPORT_SCOPE, so eval sees nothing else.
+        if eval(report_when, {"__builtins__": {}}, {"t": time["start"] + steps * dt, "dt": dt, "end": time["end"]}):
+            return steps
+    return None
 
 
 def _library():

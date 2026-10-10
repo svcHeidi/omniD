@@ -119,3 +119,35 @@ def test_a_diagonal_tensor_names_parameters():
     problem = _shipped()
     problem["pde"]["tensors"]["sigma"]["diagonal"] = ["sigma_xx", "sigma_yy", "sigma_qq"]
     assert "pde.tensors.sigma" in _refused(problem)
+
+
+def test_each_level_is_judged_at_its_report_step():
+    problem = load_problem("fda_monodomain")
+    ladder = problem["refinement"]["hex"]
+    for steps, dt in zip(ladder["steps"], ladder["dt"]):
+        assert steps * dt + dt / 2 >= problem["time"]["end"] > (steps - 1) * dt + dt / 2
+
+
+@pytest.mark.parametrize(
+    ("edit", "reported"),
+    [
+        (lambda p: p["refinement"]["hex"]["steps"].__setitem__(0, 23), "refinement.hex.steps"),
+        (lambda p: p["refinement"]["hex"]["steps"].pop(), "refinement.hex"),
+        (lambda p: p["refinement"]["hex"].update(dt=[0.00892857, 0.00224215, 0.000560538, 0.0003],
+                                                 steps=[22, 89, 357, 667]), "refinement.hex.dt_scales_as"),
+        (lambda p: p["time"].__setitem__("report_when", "t >= end + 1"), "time.report_when"),
+        (lambda p: p["refinement"]["hex"].__setitem__("dt_scales_as", "h**3"), "refinement.hex.dt_scales_as"),
+        (lambda p: p["time"].__setitem__("report_when", "t + dt/2"), "time.report_when"),
+        (lambda p: p["time"].__setitem__("report_when", "t + tau >= end"), "tau"),
+        (lambda p: p["norms"].__setitem__("at", "end"), "norms.at"),
+        (lambda p: p["norms"].__setitem__("points", "faces"), "norms.points"),
+        (lambda p: p["norms"].__setitem__("weight", "none"), "norms.weight"),
+        (lambda p: p["norms"].__setitem__("normalised_by", "cell_count"), "norms.normalised_by"),
+        (lambda p: p["norms"].__setitem__("kinds", ["L1", "H1"]), "norms.kinds"),
+        (lambda p: p["norms"].__setitem__("fields", ["V", "w"]), "norms.fields"),
+    ],
+)
+def test_the_time_rule_ladder_and_norms_are_checked(edit, reported):
+    problem = _shipped()
+    edit(problem)
+    assert reported in _refused(problem)
