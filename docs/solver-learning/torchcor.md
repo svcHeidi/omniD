@@ -7,7 +7,7 @@
 TorchCor is a Python API on PyTorch, not a binary. "The solver" below is the
 installed `torchcor` package run in its own venv; every claim carries the
 command (or script) that settled it. Run outputs live under
-`/Users/simaocastro/omnid-runs/2026-10-09/torchcor/<probe>/` (each holds the
+`~/omnid-runs/2026-10-09/torchcor/<probe>/` (each holds the
 script that ran, `run.log` and `run.err`). Line numbers cite TorchCor at commit
 `b02daee`, which pins them.
 
@@ -184,11 +184,11 @@ benchmark.py's class.**
 Runs below use `~/torchcor-cases` (the case, the runner
 `scripts/run_case.py`, and TorchCor as the submodule `torchcor` at `b02daee`)
 and the venv `~/torchcor-venv` rebuilt from that submodule. Outputs under
-`/Users/simaocastro/omnid-runs/2026-10-09/torchcor/g<n>_*/`.
+`~/omnid-runs/2026-10-09/torchcor/g<n>_*/`.
 
 | # | command | observed | conclusion |
 |---|---|---|---|
-| G0 | `uv venv ~/torchcor-venv`; `uv pip install -e ~/torchcor-cases/torchcor`; `python -c "import torchcor; print(torchcor.__file__)"` | `/Users/simaocastro/torchcor-cases/torchcor/torchcor/__init__.py`, torch 2.14.1 | **F1 settled:** the submodule is both `omnidriver.toml`'s `source` and the code that runs |
+| G0 | `uv venv ~/torchcor-venv`; `uv pip install -e ~/torchcor-cases/torchcor`; `python -c "import torchcor; print(torchcor.__file__)"` | `~/torchcor-cases/torchcor/torchcor/__init__.py`, torch 2.14.1 | **F1 settled:** the submodule is both `omnidriver.toml`'s `source` and the code that runs |
 | G0b | `g0_describe_probe/probe.py`: each `torchcor.ionic` model built with `dt` only; its `_init` attributes; its constructor | all ten build; `_init` attributes: AlievPanfilov 0, BuenoOrovio 4, CRN 20, MitchellSchaeffer 2, ModifiedMS2v 0, OHaraRudy 45, TTP 24, Tomek19 43, Tomek20 56, TWorld 93. `grep` of the compared literals: OHaraRudy `cell_type` compares `EPI`, `MCELL` (default `ENDO` is the else branch), Tomek19 `MCELL`, Tomek20 `M`, TWorld `MID` and `sex` `MALE`, `FEMALE` (default `MIX`) | **a string option's menu is its compared literals plus its default**, which no comparison names. The mid-myocardial spelling differs per model (`MCELL`, `M`, `MID`), so a menu must be read per model, never shared. TTP's `GKs_init` and `Gto_init` are conductances set from `cell_type`, yet end in `_init` |
 | G0c | `torch.sparse_coo_tensor(..., device="mps").to_sparse_csr()` | `NotImplementedError` for `aten::_to_sparse_csr` on `SparseMPS` | the conversion `Monodomain.assemble` needs (D12) is a one-line probe; the runner offers `mps` only when it succeeds |
 | G1 | `g1_runner_dx05/`: `run_case.py nversion/case.json` on a copy of `cases/nversion` (et 0.24, float32, θ 1, consistent mass, to 150 ms) | exit 0; 3675 nodes, 30 000 steps; setup 0.46 s, **solve 19.1 s**, process 29.2 s. P1 0.955, P2 21.375, P3 33.105, P4 38.050, P5 6.455, P6 22.175, P7 33.660, **P8 40.325** ms; no node unactivated (latest 40.35 ms). Rerun (`rerun/`): `activation_times.dat` and `--describe` byte-identical | the runner reproduces D10's convention (P1 0.955). `et` 0.24 instead of 0.2 moves P8 by -0.06 ms at dx 0.5 (D10: 40.385 ms in float64 at et 0.2). The run is deterministic run to run (D3 again, through the runner) |
@@ -199,7 +199,7 @@ and the venv `~/torchcor-venv` rebuilt from that submodule. Outputs under
 ## H. TorchCor against openCARP at dx 0.5
 
 Why G4's two solvers disagree across the fibre, one variable at a time. Runs
-under `/Users/simaocastro/omnid-runs/2026-10-09/transverse/`. `drive.py` is a
+under `~/omnid-runs/2026-10-09/transverse/`. `drive.py` is a
 throwaway copy of the runner's `run` (same case.json, `step()` loop and 0 mV
 threshold) that loads a given CARP mesh directory, takes θ, and can override
 `it`/`et` and the stimulus intensity; `lat.py` reads openCARP's

@@ -22,14 +22,14 @@
 **Evidence:**
 - `docs/solver-learning/opencarp.md`: F3, F5, F6, D5, G4, plus F16 and F17 added by Task 5;
 - the code map `.superpowers/sdd/map-B.md`;
-- the paper research `.superpowers/sdd/niederer-benchmark-definition.md`, which is not committed (the directory is git-ignored). Task 4 transcribes from it.
+- the paper research `docs/superpowers/reports/niederer-benchmark-definition.md`. Task 4 transcribes from it.
 **Runs alongside:** topic A, `docs/superpowers/specs/2026-09-26-core-generality-design.md`. See "Coordination with topic A" below.
 
 
 > **Corrected 2026-09-26 (controller): P2–P7 are placed.** The reference chooses
 > a naming order for P2/P3 and places P2–P7 in the Niederer frame by the vertical
 > pairings of Figure 1b; the derivation is appended to
-> `.superpowers/sdd/niederer-benchmark-definition.md` under "Resolution of P2–P7".
+> `docs/superpowers/reports/niederer-benchmark-definition.md` under "Resolution of P2–P7".
 > Task 4 therefore gives **every point P1–P9 its coordinates**, and nothing is
 > `unresolved`:
 > P1 (0,0,0) · P2 (0,7,0) · P3 (20,0,0) · P4 (20,7,0) · P5 (0,0,3) · P6 (0,7,3) · P7 (20,0,3) · P8 (20,7,3) · P9 (10,3.5,1.5) mm.
@@ -2402,7 +2402,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
 
 - [ ] **Step 1: Read the research file and settle the owner's open point (no code)**
 
-  Read `.superpowers/sdd/niederer-benchmark-definition.md` in full. If it has changed since 2026-09-26, recheck every row of the table in Step 3 against it before writing. Every value in the file comes from it; nothing else is inferred.
+  Read `docs/superpowers/reports/niederer-benchmark-definition.md` in full. If it has changed since 2026-09-26, recheck every row of the table in Step 3 against it before writing. Every value in the file comes from it; nothing else is inferred.
   
   ~~One question goes to the owner before commit: **P5**.~~ Superseded 2026-09-26: see the banner at the top. All nine points take the coordinates listed there.
   - The research verifies P1, P4, P8 and P9.

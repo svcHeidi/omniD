@@ -1,6 +1,6 @@
 # omnidriver: where it stands
 
-Read this first, after `CLAUDE.md`. It describes the state as of 2026-10-09.
+Read this first, after `CLAUDE.md`. It describes the state as of 2026-10-10.
 History lives in `plans/` and `specs/`; this file is only the present and what
 is next.
 
@@ -64,18 +64,21 @@ Pass 2 (`plans/2026-10-01-pass2-convergence.md`) is complete.
   lives only in its `workflow_state.json`, and the sweep manifest keeps what the
   sweep observed as `sweep_outcome`.
 - **Every command refuses a bad call in one JSON shape**
-  (`{"status": "failed", "error": ...}`, exit 1).
+  (`{"status": "failed", "code": ..., "error": ...}`, exit 1). `code` is one of
+  the listed vocabulary (`core/refusal.py` `CODES`), and a refusal that knows
+  which rules a value broke carries them as data (`refusals`).
 - **The plugin contract is one table** of optional members
   (`provider_stack.MEMBERS`, called through `stack.call`), at API version 3.
   `AGENT_GUIDE.md` "Adding a New Solver" has a tested minimal plugin.
 - **Commands:**
   - `describe` lists a stack's records (with `serial_only`), its repository
     `scripts` and the installed plugin ids; with `--entry`, the keys a record's
-    own solver allows.
+    own solver allows, each axis with its unit and bounds, the record's
+    conformance quantity and the readers of its outputs (`record_surface`).
   - `omnidriver check` runs conformance C1–C14 against a real solver, plus the
     native regression with `--regression` and N-rank evidence in C13. It
-    reports and never gates; a check that verifies nothing for a record is
-    `not_applicable`.
+    reports and never gates; a check that verifies nothing for a record (C13
+    for a serial-only one) is `not_applicable`.
   - `omnidriver build` builds a case from the catalogue when there is no
     native case. It is kept apart from the record path.
   - `omnidriver compare` compares quantities read from two runs' artifacts.
@@ -205,8 +208,10 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - *Records against the native `Allrun`.* A record restates the native
      script's commands, and no check compares the two: either a check of each
      record's command sequence against its `Allrun`, or steps derived from it.
-   - *Units across solvers.* A `native_unit` on axes, with sweeps in SI. It
-     includes the electrode seam: cardiacFOAM reads electrode positions in
+   - *Units across solvers.* Each axis states the unit of its value
+     (`record_surface.axes[].unit`), in its own solver's unit; whether sweeps
+     should be stated in SI across solvers is open. It includes the electrode
+     seam: cardiacFOAM reads electrode positions in
      metres, and cardiacCore's `applications/scripts/electrode_positions.py`
      takes a caller-declared unit and converts nothing, so a millimetre case
      gives a pseudo-ECG a factor of 1000 off.
@@ -262,7 +267,7 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - an iterated bidirectional coupling (both sides implicit, the same current),
      deferred by the owner: an outer loop around today's conservative pass, with
      the solves made repeatable (about 15 files); the design and its cost are in
-     `.superpowers/sdd/pvj-outer-loop-assessment.md`;
+     `docs/superpowers/reports/pvj-outer-loop-assessment.md`;
    - on the bath-bidomain branch only: its reaction/diffusion split skips the
      SBDF2 `VmRate` and `Iion` refresh that `advance()` does, so bath with SBDF2
      differs from the normal advance.

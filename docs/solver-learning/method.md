@@ -76,7 +76,10 @@ gate, nothing in between".
     bracketed arguments) and units (openCARP's `mesher` takes sizes in cm and
     resolution in µm).
 12. Time it. If it runs in seconds, real-binary tests are affordable in the
-    native test tier. openCARP took 0.25 s.
+    native test tier. openCARP took 0.25 s. (Corrected 2026-10-10: there is no
+    native test tier any more, since no pytest test runs a solver. A fast case
+    is what `omnidriver check` runs; it reports and never gates. The logs' probes
+    that name a `*_native.py` test ran it as it then was.)
 13. **Take apart every output file:** names, formats, headers (use the solver's
     own inspection tools, such as `igbhead`), line counts against mesh size, and
     which file records the configuration that actually ran. openCARP writes

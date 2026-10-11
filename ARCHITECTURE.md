@@ -14,10 +14,18 @@ Because `src/omnidriver/` will not contain an `__init__.py` file in any of the p
 omnidriver/ (GitHub Root)
 ├── packages/
 │   ├── omnidriver/                  (import omnidriver.core)
-│   │   └── src/omnidriver/core/     <-- Universal DAG, provenance, schemas
-│   │       ├── quantities/          <-- Solver-neutral results-as-quantities: Quantity,
-│   │       │                            units, sentinels, the reader contract, comparison
-│   │       └── runtime_records.py   <-- Core's own run-record filenames, declared once
+│   │   └── src/omnidriver/
+│   │       ├── cli.py               <-- The `omnidriver` command; every refusal in one JSON
+│   │       │                            shape (core/refusal.py lists its codes)
+│   │       ├── conformance/         <-- C1-C14, the executable definition of "a solver can
+│   │       │                            plug in" (`omnidriver check`), and what a target supplies
+│   │       ├── schemas/             <-- run document, point reference, comparison report
+│   │       └── core/                <-- Plugin contract, provider stack, records, planning
+│   │           ├── runtime/         <-- Execution: run documents, steps, sweeps, provenance,
+│   │           │                        resume, MPI, the record surface `describe` shows
+│   │           ├── quantities/      <-- Solver-neutral results-as-quantities: Quantity,
+│   │           │                        units, sentinels, the reader contract, comparison
+│   │           └── runtime_records.py <-- Core's own run-record filenames, declared once
 │   │                                    (workflow_state.json, run_document.json, ...)
 │   │
 │   ├── omnidriver-openfoam/         (import omnidriver.openfoam)
@@ -41,6 +49,9 @@ omnidriver/ (GitHub Root)
 │   └── omnidriver-verifier/             (import omnidriver.verifier)
 │       └── src/omnidriver/verifier/     <-- Manufactured problems as data and their checks;
 │                                            depends on core only (Rule 6)
+│   └── omnidriver-agents/               (import omnidriver_agents; not in the namespace)
+│       └── src/omnidriver_agents/       <-- Agent harness: runs a task under agent CLIs, with
+│                                             and without omniD, through the CLI only (Rule 6)
 │
 ├── benchmarks/                      <-- Published, solver-neutral reference definitions
 │                                        (e.g. niederer2011.json); scripts/check-benchmark-
@@ -61,6 +72,9 @@ omnidriver/ (GitHub Root)
 6. **The verifier:** `omnidriver.verifier` depends on core only and reaches a
    solver through the plugin contract; no other package imports it, so no
    plugin depends on the checks that judge it.
+7. **The harness stays outside:** `omnidriver_agents` imports nothing from
+   `omnidriver`, and nothing under `omnidriver` imports it; it measures omniD
+   through the `omnidriver` command and its JSON.
    `scripts/check-import-boundaries.py` enforces all six rules.
 
 ## Verification
