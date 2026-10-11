@@ -8,6 +8,9 @@ from pathlib import Path
 
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from omnidriver.cardiacfoam.common_dict_entries import (
+    CONORMAL_PATCH_DOCUMENT,
+    CONORMAL_PATCH_ENTRIES,
+    ELECTRO_MECHANICAL_PROPERTY_ENTRIES,
     PHYSICS_PROPERTY_ENTRIES,
     PRE_PACING_PROPERTY_ENTRIES,
     PURKINJE_GRAPH_DOCUMENT,
@@ -74,6 +77,8 @@ class CardiacFoamPlugin:
         entries.extend(CONTROL_DICT_ENTRIES)
         entries.extend(PRE_PACING_PROPERTY_ENTRIES)
         entries.extend(PURKINJE_GRAPH_ENTRIES)
+        entries.extend(ELECTRO_MECHANICAL_PROPERTY_ENTRIES)
+        entries.extend(CONORMAL_PATCH_ENTRIES)
         for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
             entries.extend(group)
         return tuple(entries)
@@ -90,6 +95,8 @@ class CardiacFoamPlugin:
             "controlDict": CONTROL_DICT_ENTRIES,
             "prePacingProperties": PRE_PACING_PROPERTY_ENTRIES,
             PURKINJE_GRAPH_DOCUMENT: PURKINJE_GRAPH_ENTRIES,
+            "electroMechanicalProperties": ELECTRO_MECHANICAL_PROPERTY_ENTRIES,
+            CONORMAL_PATCH_DOCUMENT: CONORMAL_PATCH_ENTRIES,
         })
 
     def resolve_case_models(self, case_root: Path) -> dict:

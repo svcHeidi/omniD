@@ -455,6 +455,43 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             notes='Pass-through key; commonly used in repository tutorials.',
             value_kind='scalar',
         ),
+        openfoam_table_entry(
+            ODE_TABLE,
+            driver_path='$ELECTRO_MODEL_COEFFS.ODESolver.solver',
+            description="ODE solver selector of the active-tension model, read from its own ODESolver sub-dictionary.",
+            source_refs=('src/activeTensionModels/LandNiederer/LandNiederer.C', 'src/activeTensionModels/LandNiedererTWorld/LandNiedererTWorld.C'),
+            notes="LandNiederer and LandNiedererTWorld hand ODESolver::New the ODESolver sub-dictionary when it is present and this block otherwise, so the sub-dictionary replaces solver, absTol, relTol and maxSteps here rather than adding to them; NashPanfilov never reads it.",
+            typical_value='RKF45',
+            phases=frozenset({'solver'}),
+            applicable_when={"activeTensionModel": ("LandNiederer", "LandNiedererTWorld")},
+        ),
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.ODESolver.maxSteps',
+            description='Maximum internal ODE steps per macro time step of the active-tension model, read from its ODESolver sub-dictionary.',
+            source_refs=('src/activeTensionModels/LandNiederer/LandNiederer.C', 'src/activeTensionModels/LandNiedererTWorld/LandNiedererTWorld.C'),
+            notes='Pass-through key read upstream by ODESolver.C; see the sibling maxSteps entry.',
+            value_kind='integer',
+            phases=frozenset({'solver'}),
+            applicable_when={"activeTensionModel": ("LandNiederer", "LandNiedererTWorld")},
+        ),
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.ODESolver.absTol',
+            description='Absolute tolerance of the active-tension model, read from its ODESolver sub-dictionary.',
+            source_refs=('src/activeTensionModels/LandNiederer/LandNiederer.C', 'src/activeTensionModels/LandNiedererTWorld/LandNiedererTWorld.C'),
+            notes='Pass-through key read upstream by ODESolver.C; see the sibling absTol entry.',
+            value_kind='scalar',
+            phases=frozenset({'solver'}),
+            applicable_when={"activeTensionModel": ("LandNiederer", "LandNiedererTWorld")},
+        ),
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.ODESolver.relTol',
+            description='Relative tolerance of the active-tension model, read from its ODESolver sub-dictionary.',
+            source_refs=('src/activeTensionModels/LandNiederer/LandNiederer.C', 'src/activeTensionModels/LandNiedererTWorld/LandNiedererTWorld.C'),
+            notes='Pass-through key read upstream by ODESolver.C; see the sibling relTol entry.',
+            value_kind='scalar',
+            phases=frozenset({'solver'}),
+            applicable_when={"activeTensionModel": ("LandNiederer", "LandNiedererTWorld")},
+        ),
         ),
     ),
     "single_cell_stimulus": build_group(
@@ -721,9 +758,9 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             driver_path='$ELECTRO_MODEL_COEFFS.verificationModel.type',
             phases=frozenset({'solver'}),
             description='Optional myocardium-side verification hook selector.',
-            source_refs=('src/electroModels/core/verificationModels/electroVerificationModel.C', 'src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.H', 'src/verificationModels/bidomainVerification/manufacturedFDABidomainVerifier.H', 'src/verificationModels/bathBidomainVerification/manufacturedFDABathBidomainVerifier.H', 'src/verificationModels/eikonalVerification/manufacturedEikonalVerifier.H', 'src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainVerifier.H'),
+            source_refs=('src/electroModels/core/verificationModels/electroVerificationModel.C', 'src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.H', 'src/verificationModels/bidomainVerification/manufacturedFDABidomainVerifier.H', 'src/verificationModels/bathBidomainVerification/manufacturedFDABathBidomainVerifier.H', 'src/verificationModels/eikonalVerification/manufacturedEikonalVerifier.H', 'src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainVerifier.H', 'src/verificationModels/monodomainVerification/manufacturedConormalMonodomainVerifier.H', 'src/verificationModels/bidomainVerification/manufacturedUnequalConormalBidomainVerifier.H'),
             value_kind='enum',
-            enum_values=('manufacturedFDAMonodomainVerifier', 'manufacturedFDABidomainVerifier', 'manufacturedFDABathBidomainVerifier', 'manufacturedEikonalVerifier', 'manufacturedAnisotropicMonodomainVerifier'),
+            enum_values=('manufacturedFDAMonodomainVerifier', 'manufacturedFDABidomainVerifier', 'manufacturedFDABathBidomainVerifier', 'manufacturedEikonalVerifier', 'manufacturedAnisotropicMonodomainVerifier', 'manufacturedConormalMonodomainVerifier', 'manufacturedUnequalConormalBidomainVerifier'),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.verificationModel.fdaBathVariant',
@@ -1168,7 +1205,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         ),
         # The selected solver's ECG verifier constructors read this nested
         # block.  It is a supported source-compatible alias surface, not a
-        # generic verifier schema: alpha/k remain model-specific elsewhere.
+        # generic verifier schema: alpha remains model-specific elsewhere.
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type',
             phases=frozenset({'physics'}),
@@ -1212,6 +1249,14 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
                 'Must equal ($ELECTRO_MODEL_COEFFS.verificationModel.type == "manufacturedAnisotropicMonodomainVerifier"); refused by name otherwise.',
             ),
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedPseudoECGVerifier',)},
+        ),
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.k',
+            phases=frozenset({'physics'}),
+            description="Wave vector of the manufactured eikonal reference the eikonal-ECG verifier evaluates. Default by dimension: (1 0 0) in 1D, (1 1 0) in 2D, (1 1 1) in 3D.",
+            source_refs=('src/verificationModels/ecgVerification/manufacturedEikonalECGVerifier.C', 'src/verificationModels/eikonalVerification/manufacturedEikonalReference.H'),
+            value_kind='vector3', allowed_bindings={"<name>": None},
+            applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedEikonalECGVerifier',)},
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.referenceQuadratureOrder',
@@ -1585,20 +1630,6 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             allowed_bindings={"<name>": None},
         ),
         DictEntry(
-            driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.purkinjeFibreRadius',
-            phases=frozenset({'physics'}),
-            description="Radius [m] of the Purkinje fibre, whose cross-section pi*radius^2 times a terminal node's control length (half of each incident edge) is the volume the network loses each junction current from, so that the current the tissue receives is the current the network gives up.",
-            source_refs=('src/electroModels/electroDomains/conductionSystemDomain/conductionSystemDomain.C', 'src/verificationModels/coupledVerification/coupled1D3DMonodomainVerifier.C'),
-            notes="Read when a reactionDiffusionPvjCoupler with couplingMode bidirectional hands the network its junction conductances, and by the coupled1D3DMonodomainVerifier. A unidirectional coupling never reads it. It is a separate length from the tissue's chi, so the network's node volume does not follow from the 3D mesh. The catalogue states the requirement on any coupling being bidirectional, since a coupling's network is named in another block.",
-            unit='m',
-            value_kind='scalar',
-            allowed_bindings={"<name>": None},
-            exclusive_minimum=0,
-            required=True,
-            required_when={"$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.couplingMode": "bidirectional"},
-            applicable_when={"$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.conductionSystemSolver": "monodomain1DSolver"},
-        ),
-        DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.activationVmThreshold',
             phases=frozenset({'physics'}),
             description='Membrane voltage above which a Purkinje node counts as activated, for activation-time recording.',
@@ -1745,9 +1776,8 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.couplingMode',
-            description="Coupling direction. 'unidirectional': the network drives the tissue and receives nothing back. 'bidirectional': reactionDiffusionPvjCoupler gives the network node the junction current as a loss from its volume pi*purkinjeFibreRadius^2*L (L the node's control length), against the tissue's Vm from before the tissue solve and with the network's own Vm on the cable matrix diagonal; the tissue then receives exactly the current the network solved, so charge is conserved each step, and the tissue's activation can drive the network retrogradely. The eikonal couplers instead return the earliest tissue activation near each junction to its node as an activation-time candidate. REQUIRED: the coupler reads it with get<word>, so omitting it is a fatal error, not a default.",
+            description="Coupling direction. 'unidirectional': the network drives the tissue and receives nothing back. 'bidirectional': reactionDiffusionPvjCoupler also hands the network terminals the junction current as a source term, and the eikonal couplers return the earliest tissue activation near each junction to its node as an activation-time candidate. REQUIRED: the coupler reads it with get<word>, so omitting it is a fatal error, not a default.",
             source_refs=('src/electroModels/electroCouplers/pvjCoupler/pvjCoupler.C', 'src/electroModels/electroCouplers/pvjCoupler/reactionDiffusion/reactionDiffusionPvjCoupler.C', 'src/electroModels/electroDomains/conductionSystemDomain/conductionSystemDomain.C'),
-            notes="A bidirectional reactionDiffusionPvjCoupler requires purkinjeFibreRadius in the network's purkinjeGraphModelCoeffs; the coupler writes its restart state (the last tissue activation each terminal observed) only in this mode.",
             value_kind='enum',
             enum_values=('unidirectional', 'bidirectional'),
             allowed_bindings={"<name>": None},

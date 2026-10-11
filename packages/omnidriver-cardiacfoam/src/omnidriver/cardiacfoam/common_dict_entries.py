@@ -161,6 +161,96 @@ PRE_PACING_PROPERTY_ENTRIES: Final[tuple[DictEntry, ...]] = (
 )
 
 
+_EM = "src/electroMechanicalModels/"
+_EM_VERIFIER = "src/verificationModels/electromechanicsVerification/"
+_EM_COEFFS = "$ELECTRO_MECHANICAL_COEFFS."
+_EM_VERIFIER_APPLIES = {_EM_COEFFS + "verificationModel.type": "manufacturedElectromechanicsVerifier"}
+
+#: ``constant/electroMechanicalProperties``: ``electroMechanicalModel`` selects the model, and its settings
+#: sit in ``<electroMechanicalModel>Coeffs`` (token ``$ELECTRO_MECHANICAL_COEFFS``). Catalogued for the keys the
+#: C++ scan establishes; the dictionary is not yet one a record or the case builder addresses.
+ELECTRO_MECHANICAL_PROPERTY_ENTRIES: Final[tuple[DictEntry, ...]] = (
+    DictEntry(
+        driver_path="electroMechanicalModel", phases=frozenset({"physics"}), value_kind="enum",
+        enum_values=("sequentialElectroMechanical",), required=True,
+        description="Electromechanical model; its settings are read from the <electroMechanicalModel>Coeffs sub-dictionary.",
+        source_refs=(_EM + "electroMechanicalModel/electroMechanicalModel.C",),
+    ),
+    DictEntry(
+        driver_path=_EM_COEFFS + "TaScale", phases=frozenset({"physics"}), value_kind="scalar", typical_value="1e3",
+        description="Factor from the active-tension model's units to the active tension Ta in Pa.",
+        source_refs=(_EM + "sequentialElectroMechanical/sequentialElectroMechanical.C",),
+        notes="The manufactured electromechanics verifier reads the same key.",
+    ),
+    DictEntry(
+        driver_path=_EM_COEFFS + "verificationModel.type", phases=frozenset({"physics"}), value_kind="enum",
+        enum_values=("manufacturedElectromechanicsVerifier",),
+        description="Electromechanical verification model; the verifier is built only when the verificationModel sub-dictionary exists.",
+        source_refs=(_EM_VERIFIER + "electromechanicalVerificationModel.C", _EM_VERIFIER + "manufacturedElectromechanicsVerifier.C"),
+    ),
+    DictEntry(
+        driver_path=_EM_COEFFS + "verificationModel.amplitude", phases=frozenset({"physics"}), value_kind="vector3",
+        typical_value="(0.02 0.02 0.02)",
+        description="Amplitude of the manufactured displacement D = amplitude * (x^2 y, y^2 z, z^2 x) * sin(t).",
+        source_refs=(_EM_VERIFIER + "manufacturedElectromechanicsVerifier.C", _EM_VERIFIER + "manufacturedElectromechanicsReference.H"),
+        notes=(
+            "The verifier reads it with this default. manufacturedElectromechanicsAmplitude in the reference header "
+            "reads it with no default, but nothing in the source calls that function."
+        ),
+        applicable_when=_EM_VERIFIER_APPLIES,
+    ),
+    DictEntry(
+        driver_path=_EM_COEFFS + "verificationModel.initializeFields", phases=frozenset({"physics"}),
+        value_kind="boolean", typical_value="true",
+        description="Whether the verifier sets Vm and D to the manufactured solution at initialisation.",
+        source_refs=(_EM_VERIFIER + "manufacturedElectromechanicsVerifier.C",),
+        applicable_when=_EM_VERIFIER_APPLIES,
+    ),
+    *(
+        DictEntry(
+            driver_path=_EM_COEFFS + "verificationModel." + key, phases=frozenset({"physics"}),
+            value_kind="scalar", typical_value=default, description=description,
+            source_refs=(_EM_VERIFIER + "manufacturedElectromechanicsVerifier.C",),
+            notes=(
+                f"With a constants sub-dictionary beside verificationModel, {key} is read from it, and from this "
+                "block only when the constants one lacks it."
+            ) if key != "TaScale" else (
+                "Read from the <electroMechanicalModel>Coeffs block first and from this one only when that lacks it."
+            ),
+            applicable_when=_EM_VERIFIER_APPLIES,
+        )
+        for key, default, description in (
+            ("Tmax", "1.0", "Factor of the manufactured active tension Ta = Tmax*TaScale*Vm^2/(V0^2 + Vm^2)*(1 + gamma*(lambda - 1))."),
+            ("V0", "1.0", "The Vm at which Vm^2/(V0^2 + Vm^2), the voltage factor of the manufactured active tension, is one half; the verifier stops unless it is above 0."),
+            ("gamma", "1.0", "Weight of the stretch factor (1 + gamma*(lambda - 1)) of the manufactured active tension."),
+            ("TaScale", "1e3", "Factor from the active-tension model's units to Pa in the manufactured active tension."),
+        )
+    ),
+)
+
+#: A ``conormalZeroFlux`` patch of a field file (``0/Vm``, ``0/phiE``, ``0/activationTime``): the keys its
+#: constructor reads from the patch dictionary. The solver names both fields through ``setConductivity``
+#: and the patch stops on a disagreement, so a case rarely writes them; the patch writes them back itself.
+CONORMAL_PATCH_DOCUMENT = "conormalZeroFluxPatch"
+
+CONORMAL_PATCH_ENTRIES: Final[tuple[DictEntry, ...]] = (
+    DictEntry(
+        driver_path="conductivity", phases=frozenset({"physics"}), value_kind="word",
+        description="Name of the conductivity tensor field the patch takes its conormal from.",
+        source_refs=("src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C",),
+    ),
+    DictEntry(
+        driver_path="offsetField", phases=frozenset({"physics"}), value_kind="word",
+        description=(
+            "Name of a field whose gradient is added to the solved field's gradient in the conormal flux "
+            "(phiE for Vm in a bidomain case)."
+        ),
+        source_refs=("src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C",),
+        notes="Left empty (word::null), no offset is applied.",
+    ),
+)
+
+
 _DOMAIN = "src/electroModels/electroDomains/conductionSystemDomain/"
 _GRAPH_READER = _DOMAIN + "conductionSystemDomain.C"
 _GRAPH_TOPOLOGY = _DOMAIN + "conductionGraph.H"
