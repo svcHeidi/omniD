@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -42,6 +43,24 @@ def test_the_prefix_sources_first_then_exports_then_path():
     assert render_prefix(_connection(), {}) == ""
 
 
+def test_a_variable_that_keeps_another_exports_it_in_front_of_the_supplied_value(tmp_path):
+    connection = EnvironmentConnection(
+        supplied=(SuppliedVariable("TOY_RC", True, "sourced"),
+                  SuppliedVariable("TOY_LIBS", False, "after the source", keeps="TOY_OWN_LIBS")),
+        source="TOY_RC",
+    )
+    prefix = render_prefix(connection, {"TOY_RC": "/rc", "TOY_LIBS": "/opt/lib"})
+    assert prefix == 'source /rc; export TOY_LIBS="${TOY_OWN_LIBS:+$TOY_OWN_LIBS:}"/opt/lib; '
+    rc = tmp_path / "rc"
+    rc.write_text("export TOY_OWN_LIBS=/own/a:/own/b\n")
+    probe = f'{prefix}printf %s "$TOY_LIBS"'.replace("source /rc", f"source {rc}")
+    kept = subprocess.run(["bash", "-c", probe], capture_output=True, text=True, check=True)
+    assert kept.stdout == "/own/a:/own/b:/opt/lib"
+    rc.write_text("")
+    bare = subprocess.run(["bash", "-c", probe], capture_output=True, text=True, check=True, env={"PATH": os.environ["PATH"]})
+    assert bare.stdout == "/opt/lib"
+
+
 def test_a_manifest_names_only_supplied_variables(tmp_path):
     profile = tmp_path / "plugin.yaml"
     body = (
@@ -57,6 +76,33 @@ def test_a_manifest_names_only_supplied_variables(tmp_path):
     profile.write_text(body + "  searched_paths: [/opt]\n")
     with pytest.raises(ValueError, match="unknown keys"):
         load_plugin_profile(profile)
+
+
+def _keeps_profile(tmp_path: Path, item: str):
+    profile = tmp_path / "plugin.yaml"
+    profile.write_text(
+        "schema_version: 1\nplugin: {id: toy, api_version: '3'}\nenvironment:\n  supplied:\n"
+        f"    - {{name: TOY_LIBS, required: false, why: after the source{item}}}\n"
+    )
+    return profile
+
+
+def test_a_manifest_declares_the_variable_a_supplied_one_keeps(tmp_path):
+    (variable,) = load_plugin_profile(_keeps_profile(tmp_path, ", keeps: TOY_OWN_LIBS")).environment.supplied
+    assert variable.keeps == "TOY_OWN_LIBS"
+    (variable,) = load_plugin_profile(_keeps_profile(tmp_path, "")).environment.supplied
+    assert variable.keeps is None
+
+
+@pytest.mark.parametrize("keeps", ["1LIBS", "A-B", "A B", "ÄLIBS", "''", "[A]", "7"])
+def test_a_keeps_that_is_not_a_bash_variable_name_is_refused_by_name(tmp_path, keeps):
+    with pytest.raises(ValueError, match=r"supplied\[0\]\.keeps must be a variable name"):
+        load_plugin_profile(_keeps_profile(tmp_path, f", keeps: {keeps}"))
+
+
+def test_a_misspelt_key_of_a_supplied_variable_is_refused_by_name(tmp_path):
+    with pytest.raises(ValueError, match=r"supplied\[0\] has unknown keys \['keep'\]"):
+        load_plugin_profile(_keeps_profile(tmp_path, ", keep: TOY_OWN_LIBS"))
 
 
 class _Provider:

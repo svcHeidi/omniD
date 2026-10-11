@@ -292,34 +292,31 @@ def drift(snippets: dict[str, str], problem: dict) -> list[str]:
     hex_ladder = problem["refinement"]["hex"]
     if values != [*hex_ladder["cells_per_axis"], *hex_ladder["dt"]]:
         found.append("hex refinement")
-    found += _tet_drift(snippets, problem, commit)
+    found += _tet_drift(snippets, problem)
     return found
 
 
-def _tet_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
-    """The tet study's FDA rows (its first four, one per level) against the tet ladder; its mesh size against the
-    spacing the ladder implies, lc = edge/cells_per_axis.
-
-    The mesh size is read from the template's stated rule (``lc = 1/N`` in its comment) and its use in both
-    ``Mesh.MeshSize`` bounds. How ``lc`` is set is not read: the template on native main leaves the placeholder
-    ``lc = __LC__;`` and the branch's declares it with ``DefineConstant``; a strict plan refuses the step that
-    would not set it (``gmsh_setnumber_not_declared``)."""
-    dimension, conductivity, verifier, *ladder = _body(snippets[TET_SWEEP], commit)
+def _tet_drift(snippets: dict[str, str], problem: dict) -> list[str]:
+    """The tet study's FDA rows (its first four, one per level) against the tet ladder, read at the commit the tet
+    runs executed; the template's mesh size is the lc the runner supplies (the study's README states lc = 1/N)."""
+    commit = problem["native"]["cardiacfoam"]["tet_study_commit"]
+    dimension, verifier, *values = _body(snippets[TET_SWEEP], commit)
+    conductivity, ladder = values[:6], values[6:]
     tet = problem["refinement"]["tet"]
     parameters = problem["parameters"]
     found = []
-    if [int(dimension.strip().strip('"').removesuffix("D"))] != tet["dimensions"]:
+    if [int(dimension.split(":")[1].strip(' ",').removesuffix("D"))] != tet["dimensions"]:
         found.append("tet dimensions")
-    xx, _, _, yy, _, zz = (float(v) for v in conductivity.split("(")[1].split(")")[0].split())
+    xx, _, _, yy, _, zz = (float(v.strip(", ")) for v in conductivity)
     if (xx, yy, zz) != (parameters["sigma_xx"], parameters["sigma_yy"], parameters["sigma_zz"]):
         found.append("tet conductivity")
     if verifier.strip().strip('",') != problem["native"]["cardiacfoam"]["verification_model"]:
         found.append("tet verifier")
-    if [float(line) for line in ladder] != [*tet["cells_per_axis"], *tet["dt"]]:
+    if [float(line.strip(", ")) for line in ladder] != [*tet["cells_per_axis"], *tet["dt"]]:
         found.append("tet refinement")
     geo = " ".join(_body(snippets[TET_GEO], commit))
     edge = problem["domain"]["box"][0][1] - problem["domain"]["box"][0][0]
-    if (edge != 1 or "(lc = 1/N)" not in geo
+    if (edge != 1 or "DefineConstant[ lc =" not in geo
             or not all(f"Mesh.MeshSize{bound} = lc;" in geo for bound in ("Min", "Max"))):
         found.append("tet mesh size")
     return found
@@ -367,7 +364,7 @@ def test_the_problem_data_matches_cardiacfoam():
         (TET_SWEEP, "0.030396355", "0.0398782", "tet conductivity"),
         (TET_SWEEP, "manufacturedFDAMonodomainVerifier", "manufacturedAnisotropicMonodomainVerifier", "tet verifier"),
         (TET_SWEEP, "0.000560538", "0.00056", "tet refinement"),
-        (TET_GEO, "(lc = 1/N)", "(lc = 2/N)", "tet mesh size"),
+        (TET_GEO, "DefineConstant[ lc =", "DefineConstant[ mc =", "tet mesh size"),
         (TET_GEO, "MeshSizeMax = lc;", "MeshSizeMax = 2*lc;", "tet mesh size"),
     ],
 )

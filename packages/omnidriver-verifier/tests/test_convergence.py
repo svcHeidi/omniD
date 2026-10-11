@@ -475,3 +475,25 @@ def test_an_extrapolated_result_carries_how_its_limit_was_obtained():
     with pytest.raises(ProblemError) as caught:
         temporal_table(problem, [result])
     assert "reference_dt" in str(caught.value)
+
+
+def test_orders_are_fitted_against_a_supplied_mesh_size_when_every_level_has_one():
+    problem = load_problem("fda_monodomain")
+    result = _result(problem, "a", 1.0, 2)
+    for level in result["levels"]:
+        level["mesh_size"] = 3.0 * (1 / level["cells_per_axis"]) ** 0.5
+    row = comparison_table(problem, [result])["rows"][0]
+    assert row["spacing"] == "mesh_size"
+    assert row["least_squares_order"]["V"]["L2"] == pytest.approx(4)
+    assert row["levels"][0]["h"] == pytest.approx(3.0 * (1 / result["levels"][0]["cells_per_axis"]) ** 0.5)
+    plain = comparison_table(problem, [_result(problem, "a", 1.0, 2)])["rows"][0]
+    assert plain["spacing"] == "edge_over_n"
+
+
+def test_a_mesh_size_at_only_some_levels_is_refused():
+    problem = load_problem("fda_monodomain")
+    result = _result(problem, "a", 1.0, 2)
+    result["levels"][0]["mesh_size"] = 0.1
+    with pytest.raises(ProblemError) as caught:
+        comparison_table(problem, [result])
+    assert caught.value.code == "results_invalid"

@@ -1,7 +1,5 @@
-// cardiacFOAM 277dfeb1933990da366d4b30dd9ef40b3e94c87c tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/box.geo.template, verbatim lines 7, 14, 21, 22
-// render_tet_geo (lc = 1/N) to build a refinement ladder.
-// ...
-lc = __LC__;
+// cardiacFOAM a7b8e845c76579aec8fa0ff7b5e13a21547c1242 tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/box.geo.template, verbatim lines 12, 19, 20
+DefineConstant[ lc = { 0.1, Name "lc" } ];
 // ...
 Mesh.MeshSizeMin = lc;
 // ...

@@ -493,3 +493,18 @@ def test_env_reports_the_bashrc_a_run_would_source_and_where_it_found_it(tmp_pat
     }
     assert plugin.resolve_supplied_variables({"OPENFOAM_BASHRC": "/named", **sourced_shell}) == {}
     assert plugin.resolve_supplied_variables({}) == {}
+
+
+def test_the_openfoam_shell_keeps_the_bashrcs_library_path_in_front_of_dyld_library_path():
+    from importlib import resources
+
+    from omnidriver.core.environment_connection import render_prefix
+    from omnidriver.core.plugin_profile import load_plugin_profile
+
+    manifest = resources.files("omnidriver.openfoam") / "openfoam-environment.yaml"
+    connection = load_plugin_profile(manifest).environment
+    assert {variable.name: variable.keeps for variable in connection.supplied}["DYLD_LIBRARY_PATH"] == "FOAM_LD_LIBRARY_PATH"
+    prefix = render_prefix(connection, {"OPENFOAM_BASHRC": "/of/etc/bashrc", "DYLD_LIBRARY_PATH": "/opt/lib"})
+    assert prefix == (
+        'source /of/etc/bashrc; export DYLD_LIBRARY_PATH="${FOAM_LD_LIBRARY_PATH:+$FOAM_LD_LIBRARY_PATH:}"/opt/lib; '
+    )

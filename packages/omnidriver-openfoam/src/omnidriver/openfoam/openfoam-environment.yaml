@@ -54,6 +54,7 @@ environment:
       why: OpenFOAM's etc/bashrc, sourced first. It puts OpenFOAM's own MPI first on PATH, so no other solver's MPI bin may be added to this shell
     - name: DYLD_LIBRARY_PATH
       required: false
-      why: macOS only. Exported after the source, because macOS strips DYLD_* when bash starts
+      keeps: FOAM_LD_LIBRARY_PATH
+      why: macOS only. Exported after the source, because macOS strips DYLD_* when bash starts; the value is put after the bashrc's own FOAM_LD_LIBRARY_PATH, which libOpenFOAM is found through
   source: OPENFOAM_BASHRC
   mpi_launcher: mpirun

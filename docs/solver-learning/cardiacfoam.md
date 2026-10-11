@@ -969,3 +969,95 @@ tet ladder 575 s; a temporal case about 15 s. The `gmsh` template mismatch (AD6)
 undeclared-`-setnumber` check, and the verifier's own performance fixes (`nodal_control_volumes` was
 quadratic in the number of elements; `exact_values` evaluated every field of the problem per point),
 are omniD's, on `feat/verifier-anisotropic`.
+
+## AE. The FDA manufactured monodomain, tet verification (2026-10-10)
+
+The second step after AB: the same problem on the tetrahedral ladder
+(`refinement.tet`: 3D, gmsh `lc = 1/N`, N = 10, 20, 40, dt and steps as hex),
+cardiacFOAM's native tet route against openCARP on the same meshes
+(`opencarp.md` Q). Runs under `<runs>/2026-10-10/fda-tet/`
+(`compare/table.json`). OpenFOAM v2412, serial.
+
+| # | command | observed | conclusion |
+|---|---|---|---|
+| AE1 | the native `tetConvergence/sweep_tet_generic.json` (exported tree, and `277dfeb19` via `git show`) | 16 rows: {Gauss linear, leastSquares} × {FDA verifier with diagonal σ (the problem's), anisotropic verifier with rotated σ} × N 10-80; 3D only; per-level `deltaT` kept (the hex study's F2 loss, AB4, did not reach the tet studies); the base case's `fvSchemes` already sets `gradSchemes leastSquares` and the study's overlay equals it; `fvSolution` `nNonOrthogonalCorrectors 1` | the first eight rows are the FDA problem; `make_specs.py` slices them unchanged, no study of our own needed |
+| AE2 | `omnidriver sweep-run` over those rows, N = 10, 20, 40 | `ok`, 272 s for six cases; solve 4, 7, 89 s (Gauss linear) and 4, 7, 96 s (leastSquares); 4874, 37 040, 289 388 cells; checkMesh non-orthogonality max 62-69° (average 21°), skewness max 0.71-0.90, `Mesh OK` | gmsh 4.15.2 gives the template's stated counts; the mesh is identical for both schemes (same sha) |
+| AE3 | N = 80 (2 278 889 cells) | about 11 GB per case. Two at once swapped; leastSquares alone ran at 2.6 s per step and was stopped at t = 0.1155 of 0.2 by the owner's decision (N = 40 is enough) | not run to the end. Expect about 65 min serial per scheme on this machine |
+| AE4 | gate 3 on tets: the shared norm on Vm, u1, u2 at cell centres and `writeCellVolumes` volumes at steps*dt, against `postProcessing/3D_<n>_cells.dat` (`cardiacfoam/gate3_small.json`) | `passed` on all six; largest relative difference 3.8e-6 (< 5e-6 print) | the shared norm reproduces the native verifier on unstructured cells too. The native file is named by its own N = round(cells^(1/3)) = 17, 33, 66 and prints dx = 1/that, not the ladder's lc |
+| AE5 | `compare`, L2 of V | Gauss linear: 2.265e-2, 1.320e-2, 1.119e-2, orders 0.78, 0.24. leastSquares: 1.084e-2, 2.838e-3, 6.816e-4, orders 1.93, 2.06 (least squares 2.00); Linf orders 1.60, 1.41 | **with `Gauss linear` the error stagnates on tets**; with `leastSquares` (the native default) it converges at second order in L2, lower in Linf |
+
+**Stated against observed.** The catalogue states 2 for every spatial entry,
+with conditions: `linear` only where the face centre lies on the line
+joining the cell centres, `corrected` the order the non-orthogonal correction
+restores. Neither holds on these tets (skewness to 0.90).
+
+**Isolating the term** (`<runs>/2026-10-10/fda-tet-review/`: the Gauss linear
+cases' `system` and `constant` copied and one entry changed, run serial at
+N = 10 and 20, FDA verifier; the baseline reproduces the table to every digit,
+so the stagnation is not an evaluation artefact). L2 of V, N = 10 to 20:
+
+| variant | L2 N=10 | L2 N=20 | order |
+|---|---|---|---|
+| baseline: `gradSchemes default Gauss linear`, `snGradSchemes corrected`, `nNonOrthogonalCorrectors 1` | 2.265e-2 | 1.320e-2 | 0.78 |
+| `nNonOrthogonalCorrectors 0` | 2.263e-2 | 1.321e-2 | 0.78 |
+| `nNonOrthogonalCorrectors 3` | 2.265e-2 | 1.320e-2 | 0.78 |
+| `uncorrected` snGrad and laplacian | 3.70e-2 | 2.04e-2 | 0.86 |
+| `Gauss skewCorrected linear` | 1.391e-2 | 4.46e-3 | 1.64 |
+| `Gauss pointLinear` | 1.657e-2 | 5.29e-3 | 1.65 |
+| `iterativeGauss linear 5` | 1.342e-2 | 4.22e-3 | 1.67 |
+| default `Gauss linear` with `grad(Vm) leastSquares` only | 1.084e-2 | 2.84e-3 | 1.93 (identical to `leastSquares`) |
+| default `bogusScheme` with `grad(Vm) Gauss linear` | runs, identical to the baseline | | 0.78 |
+| `leastSquares` default | 1.084e-2 | 2.84e-3 | 1.93 |
+
+The corrector count does nothing, and dropping the correction makes it worse.
+The cause is the cell gradient. The Gauss linear gradient is inconsistent on
+skewed tets (it is not first-order consistent there), and it feeds both
+uses of a gradient in this solver: the non-orthogonal correction of `snGrad`,
+and the cross-diffusion term of the anisotropic conductivity.
+`gaussLaplacianScheme<scalar,tensor>::fvmLaplacian`, which a `surfaceTensorField`
+conductivity selects, adds `gammaSnGradCorr` of the tangential flux
+whatever `snGradSchemes` says, so `uncorrected` does not remove it; with
+sigma = (0.111, 0.122, 0.030) it is non-zero everywhere. `grad(Vm)` is the only
+gradient requested (the bogus default runs unused; `grad(Vm.component(0))` of a
+scalar is the same field), so changing that one entry changes the answer
+completely. The skew-corrected gradients recover order about 1.65, shown only
+at N = 10 to 20. `leastSquares` is exact for a linear field on an interior
+stencil, not in boundary cells, whose stencil is one-sided: second order there
+is observed, not guaranteed. None of this is against the owner's default: the
+base case and the `tetConvergence` overlay use `leastSquares`; `Gauss linear` is
+a deliberate variant of the sweep.
+
+**The mesh size.** `lc` is the ladder's label and the order fit in the table
+above uses 1/N. The mean edge of the gmsh meshes is 1.27/N, 1.31/N, 1.34/N
+(it grows with N), so the verifier's fit on an unstructured mesh takes a
+measured size when supplied (`comparison_table`, a `mesh_size` on every level).
+Against the mean edge, orders N = 10 to 20 and 20 to 40: Gauss linear
+0.82, 0.25 (0.78, 0.24 under lc); leastSquares 2.05, 2.12 (1.93, 2.06);
+openCARP P1 1.66, 2.01 (1.57, 1.95). No conclusion changes; part of
+openCARP's 1.57 is the definition of `lc`. The mean edge at N = 80 was not
+measured.
+
+**Provenance of the tet study.** The runs executed native
+`omnid/tutorials-are-pointers` at `a7b8e845c` (a template with
+`DefineConstant[ lc ]`, mesh size set by `gmsh -setnumber lc <1/N>`; the
+template change is `60805b27b`). The problem's `native.cardiacfoam.commit`
+(`277dfeb19`) holds a template with an `__LC__` placeholder rendered by a
+`render_tet_geo` helper that exists in no native main, and a sweep file of
+another layout. The drift gate therefore reads the tet template and sweep at
+`tet_study_commit`, a field of the problem data, set to `a7b8e845c`: one place
+names the tree that ran, and the gate follows it. The rest of the problem is
+read at `commit`. The gate checks the template's code (`lc` is a
+`DefineConstant` that `MeshSizeMin` and `MeshSizeMax` take), not its comment;
+that lc = 1/N is the study README's stated rule, supplied by the runner, and
+the meshes' cell counts (4874 and 37 040 at N = 10 and 20) are what the
+template states for it.
+
+Time: `godunov` is first order, and dt ~ h² keeps that O(h²). Against openCARP
+on the same mesh there are two readings. Per mesh, cardiacFOAM with leastSquares
+has a lower error at every level: 2.6 times lower at N = 40, with about 5.6
+times the unknowns (289 388 cells against 51 853 nodes). Per unknown, openCARP
+is about 1.2 times better (its N = 40 error scaled to cardiacFOAM's unknowns by
+unknowns^(-2/3) is about 5.6e-4 against 6.8e-4). The discrete L2 norms differ
+near the boundary (finite-volume centroids against finite-element nodes with
+lumped volumes, where boundary nodes carry about 32 % of the weight at
+N = 10), so the coarse-level ratios are rough.
