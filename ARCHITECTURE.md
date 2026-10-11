@@ -75,7 +75,7 @@ omnidriver/ (GitHub Root)
 7. **The harness stays outside:** `omnidriver_agents` imports nothing from
    `omnidriver`, and nothing under `omnidriver` imports it; it measures omniD
    through the `omnidriver` command and its JSON.
-   `scripts/check-import-boundaries.py` enforces all six rules.
+   `scripts/check-import-boundaries.py` enforces all seven rules.
 
 ## Verification
 
