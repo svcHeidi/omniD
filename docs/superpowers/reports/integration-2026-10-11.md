@@ -1,23 +1,24 @@
 # Integration 2026-10-11: review guide
 
 Branch `integration/2026-10-11`, from `chore/trim-paper-links` (`ffb547cd`),
-merged with `feat/verifier-anisotropic`, `chore/cleanup-2026-10-10` and
-`design/benchmark-verifier-builder`. It is ahead of `main` (`58cccc8f`) by 186
-commits (171 outside merges): 295 files, +21017 / -757.
+merged with `feat/verifier-anisotropic`, `chore/cleanup-2026-10-10`,
+`design/benchmark-verifier-builder` and `feat/verifier-problem-library`. It is ahead of `main` (`58cccc8f`) by 194
+commits (178 outside merges): 299 files, +21414 / -761. `feat/verifier-problem-library`
+is merged too: the verifier-temporal branch had left it at `90674a80`.
 
 ## Size by area (`git diff --stat main...HEAD`)
 
 | area | files | added | removed |
 |---|---|---|---|
-| `packages/omnidriver` (core) | 46 | 1636 | 391 |
-| `packages/omnidriver-openfoam` | 64 | 2047 | 94 |
+| `packages/omnidriver` (core) | 47 | 1707 | 394 |
+| `packages/omnidriver-openfoam` | 66 | 2064 | 95 |
 | `packages/omnidriver-cardiacfoam` | 37 | 736 | 105 |
 | `packages/omnidriver-cardiaccore` | 5 | 21 | 23 |
 | `packages/omnidriver-opencarp` | 14 | 190 | 40 |
 | `packages/omnidriver-torchcor` (new) | 24 | 6449 | 0 |
-| `packages/omnidriver-verifier` (new) | 38 | 3691 | 0 |
+| `packages/omnidriver-verifier` (new) | 38 | 3720 | 0 |
 | `packages/omnidriver-agents` (new) | 22 | 1123 | 0 |
-| `docs/` | 28 | 4713 | 36 |
+| `docs/` | 29 | 4993 | 36 |
 | `benchmarks/`, `scripts/`, `.github/`, root documents | 20 | about 370 | about 70 |
 
 ## What the branch contains
@@ -42,8 +43,15 @@ commits (171 outside merges): 295 files, +21017 / -757.
   declare (`0405a7b5`, plan check `gmsh_setnumber_not_declared`); chi, Cm and
   the uniform conductivity diagonal are positive by construction; an ionic
   model entry names the model it is (`same_model_as`).
-- The `keeps` environment change named in the hand-over was not found by that
-  name in the core sources; locate it from the commit list if it matters.
+- A supplied environment variable may declare `keeps: <name>`: the variable the
+  sourced file sets, whose value stays in front of the supplied one when it is
+  exported (`896ae226`, `10ead8f0`). The OpenFOAM profile uses it so that
+  `DYLD_LIBRARY_PATH` is exported after the bashrc's own
+  `FOAM_LD_LIBRARY_PATH`, which macOS would otherwise lose. `keeps` must be a
+  bash variable name (ASCII), an item's keys are closed, and nothing stray (a
+  `:`) is emitted when the kept variable is unset. It was reviewed adversarially
+  in an earlier round, with a follow-up fix (`10ead8f0`); the loader, manifest
+  and rendered-shell tests cover it.
 
 ### The verifier package (`omnidriver-verifier`, import `omnidriver.verifier`)
 
@@ -56,6 +64,10 @@ comparison.
 
 What it provides:
 
+- **Mesh-size order fit**: when every level of a spatial result carries a
+  `mesh_size`, orders are fitted against it instead of edge/N (`spacing` in the
+  row says which; a size at only some levels is refused as `results_invalid`)
+  (`fd02b867`).
 - **Problem library** (`problems/`): `fda_monodomain` (1D, 2D, 3D; hex and tet
   ladders; a temporal ladder) and `anisotropic_monodomain` (3D, a fully
   populated conductivity tensor, the boundary-compatible sin^2 solution; hex and
@@ -130,10 +142,20 @@ benchmark/verifier builder, the phie-recovery notes and the reports under
   moved report path).
 - `design/benchmark-verifier-builder`: one new commit (phie-recovery notes),
   clean.
+- `feat/verifier-problem-library` (six commits: the tet FDA study notes, the
+  mesh-size fit, the tet study commit, the `keeps` mechanism). Conflicts:
+  `cardiacfoam.md` and `opencarp.md` had two sections lettered alike (AC and O
+  for the temporal study on one side, the tet study on the other); the tet study
+  is renamed AE (cardiacFOAM) and Q (openCARP), its rows and cross-references
+  with it, and the later wording of row AB4 kept. `test_convergence.py`: both
+  sides' tests kept. `test_native_drift.py`: the tet study is read at the commit
+  its runs executed (`tet_study_commit`, with the committed fixtures that go
+  with it), not at the problem's `commit`. The merged diff carries no manuscript
+  reference.
 
 ## Reviewed, and not
 
-Adversarially reviewed: the knowledge-as-data core changes, the OpenFOAM
+Adversarially reviewed: the knowledge-as-data core changes, the `keeps` mechanism, the OpenFOAM
 numerics catalogue and the cardiacFOAM numerics, the verifier up to the
 anisotropic problem and its temporal tables.
 
