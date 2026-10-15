@@ -24,7 +24,9 @@ VERIFIER = OWN_KEY + "src/verificationModels/monodomainVerification/manufactured
 ELECTRO = OWN_KEY + f"{fda.CASE}/constant/electroProperties"
 SWEEP = OWN_KEY + f"{fda.CASE}/setup/studies/cartesianConvergence/sweep_hex_convergence.json"
 TET_SWEEP = OWN_KEY + f"{fda.CASE}/setup/studies/tetConvergence/sweep_tet_generic.json"
-OWN = (REFERENCE, VERIFIER, ELECTRO, SWEEP, TET_SWEEP)
+# The FDA gate reads the template at its tet-study commit; this problem's tet ladder is the one at its own commit.
+TET_GEO = OWN_KEY + f"{fda.CASE}/setup/studies/tetConvergence/box.geo.template"
+OWN = (REFERENCE, VERIFIER, ELECTRO, SWEEP, TET_SWEEP, TET_GEO)
 # OpenFOAM's symmTensor components in storage order, and the conductivity entries the data names them by.
 SYMM_TENSOR = ("xx", "xy", "xz", "yy", "yz", "zz")
 # The tensor is symmetric, so the C++'s transposed component is the same parameter.
@@ -170,7 +172,7 @@ def _ladder_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[
     cells, dts = values[:8], values[8:]
     if cells != 2 * tet["cells_per_axis"] or dts != 2 * tet["dt"]:
         found.append("tet refinement")
-    geo = " ".join(fda._body(snippets[fda.TET_GEO], commit))
+    geo = " ".join(fda._body(snippets[TET_GEO], commit))
     edge = problem["domain"]["box"][0][1] - problem["domain"]["box"][0][0]
     if (edge != 1 or "(lc = 1/N)" not in geo
             or not all(f"Mesh.MeshSize{bound} = lc;" in geo for bound in ("Min", "Max"))):
@@ -204,7 +206,7 @@ def test_the_problem_data_matches_cardiacfoam():
         (SWEEP, "0.000140174", "0.000140", "hex refinement"),
         (TET_SWEEP, "-0.0130256", "-0.0130", "tet conductivity"),
         (TET_SWEEP, "0.000560538", "0.00056", "tet refinement"),
-        (fda.TET_GEO, "(lc = 1/N)", "(lc = 2/N)", "tet mesh size"),
+        (TET_GEO, "(lc = 1/N)", "(lc = 2/N)", "tet mesh size"),
         (fda.IONIC, "CONSTANTS[Beta] = -8.6", "CONSTANTS[Beta] = -8.7", "ionic Beta"),
         (fda.IONIC, "pow(STATES[u2], 3)", "pow(STATES[u2], 2)", "rate u2"),
     ],
