@@ -27,10 +27,9 @@ _PURKINJE_GRAPH_MODEL_COEFFS = (
     "monodomainSolverCoeffs", "conductionNetworkDomains", "purkinjeNetwork", "purkinjeGraphModelCoeffs",
 )
 
-#: Every graph file the native case ships, plus the plain default, so the
-#: solve steps' `consumes` covers whichever one a study names.
+#: Every graph file the native case ships, so the solve steps' `consumes`
+#: covers whichever one a study names.
 GRAPH_FILES: tuple[str, ...] = (
-    "purkinjeGraph",
     "purkinjeGraph.nodes003", "purkinjeGraph.nodes011", "purkinjeGraph.nodes021",
     "purkinjeGraph.nodes041", "purkinjeGraph.nodes081", "purkinjeGraph.nodes161",
 )
