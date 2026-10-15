@@ -145,4 +145,4 @@ check it; the refusals it names are the record's own.
   refused the same way, junctions that share cells being judged together; a
   plan before the mesh exists reports the bound it can compute as a note.
   `pvjCouplingScheme implicit` and a bidirectional `reactionDiffusionPvjCoupler`
-  (which also needs `purkinjeFibreRadius`) have no such bound.
+  have no such bound.

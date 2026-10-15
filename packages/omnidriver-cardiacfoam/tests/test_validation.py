@@ -12,7 +12,9 @@ import pytest
 
 from omnidriver.dict_entries import DictEntry
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
-from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES, PURKINJE_GRAPH_ENTRIES
+from omnidriver.cardiacfoam.common_dict_entries import (
+    CONORMAL_PATCH_ENTRIES, ELECTRO_MECHANICAL_PROPERTY_ENTRIES, PHYSICS_PROPERTY_ENTRIES, PURKINJE_GRAPH_ENTRIES,
+)
 from omnidriver.openfoam.control_dict import CONTROL_DICT_ENTRIES
 from omnidriver.core.plugin_interface import driver_context as _driver_context
 from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
@@ -29,11 +31,11 @@ def _validate(config, *, entries=None, driver_context):
     """The catalogue relations over the flat context the per-phase slices make."""
     context = {key: val for slice_ in config.values() for key, val in slice_.items() if val not in (None, "")}
     if entries is None:
-        # controlDict and the Purkinje graph are documents of their own, judged by their own rules.
-        entries = [
-            e for e in driver_context.stack.call("get_dict_entries")
-            if e not in CONTROL_DICT_ENTRIES and e not in PURKINJE_GRAPH_ENTRIES
-        ]
+        # The documents other than electroProperties are judged by their own rules.
+        other = (
+            *CONTROL_DICT_ENTRIES, *PURKINJE_GRAPH_ENTRIES, *ELECTRO_MECHANICAL_PROPERTY_ENTRIES, *CONORMAL_PATCH_ENTRIES,
+        )
+        entries = [e for e in driver_context.stack.call("get_dict_entries") if e not in other]
     return tuple(rule_diagnostics(entries, context, document="constant/electroProperties"))
 
 _PHASE_ORDER = ("anatomy", "physics", "stimulus", "solver")
@@ -1020,8 +1022,6 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
         "$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.couplingMode": mode,
         "$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.electroDomainCoupler": coupler,
     }
-    if mode == "bidirectional" and conduction_solver == "monodomain1DSolver":
-        overrides[f"{prefix}.purkinjeFibreRadius"] = "1.7e-05"
     if conduction_solver == "eikonalSolver1D":
         overrides[f"{prefix}.purkinjeCV"] = "[0 1 -1 0 0 0 0] 4.2"
     if myocardium_solver == "eikonalSolver":

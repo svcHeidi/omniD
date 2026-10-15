@@ -172,3 +172,50 @@ ecgDomains
         dict_relpaths=("constant/electroProperties",),
     )
     assert [d.field for d in diags] == ["sigmaExtracellulr"]
+
+
+# Verbatim from the sphericalShell eikonalECG case of cardiacFOAM
+# (af0e1716), constant/electroProperties and system/fvSchemes.
+_INCLUDE_IF_PRESENT_ELECTRO = """\
+eikonalSolverCoeffs
+{
+    eikonalAdvectionDiffusionApproach true;
+    #includeIfPresent "<case>/local/formulation"
+    useGraphPrePopulation true;
+    verificationModel
+    {
+        type    manufacturedShellEikonalVerifier;
+        N       12;
+        #includeIfPresent "<case>/local/verification"
+    }
+}
+"""
+
+
+def test_a_preprocessing_directive_is_not_a_key(tmp_path):
+    _write(tmp_path, _INCLUDE_IF_PRESENT_ELECTRO)
+    paths = (
+        "eikonalAdvectionDiffusionApproach",
+        "useGraphPrePopulation",
+        "verificationModel.type",
+        "verificationModel.N",
+    )
+    assert case_dict_key_diagnostics(
+        tmp_path, catalogued_paths=paths,
+        dict_relpaths=("constant/electroProperties",),
+    ) == ()
+
+
+def test_a_misspelling_beside_a_directive_is_still_reported(tmp_path):
+    _write(tmp_path, _INCLUDE_IF_PRESENT_ELECTRO.replace("useGraphPrePopulation", "useGraphPrePopulaton"))
+    paths = (
+        "eikonalAdvectionDiffusionApproach",
+        "useGraphPrePopulation",
+        "verificationModel.type",
+        "verificationModel.N",
+    )
+    diags = case_dict_key_diagnostics(
+        tmp_path, catalogued_paths=paths,
+        dict_relpaths=("constant/electroProperties",),
+    )
+    assert [d.field for d in diags] == ["useGraphPrePopulaton"]

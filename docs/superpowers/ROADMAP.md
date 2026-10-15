@@ -248,9 +248,8 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    native main; the measurements, before and after, are in
    `docs/solver-learning/cardiacfoam-pvj-coupling.md`). The branch has:
    - a conservative bidirectional junction: the network node loses the junction
-     current from the volume `pi rho^2 L` (`purkinjeFibreRadius`, catalogued, required
-     once a coupling is bidirectional) and the tissue receives the current the
-     network solved, whatever `pvjCouplingScheme`; charge balances every step, and
+     current from the volume `pi rho^2 L` (`purkinjeFibreRadius`, read only on that branch)
+     and the tissue receives the current the network solved, whatever `pvjCouplingScheme`; charge balances every step, and
      retrograde activation of the network occurs;
    - `pvjCouplingScheme implicit` on the tissue's diagonal for both tissue
      algorithms (unidirectional), and `eikonalMonodomainPvjCoupler` reading it;
@@ -271,9 +270,9 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - on the bath-bidomain branch only: its reaction/diffusion split skips the
      SBDF2 `VmRate` and `Iion` refresh that `advance()` does, so bath with SBDF2
      differs from the normal advance.
-   - `purkinjeFibreRadius`: the catalogue follows native main, where it is required
-     once a coupling is bidirectional. Native `60f4cb597` (on `omnid/*` branches,
-     not on main) makes it `lookupOrDefault` 2e-5 m; the catalogue entry follows
+   - `purkinjeFibreRadius`: not catalogued, because native main reads no such key
+     (the scan reports it `unread` there). Native `60f4cb597` (on `omnid/*` branches,
+     not on main) reads it with `lookupOrDefault` 2e-5 m; the catalogue entry follows
      once the owner merges it.
 4a. **Verifier findings, owner's calls** (2026-10-10, `cardiacfoam.md` AB,
    `opencarp.md` N):
@@ -363,9 +362,8 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      - a study's dimensioned `chi` (`{"dimensions": ..., "value": ...}`) is
        refused as "must be a number", though the C++ reads a `dimensionedScalar`
        and the native file writes one;
-     - the `configurationChecks` variants `...Bidirectional` and
-       `monodomainVerificationNone` are refused when checked without the C++
-       mapping (`purkinjeFibreRadius` required; `verificationModel.type none`);
+     - the `configurationChecks` variant `monodomainVerificationNone` is refused
+       when checked without the C++ mapping (`verificationModel.type none`);
      - `tetNumberCells`' description says "unit cube", but bathBidomain's mesh
        is three unit boxes.
      - 109 refusal sites in `tutorial_records.py` and `record_execution.py` still

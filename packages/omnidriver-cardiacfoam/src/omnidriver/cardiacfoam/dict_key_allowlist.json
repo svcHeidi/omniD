@@ -18,11 +18,15 @@
       "writeFrequency",
       "writeInterval"
     ],
-    "read by upstream OpenFOAM's ODESolver from the dictionary ionicModel hands to ODESolver::New": [
+    "read by upstream OpenFOAM's ODESolver from the dictionary ionicModel, or the active-tension model's ODESolver sub-dictionary, hands to ODESolver::New": [
       "$ELECTRO_MODEL_COEFFS.absTol",
       "$ELECTRO_MODEL_COEFFS.maxSteps",
       "$ELECTRO_MODEL_COEFFS.relTol",
       "$ELECTRO_MODEL_COEFFS.solver",
+      "$ELECTRO_MODEL_COEFFS.ODESolver.absTol",
+      "$ELECTRO_MODEL_COEFFS.ODESolver.maxSteps",
+      "$ELECTRO_MODEL_COEFFS.ODESolver.relTol",
+      "$ELECTRO_MODEL_COEFFS.ODESolver.solver",
       "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.absTol",
       "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.maxSteps",
       "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.relTol",
@@ -40,6 +44,14 @@
   "runtime_selection": {
     "description": "Which C++ selection table (addToRunTimeSelectionTable) each catalogue enum draws its menu from. by_path: the table and how the menu relates to it (strict: the same names; subset: a curated part; polymorphic: several tables share the selector). not_runtime_selected: enums whose values are plain words. internal_bases: tables no catalogue enum selects directly.",
     "by_path": {
+      "electroMechanicalModel": {
+        "base": "electroMechanicalModel",
+        "mode": "strict"
+      },
+      "$ELECTRO_MECHANICAL_COEFFS.verificationModel.type": {
+        "base": "electromechanicalVerificationModel",
+        "mode": "strict"
+      },
       "type": {
         "base": "physicsModel",
         "mode": "strict"
@@ -143,9 +155,7 @@
     "internal_bases": {
       "electroModel": "a lower-level table the myocardiumSolver key resolves through; its values appear in the union enum",
       "myocardiumSolver": "a lower-level table the myocardiumSolver key resolves through; its values appear in the union enum",
-      "electroMechanicalModel": "selected via physicsProperties' type enum; sequentialElectroMechanical is the only option once that path is taken",
       "electroStateDomain": "one bath-potential implementation; selected by adding bathPotentialDomain, not by typing a type",
-      "electromechanicalVerificationModel": "selected via the verificationModel subdict; no catalogue type selector",
       "eikonalVerificationModel": "selected via the verificationModel subdict; no catalogue type selector"
     },
     "built_when": {

@@ -231,7 +231,7 @@ class TestConductionSystemSchemaContract(unittest.TestCase):
             ),
         )
         self.assertNotIn(prefix + "alpha", entries)
-        self.assertNotIn(prefix + "k", entries)
+        self.assertEqual(entries[prefix + "k"].value_kind, "vector3")
 
     def test_purkinjeGraphModelCoeffs_chi_and_cm_documented(self):
         chi_keys = [p for p in self.entries if p.endswith(".purkinjeGraphModelCoeffs.chi")]

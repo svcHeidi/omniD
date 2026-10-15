@@ -18,6 +18,11 @@ from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 _RTS_COEFFS_SUFFIX = "Coeffs"
 
 
+def _is_directive(key: object) -> bool:
+    """A preprocessing directive (`#includeIfPresent`, `#include`, `#calc` ...) that the parser surfaces as a key."""
+    return str(key).startswith("#")
+
+
 def _scope_relative(trail: tuple[str, ...]) -> tuple[str, ...]:
     """Drop a leading runtime-selection scope dict so a trail aligns with catalogue paths relative to `<model>Coeffs`."""
     if trail and trail[0].endswith(_RTS_COEFFS_SUFFIX):
@@ -136,6 +141,8 @@ def case_dict_key_diagnostics(
 def _leaves(node: Mapping, trail: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
     found: list[tuple[str, ...]] = []
     for key in node:
+        if _is_directive(key):
+            continue
         full = trail + (str(key),)
         if hasattr(node[key], "keys"):
             found.extend(_leaves(node[key], full))
@@ -152,6 +159,8 @@ def _unmatched(
     """Outermost unmatched keys, depth-first; an unmatched container is reported once, not descended into."""
     found: list[tuple[str, ...]] = []
     for key in node:
+        if _is_directive(key):
+            continue
         value = node[key]
         full = trail + (str(key),)
         if not _matches(_scope_relative(full), known) and not str(key).endswith(
