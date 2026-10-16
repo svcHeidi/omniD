@@ -200,7 +200,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
                 'src/numericsModels/sealedWall/insulatedFaceConductivity.C',
                 'src/numericsModels/sealedWall/sealedWallPolicy.C',
             ),
-            notes='Read with get<Switch>, so a missing key is a native FatalError. insulatedFaceConductivity zeroes the wall face of Gi (monodomain, bidomain Vm), of Gi+Ge (bidomain phiE) and of the eikonal tensor. sealedWallPolicy::publish stores one state per patch (stock, sealed, value) under the field\'s name; the gradient scheme sealedWallLeastSquares, named per field in fvSchemes gradSchemes (grad(Vm) and grad(Vm.component(0)), likewise phiE and activationTime), drops the sealed faces from the wall cells\' stencil, and equals leastSquares when this key is false. The key alone zeroes the wall flux with the stock wall-cell gradient.',
+            notes='Read with get<Switch>, so a missing key is a native FatalError. insulatedFaceConductivity zeroes the wall face of Gi (monodomain, bidomain Vm), of Gi+Ge (bidomain phiE) and of the eikonal tensor. sealedWallPolicy::publish stores one state per patch (stock, sealed, value) under the field\'s name; the gradient scheme sealedWallLeastSquares, named per field in fvSchemes gradSchemes (grad(Vm) and grad(Vm.component(0)), likewise phiE and activationTime), acts on the states this key publishes. The key alone zeroes the wall flux with the stock wall-cell gradient.',
             value_kind='boolean',
             required=True,
             typical_value='false',

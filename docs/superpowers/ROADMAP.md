@@ -225,18 +225,21 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      spec. Every staged `humanSlab` copies its 333 MB anatomy bundle.
    - *After `step --apply` changes a swept key,* the case record still shows the
      sweep's axis values.
-2a. **Left from following cardiacFOAM PR #59** (the records follow #59's
-   Allruns; a record run at `numberCells` N equals `Allrun -N` N):
-   - the tet route with no `tetNumberCells` meshes at the template's `lc`
-     (N = 10), where `Allrun -mesh tet` defaults to N = 20; gmsh's `seed` is no
-     axis; a tet study with dimension 1D or 2D is not refused, though the
+2a. **Left from following cardiacFOAM PR #59.** The records follow #59's
+   Allruns: N, the time step, `writeInterval` and the 1D-3D graph are derived
+   as `Allrun -N`/`-endTime` derive them. Measured byte-identical to the
+   native run: pseudo-ECG 3D, bidomain 3D and bathBidomain 3D at N = 10, and
+   monodomain1D3D at N = 10. A record run is not the native default run in
+   these places:
+   - eikonalECG 3D reports all 161 electrodes, where the Allrun's default
+     `-electrodes five` removes `R*` and keeps 5 (the activation time is
+     identical); its `tet-errorLocalisation` route runs `writeCellCentres`,
+     and a study sets `writeErrorField` itself (`-errorField` does both);
+   - a tet route with no `tetNumberCells` meshes at the template's `lc`
+     (N = 10) with the case's N = 20 time step, which no Allrun runs
+     (`Allrun -mesh tet` defaults to N = 20); gmsh's `seed` is no axis; a tet
+     study at 1D or 2D, or naming `numberCells`, is not refused, though the
      Allrun refuses `-mesh tet` below 3D;
-   - eikonalECG: the `tet-errorLocalisation` route runs `writeCellCentres`, and
-     a study sets `writeErrorField` itself (`-errorField` does both); the
-     Allrun's default `-electrodes five` (`#remove "R.*"`) is not mirrored, so
-     a record run reports all 161 electrodes;
-   - `purkinjeFibreRadius`, read by the merged #53/#59 C++, stays uncatalogued
-     until that merge lands natively;
    - the Niederer `obliqueWall` studies (decision D1) and
      `benchmarks/niederer2011/oblique/README.md` still name `sealedWallTrace`;
      the verifier's drift snippets are pinned to native `277dfeb1`, before #59;
