@@ -5,9 +5,10 @@ import hashlib
 import json
 import os
 import subprocess
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, NamedTuple
 
 from ..plugin_interface import SolverBuild, SourceIdentity
 from .attempt_lease import record_guard
@@ -71,32 +72,52 @@ def recorded_build(name: str, path: Path | None) -> SolverBuild:
         return SolverBuild(name=name, path=path, digest=None, known="unknown")
     path = Path(path)
     digest = file_digest(path)
-    entry = _products(path.parent).get(name)
-    if digest is None or not isinstance(entry, Mapping) or entry.get("digest") != digest:
+    source = _recorded_source(_products(path.parent).get(name), digest)
+    if source is None:
         return SolverBuild(name=name, path=path, digest=digest, known="unknown")
-    return SolverBuild(name=name, path=path, digest=digest, known="recorded", source=_identity(entry.get("source")))
+    return SolverBuild(name=name, path=path, digest=digest, known="recorded", source=source)
 
 
-def write_records(builds: Iterable[SolverBuild], source: SourceIdentity) -> tuple[Path, ...]:
-    """Record each build that exists as built from ``source``, merged into the record beside it;
-    the record files written."""
+class RecordsWritten(NamedTuple):
+    """What :func:`write_records` did: the record files it wrote, the builds it recorded, and the
+    builds it kept because their existing entry still names their file (``source`` is that entry's)."""
+
+    records: tuple[Path, ...]
+    recorded: tuple[SolverBuild, ...]
+    kept: tuple[SolverBuild, ...]
+
+
+def write_records(builds: Iterable[SolverBuild], source: SourceIdentity) -> RecordsWritten:
+    """Record each build that exists as built from ``source``, merged into the record beside it. A
+    build whose entry already names its file's digest was not rebuilt since, and keeps that entry."""
     by_directory: dict[Path, list[SolverBuild]] = {}
     for build in builds:
         if build.path is not None and build.digest is not None:
             by_directory.setdefault(Path(build.path).parent, []).append(build)
     recorded_at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
-    written = []
+    written: list[Path] = []
+    recorded: list[SolverBuild] = []
+    kept: list[SolverBuild] = []
     for directory, group in sorted(by_directory.items()):
         record = directory / RECORD_FILENAME
         with record_guard(record):
             products = dict(_products(directory))
+            fresh = []
             for build in group:
+                existing = _recorded_source(products.get(build.name), build.digest)
+                if existing is not None:
+                    kept.append(replace(build, known="recorded", source=existing))
+                    continue
                 products[build.name] = {"digest": build.digest, "recordedAt": recorded_at, "source": source.to_json()}
+                fresh.append(replace(build, known="recorded", source=source))
+            if not fresh:
+                continue
             temporary = record.with_name(RECORD_FILENAME + ".tmp")
             temporary.write_text(json.dumps({"version": RECORD_VERSION, "products": products}, indent=2, sort_keys=True) + "\n")
             os.replace(temporary, record)
         written.append(record)
-    return tuple(written)
+        recorded += fresh
+    return RecordsWritten(tuple(written), tuple(recorded), tuple(kept))
 
 
 def _products(directory: Path) -> dict[str, Any]:
@@ -108,6 +129,12 @@ def _products(directory: Path) -> dict[str, Any]:
         return {}
     products = payload.get("products")
     return products if isinstance(products, dict) else {}
+
+
+def _recorded_source(entry: Any, digest: str | None) -> SourceIdentity | None:
+    if digest is None or not isinstance(entry, Mapping) or entry.get("digest") != digest:
+        return None
+    return _identity(entry.get("source"))
 
 
 def _identity(raw: Any) -> SourceIdentity | None:
@@ -135,14 +162,17 @@ def build_record_report(driver_context: Any, env: Mapping[str, str]) -> dict[str
                   "identify themselves, or the stack lists none",
         )
     recorded: list[dict[str, Any]] = []
+    kept: list[dict[str, Any]] = []
     not_built: list[dict[str, Any]] = []
     records: set[Path] = set()
     for entry in entries:
-        present = [build for build in entry.builds if build.digest is not None]
-        records.update(write_records(present, entry.repository))
-        recorded += [{"solver": entry.solver, "name": b.name, "path": str(b.path), "digest": b.digest} for b in present]
+        result = write_records([build for build in entry.builds if build.digest is not None], entry.repository)
+        records.update(result.records)
+        recorded += [{"solver": entry.solver, "name": b.name, "path": str(b.path), "digest": b.digest} for b in result.recorded]
+        kept += [{"solver": entry.solver, "name": b.name, "path": str(b.path), "repository": b.source.repository}
+                 for b in result.kept]
         not_built += [{"solver": entry.solver, "name": b.name} for b in entry.builds if b.digest is None]
     return {
         "action": "build-record", "status": "ok", "repository": entries[0].repository.to_json(),
-        "recorded": recorded, "not_built": not_built, "records": sorted(str(path) for path in records),
+        "recorded": recorded, "kept": kept, "not_built": not_built, "records": sorted(str(path) for path in records),
     }

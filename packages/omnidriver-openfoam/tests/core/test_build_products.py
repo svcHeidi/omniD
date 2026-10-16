@@ -125,6 +125,26 @@ def test_a_build_recorded_from_another_tree_is_a_stale_build(tmp_path):
     assert str(built_from.resolve()) in warning.message and str(planned.resolve()) in warning.message
 
 
+def test_a_worktree_that_rebuilt_only_a_library_does_not_claim_the_solver(tmp_path):
+    first = _repository(tmp_path / "a")
+    env = _install(tmp_path)
+    (entry,) = wmake_solver_builds(env, repository=_repo(first), used_paths=None)
+    write_records(entry.builds, entry.repository)
+
+    second = _repository(tmp_path / "b")
+    (second / "applications" / "solvers" / "myFoam" / "myFoam.C").write_text("int main() { return 1; }\n")
+    (Path(env["FOAM_USER_LIBBIN"]) / "libmodels.dylib").write_bytes(b"library rebuilt in b")
+    (entry,) = wmake_solver_builds(env, repository=_repo(second), used_paths=None)
+    write_records(entry.builds, entry.repository)
+
+    (entry,) = wmake_solver_builds(env, repository=_repo(second), used_paths=None)
+    by_name = {item["name"]: item["matchesRepository"] for item in to_json((entry,))[0]["builds"]}
+    assert by_name == {"myFoam": False, "libmodels": True}
+    (warning,) = provenance_diagnostics((entry,))
+    assert (warning.code, warning.detail["builds"]) == ("stale_build", ["myFoam"])
+    assert warning.detail["built_from"]["repository"] == str(first.resolve())
+
+
 def test_an_unrecorded_or_rebuilt_product_is_unknown_with_the_command_to_record_it(tmp_path):
     root = _repository(tmp_path / "repo")
     env = _install(tmp_path)

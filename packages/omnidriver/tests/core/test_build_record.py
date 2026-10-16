@@ -21,7 +21,7 @@ def _product(directory, name, content=b"bin"):
 
 def test_a_recorded_product_is_read_back_with_its_source(tmp_path):
     build = _product(tmp_path / "bin", "mySolver")
-    (written,) = write_records([build], SOURCE)
+    (written,) = write_records([build], SOURCE).records
     assert written == tmp_path / "bin" / RECORD_FILENAME
     payload = json.loads(written.read_text())
     assert payload["version"] == 1
@@ -70,6 +70,22 @@ def test_products_in_two_directories_get_one_record_each_and_absent_builds_none(
     app = _product(tmp_path / "bin", "mySolver")
     lib = _product(tmp_path / "lib", "libModels.so")
     missing = SolverBuild(name="never", path=None, digest=None, known="unknown")
-    written = write_records([app, lib, missing], SOURCE)
+    written = write_records([app, lib, missing], SOURCE).records
     assert sorted(written) == sorted([tmp_path / "bin" / RECORD_FILENAME, tmp_path / "lib" / RECORD_FILENAME])
     assert not (tmp_path / "bin" / (RECORD_FILENAME + ".tmp")).exists()
+
+
+def test_a_partial_rebuild_in_another_worktree_keeps_the_products_it_did_not_rebuild(tmp_path):
+    solver = _product(tmp_path / "bin", "mySolver", b"solver from a")
+    lib = _product(tmp_path / "lib", "libModels", b"lib from a")
+    write_records([solver, lib], SOURCE)
+
+    rebuilt_lib = _product(tmp_path / "lib", "libModels", b"lib from b")
+    unchanged_solver = SolverBuild(name="mySolver", path=solver.path, digest=file_digest(solver.path), known="unknown")
+    result = write_records([unchanged_solver, rebuilt_lib], OTHER)
+
+    assert recorded_build("mySolver", solver.path).source == SOURCE
+    assert recorded_build("libModels", lib.path).source == OTHER
+    assert [b.name for b in result.recorded] == ["libModels"]
+    assert [(b.name, b.source) for b in result.kept] == [("mySolver", SOURCE)]
+    assert result.records == (tmp_path / "lib" / RECORD_FILENAME,)

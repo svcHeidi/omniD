@@ -86,8 +86,10 @@ Core owns the shared parts, so no plugin re-implements them:
 build. The repository is supplied, never searched for. For each build of a
 `recordable` entry whose file exists, it writes an entry into
 `omnidriver-build.json` in the product's own directory, merging with the
-entries there, so two worktrees that build into one platform folder each
-replace only their own products. The write is atomic (a temporary file, then
+entries there. An entry whose `digest` still equals the file's is kept: that
+file was not rebuilt since it was recorded, so it is not credited to the
+supplied repository. Two worktrees that build into one platform folder
+therefore each replace only the products they rebuilt. The write is atomic (a temporary file, then
 `os.replace`) and serialised by an exclusive lock file beside it.
 
 ```json
@@ -108,7 +110,8 @@ replace only their own products. The write is atomic (a temporary file, then
 ```
 
 It prints one JSON report: the repository's identity, the products recorded
-(name, path, digest, record file) and those not built. A stack with no
+(name, path, digest, record file), those `kept` (name, path, and the repository
+their existing entry names) and those not built. A stack with no
 `recordable` entry for the repository refuses with the new code
 `build_products_undeclared`.
 
