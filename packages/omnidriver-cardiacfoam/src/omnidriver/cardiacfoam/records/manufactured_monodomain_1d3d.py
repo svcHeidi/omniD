@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.core.tutorial_records import (
-    AxisContract, AxisPatch, AxisResult, TutorialRecord, TutorialRecordError, WorkflowStep,
+    AxisContract, AxisPatch, AxisResult, Derivation, TutorialRecord, TutorialRecordError, WorkflowStep,
 )
 
 from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
@@ -67,6 +67,33 @@ def _graph_file_axis(name: str) -> AxisContract:
 
 #: The time step this case's native Allrun takes at N = 10, scaled with the cell size squared.
 _ALLRUN_STEP_AT_TEN = 0.008971136
+
+
+def _graph_for_n() -> Derivation:
+    """``Allrun -N`` with no ``-graph`` takes the graph whose edge length is 1/N, ``purkinjeGraph.nodes<N+1>``."""
+
+    def derive(stated: Any, staged_case_root: Path) -> tuple[AxisPatch, ...]:
+        n = stated.get(NUMBER_CELLS_AXIS_NAME)
+        if n is None or GRAPH_FILE_AXIS_NAME in stated:
+            return ()
+        graph_file = f"purkinjeGraph.nodes{n + 1:03d}"
+        if not (Path(staged_case_root) / "constant" / graph_file).is_file():
+            raise TutorialRecordError(
+                f"{NUMBER_CELLS_AXIS_NAME} {n} takes constant/{graph_file}, which the case does not ship; "
+                f"state {GRAPH_FILE_AXIS_NAME!r}"
+            )
+        return (AxisPatch(
+            document=ELECTRO_PROPERTIES, key_path=_PURKINJE_GRAPH_MODEL_COEFFS + ("graphFile",),
+            value=graph_file, value_kind="word", yields=True,
+        ),)
+
+    return Derivation(
+        name="allrunGraph", derive=derive,
+        description=(
+            f"When the study states {NUMBER_CELLS_AXIS_NAME} N and no {GRAPH_FILE_AXIS_NAME}, the graph is the native "
+            "Allrun's purkinjeGraph.nodes<N+1> (edge length 1/N), refused by name when the case ships no such graph."
+        ),
+    )
 
 
 AXES = (
@@ -129,5 +156,5 @@ RECORD = TutorialRecord(
     },
     variant_selector=VARIANT_SELECTOR_NAME,
     default_variant=COUPLED_VARIANT,
-    derivations=(allrun_time_controls(_ALLRUN_STEP_AT_TEN),),
+    derivations=(allrun_time_controls(_ALLRUN_STEP_AT_TEN), _graph_for_n()),
 )
