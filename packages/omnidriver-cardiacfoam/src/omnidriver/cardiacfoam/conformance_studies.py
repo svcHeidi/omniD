@@ -90,7 +90,7 @@ STUDIES: dict[str, ConformanceStudy] = {
         ),
         base_study={
             "dimension": "1D", "numberCells": 10, "system/controlDict:endTime": 0.02,
-            "system/controlDict:deltaT": 0.02 / 3,
+            "system/controlDict:deltaT": 0.02 / 3, "system/controlDict:writeInterval": 0.02,
         },
         # A catalogued scalar the bath verifier reads (native 0.01).
         patch=("constant/electroProperties:bidomainSolverCoeffs.verificationModel.alpha", 0.02),

@@ -57,8 +57,17 @@ argument_kind = "word"
 artifact_id = "bath_bidomain_interface_metrics"
 path_pattern = "postProcessing/bathBidomainInterfaceMetrics.csv"
 format = "csv_probe"
-description = "Region, interface, and exterior-boundary error norms for the manufactured bath-bidomain solution, one row per selected time."
+description = "Region, interface, and exterior-boundary error norms for the manufactured bath-bidomain solution, one row per selected time. Written without -exactFields."
 produced_by = "bathBidomainInterfaceMetrics"
+optional = true
+
+[[produces]]
+artifact_id = "bath_bidomain_interface_metrics_exact"
+path_pattern = "postProcessing/bathBidomainInterfaceMetricsExactField.csv"
+format = "csv_probe"
+description = "The same norms with phiE replaced by the manufactured exact solution. Written only with -exactFields."
+produced_by = "bathBidomainInterfaceMetrics"
+optional = true
 
 [[produces]]
 artifact_id = "bath_bidomain_face_errors"
