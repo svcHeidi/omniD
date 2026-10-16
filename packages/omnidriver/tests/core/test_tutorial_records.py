@@ -429,6 +429,25 @@ def test_only_a_yielding_patch_names_what_it_was_derived_from():
         AxisPatch("system/controlDict", ("deltaT",), 0.002, "scalar", derived_from=("system/controlDict::endTime",))
 
 
+def test_a_removed_key_takes_every_patch_beneath_it_and_is_written_as_a_removal():
+    removal = SourcedPatch(
+        patch=AxisPatch("constant/p", ("coeffs", "ecg"), None, "mapping", removes=True), source="dimension", validated=False,
+    )
+    beneath = SourcedPatch(
+        patch=AxisPatch("constant/p", ("coeffs", "ecg", "E", "type"), "x", "word"), source="base", validated=True,
+    )
+    beside = SourcedPatch(patch=AxisPatch("constant/p", ("coeffs", "type"), "y", "word"), source="base", validated=True)
+    combined = combine_patches([beneath, removal, beside])
+    assert [sourced.slot() for sourced in combined] == ["constant/p::coeffs.ecg", "constant/p::coeffs.type"]
+    (removed, kept) = patches_to_parameters(combined, owner="test")
+    assert (removed.operation, removed.value, kept.operation) == ("remove", None, "ensure")
+
+
+def test_a_removal_carries_no_value():
+    with pytest.raises(TutorialRecordError, match="carries no value"):
+        AxisPatch("constant/p", ("coeffs", "ecg"), {}, "mapping", removes=True)
+
+
 # ---------------------------------------------------------------------------
 # resolve_case_patches: sorting + axes + direct keys, end to end (pure)
 # ---------------------------------------------------------------------------

@@ -34,6 +34,7 @@ AXES = (
         "dimension", mesh_step_id="mesh",
         solver_coefficients=(ELECTRO_PROPERTIES, _MONODOMAIN_SOLVER_COEFFS),
         ecg_verification_scope=_ECG_VERIFICATION_MODEL,
+        ecg_domains=(ELECTRO_PROPERTIES, _MONODOMAIN_SOLVER_COEFFS + ("ecgDomains",)),
     ),
     number_cells_axis("numberCells", step_at_ten=_ALLRUN_STEP_AT_TEN),
     tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh", step_at_ten=_ALLRUN_STEP_AT_TEN),

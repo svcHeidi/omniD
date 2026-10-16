@@ -66,6 +66,8 @@ def _target_for_parameter(parameter: ParameterAssignment) -> dict[str, Any]:
     if parameter.operation != "remove":
         render = CONTAINER_FORMATTERS.get(parameter.value_kind)
         target["value"] = render(parameter.value) if render is not None else parameter.value
+    elif parameter.value_kind == "mapping":
+        target["removes_dictionary"] = True
     return target
 
 
@@ -111,7 +113,8 @@ def render_patch_case_files(
     ``"set"``) selects between :func:`mutators.update_foam_entry` and
     :func:`mutators.remove_foam_entry`: ``"set"`` requires the key to already
     exist (``add_if_missing=False``), ``"ensure"`` upserts it, and
-    ``"remove"`` deletes it with ``missing_ok=True``.
+    ``"remove"`` deletes it with ``missing_ok=True``, through
+    :func:`mutators.remove_foam_dict` when its value kind is ``mapping``.
     """
     del driver_context, execution_env
     case_root = Path(resolved.request.case_root)
@@ -163,7 +166,9 @@ def render_patch_case_files(
             scope = key_path[:-1] or None
             key = key_path[-1]
             operation = edit.get("operation", "set")
-            if operation == "remove":
+            if operation == "remove" and edit.get("removes_dictionary"):
+                remove_foam_dict(snapshot_path, key, scope=scope, missing_ok=True)
+            elif operation == "remove":
                 remove_foam_entry(snapshot_path, key, scope=scope, missing_ok=True)
             elif operation == "ensure":
                 update_foam_entry(

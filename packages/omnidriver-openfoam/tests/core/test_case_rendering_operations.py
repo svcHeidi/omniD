@@ -245,3 +245,15 @@ def test_dict_operation_ensure_is_refused(tmp_path):
     resolved = _resolved(case_root, parameter, extra_targets=(target,))
     with pytest.raises(ValueError, match="'ensure'"):
         _render(resolved, tmp_path)
+
+
+def test_removing_a_mapping_removes_the_whole_dictionary(tmp_path):
+    case_root = _case(tmp_path)
+    parameter = _assignment(key_path=("bathPotentialDomain",), value=None, value_kind="mapping", operation="remove")
+    request = CaseMutationRequest(
+        mode="clone_and_patch", case_root=case_root, adapter_id="org.omnidriver.test",
+        workflow="test", source_artifacts=(), parameters=(parameter,), requested_by="test",
+    )
+    content = _render(case_rendering.patch_mutation(request, owner_id="org.omnidriver.test"), tmp_path)
+    assert "bathPotentialDomain" not in content and "groundPatches" not in content
+    assert "existingScalar 5;" in content

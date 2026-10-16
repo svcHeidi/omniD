@@ -694,6 +694,10 @@ class AxisPatch:
     #: study that sets one of them and leaves this slot to the axis is
     #: refused, since the derivation did not see the study's value.
     derived_from: tuple[str, ...] = ()
+    #: The key is removed from the case, as a native script's ``#remove``
+    #: does; ``value`` is ``None``, and any other patch beneath the key goes
+    #: with it.
+    removes: bool = False
 
     def __post_init__(self) -> None:
         _check_case_relative("a patch's document", self.document)
@@ -701,6 +705,8 @@ class AxisPatch:
         object.__setattr__(self, "derived_from", tuple(self.derived_from))
         if self.derived_from and not self.yields:
             raise TutorialRecordError(f"a patch on {self.slot()!r} names derived_from but does not yield")
+        if self.removes and (self.value is not None or self.yields):
+            raise TutorialRecordError(f"a patch removing {self.slot()!r} carries no value and does not yield")
         if not self.key_path:
             raise TutorialRecordError(
                 f"a patch on {self.document!r} names no key"
@@ -921,8 +927,20 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
     the value (strict same-type equality) match, and are otherwise refused
     naming both sources: a later write never silently wins. A patch that
     ``yields`` gives way to one that does not; one kept whose
-    ``derived_from`` names a slot another patch sets is refused.
+    ``derived_from`` names a slot another patch sets is refused. A patch
+    beneath a key another patch ``removes`` goes with the key, as under a
+    native ``#remove``.
     """
+    removed = [sourced.patch for sourced in patches if sourced.patch.removes]
+    patches = [
+        sourced for sourced in patches
+        if not any(
+            gone.document == sourced.patch.document
+            and len(sourced.patch.key_path) > len(gone.key_path)
+            and sourced.patch.key_path[:len(gone.key_path)] == gone.key_path
+            for gone in removed
+        )
+    ]
     stated = {sourced.slot(): sourced for sourced in patches if not sourced.patch.yields}
     by_slot: dict[str, SourcedPatch] = {}
     for sourced in patches:
@@ -1130,6 +1148,10 @@ def resolve_case_patches(
                 "commit_case_write may write a case."
             )
         for patch in result.patches:
+            if patch.removes:
+                # A removal sets no value for the validator to judge.
+                sourced_patches.append(SourcedPatch(patch=patch, source=name, validated=False))
+                continue
             value_kind, validated = _validate_or_wrap(
                 direct_key_validator, patch.document, patch.key_path, patch.value,
             )
@@ -1236,6 +1258,9 @@ def split_unchanged(
     unchanged: list[SourcedPatch] = []
     for sourced in patches:
         patch = sourced.patch
+        if patch.removes:
+            to_write.append(sourced)
+            continue
         document_path = Path(case_root) / patch.document
         current = read_current_value(document_path, patch.key_path)
         if current is not None and values_agree(patch.value_kind, patch.value, current):
@@ -1274,7 +1299,7 @@ def patches_to_parameters(
             value_kind=sourced.patch.value_kind,
             source="case",
             validated=sourced.validated,
-            operation="ensure" if sourced.validated else "set",
+            operation="remove" if sourced.patch.removes else "ensure" if sourced.validated else "set",
         )
         for sourced in patches
     )

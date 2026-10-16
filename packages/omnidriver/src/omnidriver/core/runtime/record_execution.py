@@ -250,6 +250,7 @@ def _serialize_sourced_patch(sourced: SourcedPatch, *, status: str) -> dict[str,
         "validated": sourced.validated,
         "source": sourced.source,
         "status": status,
+        **({"removes": True} if sourced.patch.removes else {}),
     }
 
 

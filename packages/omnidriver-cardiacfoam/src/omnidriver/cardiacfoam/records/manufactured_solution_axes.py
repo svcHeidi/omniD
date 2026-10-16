@@ -35,6 +35,7 @@ def dimension_axis(
     name: str, *, mesh_step_id: str = "mesh",
     solver_coefficients: tuple[str, tuple[str, ...]] | None = None,
     ecg_verification_scope: tuple[str, ...] | None = None,
+    ecg_domains: tuple[str, tuple[str, ...]] | None = None,
 ) -> AxisContract:
     """A named axis mapping a dimension (one of :data:`DIMENSIONS`) to the
     mesh step's ``-dict system/blockMeshDict.<dim>`` (replacing the step's
@@ -45,6 +46,10 @@ def dimension_axis(
     document, at ``scope + ecg_verification_scope + ("dimension",)``: the
     verifier's dimension echoes the tissue dimension, and one study value
     drives both so they cannot desync. Requires ``solver_coefficients``.
+
+    ``ecg_domains`` is the ``(document, key path)`` of the case's ECG domains,
+    which run in 3D only: a 1D or 2D value removes them, as the native
+    ``Allrun``'s ``#remove ecgDomains`` does.
 
     Refuses by name a value that is not one of :data:`DIMENSIONS`: a
     nonsense dimension would otherwise surface only as blockMesh failing to
@@ -65,12 +70,15 @@ def dimension_axis(
                 document=document, key_path=scope + ("dimension",),
                 value=f'"{value}"', value_kind="word",
             ),)
-            if ecg_verification_scope is not None:
+            if ecg_verification_scope is not None and value == "3D":
                 patches += (AxisPatch(
                     document=document,
                     key_path=scope + ecg_verification_scope + ("dimension",),
                     value=f'"{value}"', value_kind="word",
                 ),)
+        if ecg_domains is not None and value != "3D":
+            document, key_path = ecg_domains
+            patches += (AxisPatch(document=document, key_path=key_path, value=None, value_kind="mapping", removes=True),)
         return AxisResult(
             patches=patches,
             command_arguments={mesh_step_id: MESH_DICT_KEY + (block_mesh_dict_document(value),)},
@@ -81,6 +89,7 @@ def dimension_axis(
         description=(
             f"The dimension, one of {list(DIMENSIONS)}: the mesh step reads system/blockMeshDict.<dimension> (-dict)"
             + (", and the solver's own dimension key is set to it." if solver_coefficients is not None else ".")
+            + (" The ECG domains run in 3D only: 1D and 2D remove them." if ecg_domains is not None else "")
         ),
     )
 

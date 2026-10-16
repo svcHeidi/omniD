@@ -42,22 +42,36 @@ def test_bidomain_dimension_writes_its_solver_coefficient_and_picks_the_mesh_dic
     assert command_arguments == {"mesh": ("-dict", "system/blockMeshDict.1D")}
 
 
-def test_eikonal_ecg_dimension_only_picks_the_mesh_dict(tmp_path):
-    """eikonalECG's solver has no ``dimension`` key, so its axis writes nothing and must not borrow bidomain's."""
+def test_eikonal_ecg_dimension_picks_the_mesh_dict_and_removes_the_3d_only_ecg(tmp_path):
+    """eikonalECG's solver has no ``dimension`` key, so its axis must not borrow bidomain's; its ECG runs in 3D only."""
     patches, command_arguments = _resolve("manufacturedEikonalECG", {"dimension": "2D"}, tmp_path)
-    assert patches == {}
+    assert patches == {"constant/electroProperties::eikonalSolverCoeffs.ecgDomains": None}
     assert command_arguments == {"mesh": ("-dict", "system/blockMeshDict.2D")}
+    assert _resolve("manufacturedEikonalECG", {"dimension": "3D"}, tmp_path)[0] == {}
 
 
 def test_pseudo_ecg_dimension_writes_both_the_tissue_and_ecg_verifier_dimension(tmp_path):
     """One study value drives both, so a study can never state one without the other."""
-    patches, command_arguments = _resolve("manufacturedMonodomainPseudoECG", {"dimension": "1D"}, tmp_path)
+    patches, command_arguments = _resolve("manufacturedMonodomainPseudoECG", {"dimension": "3D"}, tmp_path)
+    assert patches == {
+        "constant/electroProperties::monodomainSolverCoeffs.dimension": '"3D"',
+        "constant/electroProperties::monodomainSolverCoeffs.ecgDomains.ECG"
+        ".verificationModel.dimension": '"3D"',
+    }
+    assert command_arguments == {"mesh": ("-dict", "system/blockMeshDict.3D")}
+
+
+def test_a_1d_pseudo_ecg_removes_the_ecg_with_every_study_key_beneath_it(tmp_path):
+    """The native Allrun writes ``#remove ecgDomains`` below everything else the case sets, for 1D and 2D."""
+    study = {
+        "dimension": "1D",
+        "constant/electroProperties:monodomainSolverCoeffs.ecgDomains.ECG.verificationModel.anisotropic": False,
+    }
+    patches, _ = _resolve("manufacturedMonodomainPseudoECG", study, tmp_path)
     assert patches == {
         "constant/electroProperties::monodomainSolverCoeffs.dimension": '"1D"',
-        "constant/electroProperties::monodomainSolverCoeffs.ecgDomains.ECG"
-        ".verificationModel.dimension": '"1D"',
+        "constant/electroProperties::monodomainSolverCoeffs.ecgDomains": None,
     }
-    assert command_arguments == {"mesh": ("-dict", "system/blockMeshDict.1D")}
 
 
 @pytest.mark.parametrize(
@@ -157,12 +171,10 @@ def _resolve_on_route(record_name: str, variant: str, study: dict, tmp_path):
 
 
 @pytest.mark.parametrize(("record_name", "variant"), _EIKONAL_TET_ROUTES)
-@pytest.mark.parametrize("dimension", ["1D", "2D", "3D"])
-def test_a_tet_route_refuses_an_axis_whose_only_effect_is_the_blockmesh_dict(
-    record_name, variant, dimension, tmp_path,
-):
+def test_a_tet_route_refuses_an_axis_whose_only_effect_is_the_blockmesh_dict(record_name, variant, tmp_path):
+    """In 3D; in 1D and 2D the axis also removes the ECG."""
     with pytest.raises(TutorialRecordError) as exc:
-        _resolve_on_route(record_name, variant, {"dimension": dimension}, tmp_path)
+        _resolve_on_route(record_name, variant, {"dimension": "3D"}, tmp_path)
     for fragment in (record_name, "'dimension'", "'mesh'", "does not run"):
         assert fragment in str(exc.value), (fragment, str(exc.value))
 
