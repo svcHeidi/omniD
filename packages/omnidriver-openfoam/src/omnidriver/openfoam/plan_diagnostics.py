@@ -55,7 +55,14 @@ def plan_diagnostics(
         item for item in driver_context.stack.call("validate_run_semantics", case_root, driver_context=driver_context)
         if item.level != "error"
     )
-    schemes = fv_schemes_diagnostics(case_root, env=env, scratch_root=scratch_root)
+    schemes = fv_schemes_diagnostics(
+        case_root, env=env, scratch_root=scratch_root,
+        solver_schemes=(
+            cached_scan(source_root, cache_root=scratch_root).schemes
+            if source_root is not None and source_root.is_dir() else None
+        ),
+        solver_root=source_root,
+    )
     return catalog + function_objects + keys + schemes + snapshot_diagnostics(env) + rules
 
 

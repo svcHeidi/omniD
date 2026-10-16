@@ -10,7 +10,7 @@ import json
 import os
 import re
 import tempfile
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Iterable, Iterator, Mapping
 
@@ -18,7 +18,7 @@ from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, catalogued_pa
 from omnidriver.core.specs.paths import SCRATCH_ENV_VAR
 
 from . import rtst_scanner
-from .rtst_scanner import scan_rtst_registrations
+from .rtst_scanner import scan_rtst_registrations, scan_scheme_registrations
 
 #: One subDict segment the C++ names by an expression, not a literal: any
 #: name, the way a catalogue's ``<name>`` placeholder is.
@@ -158,6 +158,9 @@ class Scan:
     #: ``(class, literal)`` per ``new <class>(...)`` made only when a
     #: selector equals the literal: ``if (x == "literal") { ... new C(...) }``.
     dispatch: tuple[tuple[str, str], ...] = ()
+    #: ``{fvSchemes table: {registered name: class}}``: the schemes the
+    #: source adds to OpenFOAM's tables (``scan_scheme_registrations``).
+    schemes: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -171,7 +174,7 @@ class Scan:
         return cls(
             digest=payload["digest"], reads=reads, registrations=payload["registrations"],
             parameters=tupled(payload["parameters"]), calls=tupled(payload["calls"]),
-            dispatch=tupled(payload["dispatch"]),
+            dispatch=tupled(payload["dispatch"]), schemes=payload["schemes"],
         )
 
     def resolution(self) -> dict[str, object]:
@@ -287,7 +290,8 @@ def scan_source(source_root: Path, *, digest: str | None = None) -> Scan:
         files[relative] = (text, structure, list(_functions(structure)))
         includes[relative] = [(m.group(1), m.start()) for m in _INCLUDE.finditer(raw)]
     classes = _class_index(structure for _text, structure, _functions_ in files.values())
-    registrations = scan_rtst_registrations({relative: text for relative, (text, _s, _f) in files.items()})
+    texts = {relative: text for relative, (text, _s, _f) in files.items()}
+    registrations = scan_rtst_registrations(texts)
     selected: dict[str, list[tuple[str, str]]] = {}
     for base, names in registrations.items():
         for name, derived in names.items():
@@ -308,6 +312,7 @@ def scan_source(source_root: Path, *, digest: str | None = None) -> Scan:
     return Scan(
         digest=digest or source_digest(source_root), reads=tuple(reads), registrations=registrations,
         parameters=tuple(sorted(parameters)), calls=tuple(calls), dispatch=tuple(sorted(dispatch)),
+        schemes=scan_scheme_registrations(texts),
     )
 
 

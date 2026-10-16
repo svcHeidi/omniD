@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Final, Mapping
+from typing import Any, Final, Iterable, Mapping
 
 from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
@@ -159,10 +159,13 @@ def _read(path: Path) -> dict[str, dict[str, Any]]:
 
 def fv_schemes_diagnostics(
     case_root: Path, *, env: Mapping[str, str], scratch_root: Path | None,
+    solver_schemes: Mapping[str, Iterable[str]] | None = None, solver_root: Path | None = None,
 ) -> tuple[StrictDiagnostic, ...]:
     """Notes for each scheme of the case's ``fvSchemes`` files that OpenFOAM's source ($FOAM_SRC, supplied) does not register.
 
-    One note says so when the source is not supplied, and the schemes are then not judged."""
+    ``solver_schemes`` (``{table: names}``) are the schemes the solver's own source at ``solver_root`` adds to those
+    tables, which a case may name too. One note says so when OpenFOAM's source is not supplied, and the schemes are then
+    not judged."""
     files = sorted((Path(case_root) / "system").rglob("fvSchemes")) if (Path(case_root) / "system").is_dir() else []
     if not files:
         return ()
@@ -182,6 +185,9 @@ def fv_schemes_diagnostics(
         ),)
     tables = cached_selection_tables(root, cache_root=scratch_root)
     menus = {table: set(names) for table, names in tables.menus().items()}
+    for table, names in (solver_schemes or {}).items():
+        menus.setdefault(table, set()).update(names)
+    registered_in = f"{root}" + (f" and the solver's {solver_root}" if solver_schemes else "")
     found: list[StrictDiagnostic] = []
     for path in files:
         relpath = path.relative_to(case_root).as_posix()
@@ -190,5 +196,5 @@ def fv_schemes_diagnostics(
         except (OSError, ValueError, KeyError) as exc:
             found.append(diagnostic("error", "case_unreadable", f"{path} cannot be read: {exc}", source=relpath))
             continue
-        found += scheme_diagnostics(values, menus, document=relpath, source_root=str(root))
+        found += scheme_diagnostics(values, menus, document=relpath, source_root=registered_in)
     return tuple(found)

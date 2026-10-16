@@ -27,9 +27,11 @@ def test_the_electromechanical_defaults_are_the_ones_the_cxx_gives():
     assert typical["verificationModel.TaScale"] == "1e3"
 
 
-def test_the_conormal_and_unequal_conormal_verifiers_are_selectable():
+def test_the_spherical_shell_verifiers_are_selectable():
     menu = _ELECTRO["$ELECTRO_MODEL_COEFFS.verificationModel.type"].enum_values
-    assert {"manufacturedConormalMonodomainVerifier", "manufacturedUnequalConormalBidomainVerifier"} <= set(menu)
+    assert {
+        "manufacturedShellMonodomainVerifier", "manufacturedShellBidomainVerifier", "manufacturedShellEikonalVerifier",
+    } <= set(menu)
 
 
 def test_the_active_tension_odesolver_sub_dictionary_is_optional_and_for_the_land_models():
@@ -38,11 +40,6 @@ def test_the_active_tension_odesolver_sub_dictionary_is_optional_and_for_the_lan
     for entry in kids.values():
         assert not entry.required and not entry.required_when
         assert entry.applicable_when["activeTensionModel"] == ("LandNiederer", "LandNiedererTWorld")
-
-
-def test_offset_field_is_a_word_on_the_conormal_patch():
-    entry = next(entry for entry in _CATALOGUE.entries_for("conormalZeroFluxPatch") if entry.driver_path == "offsetField")
-    assert entry.value_kind == "word" and not entry.required
 
 
 def test_the_eikonal_ecg_wave_vector_sits_under_the_ecg_domain():

@@ -113,22 +113,22 @@ any new tutorial a study needs. A few omniD tests use verbatim snippets of the
 C++ as frozen fixtures for the generic scanner; they test the mechanism, not
 the feature.
 
-What the catalogue holds of the insulated-wall work, and what it does not:
+What the catalogue holds of the sealed wall, as cardiacFOAM PR #59
+(`feat/mono-bi-eikonal-verification`) has it:
 
-- **Catalogued:** `sealedHeartBoundary` (`Switch`) and `sealedWallTrace`
-  (`zeroGradient` or `conormal`), required for the monodomain, bidomain and
-  eikonal solvers: a case without them is refused before running, with an
-  explanation. `exposedFacesPatch` (read with `cellZone`) and the eikonal
-  verifier's `verificationModel.productionPatches`, both optional.
-- **Not an `electroProperties` key:** `offsetField` is an entry of a
-  `conormalZeroFlux` patch in a field file (`0/Vm`); the solver names it and
-  writes it back. omniD catalogues no field file, so `catalog --uncatalogued`
-  still lists it.
-- **Tutorial cases with no omniD record:** `insulatedWall` for bidomain,
-  eikonalECG and monodomainPseudoECG. They run through `--case`, or get a
-  record. On the heart-in-bath branch, also bathBidomain's `insulatedWall` and
-  `idealizedHeart/electroHeartBath`, and its keys `bathHeartPhiETrace` and
-  `sigmaB`, which stay `uncatalogued` until that branch lands.
+- **Catalogued:** `sealedHeartBoundary` (`Switch`), required for the
+  monodomain, bidomain and eikonal solvers; a case without it is refused
+  before running. #59 removed `sealedWallTrace` and the `conormalZeroFlux`
+  wall, and omniD with them. The wall-cell gradient is the scheme
+  `sealedWallLeastSquares`, named per field in `fvSchemes` `gradSchemes`; a
+  plan judges `fvSchemes` against OpenFOAM's tables and the schemes the
+  supplied solver source registers, so it is on the menu when that source
+  is. Also `bathHeartPhiETrace` (`zeroGradient` or `global`), the
+  `conormalHarmonic` heart/bath interface, and the three spherical-shell
+  verifiers with their keys.
+- **Tutorial cases with no omniD record:** the three `sphericalShell` cases
+  (bidomain, eikonalECG, monodomainPseudoECG). They run through `--case`, or
+  get a record.
 
 **Order when the owner is ready:**
 1. Fast-forward native `main` to `omnid/tutorials-are-pointers`, or merge the

@@ -13,7 +13,7 @@ import pytest
 from omnidriver.dict_entries import DictEntry
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from omnidriver.cardiacfoam.common_dict_entries import (
-    CONORMAL_PATCH_ENTRIES, ELECTRO_MECHANICAL_PROPERTY_ENTRIES, PHYSICS_PROPERTY_ENTRIES, PURKINJE_GRAPH_ENTRIES,
+    ELECTRO_MECHANICAL_PROPERTY_ENTRIES, PHYSICS_PROPERTY_ENTRIES, PURKINJE_GRAPH_ENTRIES,
 )
 from omnidriver.openfoam.control_dict import CONTROL_DICT_ENTRIES
 from omnidriver.core.plugin_interface import driver_context as _driver_context
@@ -33,7 +33,7 @@ def _validate(config, *, entries=None, driver_context):
     if entries is None:
         # The documents other than electroProperties are judged by their own rules.
         other = (
-            *CONTROL_DICT_ENTRIES, *PURKINJE_GRAPH_ENTRIES, *ELECTRO_MECHANICAL_PROPERTY_ENTRIES, *CONORMAL_PATCH_ENTRIES,
+            *CONTROL_DICT_ENTRIES, *PURKINJE_GRAPH_ENTRIES, *ELECTRO_MECHANICAL_PROPERTY_ENTRIES,
         )
         entries = [e for e in driver_context.stack.call("get_dict_entries") if e not in other]
     return tuple(rule_diagnostics(entries, context, document="constant/electroProperties"))

@@ -70,3 +70,46 @@ def test_a_macro_inside_a_define_registers_nothing(texts):
 
 def test_the_ode_solvers_are_found_by_the_runtime_selection_scan(texts):
     assert scan_rtst_registrations(texts)["ODESolver"] == {"Euler": "Euler"}
+
+
+# Verbatim from cardiacFOAM src/numericsModels/sealedWall/sealedWallLeastSquaresGrad.{H,C}: a solver's own gradient
+# scheme, added to OpenFOAM's gradScheme table by hand.
+_SOLVER_GRAD_HEADER = """
+namespace Foam
+{
+namespace fv
+{
+
+class sealedWallLeastSquaresGrad
+:
+    public fv::gradScheme<scalar>
+{
+public:
+
+    //- Runtime type information
+    TypeName("sealedWallLeastSquares");
+};
+}
+}
+"""
+_SOLVER_GRAD_SOURCE = """
+namespace Foam
+{
+namespace fv
+{
+    defineTypeNameAndDebug(sealedWallLeastSquaresGrad, 0);
+
+    gradScheme<scalar>::addIstreamConstructorToTable
+        <sealedWallLeastSquaresGrad>
+        addSealedWallLeastSquaresGradScalarIstreamConstructorToTable_;
+}
+}
+"""
+
+
+def test_a_gradient_a_solver_adds_to_the_table_by_hand_registers_under_its_type_name():
+    texts = {
+        "sealedWall/sealedWallLeastSquaresGrad.H": _strip_comments(_SOLVER_GRAD_HEADER),
+        "sealedWall/sealedWallLeastSquaresGrad.C": _strip_comments(_SOLVER_GRAD_SOURCE),
+    }
+    assert scan_scheme_registrations(texts) == {"gradSchemes": {"sealedWallLeastSquares": "sealedWallLeastSquaresGrad"}}

@@ -6,7 +6,11 @@
 #include "PstreamReduceOps.H"
 #include "myocardiumDomain.H"
 #include "insulatedFaceConductivity.H"
-#include "conormalZeroFluxFvPatchScalarField.H"
+#include "sealedWallPolicy.H"
+#include "compatibilityProjection.H"
+#include "conormalStabilisation.H"
+#include "exposedPhiETrace.H"
+#include "fvMeshSubset.H"
 #include "addToRunTimeSelectionTable.H"
 #include "polyMesh.H"
 
@@ -32,16 +36,14 @@ bidomainSolver::bidomainSolver
             "phiE",
             mesh.time().timeName(),
             mesh,
-            IOobject::READ_IF_PRESENT,
+            electroProperties.found("bathPotentialDomain")
+          ? IOobject::NO_READ
+          : myocardiumFieldReadOption(meshSubsetPtr),
             IOobject::AUTO_WRITE
         ),
         mesh,
         dimensionedScalar("phiE", dimVoltage, 0.0),
-        conormalWallPatchTypes
-        (
-            mesh,
-            electroProperties.get<word>("sealedWallTrace")
-        )
+        "zeroGradient"
     ),
     gradPhiE_
     (
@@ -50,7 +52,7 @@ bidomainSolver::bidomainSolver
             "grad(" + phiE_.name() + ")",
             mesh.time().timeName(),
             mesh,
-            IOobject::READ_IF_PRESENT,
+            myocardiumFieldReadOption(meshSubsetPtr),
             IOobject::NO_WRITE
         ),
         mesh,
@@ -63,7 +65,7 @@ bidomainSolver::bidomainSolver
             "phiI",
             mesh.time().timeName(),
             mesh,
-            IOobject::READ_IF_PRESENT,
+            myocardiumFieldReadOption(meshSubsetPtr),
             IOobject::AUTO_WRITE
         ),
         mesh,
@@ -124,7 +126,40 @@ bidomainSolver::bidomainSolver
     ),
     hasPhiEReferencePoint_(electroProperties.found("phiERefPoint")),
     externalPhiEBasePtr_(nullptr),
-    externalPhiECellMapPtr_(nullptr)
+    externalPhiECellMapPtr_(nullptr),
+    meshSubsetPtr_(meshSubsetPtr),
+    bathHeartPhiETrace_
+    (
+        electroProperties.getOrDefault<word>("bathHeartPhiETrace", "zeroGradient")
+    ),
+    verifierPtr_(nullptr)
 {
-    setConormalWallConductivity(phiE_, Ge_.name(), word::null);
+    if
+    (
+        bathHeartPhiETrace_ != "zeroGradient"
+     && bathHeartPhiETrace_ != "global"
+    )
+    {
+        FatalIOErrorInFunction(electroProperties)
+            << "bathHeartPhiETrace must be zeroGradient or global"
+            << exit(FatalIOError);
+    }
+    if (bathHeartPhiETrace_ == "global" && !sealedHeartBoundary_)
+    {
+        FatalIOErrorInFunction(electroProperties)
+            << "bathHeartPhiETrace global requires sealedHeartBoundary true"
+            << exit(FatalIOError);
+    }
+    sealedWallPolicy::publish(phiE_, sealedHeartBoundary_);
+
+    if (meshSubsetPtr_ && meshSubsetPtr_->hasSubMesh())
+    {
+        const labelUList& cellMap = meshSubsetPtr_->cellMap();
+
+        if (!electroProperties.found("bathPotentialDomain"))
+        {
+            readMappedCellField(phiE_, supportMesh, cellMap);
+        }
+        readMappedCellField(phiI_, supportMesh, cellMap);
+    }
 }

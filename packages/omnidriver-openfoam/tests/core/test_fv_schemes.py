@@ -143,3 +143,14 @@ def test_a_misspelt_scheme_is_noted_with_its_menu_and_a_good_one_is_not(tmp_path
 def test_a_supplied_source_that_is_no_directory_is_a_warning(tmp_path):
     (note,) = fv_schemes_diagnostics(_case(tmp_path), env={"FOAM_SRC": str(tmp_path / "missing")}, scratch_root=None)
     assert (note.level, note.code) == ("warning", "openfoam_source_unavailable")
+
+
+def test_a_scheme_the_solver_source_registers_is_on_the_menu_only_when_that_source_is_supplied(tmp_path):
+    env = {"FOAM_SRC": str(_SOURCE)}
+    case = _case(tmp_path / "case", ddt="backward")
+    with (case / "system" / "fvSchemes").open("a") as handle:
+        handle.write("gradSchemes { default leastSquares; grad(Vm) sealedWallLeastSquares; }\n")
+    (note,) = fv_schemes_diagnostics(case, env=env, scratch_root=None)
+    assert (note.field, note.detail["value"]) == ("gradSchemes.grad(Vm)", "sealedWallLeastSquares")
+    solver = {"gradSchemes": {"sealedWallLeastSquares": "sealedWallLeastSquaresGrad"}}
+    assert fv_schemes_diagnostics(case, env=env, scratch_root=None, solver_schemes=solver, solver_root=tmp_path) == ()

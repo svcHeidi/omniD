@@ -228,29 +228,6 @@ ELECTRO_MECHANICAL_PROPERTY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     ),
 )
 
-#: A ``conormalZeroFlux`` patch of a field file (``0/Vm``, ``0/phiE``, ``0/activationTime``): the keys its
-#: constructor reads from the patch dictionary. The solver names both fields through ``setConductivity``
-#: and the patch stops on a disagreement, so a case rarely writes them; the patch writes them back itself.
-CONORMAL_PATCH_DOCUMENT = "conormalZeroFluxPatch"
-
-CONORMAL_PATCH_ENTRIES: Final[tuple[DictEntry, ...]] = (
-    DictEntry(
-        driver_path="conductivity", phases=frozenset({"physics"}), value_kind="word",
-        description="Name of the conductivity tensor field the patch takes its conormal from.",
-        source_refs=("src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C",),
-    ),
-    DictEntry(
-        driver_path="offsetField", phases=frozenset({"physics"}), value_kind="word",
-        description=(
-            "Name of a field whose gradient is added to the solved field's gradient in the conormal flux "
-            "(phiE for Vm in a bidomain case)."
-        ),
-        source_refs=("src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C",),
-        notes="Left empty (word::null), no offset is applied.",
-    ),
-)
-
-
 _DOMAIN = "src/electroModels/electroDomains/conductionSystemDomain/"
 _GRAPH_READER = _DOMAIN + "conductionSystemDomain.C"
 _GRAPH_TOPOLOGY = _DOMAIN + "conductionGraph.H"

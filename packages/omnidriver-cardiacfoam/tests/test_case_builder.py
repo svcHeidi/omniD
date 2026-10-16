@@ -798,11 +798,10 @@ if __name__ == "__main__":
 BIDOMAIN_SOLVER_CXX = Path(__file__).resolve().parent / "fixtures" / "cxx" / "bidomainSolver.C"
 _BIDOMAIN = {"myocardiumSolver": "bidomainSolver", "ionicModel": "TNNP", "tissue": "epicardialCells"}
 _SEALED = "$ELECTRO_MODEL_COEFFS.sealedHeartBoundary"
-_TRACE = "$ELECTRO_MODEL_COEFFS.sealedWallTrace"
 
 
 def _without_sealed_wall(monkeypatch) -> None:
-    """The catalogue holds both keys, so the tests that need a key the C++ reads and the catalogue lacks take their group out."""
+    """The catalogue holds the key, so the tests that need a key the C++ reads and the catalogue lacks take its group out."""
     from omnidriver.cardiacfoam import case_builder
 
     groups = {name: group for name, group in case_builder.ELECTRO_PROPERTY_ENTRY_GROUPS.items() if name != "sealed_wall"}
@@ -823,13 +822,11 @@ def test_a_key_the_cxx_reads_and_the_catalogue_lacks_is_built_under_its_coeffs_a
 
     _native_tree(tmp_path, monkeypatch)
     built = build_case(
-        _BIDOMAIN, case_dir=tmp_path / "case", electro_overrides={_SEALED: "yes", _TRACE: "zeroGradient"},
+        _BIDOMAIN, case_dir=tmp_path / "case", electro_overrides={_SEALED: "yes"},
         driver_context=_CTX,
     )
     assert built["status"] == "ok", built["diagnostics"]
-    assert [(d["code"], d["field"]) for d in built["diagnostics"]] == [
-        ("plugin_catalog_uncatalogued", _SEALED), ("plugin_catalog_uncatalogued", _TRACE),
-    ]
+    assert [(d["code"], d["field"]) for d in built["diagnostics"]] == [("plugin_catalog_uncatalogued", _SEALED)]
     text = (tmp_path / "case" / "constant" / "electroProperties").read_text()
     coeffs = text.split("bidomainSolverCoeffs", 1)[1]
     assert "sealedHeartBoundary yes;" in coeffs

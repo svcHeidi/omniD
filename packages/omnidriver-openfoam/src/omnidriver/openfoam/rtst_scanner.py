@@ -68,11 +68,12 @@ def scan_rtst_registrations(texts: Mapping[str, str]) -> dict[str, dict[str, str
 
 
 _TYPENAME_RE = re.compile(r'\bTypeName\s*\(\s*"([^"]+)"\s*\)')
-# A scheme added to its table by hand, without a macro: `surfaceInterpolationScheme<scalar>::addMeshConstructorToTable<harmonic>`.
+# A scheme added to its table by hand, without a macro: `surfaceInterpolationScheme<scalar>::addMeshConstructorToTable<harmonic>`,
+# or a solver's own gradient, `gradScheme<scalar>::addIstreamConstructorToTable<sealedWallLeastSquaresGrad>`.
 _TABLE_ADDITION_RE = re.compile(
-    r"\b(?P<base>surfaceInterpolationScheme)\s*<\s*\w+\s*>\s*::\s*add\w*ConstructorToTable\s*<\s*(?P<derived>\w+)\s*>",
+    r"\b(?P<base>surfaceInterpolationScheme|gradScheme)\s*<\s*\w+\s*>\s*::\s*add\w*ConstructorToTable\s*<\s*(?P<derived>\w+)\s*>",
 )
-_ADDED_TABLES = {"surfaceInterpolationScheme": "interpolationSchemes"}
+_ADDED_TABLES = {"surfaceInterpolationScheme": "interpolationSchemes", "gradScheme": "gradSchemes"}
 _MACRO_CALL_RE = re.compile(r'\b(make\w*Scheme\w*)\s*\(((?:[^()"]|"[^"]*")*)\)')
 
 #: The registered name a scheme macro gives, by where it is written: ``type_name`` is the ``TypeName`` of the class
