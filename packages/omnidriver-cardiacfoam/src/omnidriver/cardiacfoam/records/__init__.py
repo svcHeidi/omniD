@@ -18,6 +18,9 @@ from .manufactured_monodomain_pseudo_ecg import RECORD as _MANUFACTURED_MONODOMA
 from .cable_1d_restitution import RECORD as _CABLE_1D_RESTITUTION_RECORD
 from .cable_1d_cv_convergence import RECORD as _CABLE_1D_CV_CONVERGENCE_RECORD
 from .manufactured_monodomain_1d3d import RECORD as _MANUFACTURED_MONODOMAIN_1D3D_RECORD
+from .cable_1d_eikonal_cv import RECORD as _CABLE_1D_EIKONAL_CV_RECORD
+from .ionic_heterogeneity import RECORD as _IONIC_HETEROGENEITY_RECORD
+from .rotor_instability import RECORD as _ROTOR_INSTABILITY_RECORD
 
 #: Built with build_tutorial_record_catalog, not a dict comprehension: two
 #: records sharing a name are refused by name, not silently overwritten.
@@ -32,4 +35,7 @@ TUTORIAL_RECORDS = build_tutorial_record_catalog((
     _CABLE_1D_RESTITUTION_RECORD,
     _CABLE_1D_CV_CONVERGENCE_RECORD,
     _MANUFACTURED_MONODOMAIN_1D3D_RECORD,
+    _CABLE_1D_EIKONAL_CV_RECORD,
+    _IONIC_HETEROGENEITY_RECORD,
+    _ROTOR_INSTABILITY_RECORD,
 ), conformance=STUDIES)

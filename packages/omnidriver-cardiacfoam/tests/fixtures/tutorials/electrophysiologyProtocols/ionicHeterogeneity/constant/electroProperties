@@ -1,0 +1,46 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      electroProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+myocardiumSolver singleCellSolver;
+
+singleCellSolverCoeffs
+{
+    ionicModel    BuenoOrovio;
+    tissue        endocardialCells;
+
+    solver          RKF45;
+    maxSteps        1000000000;
+    absTol          1e-6;
+    relTol          1e-4;
+
+    ionicHeterogeneity
+    {
+        mode              namedRegions;
+        field             t;
+        transitionMode    blend;
+        transitionWidth   0.1;
+        smoothing         smoothstep;
+        regions
+        {
+            endocardialCells { range (0 0.3); }
+            mCells           { range (0.3 0.7); }
+            epicardialCells  { range (0.7 1); }
+        }
+    }
+}
+
+// ************************************************************************* //
