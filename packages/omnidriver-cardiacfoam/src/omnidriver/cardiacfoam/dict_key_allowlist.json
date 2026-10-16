@@ -34,11 +34,6 @@
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.absTol",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.relTol",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.solver"
-    ],
-    "read by readConductivityField through conductivityFieldSpec::dictionaryEntry, a key the scan cannot name": [
-      "$ELECTRO_MODEL_COEFFS.conductivity",
-      "$ELECTRO_MODEL_COEFFS.conductivityExtracellular",
-      "$ELECTRO_MODEL_COEFFS.conductivityIntracellular"
     ]
   },
   "runtime_selection": {

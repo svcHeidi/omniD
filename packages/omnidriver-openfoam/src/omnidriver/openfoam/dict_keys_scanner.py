@@ -44,8 +44,15 @@ _METHOD_CALL = re.compile(r"(?:\.|->)\s*(?P<method>" + _METHOD_NAMES + r")\b\s*"
 _BARE_CALL = re.compile(r"(?<![\w.>:])(?P<method>" + _METHOD_NAMES + r")\b\s*" + _TEMPLATE_ARGS + r"\s*\(")
 _DIMENSIONED = re.compile(
     r"\b(?P<type>dimensioned(?:Scalar|Vector|Tensor|SymmTensor)|dimensioned\s*<\s*\w+\s*>)"
-    r"(?:\s+\w+)?\s*\((?=\s*\")"
+    r"(?:\s+\w+)?\s*\((?=\s*(?:\"|[A-Za-z_]\w*\s*\.\s*[A-Za-z_]\w*\s*,))"
 )
+#: A key named by a member of a parameter, ``spec.dictionaryEntry``.
+_MEMBER_KEY = re.compile(r"\s*(?P<param>[A-Za-z_]\w*)\s*\.\s*(?P<member>[A-Za-z_]\w*)\s*")
+_STRUCT = re.compile(r"\bstruct\s+(?P<name>[A-Za-z_]\w*)\s*\{(?P<body>[^{}]*)\}")
+_STRUCT_MEMBER = re.compile(r"(?:[A-Za-z_][\w:]*(?:\s*<[^;<>]*>)?\s+)+(?P<name>[A-Za-z_]\w*)")
+_PLAIN_PARAM = re.compile(r"(?:const\s+)?(?:Foam::)?(?P<type>[A-Za-z_]\w*)\s*[&*]?\s*(?P<name>[A-Za-z_]\w*)\s*(?:=.*)?")
+#: An aggregate an argument builds in place: ``Spec{"a", "b"}`` or ``{"a", "b"}``.
+_BRACED = re.compile(r"(?:[A-Za-z_][\w:]*\s*)?\{(?P<items>.*)\}", re.DOTALL)
 _MEMBER_INIT = re.compile(r"(?<![\w.>:])(?P<member>[A-Za-z_]\w*)\s*\((?=\s*\")")
 #: Any call: ``name(``, ``Qual::name(``, ``.name(``, ``->name(``.
 _CALL = re.compile(r"(?P<callee>(?:[A-Za-z_]\w*\s*::\s*)*[A-Za-z_]\w*)\s*\(")
@@ -300,6 +307,9 @@ def scan_source(source_root: Path, *, digest: str | None = None) -> Scan:
     parameters: set[tuple[str, int, int, str]] = set()
     calls: list[tuple[str, int, int, str, tuple[str, ...]]] = []
     dispatch: set[tuple[str, str]] = set()
+    structs = _struct_members(texts)
+    keyed: list[tuple[DictRead, tuple[int, int, int, int]]] = []
+    aggregate_calls: list[_AggregateCall] = []
     for relative, (text, structure, functions) in files.items():
         for function in functions or _includers(relative, files, includes):
             dispatch.update(_dispatch(text, structure, function))
@@ -308,7 +318,11 @@ def scan_source(source_root: Path, *, digest: str | None = None) -> Scan:
                 match = _DICT_PARAM.search(param)
                 if match:
                     parameters.add((function.name, index, len(params), f"param:{function.name}:{match.group('name')}"))
-            reads.extend(_reads_in(text, structure, function, relative, classes, selected, registrations, calls))
+            reads.extend(_reads_in(
+                text, structure, function, relative, classes, selected, registrations, calls,
+                structs=structs, keyed=keyed, aggregate_calls=aggregate_calls,
+            ))
+    reads.extend(_reads_keyed_by_caller(keyed, aggregate_calls))
     return Scan(
         digest=digest or source_digest(source_root), reads=tuple(reads), registrations=registrations,
         parameters=tuple(sorted(parameters)), calls=tuple(calls), dispatch=tuple(sorted(dispatch)),
@@ -833,6 +847,8 @@ def _reads_in(
     classes: dict[str, _Class], selected: dict[str, list[tuple[str, str]]],
     registrations: dict[str, dict[str, str]],
     calls: list[tuple[str, int, int, str, tuple[str, ...]]],
+    *, structs: Mapping[str, tuple[str, ...]] | None = None,
+    keyed: list | None = None, aggregate_calls: list | None = None,
 ) -> Iterator[DictRead]:
     region = structure[function.start:function.end]
     constructors = (
@@ -851,8 +867,27 @@ def _reads_in(
     candidates += [(m.start(), m, "call") for m in _CALL.finditer(region)]
     selected_as = tuple(selected.get(function.owner or "", ()))
     produced: list[tuple[DictRead, int, int, str | None]] = []
+    params = _split_args(function.params)
+    by_name = {match.group("name"): (index, match.group("type")) for index, param in enumerate(params)
+               if (match := _PLAIN_PARAM.fullmatch(param.strip()))}
+    keyed_at: dict[int, tuple[int, int, int, int]] = {}
+
+    def member_key(argument: str, root: str | None) -> tuple[int, int, int, int] | None:
+        """``(struct parameter, member, dictionary parameter, parameter count)`` for a key named by a member of a
+        struct parameter (``spec.dictionaryEntry``) read from a dictionary parameter."""
+        match = _MEMBER_KEY.fullmatch(argument)
+        if match is None or structs is None or not root or not root.startswith(f"param:{function.name}:"):
+            return None
+        index, type_name = by_name.get(match.group("param"), (None, None))
+        members = structs.get(type_name or "", ())
+        dictionary = by_name.get(root.rsplit(":", 1)[1], (None, None))[0]
+        if index is None or match.group("member") not in members or dictionary is None:
+            return None
+        return index, members.index(match.group("member")), dictionary, len(params)
 
     def emit(read: DictRead, start: int, close_at: int, variable: str | None) -> None:
+        if read.key is None and args and (found := member_key(args[0], read.root)) is not None:
+            keyed_at[len(produced)] = found
         produced.append((read, start, close_at, variable))
 
     for offset, match, kind in sorted(candidates, key=lambda item: item[0]):
@@ -864,12 +899,19 @@ def _reads_in(
             continue
         args = _split_args(text[open_at + 1:close_at])
         if kind == "call":
-            _record_call(re.sub(r"\s+", "", match.group("callee")), args, environment, calls, constructors)
+            callee = re.sub(r"\s+", "", match.group("callee"))
+            _record_call(callee, args, environment, calls, constructors)
+            if aggregate_calls is not None:
+                _record_aggregate_call(
+                    callee, args, environment, function, selected_as, aggregate_calls, by_name, structs or {},
+                )
             continue
         key = _literal(args[0]) if args else None
         if kind == "dimensioned":
             scope = environment.resolve(args[-1]) if len(args) >= 2 else None
             if scope is NOT_A_DICTIONARY or (scope is None and (len(args) < 2 or _VALUE_ARGUMENT.fullmatch(args[-1].strip()))):
+                continue
+            if key is None and member_key(args[0], scope.root if scope is not None else None) is None:
                 continue
             member = match.groupdict().get("member")
             method, default = "dimensioned", None
@@ -904,7 +946,102 @@ def _reads_in(
             start if kind != "dimensioned" else position, close_at,
             None if kind == "dimensioned" else _bound_variable(structure, start, function.start),
         )
-    yield from _with_comparisons(text, structure, function, produced)
+    for index, read in enumerate(_with_comparisons(text, structure, function, produced)):
+        if index in keyed_at and keyed is not None:
+            keyed.append((read, keyed_at[index]))
+        yield read
+
+
+@dataclass(frozen=True)
+class _AggregateCall:
+    """A call that passes a struct, built in place from literals or forwarded from the caller's own parameter,
+    beside dictionaries."""
+
+    callee: str
+    count: int
+    #: Argument index -> the literals an aggregate built in place holds, by position.
+    literals: dict[int, tuple[str | None, ...]]
+    #: Argument index -> the caller's struct parameter forwarded there.
+    forwarded: dict[int, int]
+    scopes: dict[int, "_Scope"]
+    function: str
+    selected_as: tuple[tuple[str, str], ...]
+    #: The caller's parameters: count, and the index of each by name.
+    parameter_count: int
+    parameters: dict[str, int]
+
+
+def _struct_members(texts: Mapping[str, str]) -> dict[str, tuple[str, ...]]:
+    """``{struct: member names in declaration order}`` for each plain ``struct`` of data members."""
+    structs: dict[str, tuple[str, ...]] = {}
+    for text in texts.values():
+        for match in _STRUCT.finditer(text):
+            members = [_STRUCT_MEMBER.fullmatch(part.strip()) for part in match.group("body").split(";") if part.strip()]
+            if members and all(members):
+                structs[match.group("name")] = tuple(member.group("name") for member in members)
+    return structs
+
+
+def _record_aggregate_call(
+    callee: str, args: list[str], environment: "_Environment", function: _Function,
+    selected_as: tuple[tuple[str, str], ...], aggregate_calls: list,
+    parameters: Mapping[str, tuple[int, str]], structs: Mapping[str, tuple[str, ...]],
+) -> None:
+    literals = {
+        index: tuple(_literal(item) for item in _split_args(braced.group("items")))
+        for index, argument in enumerate(args) if (braced := _BRACED.fullmatch(argument.strip()))
+    }
+    forwarded = {
+        index: parameters[argument.strip()][0] for index, argument in enumerate(args)
+        if argument.strip() in parameters and parameters[argument.strip()][1] in structs
+    }
+    scopes = {
+        index: scope for index, argument in enumerate(args)
+        if index not in literals and index not in forwarded
+        and (scope := environment.resolve(argument)) is not None and scope is not NOT_A_DICTIONARY
+    }
+    if (literals or forwarded) and scopes:
+        aggregate_calls.append(_AggregateCall(
+            callee, len(args), literals, forwarded, scopes, function.name, selected_as,
+            len(_split_args(function.params)), {name: index for name, (index, _type) in parameters.items()},
+        ))
+
+
+def _reads_keyed_by_caller(keyed: list, aggregate_calls: list) -> list[DictRead]:
+    """A read whose key a struct parameter names (``readField(dict, Spec{"a", "key"})`` reading ``spec.member``), once
+    per call that builds that struct from literals: the key is the call's literal, the dictionary the one the call
+    passes, and the function and selection the caller's. A caller that forwards its own struct parameter takes the
+    read over, keyed by that parameter."""
+    found: list[DictRead] = []
+    pending = list(keyed)
+    for _depth in range(8):
+        following = []
+        for read, (struct_index, member_index, dictionary_index, count) in pending:
+            for call in aggregate_calls:
+                if call.count != count or not _same_function(read.function or "", call.callee):
+                    continue
+                scope = call.scopes.get(dictionary_index)
+                if scope is None:
+                    continue
+                moved = replace(
+                    read, root=scope.root, scope=scope.path + (read.scope or ()),
+                    function=call.function, selected_as=call.selected_as,
+                )
+                if struct_index in call.literals:
+                    items = call.literals[struct_index]
+                    key = items[member_index] if member_index < len(items) else None
+                    if key is not None:
+                        found.append(replace(moved, key=key))
+                elif struct_index in call.forwarded and scope.root and scope.root.startswith(f"param:{call.function}:"):
+                    forwarded_dictionary = call.parameters.get(scope.root.rsplit(":", 1)[1])
+                    if forwarded_dictionary is not None:
+                        following.append((
+                            moved, (call.forwarded[struct_index], member_index, forwarded_dictionary, call.parameter_count),
+                        ))
+        if not following:
+            break
+        pending = following
+    return found
 
 
 def _bound_variable(structure: str, start: int, floor: int) -> str | None:

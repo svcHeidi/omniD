@@ -1278,3 +1278,178 @@ def test_a_list_of_scalar_lists_is_read_as_its_own_kind():
     from omnidriver.openfoam.dict_keys_scanner import value_kind_of
 
     assert value_kind_of("List<scalarList>") == value_kind_of("Foam::List<Foam::scalarList>") == "scalar_list_list"
+
+
+
+# cardiacFOAM (#59, 6141cc37) src/genericWriter/conductivityFieldIO.{H,C}: the struct that names a conductivity key, and
+# readConductivityField to the end of its uniform branch, which reads the key a member of a struct parameter names.
+CONDUCTIVITY_FIELD_SPEC = '''struct conductivityFieldSpec
+{
+    word fieldName;
+    word dictionaryEntry;
+    word internalName;
+};
+'''
+READ_CONDUCTIVITY_UNIFORM = '''tmp<volTensorField> readConductivityField
+(
+    const fvMesh& solverMesh,
+    const fvMesh& supportMesh,
+    const fvMeshSubset* meshSubsetPtr,
+    const dictionary& coefficients,
+    const conductivityFieldSpec& spec
+)
+{
+    word source("uniform");
+
+    if (coefficients.found("conductivitySource"))
+    {
+        source = word(coefficients.lookup("conductivitySource"));
+    }
+    else
+    {
+        WarningInFunction
+            << "No conductivitySource specified in " << coefficients.name()
+            << "; using the legacy default 'uniform'. Add either "
+            << "'conductivitySource uniform;' or 'conductivitySource field;'."
+            << endl;
+    }
+
+    if (source == "uniform")
+    {
+        if (!coefficients.found(spec.dictionaryEntry))
+        {
+            FatalIOErrorInFunction(coefficients)
+                << "conductivitySource is 'uniform' but entry '"
+                << spec.dictionaryEntry << "' is missing."
+                << exit(FatalIOError);
+        }
+
+        return tmp<volTensorField>
+        (
+            new volTensorField
+            (
+                IOobject
+                (
+                    spec.internalName,
+                    solverMesh.time().timeName(),
+                    solverMesh,
+                    IOobject::NO_READ,
+                    IOobject::NO_WRITE
+                ),
+                solverMesh,
+                dimensionedTensor
+                (
+                    dimensionedSymmTensor
+                    (
+                        spec.dictionaryEntry,
+                        coefficients
+                    ) & tensor(I)
+                )
+            )
+        );
+    }
+}
+'''
+# src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C: monodomainSolver::initialiseConductivity,
+# which builds the struct in place.
+MONODOMAIN_CONDUCTIVITY = '''tmp<volTensorField> monodomainSolver::initialiseConductivity
+(
+    const fvMesh& mesh,
+    const fvMesh& supportMesh,
+    const fvMeshSubset* meshSubsetPtr,
+    const dictionary& electroProperties
+) const
+{
+    return readConductivityField
+    (
+        mesh,
+        supportMesh,
+        meshSubsetPtr,
+        electroProperties,
+        conductivityFieldSpec
+        {
+            "Conductivity",
+            "conductivity",
+            "conductivity"
+        }
+    );
+}
+'''
+# src/electroModels/myocardiumModels/bidomainSolver/bidomainSolver.C: initialiseConductivityTensor, which forwards its
+# own struct parameter, and the constructor's two calls of it (its Gi_ and Ge_ initialisers, the list closed after Ge_).
+BIDOMAIN_CONDUCTIVITY_TENSOR = '''tmp<volTensorField> bidomainSolver::initialiseConductivityTensor
+(
+    const fvMesh& mesh,
+    const fvMesh& supportMesh,
+    const fvMeshSubset* meshSubsetPtr,
+    const conductivityFieldSpec& spec,
+    const dictionary& dict
+) const
+{
+    return readConductivityField
+    (
+        mesh,
+        supportMesh,
+        meshSubsetPtr,
+        dict,
+        spec
+    );
+}
+'''
+BIDOMAIN_CONDUCTIVITY_CALLS = '''bidomainSolver::bidomainSolver
+(
+    const fvMesh& mesh,
+    const fvMesh& supportMesh,
+    const fvMeshSubset* meshSubsetPtr,
+    const dictionary& electroProperties
+)
+:
+    Gi_(initialiseConductivityTensor
+    (
+        mesh,
+        supportMesh,
+        meshSubsetPtr,
+        conductivityFieldSpec
+        {
+            "ConductivityIntracellular",
+            "conductivityIntracellular",
+            "conductivityIntracellular"
+        },
+        electroProperties
+    )),
+    Ge_(initialiseConductivityTensor
+    (
+        mesh,
+        supportMesh,
+        meshSubsetPtr,
+        conductivityFieldSpec
+        {
+            "ConductivityExtracellular",
+            "conductivityExtracellular",
+            "conductivityExtracellular"
+        },
+        electroProperties
+    ))
+{}
+'''
+
+
+def test_a_key_a_struct_member_names_is_read_once_per_caller_that_builds_or_forwards_the_struct(tmp_path):
+    scan = scan_source(_tree(tmp_path, **{
+        "conductivityFieldIO.H": CONDUCTIVITY_FIELD_SPEC,
+        "conductivityFieldIO.C": READ_CONDUCTIVITY_UNIFORM,
+        "monodomainSolver.C": MONODOMAIN_CONDUCTIVITY,
+        "bidomainSolver.C": BIDOMAIN_CONDUCTIVITY_TENSOR + BIDOMAIN_CONDUCTIVITY_CALLS,
+    }))
+    value_reads = {
+        (read.key, read.root, read.function) for read in scan.reads
+        if read.method == "dimensioned" and read.key is not None
+    }
+    assert value_reads == {
+        ("conductivity", "param:monodomainSolver::initialiseConductivity:electroProperties",
+         "monodomainSolver::initialiseConductivity"),
+        ("conductivityIntracellular", "param:bidomainSolver::bidomainSolver:electroProperties", "bidomainSolver::bidomainSolver"),
+        ("conductivityExtracellular", "param:bidomainSolver::bidomainSolver:electroProperties", "bidomainSolver::bidomainSolver"),
+    }
+    read = next(read for read in scan.reads if read.key == "conductivity" and read.method == "dimensioned")
+    assert (read.type, read.file, read.conditional) == ("dimensionedSymmTensor", "conductivityFieldIO.C", True)

@@ -49,7 +49,7 @@ def plan_diagnostics(
         catalogued_paths=catalogued_paths(driver_context.stack.call("get_dict_entries")),
         dict_relpaths=held,
         scanned=scanned,
-        unread=[slot_key(item["driver_path"]) for item in (report or {}).get("unread", ())],
+        unread=[(item["document"], slot_key(item["driver_path"])) for item in (report or {}).get("unread", ())],
     )
     rules = tuple(
         item for item in driver_context.stack.call("validate_run_semantics", case_root, driver_context=driver_context)

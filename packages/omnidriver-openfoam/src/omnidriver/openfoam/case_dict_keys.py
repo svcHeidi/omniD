@@ -59,7 +59,7 @@ def case_dict_key_diagnostics(
     catalogued_paths: Iterable[str],
     dict_relpaths: Sequence[str],
     scanned: Callable[[str, tuple[str, ...]], bool] | None = None,
-    unread: Iterable[str] = (),
+    unread: Iterable[tuple[str, str]] = (),
 ) -> tuple[StrictDiagnostic, ...]:
     """Warn (never error) about keys in `dict_relpaths` absent from the
     catalogue; the catalogue deliberately omits keys OpenFOAM itself owns, so
@@ -67,8 +67,9 @@ def case_dict_key_diagnostics(
 
     ``scanned(relpath, trail)`` says whether the solver's own source reads
     that key: the plan then reports it once, as an uncatalogued note, and this
-    check stays silent. A key at one of the catalogue paths in ``unread`` (the
-    supplied C++ no longer reads them) is warned about as having no effect.
+    check stays silent. A key at one of the catalogue paths in ``unread``, each
+    ``(document, path)`` (the supplied C++ no longer reads them), is warned
+    about as having no effect in that document only.
 
     Matching is by position, not bare name: a trail matches a catalogue path
     (or a path prefix) with `<placeholder>` segments matching any name --
@@ -78,7 +79,9 @@ def case_dict_key_diagnostics(
     emitting spurious key warnings for that file.
     """
     known = _prefixes(catalogued_paths)
-    unread_paths = {tuple(path.split(".")) for path in unread}
+    unread_paths: dict[str, set[tuple[str, ...]]] = {}
+    for document, path in unread:
+        unread_paths.setdefault(document.rsplit("/", 1)[-1], set()).add(tuple(path.split(".")))
     root = Path(case_root)
     diagnostics: list[StrictDiagnostic] = []
 
@@ -94,7 +97,8 @@ def case_dict_key_diagnostics(
                 trail for trail in _unmatched(parsed, known)
                 if scanned is None or not scanned(relpath, trail)
             ]
-            ignored = [trail for trail in _leaves(parsed) if _matches(_scope_relative(trail), unread_paths)]
+            retired = unread_paths.get(relpath.rsplit("/", 1)[-1], set())
+            ignored = [trail for trail in _leaves(parsed) if _matches(_scope_relative(trail), retired)]
         except Exception as exc:
             diagnostics.append(
                 diagnostic(

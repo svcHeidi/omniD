@@ -185,7 +185,7 @@ def test_a_case_key_the_cxx_reads_is_reported_once_by_the_plan_not_by_the_key_ch
     assert unfiltered == ["multiplier", "mulitplier"]
 
 
-def test_a_case_that_sets_a_key_the_cxx_no_longer_reads_is_warned_that_it_has_no_effect(tmp_path):
+def test_a_case_that_sets_a_key_the_cxx_no_longer_reads_in_that_document_is_warned_that_it_has_no_effect(tmp_path):
     case = tmp_path / "case"
     (case / "system").mkdir(parents=True)
     (case / "system" / "setPurkinjeSlabDict").write_text(
@@ -194,7 +194,8 @@ def test_a_case_that_sets_a_key_the_cxx_no_longer_reads_is_warned_that_it_has_no
     )
     found = case_dict_key_diagnostics(
         case, catalogued_paths=["thickness", "smoothing", "block.retired"],
-        dict_relpaths=["system/setPurkinjeSlabDict"], unread=["smoothing", "block.retired"],
+        dict_relpaths=["system/setPurkinjeSlabDict"],
+        unread=[("setPurkinjeSlabDict", "smoothing"), ("setPurkinjeSlabDict", "block.retired"), ("otherDict", "thickness")],
     )
     assert [(d.level, d.code, d.field) for d in found] == [
         ("warning", "unread_case_dict_key", "smoothing"), ("warning", "unread_case_dict_key", "retired"),
