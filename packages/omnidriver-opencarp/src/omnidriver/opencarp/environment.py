@@ -24,7 +24,6 @@ REDACTION_PATTERNS = (r"(?<=://)[^/\s@]+(?=@)",)
 # ``-buildinfo``'s tag line, e.g. ``*** GIT tag:            v18.1`` (v18.1).
 _GIT_TAG = re.compile(r"GIT tag:\s*(\S+)")
 _GIT_HASH = re.compile(r"GIT hash:\s*(\S+)")
-_PLUGIN_ID = "org.omnidriver.opencarp"
 
 
 def buildinfo_identity(buildinfo: str) -> dict[str, str | None] | None:
@@ -35,23 +34,25 @@ def buildinfo_identity(buildinfo: str) -> dict[str, str | None] | None:
     return {"tag": tag.group(1) if tag else None, "commit": commit.group(1) if commit else None}
 
 
-def opencarp_solver_builds(env: Mapping[str, str], *, used_paths: frozenset | None) -> tuple[SolverEntry, ...]:
-    """openCARP as its own ``-buildinfo`` reports it, when a plan runs it."""
-    solver = shutil.which("openCARP", path=env.get("PATH", ""))
-    if solver is None or (used_paths is not None and Path(solver).resolve() not in used_paths):
+def opencarp_solver_builds(
+    env: Mapping[str, str], *, used_paths: frozenset | None, solver: str,
+) -> tuple[SolverEntry, ...]:
+    """openCARP as its own ``-buildinfo`` reports it, when a plan runs it, under the label ``solver``."""
+    binary = shutil.which("openCARP", path=env.get("PATH", ""))
+    if binary is None or (used_paths is not None and Path(binary).resolve() not in used_paths):
         return ()
     try:
         identity = buildinfo_identity(subprocess.run(
-            [solver, "-buildinfo"], capture_output=True, text=True, env=dict(env), timeout=60,
+            [binary, "-buildinfo"], capture_output=True, text=True, env=dict(env), timeout=60,
         ).stdout)
     except (OSError, subprocess.TimeoutExpired):
         identity = None
     build = SolverBuild(
-        name="openCARP", path=Path(solver), digest=file_digest(Path(solver)),
+        name="openCARP", path=Path(binary), digest=file_digest(Path(binary)),
         known="self_reported" if identity else "unknown",
         source=SourceIdentity(git=identity) if identity else None,
     )
-    return (SolverEntry(solver=_PLUGIN_ID, repository=None, builds=(build,)),)
+    return (SolverEntry(solver=solver, repository=None, builds=(build,)),)
 
 
 def opencarp_environment_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:
