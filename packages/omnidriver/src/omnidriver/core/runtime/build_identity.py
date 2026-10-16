@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -17,6 +18,8 @@ from .provenance import component_for_path
 #: The record a stack whose binaries cannot identify themselves keeps beside them.
 RECORD_FILENAME = "omnidriver-build.json"
 RECORD_VERSION = 1
+_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+_GIT_TYPES = {"commit": (str, type(None)), "tag": (str, type(None)), "dirty": (bool, type(None))}
 
 
 def file_digest(path: Path) -> str | None:
@@ -138,11 +141,17 @@ def _recorded_source(entry: Any, digest: str | None) -> SourceIdentity | None:
 
 
 def _identity(raw: Any) -> SourceIdentity | None:
-    if not isinstance(raw, Mapping):
+    # Only a source the run document can carry is a record; anything else would abort the plan.
+    if not isinstance(raw, Mapping) or not isinstance(raw.get("repository"), (str, type(None))):
         return None
-    git = raw.get("git")
-    return SourceIdentity(repository=raw.get("repository"), digest=raw.get("digest"),
-                          git=dict(git) if isinstance(git, Mapping) else None)
+    digest, git = raw.get("digest"), raw.get("git")
+    if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
+        return None
+    if git is not None and not (isinstance(git, Mapping) and all(
+        key in _GIT_TYPES and isinstance(value, _GIT_TYPES[key]) for key, value in git.items()
+    )):
+        return None
+    return SourceIdentity(repository=raw.get("repository"), digest=digest, git=dict(git) if git is not None else None)
 
 
 def build_record_report(driver_context: Any, env: Mapping[str, str]) -> dict[str, Any]:

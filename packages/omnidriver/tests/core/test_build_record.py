@@ -89,3 +89,27 @@ def test_a_partial_rebuild_in_another_worktree_keeps_the_products_it_did_not_reb
     assert [b.name for b in result.recorded] == ["libModels"]
     assert [(b.name, b.source) for b in result.kept] == [("mySolver", SOURCE)]
     assert result.records == (tmp_path / "lib" / RECORD_FILENAME,)
+
+
+def test_an_entry_whose_source_is_missing_or_malformed_is_no_record(tmp_path):
+    build = _product(tmp_path / "bin", "mySolver")
+    well_formed = SOURCE.to_json()
+    sources = [
+        None,
+        {**well_formed, "git": {"commit": "c1", "dirty": False, "branch": "main"}},
+        {**well_formed, "git": {"commit": 1, "dirty": False}},
+        {**well_formed, "git": {"commit": "c1", "dirty": "no"}},
+        {**well_formed, "digest": "md5:abc"},
+        {**well_formed, "digest": None},
+        {**well_formed, "repository": 7},
+    ]
+    for source in sources:
+        entry = {"digest": build.digest, "recordedAt": "2026-10-16T00:00:00+00:00"}
+        if source is not None:
+            entry["source"] = source
+        (tmp_path / "bin" / RECORD_FILENAME).write_text(
+            json.dumps({"version": 1, "products": {"mySolver": entry}}))
+        read = recorded_build("mySolver", build.path)
+        assert (read.known, read.source) == ("unknown", None), source
+        assert [b.name for b in write_records([build], SOURCE).recorded] == ["mySolver"]
+        assert recorded_build("mySolver", build.path).source == SOURCE
