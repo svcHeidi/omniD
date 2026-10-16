@@ -159,6 +159,42 @@ def _input_roots(stack, case_root: Path, resolved_case, conventions) -> tuple[st
     return roots
 
 
+def runtime_dependencies(
+    case_root: Path,
+    *,
+    workflow_dag: dict[str, Any] | None,
+    driver_context: "DriverContext",
+    env: Mapping[str, str] | None = None,
+    add_case_file: "_ComponentAdder | None" = None,
+) -> dict[str, RuntimeDependency]:
+    """The step executables (an MPI launcher's payload included) and the stack's
+    ``get_extra_provenance_paths``, by name; a case-local script goes to ``add_case_file``."""
+    case_root = Path(case_root)
+    environment = dict(os.environ) if env is None else dict(env)
+    add = add_case_file if add_case_file is not None else (lambda component: None)
+    dependencies: dict[str, RuntimeDependency] = {}
+    for step in (workflow_dag or {}).get("steps", ()):
+        parsed = _step_command_and_args(step)
+        if parsed is None:
+            continue
+        command, args = parsed
+        resolved_cwd = _resolve_case_cwd(case_root, str(step.get("cwd", ".")))
+        _register_step_executable(
+            command, resolved_cwd=resolved_cwd, case_root=case_root, env=environment,
+            add_case_file=add, dependencies=dependencies, driver_context=driver_context,
+        )
+        if command in mpi.LAUNCHERS:
+            payload = mpi.program(args)
+            if payload:
+                _register_step_executable(
+                    payload, resolved_cwd=resolved_cwd, case_root=case_root, env=environment,
+                    add_case_file=add, dependencies=dependencies, driver_context=driver_context,
+                )
+    for dependency in driver_context.stack.call("get_extra_provenance_paths", case_root):
+        dependencies[dependency.name] = dependency
+    return dependencies
+
+
 def enumerate_case_inputs(
     case_root: Path,
     *,
@@ -217,48 +253,13 @@ def enumerate_case_inputs(
     for rel in consumed_relpaths:
         add(component_for_path(case_root / rel, kind="case_file", relative_to=case_root))
 
-    # -- step executables, resolved the same way the executor resolves them
-    # (workflow_runner._resolve_command), including an MPI launcher's
-    # payload. Case-local scripts land as case_file components above; every
-    # other command becomes a RuntimeDependency, deduplicated by name so a
-    # binary named by two steps (or already declared by the plugin below)
-    # fingerprints once.
-    dependencies: dict[str, RuntimeDependency] = {}
-    for step in (workflow_dag or {}).get("steps", ()):
-        parsed = _step_command_and_args(step)
-        if parsed is None:
-            continue
-        command, args = parsed
-        resolved_cwd = _resolve_case_cwd(case_root, str(step.get("cwd", ".")))
-        _register_step_executable(
-            command,
-            resolved_cwd=resolved_cwd,
-            case_root=case_root,
-            env=environment,
-            add_case_file=add,
-            dependencies=dependencies,
-            driver_context=driver_context,
-        )
-        if command in mpi.LAUNCHERS:
-            payload = mpi.program(args)
-            if payload:
-                _register_step_executable(
-                    payload,
-                    resolved_cwd=resolved_cwd,
-                    case_root=case_root,
-                    env=environment,
-                    add_case_file=add,
-                    dependencies=dependencies,
-                    driver_context=driver_context,
-                )
-
-    # -- plugin-declared runtime dependencies: the solver binary,
-    # its libraries, and any additional runtime inputs the adapter declares
-    # pulls in. Authoritative over the generic PATH-only resolution above --
-    # it knows the library search directories and required/optional split a
-    # bare PATH lookup cannot.
-    for dependency in stack.call("get_extra_provenance_paths", case_root):
-        dependencies[dependency.name] = dependency
+    # Step executables and the plugin's declared runtime dependencies (the
+    # solver binary and its libraries), deduplicated by name; the plugin's
+    # declaration wins over the PATH-only resolution of a step's command.
+    dependencies = runtime_dependencies(
+        case_root, workflow_dag=workflow_dag, driver_context=driver_context,
+        env=environment, add_case_file=add,
+    )
 
     # An external #include or #includeEtc file is an input even for an
     # untouched case.  Unsupported directive forms become an unavailable

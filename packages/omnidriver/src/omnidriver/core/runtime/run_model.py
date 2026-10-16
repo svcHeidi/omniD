@@ -42,6 +42,7 @@ class RunDocument:
     launch: dict[str, Any] | None = None
     expectedArtifacts: list[dict[str, Any]] = field(default_factory=list)
     validation: dict[str, Any] = field(default_factory=dict)
+    solverProvenance: list[dict[str, Any]] | None = None
 
     def to_json(self) -> dict[str, Any]:
         data = asdict(self)
@@ -49,6 +50,8 @@ class RunDocument:
             raise ValueError("RunDocument.to_json emits only version '3'")
         if data.get("plugin") is None:
             data.pop("plugin", None)
+        if data.get("solverProvenance") is None:
+            data.pop("solverProvenance", None)
         jsonschema.validate(data, _SCHEMA)
         return data
 
@@ -68,4 +71,5 @@ class RunDocument:
             launch=data.get("launch"),
             expectedArtifacts=data.get("expectedArtifacts", []),
             validation=data.get("validation", {}),
+            solverProvenance=data.get("solverProvenance"),
         )
