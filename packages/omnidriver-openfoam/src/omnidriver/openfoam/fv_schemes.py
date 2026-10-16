@@ -152,7 +152,7 @@ def _read(path: Path) -> dict[str, dict[str, Any]]:
 
     parsed = FoamFile(path)
     return {
-        table: {key: parsed[table][key] for key in parsed[table].keys() if key is not None}
+        table: {key: parsed[table][key] for key in parsed[table].keys() if key is not None and not str(key).startswith("#")}
         for table in TABLES if table in parsed.keys() and hasattr(parsed[table], "keys")
     }
 

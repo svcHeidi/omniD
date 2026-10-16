@@ -154,3 +154,10 @@ def test_a_scheme_the_solver_source_registers_is_on_the_menu_only_when_that_sour
     assert (note.field, note.detail["value"]) == ("gradSchemes.grad(Vm)", "sealedWallLeastSquares")
     solver = {"gradSchemes": {"sealedWallLeastSquares": "sealedWallLeastSquaresGrad"}}
     assert fv_schemes_diagnostics(case, env=env, scratch_root=None, solver_schemes=solver, solver_root=tmp_path) == ()
+
+
+def test_an_include_directive_in_a_scheme_table_names_no_scheme(tmp_path):
+    case = _case(tmp_path / "case", ddt="backward")
+    with (case / "system" / "fvSchemes").open("a") as handle:
+        handle.write('gradSchemes\n{\n    default leastSquares;\n    #includeIfPresent "<case>/local/gradient"\n}\n')
+    assert fv_schemes_diagnostics(case, env={"FOAM_SRC": str(_SOURCE)}, scratch_root=None) == ()
