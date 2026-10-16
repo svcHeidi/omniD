@@ -8,7 +8,7 @@ from omnidriver.core.tutorial_records import TutorialRecord
 
 from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
 from .manufactured_solution_axes import (
-    BLOCK_MESH_DICT_DOCUMENTS, dimension_axis, hex_number_cells_axis, tet_number_cells_axis,
+    BLOCK_MESH_DICT_DOCUMENTS, dimension_axis, number_cells_axis, tet_number_cells_axis,
 )
 from .routes import block_mesh_step, gmsh_route, solve_step
 
@@ -24,6 +24,9 @@ _TET_MESH = "box.msh"
 #: with this dictionary.
 _MESH_DICT_DEFAULT = "system/blockMeshDict.3D"
 
+#: The time step the native Allrun takes at N = 10; it scales it with the cell size squared.
+_ALLRUN_STEP_AT_TEN = 0.00892857
+
 # The tet `fvSchemes` overlay is not modelled: every entry it sets already
 # equals `system/fvSchemes`.
 AXES = (
@@ -32,8 +35,8 @@ AXES = (
         solver_coefficients=(ELECTRO_PROPERTIES, _MONODOMAIN_SOLVER_COEFFS),
         ecg_verification_scope=_ECG_VERIFICATION_MODEL,
     ),
-    hex_number_cells_axis("numberCells"),
-    tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh"),
+    number_cells_axis("numberCells", step_at_ten=_ALLRUN_STEP_AT_TEN),
+    tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh", step_at_ten=_ALLRUN_STEP_AT_TEN),
 )
 
 #: The pseudo-ECG verifier's myocardium domain calls `electroModel::end()`, so

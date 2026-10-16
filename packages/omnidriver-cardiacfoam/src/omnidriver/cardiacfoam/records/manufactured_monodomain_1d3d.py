@@ -10,9 +10,9 @@ from typing import Any
 from omnidriver.core.tutorial_records import (
     AxisContract, AxisPatch, AxisResult, TutorialRecord, TutorialRecordError, WorkflowStep,
 )
-from omnidriver.openfoam.axes import block_mesh_resolution_axis
 
 from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
+from .manufactured_solution_axes import number_cells_axis
 from .routes import block_mesh_step
 
 GRAPH_FILE_AXIS_NAME = "graphFile"
@@ -65,22 +65,12 @@ def _graph_file_axis(name: str) -> AxisContract:
     )
 
 
-def _isotropic_cell_counts(
-    n: Any, current: tuple[int, int, int], extents: tuple[float, float, float] | None,
-) -> tuple[int, int, int]:
-    """The one ``hex (`` block is a cube with no direction fixed at 1 cell, so ``n`` expands isotropically."""
-    del current, extents
-    return (n, n, n)
-
+#: The time step this case's native Allrun takes at N = 10, scaled with the cell size squared.
+_ALLRUN_STEP_AT_TEN = 0.008971136
 
 AXES = (
     _graph_file_axis(GRAPH_FILE_AXIS_NAME),
-    block_mesh_resolution_axis(
-        NUMBER_CELLS_AXIS_NAME, documents=(_BLOCK_MESH_DICT_DOCUMENT,),
-        resolution=_isotropic_cell_counts, expected_blocks=1, value_kind="integer",
-        unit=None, exclusive_minimum=0,
-        description="Cells N along each edge of system/blockMeshDict's one hex block (N N N).",
-    ),
+    number_cells_axis(NUMBER_CELLS_AXIS_NAME, documents=(_BLOCK_MESH_DICT_DOCUMENT,), step_at_ten=_ALLRUN_STEP_AT_TEN),
 )
 
 #: `GRAPH_FILES` as case-relative paths, which `consumes` requires; the native

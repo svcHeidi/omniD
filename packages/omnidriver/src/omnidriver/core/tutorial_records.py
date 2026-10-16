@@ -687,10 +687,20 @@ class AxisPatch:
     key_path: tuple[str, ...]
     value: Any
     value_kind: str
+    #: A value the axis derives, as a native script does when it is not given
+    #: one: a study key on the same slot replaces it.
+    yields: bool = False
+    #: The slots (``document::key``) whose case values the derivation read; a
+    #: study that sets one of them and leaves this slot to the axis is
+    #: refused, since the derivation did not see the study's value.
+    derived_from: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _check_case_relative("a patch's document", self.document)
         object.__setattr__(self, "key_path", tuple(self.key_path))
+        object.__setattr__(self, "derived_from", tuple(self.derived_from))
+        if self.derived_from and not self.yields:
+            raise TutorialRecordError(f"a patch on {self.slot()!r} names derived_from but does not yield")
         if not self.key_path:
             raise TutorialRecordError(
                 f"a patch on {self.document!r} names no key"
@@ -909,11 +919,16 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
 
     Two sources naming one (document, key) slot agree when ``value_kind`` and
     the value (strict same-type equality) match, and are otherwise refused
-    naming both sources: a later write never silently wins.
+    naming both sources: a later write never silently wins. A patch that
+    ``yields`` gives way to one that does not; one kept whose
+    ``derived_from`` names a slot another patch sets is refused.
     """
+    stated = {sourced.slot(): sourced for sourced in patches if not sourced.patch.yields}
     by_slot: dict[str, SourcedPatch] = {}
     for sourced in patches:
         slot = sourced.slot()
+        if sourced.patch.yields and slot in stated:
+            continue
         existing = by_slot.get(slot)
         if existing is None:
             by_slot[slot] = sourced
@@ -934,6 +949,13 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
         # Agreeing patches already went through the same validator in
         # `resolve_case_patches`, so they carry the same `validated`; keep the
         # first.
+    for slot, sourced in by_slot.items():
+        for read in sourced.patch.derived_from:
+            if read in stated:
+                raise TutorialRecordError(
+                    f"{slot!r} is derived by {sourced.source!r} from the case's {read!r}, which "
+                    f"{stated[read].source!r} sets; state {slot!r} too"
+                )
     return tuple(by_slot.values())
 
 
@@ -1114,6 +1136,7 @@ def resolve_case_patches(
             revalidated = AxisPatch(
                 document=patch.document, key_path=patch.key_path,
                 value=patch.value, value_kind=value_kind,
+                yields=patch.yields, derived_from=patch.derived_from,
             )
             sourced_patches.append(
                 SourcedPatch(patch=revalidated, source=name, validated=validated)

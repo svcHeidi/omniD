@@ -393,6 +393,42 @@ def test_combine_patches_refuses_int_and_bool_as_a_conflict():
         combine_patches(patches)
 
 
+def _derived(value, source="numberCells", derived_from=()) -> SourcedPatch:
+    return SourcedPatch(
+        patch=AxisPatch("system/controlDict", ("deltaT",), value, "scalar", yields=True, derived_from=derived_from),
+        source=source, validated=True,
+    )
+
+
+def test_a_derived_patch_gives_way_to_a_study_key_on_its_slot():
+    stated = SourcedPatch(patch=AxisPatch("system/controlDict", ("deltaT",), 0.001, "scalar"), source="base", validated=True)
+    (kept,) = combine_patches([_derived(0.002), stated])
+    assert (kept.source, kept.patch.value) == ("base", 0.001)
+    (alone,) = combine_patches([_derived(0.002)])
+    assert alone.patch.value == 0.002
+
+
+def test_two_derivations_of_one_slot_must_agree():
+    with pytest.raises(TutorialRecordError, match="different values"):
+        combine_patches([_derived(0.002), _derived(0.003, source="tetNumberCells")])
+
+
+def test_a_derivation_from_a_slot_the_study_sets_is_refused_unless_the_study_states_the_derived_slot_too():
+    end_time = SourcedPatch(patch=AxisPatch("system/controlDict", ("endTime",), 0.02, "scalar"), source="base", validated=True)
+    derived = _derived(0.002, derived_from=("system/controlDict::endTime",))
+    with pytest.raises(TutorialRecordError, match="state 'system/controlDict::deltaT' too"):
+        combine_patches([derived, end_time])
+    stated = SourcedPatch(patch=AxisPatch("system/controlDict", ("deltaT",), 0.001, "scalar"), source="base", validated=True)
+    assert {patch.slot() for patch in combine_patches([derived, end_time, stated])} == {
+        "system/controlDict::endTime", "system/controlDict::deltaT",
+    }
+
+
+def test_only_a_yielding_patch_names_what_it_was_derived_from():
+    with pytest.raises(TutorialRecordError, match="does not yield"):
+        AxisPatch("system/controlDict", ("deltaT",), 0.002, "scalar", derived_from=("system/controlDict::endTime",))
+
+
 # ---------------------------------------------------------------------------
 # resolve_case_patches: sorting + axes + direct keys, end to end (pure)
 # ---------------------------------------------------------------------------

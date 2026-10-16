@@ -28,9 +28,8 @@ def _delta_t_assignment(value: float) -> ParameterAssignment:
 
 
 # Transcribed byte-for-byte from the native tree (see module docstring).
-# Three `hex (` blocks, each `(80 80 80)`, matching this tutorial's real
-# `hex_number_cells_axis(expected_blocks=3)` call in
-# manufactured_bath_bidomain.py.
+# Three `hex (` blocks, each `(80 80 80)`: the bath case's literal counts, a
+# three-block dictionary for the generic resolution rewrite.
 REAL_BATH_BIDOMAIN_BLOCK_MESH_DICT_3D = """\
 /*--------------------------------*- C++ -*----------------------------------*\\
 | =========                 |                                                 |

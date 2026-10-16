@@ -83,9 +83,12 @@ STUDIES: dict[str, ConformanceStudy] = {
         unknown_name="constant/electroProperties:bidomainSolverCoeffs.verificationModel.q",
     ),
     "manufacturedBathBidomain": ConformanceStudy(
-        # Hex route, 1D N=10, endTime 0.02 (36 steps); a real run takes about a second.
+        # Hex route, 1D N=10, endTime 0.02 at the native Allrun's step for N=10 (3 steps); a real run takes about a second.
         requires=("blockMesh", "topoSet", "setTorsoOrganConductivityField", "cardiacFoam"),
-        base_study={"dimension": "1D", "numberCells": 10, "system/controlDict:endTime": 0.02},
+        base_study={
+            "dimension": "1D", "numberCells": 10, "system/controlDict:endTime": 0.02,
+            "system/controlDict:deltaT": 0.02 / 3,
+        },
         # A catalogued scalar the bath verifier reads (native 0.01).
         patch=("constant/electroProperties:bidomainSolverCoeffs.verificationModel.alpha", 0.02),
         untouched=("constant/electroProperties", ("bidomainSolverCoeffs", "verificationModel", "k")),

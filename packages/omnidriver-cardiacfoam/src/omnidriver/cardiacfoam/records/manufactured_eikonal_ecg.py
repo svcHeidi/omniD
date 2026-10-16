@@ -7,7 +7,7 @@ from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 
 from .case_outputs import WITH_DEFAULT_VALUES
 from .manufactured_solution_axes import (
-    BLOCK_MESH_DICT_DOCUMENTS, dimension_axis, hex_number_cells_axis, tet_number_cells_axis,
+    BLOCK_MESH_DICT_DOCUMENTS, dimension_axis, number_cells_axis, tet_number_cells_axis,
 )
 from .routes import block_mesh_step, gmsh_route, solve_step
 
@@ -19,8 +19,8 @@ _TET_MESH = "box.msh"
 #: step's `-dict` argument.
 AXES = (
     dimension_axis("dimension", mesh_step_id="mesh"),
-    hex_number_cells_axis("numberCells"),
-    tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh"),
+    number_cells_axis("numberCells", step_at_ten=None),
+    tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh", step_at_ten=None),
 )
 
 #: `eikonalMyocardiumDomain` does not override `electroModel::end()`, so the
