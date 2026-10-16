@@ -595,6 +595,19 @@ process is killed mid-edit, the next `step`/`run` of that case is refused
 ("an edit of this case was interrupted (<paths>); plan again"): plan again,
 which restages the case.
 
+**Derived and removed keys.** A record may derive keys from what a study
+states, as its native script does when it is not given them
+(`TutorialRecord.derivations`, listed by `describe --entry` under
+`record_surface.derivations`). A derived value is a patch that `yields`: a study
+key on the same slot replaces it, and the plan's patches mark it `derived`. For
+example, cardiacFOAM's manufactured records derive `deltaT` from `numberCells`
+and `endTime`, and `writeInterval` from `endTime`, as `Allrun -N`/`-endTime` do;
+a study that states `deltaT` keeps its own. An axis may also remove a key
+(`AxisPatch.removes`), as a native script's removal does: a 1D or 2D pseudo-ECG
+or eikonalECG study removes the 3D-only `ecgDomains`. A study key beneath a
+removed key has no effect, and the plan says so with an info note
+`study_key_removed_with_parent` naming both.
+
 **Derived constants are not overridable.** Some models expose constants that are
 *computed* from other (user-facing) constants at `initConsts` — e.g. the
 Land-Niederer active-tension transition rates (`AC_k_uw`, `AC_k_ws`, `AC_k_wu`,
