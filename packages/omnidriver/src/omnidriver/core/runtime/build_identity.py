@@ -172,6 +172,12 @@ def build_record_report(driver_context: Any, env: Mapping[str, str]) -> dict[str
         kept += [{"solver": entry.solver, "name": b.name, "path": str(b.path), "repository": b.source.repository}
                  for b in result.kept]
         not_built += [{"solver": entry.solver, "name": b.name} for b in entry.builds if b.digest is None]
+    if not recorded and not kept:
+        return failure(
+            None, code="nothing_built", action="build-record",
+            error=f"the stack lists builds of {repository.root} ({', '.join(item['name'] for item in not_built)}), "
+                  "but none exists where the environment says it is built; run in the solver's shell after building",
+        )
     return {
         "action": "build-record", "status": "ok", "repository": entries[0].repository.to_json(),
         "recorded": recorded, "kept": kept, "not_built": not_built, "records": sorted(str(path) for path in records),

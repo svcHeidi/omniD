@@ -81,3 +81,18 @@ def test_a_stack_with_no_recordable_solver_refuses_by_name(tmp_path):
 
 def test_the_command_needs_a_repository(capsys):
     assert "--repo" in refusal(capsys, ["build-record", "--plugin", "plugins.toy:ToyStack"])
+
+
+def test_a_stack_whose_builds_are_all_absent_refuses_by_name(tmp_path):
+    class _Unbuilt:
+        plugin_id = "org.wmake"
+        plugin_api_version = "3"
+
+        def get_solver_builds(self, env, *, repository, used_paths):
+            return (SolverEntry(solver="toySolver", repository=SOURCE, recordable=True, builds=(
+                SolverBuild(name="mySolver", path=None, digest=None, known="unknown"),
+            )),)
+
+    report = build_record_report(_context(_Unbuilt(), tmp_path), {})
+    assert (report["status"], report["code"]) == ("failed", "nothing_built")
+    assert "mySolver" in report["error"]
