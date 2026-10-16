@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from omnidriver.core.runtime.models import DataArtifact, TutorialSpec
+from omnidriver.cardiacfoam.command_authorization import CARDIAC_SOLVER_COMMANDS
 from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
 from omnidriver.cardiacfoam.detection import (
     detect_ionic_model_name,
@@ -242,7 +243,17 @@ def _read_solver_and_ionic(case_root: Path) -> tuple[str, str | None] | None:
         ionic = None
     return solver, ionic
 
+def _workflow_runs_a_solver(spec: TutorialSpec) -> bool:
+    """False for a workflow that states its steps and runs no solver command: ``electroProperties`` then only configures a utility, as for ``ionicHeterogeneityProbe``."""
+    dag = spec.metadata.get("workflow_dag") if spec.metadata else None
+    steps = dag.get("steps") if dag else None
+    if not steps:
+        return True
+    return any(step.get("command") in CARDIAC_SOLVER_COMMANDS for step in steps)
+
 def predict_cardiac_artifacts(case_root: Path, spec: TutorialSpec) -> tuple[DataArtifact, ...]:
+    if not _workflow_runs_a_solver(spec):
+        return ()
     read = _read_solver_and_ionic(case_root)
     if read is None:
         return ()
