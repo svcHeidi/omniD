@@ -15,7 +15,7 @@ from .routes import block_mesh_step, gmsh_route, solve_step
 #: the native case already holds.
 _BIDOMAIN_SOLVER_COEFFS = ("bidomainSolverCoeffs",)
 
-_TET_TEMPLATE = "setup/studies/tetConvergence/box.geo.template"
+_TET_TEMPLATE = "box.geo.template"
 _TET_MESH = "box.msh"
 
 #: The native Allrun does not mesh; the case's regression script meshes with

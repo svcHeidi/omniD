@@ -11,7 +11,7 @@ from .manufactured_solution_axes import (
 )
 from .routes import block_mesh_step, gmsh_route, solve_step
 
-_TET_TEMPLATE_RELPATH = "setup/studies/tetConvergence/box.geo.template"
+_TET_TEMPLATE_RELPATH = "box.geo.template"
 _TET_MESH = "box.msh"
 
 #: The dimension axis takes no `solver_coefficients`: `eikonalSolverCoeffs` has

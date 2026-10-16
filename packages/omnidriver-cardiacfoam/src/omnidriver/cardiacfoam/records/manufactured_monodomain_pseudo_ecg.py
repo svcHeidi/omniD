@@ -17,7 +17,7 @@ from .routes import block_mesh_step, gmsh_route, solve_step
 _MONODOMAIN_SOLVER_COEFFS = ("monodomainSolverCoeffs",)
 _ECG_VERIFICATION_MODEL = ("ecgDomains", "ECG", "verificationModel")
 
-_TET_TEMPLATE = "setup/studies/tetConvergence/box.geo.template"
+_TET_TEMPLATE = "box.geo.template"
 _TET_MESH = "box.msh"
 
 #: The native `Allrun` has no mesh step; the case's regression script meshes

@@ -11,7 +11,7 @@ from .manufactured_solution_axes import (
 )
 from .routes import block_mesh_step, gmsh_route, solve_step
 
-_TET_TEMPLATE = "setup/studies/tetConvergence/three_domain_box.geo.template"
+_TET_TEMPLATE = "three_domain_box.geo.template"
 _TET_MESH = "three_domain_box.msh"
 
 # Each `blockMeshDict.<dim>` has three hex blocks (left bath, myocardium, right
