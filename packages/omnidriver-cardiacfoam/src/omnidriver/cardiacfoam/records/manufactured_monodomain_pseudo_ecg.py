@@ -62,7 +62,7 @@ RECORD = TutorialRecord(
         solve_step(_SOLVE_OUTPUTS),
     ),
     workflow_variants={
-        "hex": ("mesh", "solve"),
+        "hex": ("mesh", "checkMesh", "solve"),
         "tet": ("gmsh", "gmshToFoam", "checkMesh", "solve"),
     },
     variant_selector="mesh",

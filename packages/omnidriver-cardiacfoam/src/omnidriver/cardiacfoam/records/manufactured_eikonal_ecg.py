@@ -59,7 +59,7 @@ RECORD = TutorialRecord(
     variant_selector="mesh",
     default_variant="hex",
     workflow_variants={
-        "hex": ("mesh", "solve"),
+        "hex": ("mesh", "checkMesh", "solve"),
         "tet": ("gmsh", "gmshToFoam", "checkMesh", "solve"),
         "tet-errorLocalisation": ("gmsh", "gmshToFoam", "checkMesh", "solve", "writeCellCentres"),
     },
