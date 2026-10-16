@@ -244,12 +244,14 @@ def _read_solver_and_ionic(case_root: Path) -> tuple[str, str | None] | None:
     return solver, ionic
 
 def _workflow_runs_a_solver(spec: TutorialSpec) -> bool:
-    """False for a workflow that states its steps and runs no solver command: ``electroProperties`` then only configures a utility, as for ``ionicHeterogeneityProbe``."""
+    """False for a workflow that states its steps and runs no solver command: ``electroProperties`` then only configures a utility, as for ``ionicHeterogeneityProbe``. A parallel solve is ``mpirun`` with the solver among its arguments."""
     dag = spec.metadata.get("workflow_dag") if spec.metadata else None
     steps = dag.get("steps") if dag else None
     if not steps:
         return True
-    return any(step.get("command") in CARDIAC_SOLVER_COMMANDS for step in steps)
+    return any(
+        token in CARDIAC_SOLVER_COMMANDS for step in steps for token in (step.get("command"), *step.get("args", ()))
+    )
 
 def predict_cardiac_artifacts(case_root: Path, spec: TutorialSpec) -> tuple[DataArtifact, ...]:
     if not _workflow_runs_a_solver(spec):

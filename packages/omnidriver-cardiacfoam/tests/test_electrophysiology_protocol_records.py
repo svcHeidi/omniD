@@ -94,3 +94,16 @@ def test_ionic_heterogeneity_consumes_what_the_probe_reads():
     [step] = TUTORIAL_RECORDS["ionicHeterogeneity"].workflow_steps
     assert {"constant/electroProperties", "constant/ionicHeterogeneityProbe"} <= set(step.consumes)
     assert _foam_value(PROTOCOLS / "ionicHeterogeneity", "system/controlDict", "application") == "ionicHeterogeneityProbe"
+
+
+@pytest.mark.parametrize("study", [{}, {"parallel": True}], ids=["serial", "parallel"])
+def test_a_solving_record_predicts_the_solvers_fields_in_serial_and_in_parallel(study, tmp_path):
+    report = _plan("rotorInstability", tmp_path, study)
+    assert {"monodomain_vm_series", "monodomain_jsi_series"} <= {a.artifact_id for a in report.expected_artifacts}
+    assert any(step["command"] == "mpirun" for step in report.workflow_dag["steps"]) is bool(study)
+
+
+def test_the_utility_only_record_predicts_no_solver_field(tmp_path):
+    ids = {a.artifact_id for a in _plan("ionicHeterogeneity", tmp_path).expected_artifacts}
+    assert "single_cell_trace" not in ids
+    assert "ionic_heterogeneity_ap_metrics" in ids
