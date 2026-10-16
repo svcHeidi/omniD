@@ -8,36 +8,15 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-# Split in two because core consumes them differently: only
-# solver_commands() feeds the artifact-producer heuristic in
-# normalize_workflow_dag, so conflating them would credit a post-processing
-# utility with the solver's outputs. Their union is the plugin's
-# accept-surface contribution; neither is core knowledge.
+# Only solver_commands() feeds the artifact-producer heuristic in
+# normalize_workflow_dag; every other command this plugin runs comes through
+# utility_manifests() or core's own authorization.
 CARDIAC_SOLVER_COMMANDS = frozenset({"cardiacFoam"})
-
-# gradientReconstructionOrder (applications/test/gradientReconstructionOrder)
-# is listed here rather than coming through utility_manifests() because it
-# ships no utility.manifest.toml, though it is a live workflow step in
-# manufactured_eikonal_ecg.py's gradient_reconstruction=True path.
-#
-# The error_localisation_analysis=True path's other two steps need no entry:
-# `postProcess` is core-authorized generically (CORE_NEUTRAL_COMMANDS), and
-# the analysis script is invoked by its own relative path, which
-# workflow_runner._resolve_command treats as an explicit opt-in regardless of
-# authorization, the same as any case's own Allrun/Allclean script.
-CARDIAC_AUXILIARY_COMMANDS = frozenset({
-    "gradientReconstructionOrder",
-})
 
 
 def solver_commands() -> frozenset[str]:
     """This plugin's artifact-producing solver commands."""
     return CARDIAC_SOLVER_COMMANDS
-
-
-def auxiliary_commands() -> frozenset[str]:
-    """Authorized plugin commands that do not produce the run's artifacts."""
-    return CARDIAC_AUXILIARY_COMMANDS
 
 
 #: This plugin's own bundled ``utility.manifest.toml`` sidecars -- package

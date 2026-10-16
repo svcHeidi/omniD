@@ -7,7 +7,6 @@ from omnidriver.cardiacfoam.case_introspection import (
     samplable_fields as _samplable_fields,
 )
 from omnidriver.cardiacfoam.command_authorization import (
-    CARDIAC_AUXILIARY_COMMANDS,
     CARDIAC_SOLVER_COMMANDS,
     utility_manifests,
 )
@@ -15,9 +14,9 @@ from omnidriver.openfoam.command_authorization import openfoam_runtime_commands
 from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
 import functools
 
-# The manifest advertises the accept-surface, which is the union of both kinds
-# of authorized plugin command -- matching what `capability_manifest` composes.
-CARDIAC_AUTHORIZED_COMMANDS = CARDIAC_SOLVER_COMMANDS | CARDIAC_AUXILIARY_COMMANDS
+# The manifest advertises the accept-surface: the plugin's solver commands, matching what `capability_manifest`
+# composes.
+CARDIAC_AUTHORIZED_COMMANDS = CARDIAC_SOLVER_COMMANDS
 
 build_capability_manifest = functools.partial(
     build_capability_manifest,

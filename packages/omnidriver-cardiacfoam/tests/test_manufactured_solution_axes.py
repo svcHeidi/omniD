@@ -152,7 +152,6 @@ def test_a_record_refuses_an_axis_only_another_record_declares():
 _EIKONAL_TET_ROUTES = [
     ("manufacturedEikonalECG", "tet"),
     ("manufacturedEikonalECG", "tet-errorLocalisation"),
-    ("manufacturedEikonalECG", "tet-gradientReconstruction"),
 ]
 _TET_ROUTES_WRITING_DIMENSION = [
     ("manufacturedBidomain", "tet"),

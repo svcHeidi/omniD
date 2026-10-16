@@ -21,18 +21,6 @@ def _dag(command: str) -> dict:
     return {"steps": [{"id": "s", "command": command, "depends_on": []}]}
 
 
-def test_cardiac_plugin_authorizes_its_unmanifested_utility() -> None:
-    """gradientReconstructionOrder has no utility.manifest.toml; manufacturedEikonalECG's tet route needs it."""
-    context = _CTX
-    errors = [
-        d for d in validate_workflow_commands(
-            _dag("gradientReconstructionOrder"), driver_context=context
-        )
-        if d.level == "error"
-    ]
-    assert errors == []
-
-
 def test_cardiac_plugin_authorizes_its_own_solver() -> None:
     context = _CTX
     errors = [
@@ -50,13 +38,10 @@ def test_cardiac_utilities_come_from_the_plugin() -> None:
     assert generic.stack.call("get_utility_manifests") == {}
 
 
-def test_solver_and_auxiliary_commands_are_distinct() -> None:
+def test_the_solver_is_the_only_command_credited_with_a_runs_artifacts() -> None:
     """Only solver_commands() may be credited with a run's artifacts (normalize_workflow_dag)."""
-    solver = _CTX.stack.call("get_solver_commands")
-    auxiliary = _CTX.stack.call("get_auxiliary_commands")
-    assert solver == frozenset({"cardiacFoam"})
-    assert auxiliary == frozenset({"gradientReconstructionOrder"})
-    assert not (solver & auxiliary)
+    assert _CTX.stack.call("get_solver_commands") == frozenset({"cardiacFoam"})
+    assert _CTX.stack.call("get_auxiliary_commands") == frozenset()
 
 
 def test_utility_manifests_are_not_a_shared_mutable_dict() -> None:

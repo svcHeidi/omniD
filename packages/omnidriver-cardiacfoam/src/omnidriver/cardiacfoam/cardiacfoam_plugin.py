@@ -237,14 +237,6 @@ class CardiacFoamPlugin:
 
         return solver_commands()
 
-    def get_auxiliary_commands(self) -> frozenset[str]:
-        """Authorized plugin commands that do not produce the run's artifacts."""
-        from omnidriver.cardiacfoam.command_authorization import (
-            auxiliary_commands,
-        )
-
-        return auxiliary_commands()
-
     def get_utility_manifests(self) -> dict:
         """This plugin's ``utility.manifest.toml`` sidecars, by command name."""
         from omnidriver.cardiacfoam.command_authorization import (

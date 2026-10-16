@@ -1,5 +1,5 @@
 """``manufacturedEikonalECG``, the eikonal activation-time and template ECG manufactured-solution record.
-Native case: ``manufacturedSolutions/eikonalECG``; hex, tet and two extended tet routes."""
+Native case: ``manufacturedSolutions/eikonalECG``; hex, tet and the tet route with the error field."""
 
 from __future__ import annotations
 
@@ -47,10 +47,6 @@ _WRITE_CELL_CENTRES_STEP = WorkflowStep(
     # declared (`WorkflowStep` refuses `{`/`}`, and there is no other literal
     # path for a time-varying instance), and staging drops it regardless.
 )
-_GRADIENT_RECONSTRUCTION_STEP = WorkflowStep(
-    step_id="gradientReconstructionOrder", command=("gradientReconstructionOrder",),
-    consumes=("system/fvSchemes",),
-)
 
 RECORD = TutorialRecord(
     name="manufacturedEikonalECG",
@@ -58,7 +54,7 @@ RECORD = TutorialRecord(
     axes=AXES,
     workflow_steps=(
         _MESH_STEP, _SOLVE_STEP, *gmsh_route(_TET_TEMPLATE_RELPATH, _TET_MESH, "internal"),
-        _WRITE_CELL_CENTRES_STEP, _GRADIENT_RECONSTRUCTION_STEP,
+        _WRITE_CELL_CENTRES_STEP,
     ),
     variant_selector="mesh",
     default_variant="hex",
@@ -66,8 +62,5 @@ RECORD = TutorialRecord(
         "hex": ("mesh", "solve"),
         "tet": ("gmsh", "gmshToFoam", "checkMesh", "solve"),
         "tet-errorLocalisation": ("gmsh", "gmshToFoam", "checkMesh", "solve", "writeCellCentres"),
-        "tet-gradientReconstruction": (
-            "gmsh", "gmshToFoam", "checkMesh", "solve", "gradientReconstructionOrder",
-        ),
     },
 )
