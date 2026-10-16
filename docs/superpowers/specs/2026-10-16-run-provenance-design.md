@@ -121,8 +121,7 @@ rebuilt without recording is `unknown`.
 **The OpenFOAM layer** implements the member once, for cardiacFOAM and
 cardiacCore ("one reality"):
 
-- **products:** each `Make/files` under the repository root, outside
-  `tutorials/`, `lnInclude/` and `platforms/`: `EXE = $(FOAM_USER_APPBIN)/<name>`
+- **products:** each `Make/files` the source digest reads: `EXE = $(FOAM_USER_APPBIN)/<name>`
   or `EXE = $(FOAM_MODULE_APPBIN)/<name>` is an executable, `LIB =
   $(FOAM_USER_LIBBIN)/<lib>` or `LIB = $(FOAM_MODULE_LIBBIN)/<lib>` a library
   `<lib>.so` or `<lib>.dylib`. cardiacFOAM's solver and most of its libraries
@@ -132,9 +131,13 @@ cardiacCore ("one reality"):
   `FOAM_USER_LIBBIN`), each when set; the first existing file is the product;
 - **source digest:** every `*.C`, `*.H`, `*.cu`, `*.cuh` file and every
   `Make/files` and `Make/options` under the repository root, outside
-  `tutorials/`, `lnInclude/`, `platforms/` and `.git/`, hashed in sorted
-  relative-path order as path and bytes. A tutorial edit does not change it; a
-  build-option edit does.
+  `tutorials/`, `lnInclude/`, `platforms/`, every hidden folder (`.git/`, an
+  agent's `.claude/worktrees/`) and every folder below the root that holds its
+  own `.git` (a nested checkout or submodule, built separately), hashed in
+  sorted relative-path order as path and bytes. A tutorial edit or an edit in a
+  nested worktree does not change it; a build-option edit does. Products are
+  read from the same files, so a nested checkout's products are not the
+  repository's.
 
 **openCARP** answers `openCARP` as `self_reported`, `source.git` holding the tag and
 hash; its other programs (`mesher`, `igbextract`) print no build identity and are in no entry.

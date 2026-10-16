@@ -10,7 +10,7 @@ from typing import Any, Iterable, Iterator, Mapping
 from omnidriver.core.plugin_interface import SolverEntry, SourceIdentity
 from omnidriver.core.runtime.build_identity import git_identity, recorded_build, tree_digest
 
-_EXCLUDED = frozenset({"tutorials", "lnInclude", "platforms", ".git"})
+_EXCLUDED = frozenset({"tutorials", "lnInclude", "platforms"})
 _SOURCE_SUFFIXES = frozenset({".C", ".H", ".cu", ".cuh"})
 _MAKE_FILES = frozenset({"files", "options"})
 _EXE_RULE = re.compile(r"^\s*EXE\s*=\s*\$\(FOAM_(?:USER|MODULE)_APPBIN\)/(\S+)", re.MULTILINE)
@@ -23,15 +23,20 @@ _LIB_FOLDERS = ("FOAM_MODULE_LIBBIN", "FOAM_USER_LIBBIN")
 
 
 def _walk(root: Path) -> Iterator[Path]:
+    # A hidden folder (.git, an agent's .claude/worktrees) and a nested checkout or submodule (a
+    # folder with its own .git, built separately) are not what a build of root reads.
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(name for name in dirnames if name not in _EXCLUDED)
+        dirnames[:] = sorted(
+            name for name in dirnames
+            if name not in _EXCLUDED and not name.startswith(".") and not Path(dirpath, name, ".git").exists()
+        )
         for name in sorted(filenames):
             yield Path(dirpath, name)
 
 
 def build_source_files(root: Path) -> list[Path]:
     """Every C++/CUDA source and ``Make/files``/``Make/options`` a build of ``root`` reads; tutorials,
-    ``lnInclude`` links and platform products are not source."""
+    ``lnInclude`` links, platform products, hidden folders and nested checkouts are not source."""
     return [
         path for path in _walk(Path(root))
         if path.suffix in _SOURCE_SUFFIXES or (path.parent.name == "Make" and path.name in _MAKE_FILES)

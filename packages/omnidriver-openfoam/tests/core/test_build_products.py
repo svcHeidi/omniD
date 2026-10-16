@@ -58,6 +58,19 @@ def test_a_tutorial_edit_keeps_the_digest_and_a_build_option_edit_changes_it(tmp
     assert source_identity(root).digest != before
 
 
+def test_hidden_folders_and_nested_checkouts_are_not_the_repository_source(tmp_path):
+    root = _repository(tmp_path / "repo")
+    before = source_identity(root).digest
+    (root / ".claude" / "worktrees" / "x").mkdir(parents=True)
+    (root / ".claude" / "worktrees" / "x" / "foo.C").write_text("// a nested worktree\n")
+    (root / "sub" / ".git").mkdir(parents=True)
+    (root / "sub" / "bar.C").write_text("// a nested checkout\n")
+    (root / "sub" / "Make").mkdir()
+    (root / "sub" / "Make" / "files").write_text("bar.C\n\nEXE = $(FOAM_USER_APPBIN)/nested\n")
+    assert source_identity(root).digest == before
+    assert "nested" not in dict(products(root, _install(tmp_path)))
+
+
 def test_products_come_from_make_files_and_land_in_the_user_platform(tmp_path):
     root = _repository(tmp_path / "repo")
     env = _install(tmp_path)
