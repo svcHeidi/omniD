@@ -199,6 +199,7 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    and omniD supports it through `WorkflowStep` features as needed.
 2. **Left for the electrophysiology tests**, each needing a decision the code
    cannot make alone:
+   - *A key only the binary reads* is set today in a `--case` copy.
    - *Records against the native `Allrun`.* A record restates the native
      script's commands, and no check compares the two: either a check of each
      record's command sequence against its `Allrun`, or steps derived from it.

@@ -113,10 +113,15 @@ It prints one JSON report: the repository's identity, the products recorded
 (name, path, digest, record file), those `kept` (name, path, and the repository
 their existing entry names) and those not built. A stack with no
 `recordable` entry for the repository refuses with the new code
-`build_products_undeclared`.
+`build_products_undeclared`; one whose builds all are absent where the
+environment says they are built (outside the solver's shell, say) refuses with
+`nothing_built`.
 
 A recorded entry applies only while its `digest` equals the file's: a binary
-rebuilt without recording is `unknown`.
+rebuilt without recording is `unknown`. An entry whose `source` is missing or
+not one the run document can carry (a `digest` that is not `sha256:<64 hex>`, a
+`git` with a key other than `commit`, `tag` or `dirty` or a value of the wrong
+type) is no record: `unknown`, and replaced by the next `build-record`.
 
 **The OpenFOAM layer** implements the member once, for cardiacFOAM and
 cardiacCore ("one reality"):
@@ -210,7 +215,9 @@ No test runs a solver or a real build.
   `unknown`.
 - **TorchCor:** a package location inside and outside `repository.source`.
 - **CLI:** `build-record` with no `--repo` refuses with `usage`; a stack with no
-  recordable products refuses with `build_products_undeclared`.
+  recordable products refuses with `build_products_undeclared`, and one with no
+  build present with `nothing_built`; a product not rebuilt since another
+  worktree recorded it is kept.
 - The verification shapes of `CLAUDE.md`: all packages, core alone, the
   installed wheel, the static gates.
 

@@ -765,7 +765,12 @@ from. How that source is known is the solver's: a wmake build (cardiacFOAM,
 cardiacCore) through the build record `omnidriver build-record --repo <src>`
 writes beside the products after `./Allwmake` (`recorded`); openCARP from its
 own `-buildinfo` tag and hash (`self_reported`); TorchCor from the editable
-package the stack's `python3` imports (`live`). A build recorded from other
+package the stack's `python3` imports (`live`). `build-record` credits the
+repository only with products whose file changed since their last record: a
+product not rebuilt since another worktree recorded it keeps that record and is
+listed under `kept`, with the repository it names. With no build of the
+repository where the environment says it is built (outside the solver's shell,
+say), it refuses as `nothing_built`. A build recorded from other
 source than the supplied repository gets a `stale_build` warning naming both
 repositories, commits and digests; a build nothing identifies gets a
 `build_source_unknown` note. Neither blocks a plan.
