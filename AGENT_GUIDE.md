@@ -759,12 +759,16 @@ keyed by a digest of the `*.C`/`*.H` files and of the scanner itself: every
 plan recomputes the digest and rescans only when either changed, and an
 unreadable or altered cache file is rescanned.
 
-Preflight links the binary to this source: a user-compiled solver under
-`$FOAM_USER_APPBIN`, or a library under `$FOAM_USER_LIBBIN` that a
-`Make/files` below the source root builds, that is older than the sources it
-is built from gets a `stale_build` warning naming it, the number of newer
-source files and the newest of them. The plan and the scan read that source,
-so they describe a state the binary was not built from.
+Every plan lists, in its run document's `solverProvenance`, each solver it uses
+and each build of it the run runs: path, digest, and the source it was built
+from. How that source is known is the solver's: a wmake build (cardiacFOAM,
+cardiacCore) through the build record `omnidriver build-record --repo <src>`
+writes beside the products after `./Allwmake` (`recorded`); openCARP from its
+own `-buildinfo` tag and hash (`self_reported`); TorchCor from the editable
+package the stack's `python3` imports (`live`). A build recorded from other
+source than the supplied repository gets a `stale_build` warning naming both
+repositories, commits and digests; a build nothing identifies gets a
+`build_source_unknown` note. Neither blocks a plan.
 
 The catalogues stay the source of truth, and a key that appears in or
 disappears from the C++ never fails a plan. A plan compares them with the scan:
