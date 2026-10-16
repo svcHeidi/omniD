@@ -1022,6 +1022,8 @@ def _build_pvj_case(tmp_path, *, coupler="reactionDiffusionPvjCoupler",
         "$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.couplingMode": mode,
         "$ELECTRO_MODEL_COEFFS.domainCouplings.pvj.electroDomainCoupler": coupler,
     }
+    if mode == "bidirectional" and conduction_solver == "monodomain1DSolver":
+        overrides[f"{prefix}.purkinjeFibreRadius"] = "1.7e-05"
     if conduction_solver == "eikonalSolver1D":
         overrides[f"{prefix}.purkinjeCV"] = "[0 1 -1 0 0 0 0] 4.2"
     if myocardium_solver == "eikonalSolver":

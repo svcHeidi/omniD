@@ -62,3 +62,35 @@ def test_conduction_network_enforcement_is_preserved():
     }
     fields = _fields(_evaluate_dynamic_required_fields(context))
     assert all(f.startswith("conductionNetworkDomains.netA.") for f in fields), fields
+
+
+_NETWORK = "conductionNetworkDomains.net.purkinjeGraphModelCoeffs."
+_RADIUS = _NETWORK + "purkinjeFibreRadius"
+
+
+def _bidirectional_context(mode, **extra):
+    return {
+        "myocardiumSolver": "monodomainSolver",
+        "conductionNetworkDomains.net.conductionSystemDomain": "purkinjeGraphModel",
+        _NETWORK + "conductionSystemSolver": "monodomain1DSolver",
+        "domainCouplings.pvj.electroDomainCoupler": "reactionDiffusionPvjCoupler",
+        "domainCouplings.pvj.conductionNetworkDomain": "net",
+        "domainCouplings.pvj.couplingMode": mode,
+        **extra,
+    }
+
+
+def test_the_fibre_radius_is_required_once_a_coupling_is_bidirectional():
+    assert _RADIUS in _fields(_evaluate_dynamic_required_fields(_bidirectional_context("bidirectional")))
+    assert _RADIUS not in _fields(_evaluate_dynamic_required_fields(_bidirectional_context("unidirectional")))
+    assert _RADIUS not in _fields(_evaluate_dynamic_required_fields(
+        _bidirectional_context("bidirectional", **{_RADIUS: 1.7e-5})
+    ))
+
+
+def test_the_fibre_radius_must_be_above_zero():
+    found = rule_diagnostics(
+        _ELECTRO_ENTRIES_BY_PATH.values(), _bidirectional_context("bidirectional", **{_RADIUS: 0.0}),
+        document="constant/electroProperties",
+    )
+    assert any(item.field == _RADIUS for item in found)
