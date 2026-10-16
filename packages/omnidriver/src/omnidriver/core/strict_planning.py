@@ -379,9 +379,13 @@ def _strict_plan_for_spec(
         command_diagnostics=command_diagnostics,
         environment_diagnostics=env_diagnostics,
     )
+    study_notes = tuple(
+        StrictDiagnostic(**note) for note in (spec.metadata or {}).get("study_notes", ())
+    )
     plan_diagnostics = (
         workflow_diagnostics
         + command_diagnostics
+        + study_notes
         + plugin_diagnostics
         + configuration_diagnostics
     )

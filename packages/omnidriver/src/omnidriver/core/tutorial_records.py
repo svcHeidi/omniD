@@ -489,6 +489,29 @@ class WorkflowStep:
 
 
 @dataclass(frozen=True)
+class Derivation:
+    """Values a record derives from what a study states, as its native script derives them when it is not given them.
+
+    ``derive(stated, staged_case_root)`` receives every value the study states, by slot (``document::key``) for a
+    patch and by name for an axis, and the staged case it may read; it returns the patches it derives, each one
+    ``yields``, so a study key on the same slot replaces it.
+    """
+
+    name: str
+    description: str
+    derive: Callable[[Mapping[str, Any], Path], "tuple[AxisPatch, ...]"]
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.description.strip():
+            raise TutorialRecordError("a derivation needs a name and a description of what it derives")
+        if not callable(self.derive):
+            raise TutorialRecordError(f"derivation {self.name!r}'s derive must be callable")
+
+    def to_json(self) -> dict[str, Any]:
+        return {"name": self.name, "description": self.description}
+
+
+@dataclass(frozen=True)
 class TutorialRecord:
     """A tutorial as inert data: where its native case lives, what may vary.
 
@@ -534,6 +557,8 @@ class TutorialRecord:
     #: A record whose solve has nothing to split across processes (one cell):
     #: a run asking for ``parallel`` is refused by name when it is planned.
     serial_only: bool = False
+    #: Values the native script derives from others when not given them.
+    derivations: tuple[Derivation, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -570,6 +595,7 @@ class TutorialRecord:
                 f"selector {PARALLEL_STUDY_NAME!r}; {PARALLEL_STUDY_NAME!r} is reserved "
                 "for how a run executes (serial or parallel), never case content"
             )
+        object.__setattr__(self, "derivations", tuple(self.derivations))
         object.__setattr__(self, "workflow_steps", tuple(self.workflow_steps))
         step_ids = [step.step_id for step in self.workflow_steps]
         if len(set(step_ids)) != len(step_ids):
@@ -687,24 +713,16 @@ class AxisPatch:
     key_path: tuple[str, ...]
     value: Any
     value_kind: str
-    #: A value the axis derives, as a native script does when it is not given
-    #: one: a study key on the same slot replaces it.
+    #: A value derived from others, as a native script derives it when it is
+    #: not given one: a study key on the same slot replaces it.
     yields: bool = False
-    #: The slots (``document::key``) whose case values the derivation read; a
-    #: study that sets one of them and leaves this slot to the axis is
-    #: refused, since the derivation did not see the study's value.
-    derived_from: tuple[str, ...] = ()
-    #: The key is removed from the case, as a native script's ``#remove``
-    #: does; ``value`` is ``None``, and any other patch beneath the key goes
-    #: with it.
+    #: The key is removed from the case, as a native script's removal does;
+    #: ``value`` is ``None``, and any other patch beneath the key goes with it.
     removes: bool = False
 
     def __post_init__(self) -> None:
         _check_case_relative("a patch's document", self.document)
         object.__setattr__(self, "key_path", tuple(self.key_path))
-        object.__setattr__(self, "derived_from", tuple(self.derived_from))
-        if self.derived_from and not self.yields:
-            raise TutorialRecordError(f"a patch on {self.slot()!r} names derived_from but does not yield")
         if self.removes and (self.value is not None or self.yields):
             raise TutorialRecordError(f"a patch removing {self.slot()!r} carries no value and does not yield")
         if not self.key_path:
@@ -920,30 +938,40 @@ def _strictly_equal(first: Any, second: Any) -> bool:
     return type(first) is type(second) and first == second
 
 
-def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]:
+def combine_patches(
+    patches: Sequence[SourcedPatch], *, notes: "list[StrictDiagnostic] | None" = None,
+) -> tuple[SourcedPatch, ...]:
     """Combine every source's patches into one list, refusing a real conflict.
 
     Two sources naming one (document, key) slot agree when ``value_kind`` and
     the value (strict same-type equality) match, and are otherwise refused
     naming both sources: a later write never silently wins. A patch that
-    ``yields`` gives way to one that does not; one kept whose
-    ``derived_from`` names a slot another patch sets is refused. A patch
-    beneath a key another patch ``removes`` goes with the key, as under a
-    native ``#remove``.
+    ``yields`` gives way to one that does not. A patch beneath a key another
+    patch ``removes`` goes with the key, as under a native script's removal,
+    and ``notes`` receives a note naming both.
     """
-    removed = [sourced.patch for sourced in patches if sourced.patch.removes]
-    patches = [
-        sourced for sourced in patches
-        if not any(
-            gone.document == sourced.patch.document
-            and len(sourced.patch.key_path) > len(gone.key_path)
-            and sourced.patch.key_path[:len(gone.key_path)] == gone.key_path
-            for gone in removed
-        )
-    ]
-    stated = {sourced.slot(): sourced for sourced in patches if not sourced.patch.yields}
-    by_slot: dict[str, SourcedPatch] = {}
+    removed = [sourced for sourced in patches if sourced.patch.removes]
+    kept: list[SourcedPatch] = []
     for sourced in patches:
+        parent = next((
+            gone for gone in removed
+            if gone.patch.document == sourced.patch.document
+            and len(sourced.patch.key_path) > len(gone.patch.key_path)
+            and sourced.patch.key_path[:len(gone.patch.key_path)] == gone.patch.key_path
+        ), None)
+        if parent is None:
+            kept.append(sourced)
+        elif notes is not None and not sourced.patch.yields:
+            notes.append(diagnostic(
+                "info", "study_key_removed_with_parent",
+                f"{sourced.source!r} sets {sourced.slot()!r}, which lies beneath {parent.slot()!r}; "
+                f"{parent.source!r} removes that key, so the value has no effect",
+                source=sourced.patch.document, field=".".join(sourced.patch.key_path),
+                detail={"removed_by": parent.source, "removed": parent.slot(), "value": sourced.patch.value},
+            ))
+    stated = {sourced.slot() for sourced in kept if not sourced.patch.yields}
+    by_slot: dict[str, SourcedPatch] = {}
+    for sourced in kept:
         slot = sourced.slot()
         if sourced.patch.yields and slot in stated:
             continue
@@ -967,13 +995,6 @@ def combine_patches(patches: Sequence[SourcedPatch]) -> tuple[SourcedPatch, ...]
         # Agreeing patches already went through the same validator in
         # `resolve_case_patches`, so they carry the same `validated`; keep the
         # first.
-    for slot, sourced in by_slot.items():
-        for read in sourced.patch.derived_from:
-            if read in stated:
-                raise TutorialRecordError(
-                    f"{slot!r} is derived by {sourced.source!r} from the case's {read!r}, which "
-                    f"{stated[read].source!r} sets; state {slot!r} too"
-                )
     return tuple(by_slot.values())
 
 
@@ -1055,6 +1076,8 @@ def resolve_case_patches(
     staged_case_root: Path,
     direct_key_validator: DirectKeyValidator,
     workflow_step_ids: Sequence[str] | None = None,
+    notes: "list[StrictDiagnostic] | None" = None,
+    derive: bool = True,
 ) -> tuple[
     tuple[SourcedPatch, ...], dict[str, tuple[str, ...]], dict[str, dict[tuple[str, ...], tuple[str, ...]]],
 ]:
@@ -1157,8 +1180,7 @@ def resolve_case_patches(
             )
             revalidated = AxisPatch(
                 document=patch.document, key_path=patch.key_path,
-                value=patch.value, value_kind=value_kind,
-                yields=patch.yields, derived_from=patch.derived_from,
+                value=patch.value, value_kind=value_kind, yields=patch.yields,
             )
             sourced_patches.append(
                 SourcedPatch(patch=revalidated, source=name, validated=validated)
@@ -1223,7 +1245,41 @@ def resolve_case_patches(
                     f"in its command arguments, which axis {axis_name!r} replaces; one argument has one owner"
                 )
 
-    combined = combine_patches(sourced_patches)
+    stated: dict[str, Any] = {
+        sourced.slot(): sourced.patch.value for sourced in sourced_patches
+        if not sourced.patch.yields and not sourced.patch.removes
+    }
+    stated.update({name: value for _source, name, _sorted, value in axis_entries})
+    for derivation in record.derivations if derive else ():
+        before_digest = _case_root_digest(staged_case_root)
+        try:
+            derived = tuple(derivation.derive(stated, staged_case_root))
+        except TutorialRecordError as exc:
+            if exc.diagnostics or exc.code not in (None, "axis_rule"):
+                raise
+            raise _axis_refusal(derivation.name, getattr(exc, "rule", None), f"derivation {derivation.name!r}: {exc}") from exc
+        except Exception as exc:
+            raise TutorialRecordError(
+                f"derivation {derivation.name!r} crashed: {exc}", code="internal_error",
+            ) from exc
+        if _case_root_digest(staged_case_root) != before_digest:
+            raise TutorialRecordError(
+                f"derivation {derivation.name!r} is not pure: it modified the staged case; only "
+                "commit_case_write may write a case"
+            )
+        for patch in derived:
+            if not patch.yields:
+                raise TutorialRecordError(
+                    f"derivation {derivation.name!r} derives {patch.slot()!r} without yielding to the study",
+                    code="internal_error",
+                )
+            value_kind, validated = _validate_or_wrap(direct_key_validator, patch.document, patch.key_path, patch.value)
+            sourced_patches.append(SourcedPatch(
+                patch=AxisPatch(patch.document, patch.key_path, patch.value, value_kind, yields=True),
+                source=derivation.name, validated=validated,
+            ))
+
+    combined = combine_patches(sourced_patches, notes=notes)
     return combined, dict(command_arguments), {
         step_id: {key: values for key, (values, _owner) in by_key.items()} for step_id, by_key in replaced.items()
     }

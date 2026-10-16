@@ -21,8 +21,8 @@ AXES = (
     dimension_axis(
         "dimension", mesh_step_id="mesh", ecg_domains=(ELECTRO_PROPERTIES, ("eikonalSolverCoeffs", "ecgDomains")),
     ),
-    number_cells_axis("numberCells", step_at_ten=None),
-    tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh", step_at_ten=None),
+    number_cells_axis("numberCells"),
+    tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh"),
 )
 
 #: `eikonalMyocardiumDomain` does not override `electroModel::end()`, so the

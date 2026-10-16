@@ -21,6 +21,7 @@ from omnidriver.core.tutorial_records import (
     AxisPatch,
     AxisResult,
     DefaultArgument,
+    Derivation,
     DocumentKeyName,
     SourcedPatch,
     TutorialRecord,
@@ -393,10 +394,9 @@ def test_combine_patches_refuses_int_and_bool_as_a_conflict():
         combine_patches(patches)
 
 
-def _derived(value, source="numberCells", derived_from=()) -> SourcedPatch:
+def _derived(value, source="numberCells") -> SourcedPatch:
     return SourcedPatch(
-        patch=AxisPatch("system/controlDict", ("deltaT",), value, "scalar", yields=True, derived_from=derived_from),
-        source=source, validated=True,
+        patch=AxisPatch("system/controlDict", ("deltaT",), value, "scalar", yields=True), source=source, validated=True,
     )
 
 
@@ -413,20 +413,48 @@ def test_two_derivations_of_one_slot_must_agree():
         combine_patches([_derived(0.002), _derived(0.003, source="tetNumberCells")])
 
 
-def test_a_derivation_from_a_slot_the_study_sets_is_refused_unless_the_study_states_the_derived_slot_too():
-    end_time = SourcedPatch(patch=AxisPatch("system/controlDict", ("endTime",), 0.02, "scalar"), source="base", validated=True)
-    derived = _derived(0.002, derived_from=("system/controlDict::endTime",))
-    with pytest.raises(TutorialRecordError, match="state 'system/controlDict::deltaT' too"):
-        combine_patches([derived, end_time])
-    stated = SourcedPatch(patch=AxisPatch("system/controlDict", ("deltaT",), 0.001, "scalar"), source="base", validated=True)
-    assert {patch.slot() for patch in combine_patches([derived, end_time, stated])} == {
-        "system/controlDict::endTime", "system/controlDict::deltaT",
-    }
+def _record_deriving(derive) -> TutorialRecord:
+    return TutorialRecord(
+        name="derived", native_case_relpath="case",
+        workflow_steps=(WorkflowStep(step_id="solve", command=("solver",)),),
+        axes=(AxisContract(
+            name="cells", value_kind="integer", unit=None, description="cells",
+            resolve=lambda value, root: AxisResult(patches=(AxisPatch("system/mesh", ("N",), value, "integer"),)),
+        ),),
+        derivations=(Derivation(name="step", description="the step from N and endTime", derive=derive),),
+    )
 
 
-def test_only_a_yielding_patch_names_what_it_was_derived_from():
-    with pytest.raises(TutorialRecordError, match="does not yield"):
-        AxisPatch("system/controlDict", ("deltaT",), 0.002, "scalar", derived_from=("system/controlDict::endTime",))
+def _accept(document, key_path, value):
+    return ("scalar" if isinstance(value, float) else "integer", True)
+
+
+def test_a_derivation_reads_what_the_study_states_and_yields_to_it(tmp_path):
+    seen = []
+
+    def derive(stated, root):
+        seen.append(dict(stated))
+        end = stated.get("system/controlDict::endTime", 1.0)
+        return (AxisPatch("system/controlDict", ("deltaT",), end / stated.get("cells", 10), "scalar", yields=True),)
+
+    record = _record_deriving(derive)
+    combined, *_ = resolve_case_patches(
+        record, study_by_source={"base": {"cells": 4, "system/controlDict:endTime": 2.0}},
+        staged_case_root=tmp_path, direct_key_validator=_accept,
+    )
+    assert seen == [{"cells": 4, "system/mesh::N": 4, "system/controlDict::endTime": 2.0}]
+    assert {sourced.slot(): (sourced.patch.value, sourced.source) for sourced in combined}["system/controlDict::deltaT"] == (0.5, "step")
+    combined, *_ = resolve_case_patches(
+        record, study_by_source={"base": {"cells": 4, "system/controlDict:deltaT": 0.1}},
+        staged_case_root=tmp_path, direct_key_validator=_accept,
+    )
+    assert {sourced.slot(): sourced.source for sourced in combined}["system/controlDict::deltaT"] == "base"
+
+
+def test_a_derivation_may_only_derive_what_yields(tmp_path):
+    record = _record_deriving(lambda stated, root: (AxisPatch("system/controlDict", ("deltaT",), 0.1, "scalar"),))
+    with pytest.raises(TutorialRecordError, match="without yielding"):
+        resolve_case_patches(record, study_by_source={"base": {}}, staged_case_root=tmp_path, direct_key_validator=_accept)
 
 
 def test_a_removed_key_takes_every_patch_beneath_it_and_is_written_as_a_removal():
@@ -437,8 +465,12 @@ def test_a_removed_key_takes_every_patch_beneath_it_and_is_written_as_a_removal(
         patch=AxisPatch("constant/p", ("coeffs", "ecg", "E", "type"), "x", "word"), source="base", validated=True,
     )
     beside = SourcedPatch(patch=AxisPatch("constant/p", ("coeffs", "type"), "y", "word"), source="base", validated=True)
-    combined = combine_patches([beneath, removal, beside])
+    notes = []
+    combined = combine_patches([beneath, removal, beside], notes=notes)
     assert [sourced.slot() for sourced in combined] == ["constant/p::coeffs.ecg", "constant/p::coeffs.type"]
+    (note,) = notes
+    assert (note.level, note.code, note.field) == ("info", "study_key_removed_with_parent", "coeffs.ecg.E.type")
+    assert "'dimension' removes that key" in note.message
     (removed, kept) = patches_to_parameters(combined, owner="test")
     assert (removed.operation, removed.value, kept.operation) == ("remove", None, "ensure")
 

@@ -11,3 +11,4 @@ def test_the_solve_steps_consume_only_the_numbered_graph_files():
     assert graph_paths == {
         f"constant/purkinjeGraph.nodes{k:03d}" for k in (3, 11, 21, 41, 81, 161)
     }
+

@@ -8,7 +8,7 @@ from omnidriver.core.tutorial_records import TutorialRecord
 
 from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
 from .manufactured_solution_axes import (
-    BLOCK_MESH_DICT_DOCUMENTS, dimension_axis, number_cells_axis, tet_number_cells_axis,
+    BLOCK_MESH_DICT_DOCUMENTS, allrun_time_controls, dimension_axis, number_cells_axis, tet_number_cells_axis,
 )
 from .routes import block_mesh_step, gmsh_route, solve_step
 
@@ -36,8 +36,8 @@ AXES = (
         ecg_verification_scope=_ECG_VERIFICATION_MODEL,
         ecg_domains=(ELECTRO_PROPERTIES, _MONODOMAIN_SOLVER_COEFFS + ("ecgDomains",)),
     ),
-    number_cells_axis("numberCells", step_at_ten=_ALLRUN_STEP_AT_TEN),
-    tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh", step_at_ten=_ALLRUN_STEP_AT_TEN),
+    number_cells_axis("numberCells"),
+    tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh"),
 )
 
 #: The pseudo-ECG verifier's myocardium domain calls `electroModel::end()`, so
@@ -50,6 +50,7 @@ RECORD = TutorialRecord(
     name="manufacturedMonodomainPseudoECG",
     native_case_relpath="manufacturedSolutions/monodomainPseudoECG",
     axes=AXES,
+    derivations=(allrun_time_controls(_ALLRUN_STEP_AT_TEN),),
     workflow_steps=(
         block_mesh_step(
             BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",), default_dict=_MESH_DICT_DEFAULT,

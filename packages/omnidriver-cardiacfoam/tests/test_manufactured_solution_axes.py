@@ -1,8 +1,9 @@
 """Manufactured-solution axes, resolved per record through the real cardiac stack.
 
 ``dimension`` differs per record (bidomain's solver has the key, eikonalECG's does not); ``numberCells`` patches the
-blockMeshDicts' top-level ``N`` and, for a transient case, derives ``deltaT`` as the native ``Allrun`` does, from the
-staged ``controlDict`` (verbatim from cardiacFOAM #59's monodomainPseudoECG, ``endTime 0.2``)."""
+blockMeshDicts' top-level ``N``, and a transient record derives ``deltaT`` and ``writeInterval`` as the native
+``Allrun`` does, from the stated or staged ``N`` and ``endTime`` (the staged ``controlDict`` and ``blockMeshDict.3D``
+are verbatim from cardiacFOAM #59's monodomainPseudoECG: ``endTime 0.2``, ``N 20``)."""
 
 from __future__ import annotations
 
@@ -22,13 +23,14 @@ from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 _CTX = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test:manufactured-axes")
 
 
-_CONTROL_DICT = Path(__file__).parent / "fixtures" / "local_includes" / "controlDict"
+_FIXTURES = Path(__file__).parent / "fixtures" / "local_includes"
 
 
 def _resolve(record_name: str, study: dict, tmp_path):
     record = _CTX.stack.call("get_tutorial_records")[record_name]
     (tmp_path / "system").mkdir(exist_ok=True)
-    shutil.copy(_CONTROL_DICT, tmp_path / "system" / "controlDict")
+    for name in ("controlDict", "blockMeshDict.3D"):
+        shutil.copy(_FIXTURES / name, tmp_path / "system" / name)
     combined, command_arguments, _ = resolve_case_patches(
         record, study_by_source={"base": study}, staged_case_root=tmp_path,
         direct_key_validator=_CTX.stack.call("get_record_key_validator", driver_context=_CTX),
@@ -110,14 +112,23 @@ def test_a_study_time_step_replaces_the_derived_one(tmp_path):
     assert patches["system/controlDict::deltaT"] == 0.0001
 
 
-def test_a_study_end_time_without_a_time_step_is_refused(tmp_path):
-    with pytest.raises(TutorialRecordError, match="state 'system/controlDict::deltaT' too"):
-        _resolve("manufacturedBidomain", {"numberCells": 40, "system/controlDict:endTime": 0.02}, tmp_path)
+def test_a_study_end_time_derives_the_step_and_the_write_interval_as_allrun_minus_end_time_does(tmp_path):
+    """``Allrun -endTime 0.05`` at the case's N = 20: 0.05/ceil(0.05/0.0022321425) = 0.05/23, writing at 0.05."""
+    patches, _ = _resolve("manufacturedBidomain", {"system/controlDict:endTime": 0.05}, tmp_path)
+    assert patches["system/controlDict::deltaT"] == 0.05 / 23
+    assert patches["system/controlDict::writeInterval"] == 0.05
+    patches, _ = _resolve("manufacturedBidomain", {"numberCells": 40, "system/controlDict:endTime": 0.05}, tmp_path)
+    assert patches["system/controlDict::deltaT"] == allrun_time_step(40, 0.05, 0.00892857)
     patches, _ = _resolve(
         "manufacturedBidomain",
         {"numberCells": 40, "system/controlDict:endTime": 0.02, "system/controlDict:deltaT": 0.0005}, tmp_path,
     )
-    assert patches["system/controlDict::deltaT"] == 0.0005
+    assert (patches["system/controlDict::deltaT"], patches["system/controlDict::writeInterval"]) == (0.0005, 0.02)
+
+
+def test_one_study_names_one_n(tmp_path):
+    with pytest.raises(TutorialRecordError, match="are one Allrun -N"):
+        _resolve("manufacturedBidomain", {"numberCells": 40, "tetNumberCells": 20}, tmp_path)
 
 
 def test_the_dimension_axis_refuses_a_dimension_by_name(tmp_path):
@@ -131,7 +142,7 @@ def test_the_tet_axis_declares_only_a_positive_cell_count(value):
     """Core refuses what the declaration rules out before ``resolve`` runs."""
     from omnidriver.core.contracts.dictionary import bound_violations, numeric_bounds, validate_value_shape
 
-    axis = tet_number_cells_axis("tetNumberCells", step_at_ten=None)
+    axis = tet_number_cells_axis("tetNumberCells")
     assert validate_value_shape(axis.value_kind, value) or bound_violations(numeric_bounds(axis), value)
 
 

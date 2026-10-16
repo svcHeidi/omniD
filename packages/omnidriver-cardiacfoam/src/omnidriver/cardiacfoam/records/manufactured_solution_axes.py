@@ -4,9 +4,9 @@ Each record instantiates them with its own ``<solver>Coeffs`` scope and file set
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
-from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult, TutorialRecordError
+from omnidriver.core.tutorial_records import AxisContract, AxisPatch, AxisResult, Derivation, TutorialRecordError
 
 #: One ``blockMeshDict`` per dimension; none of these cases has a plain ``system/blockMeshDict``.
 DIMENSIONS: tuple[str, ...] = ("1D", "2D", "3D")
@@ -94,9 +94,10 @@ def dimension_axis(
     )
 
 
-#: The controlDict the derived time step is written to, and the end time it is derived from.
+#: The controlDict the native Allrun writes its time controls into.
 CONTROL_DICT_DOCUMENT = "system/controlDict"
-_END_TIME_SLOT = f"{CONTROL_DICT_DOCUMENT}::endTime"
+#: The axes that are the native ``Allrun -N``: one study names at most one N.
+N_AXES: tuple[str, ...] = ("numberCells", "tetNumberCells")
 
 
 def allrun_time_step(n: int, end_time: float, step_at_ten: float) -> float:
@@ -109,57 +110,84 @@ def allrun_time_step(n: int, end_time: float, step_at_ten: float) -> float:
     return end_time / steps
 
 
-def _derived_time_step(name: str, n: int, staged_case_root: Path, step_at_ten: float) -> AxisPatch:
+def _case_value(staged_case_root: Path, document: str, key: str) -> Any:
     from foamlib import FoamFile
 
     try:
-        end_time = FoamFile(Path(staged_case_root) / CONTROL_DICT_DOCUMENT).get("endTime")
+        return FoamFile(Path(staged_case_root) / document).get(key)
     except (OSError, ValueError):
-        end_time = None
-    if isinstance(end_time, bool) or not isinstance(end_time, (int, float)) or end_time <= 0:
-        raise TutorialRecordError(f"axis {name!r}: the staged {CONTROL_DICT_DOCUMENT} has no positive endTime to derive deltaT from")
-    return AxisPatch(
-        document=CONTROL_DICT_DOCUMENT, key_path=("deltaT",), value=allrun_time_step(n, end_time, step_at_ten),
-        value_kind="scalar", yields=True, derived_from=(_END_TIME_SLOT,),
-    )
+        return None
 
 
-def _time_step_description(step_at_ten: float | None) -> str:
-    if step_at_ten is None:
-        return ""
-    return (
-        f" Unless the study sets system/controlDict deltaT, deltaT is the native Allrun's: "
-        f"endTime/ceil(endTime/({step_at_ten:g}*(10/N)^2)), from the case's endTime (a study that sets endTime sets deltaT too)."
-    )
+def stated_n(stated: Mapping[str, Any]) -> int | None:
+    """The ``N`` a study states through :data:`N_AXES`; refused by name when it states two different ones."""
+    values = {stated[name] for name in N_AXES if name in stated}
+    if len(values) > 1:
+        raise TutorialRecordError(f"{' and '.join(N_AXES)} are one Allrun -N; the study states {sorted(values)}")
+    return next(iter(values), None)
 
 
-def number_cells_axis(
-    name: str, *, documents: tuple[str, ...] = BLOCK_MESH_DICT_DOCUMENTS, step_at_ten: float | None,
-) -> AxisContract:
-    """A named ``numberCells`` axis, the native ``Allrun -N``: ``N`` patches the top-level ``N`` of each of
-    ``documents``, whose blocks count ``$N`` cells along each direction that is not one cell, so it holds whichever
-    file the ``dimension`` axis selects. ``step_at_ten`` is the time step the ``Allrun`` takes at ``N = 10``, from
-    which it derives the step for any ``N`` (:func:`allrun_time_step`); ``None`` for a steady case, whose
-    ``Allrun`` derives none."""
+def allrun_time_controls(step_at_ten: float, *, mesh_document: str = "system/blockMeshDict.3D") -> Derivation:
+    """The time controls the native ``Allrun`` writes: ``deltaT`` from ``N`` and ``endTime``
+    (:func:`allrun_time_step`, ``step_at_ten`` the step at ``N = 10``), and ``writeInterval = endTime``.
 
-    def resolve(value: Any, staged_case_root: Path) -> AxisResult:
-        patches = tuple(
-            AxisPatch(document=document, key_path=("N",), value=value, value_kind="integer") for document in documents
-        )
-        if step_at_ten is not None:
-            patches += (_derived_time_step(name, value, staged_case_root, step_at_ten),)
-        return AxisResult(patches=patches)
+    Derived when the study states ``N`` (:data:`N_AXES`) or ``endTime``; whichever it leaves out is the case's own
+    (``N`` from ``mesh_document``). A study key on ``deltaT`` or ``writeInterval`` replaces the derived one."""
+    end_time_slot = f"{CONTROL_DICT_DOCUMENT}::endTime"
 
-    return AxisContract(
-        name=name, value_kind="integer", unit=None, exclusive_minimum=0, resolve=resolve,
+    def derive(stated: Mapping[str, Any], staged_case_root: Path) -> tuple[AxisPatch, ...]:
+        n = stated_n(stated)
+        end_time = stated.get(end_time_slot)
+        if n is None and end_time is None:
+            return ()
+        if n is None:
+            n = _case_value(staged_case_root, mesh_document, "N")
+        if end_time is None:
+            end_time = _case_value(staged_case_root, CONTROL_DICT_DOCUMENT, "endTime")
+        for name, value in (("N", n), ("endTime", end_time)):
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+                raise TutorialRecordError(f"no positive {name} to derive the Allrun's deltaT from (found {value!r})")
+        patches = (AxisPatch(
+            document=CONTROL_DICT_DOCUMENT, key_path=("deltaT",), value=allrun_time_step(n, end_time, step_at_ten),
+            value_kind="scalar", yields=True,
+        ),)
+        if end_time_slot in stated:
+            patches += (AxisPatch(
+                document=CONTROL_DICT_DOCUMENT, key_path=("writeInterval",), value=end_time,
+                value_kind="scalar", yields=True,
+            ),)
+        return patches
+
+    return Derivation(
+        name="allrunTimeControls", derive=derive,
         description=(
-            "Cells N per unit length: the top-level N of every " + ", ".join(documents) + "."
-            + _time_step_description(step_at_ten)
+            f"When the study states N ({' or '.join(N_AXES)}) or system/controlDict endTime, deltaT is the native "
+            f"Allrun's endTime/ceil(endTime/({step_at_ten:g}*(10/N)^2)), the case's own N or endTime standing in for "
+            "the one not stated; a stated endTime also sets writeInterval to it. A study key on deltaT or "
+            "writeInterval replaces the derived value."
         ),
     )
 
 
-def tet_number_cells_axis(name: str, *, gmsh_step_id: str = "gmsh", step_at_ten: float | None) -> AxisContract:
+def number_cells_axis(name: str, *, documents: tuple[str, ...] = BLOCK_MESH_DICT_DOCUMENTS) -> AxisContract:
+    """A named ``numberCells`` axis, the native ``Allrun -N``: ``N`` patches the top-level ``N`` of each of
+    ``documents``, whose blocks count ``$N`` cells along each direction that is not one cell, so it holds whichever
+    file the ``dimension`` axis selects. A record whose ``Allrun`` derives its time step from ``N`` declares
+    :func:`allrun_time_controls` too."""
+
+    def resolve(value: Any, staged_case_root: Path) -> AxisResult:
+        del staged_case_root  # this axis reads nothing from the staged case
+        return AxisResult(patches=tuple(
+            AxisPatch(document=document, key_path=("N",), value=value, value_kind="integer") for document in documents
+        ))
+
+    return AxisContract(
+        name=name, value_kind="integer", unit=None, exclusive_minimum=0, resolve=resolve,
+        description="Cells N per unit length: the top-level N of every " + ", ".join(documents) + ".",
+    )
+
+
+def tet_number_cells_axis(name: str, *, gmsh_step_id: str = "gmsh") -> AxisContract:
     """A named ``tetNumberCells`` axis: ``N`` becomes the gmsh step's
     ``-setnumber lc <1/N>`` (added to the step's command line), and no
     document patch -- a tet case writes nothing into the unused
@@ -172,21 +200,18 @@ def tet_number_cells_axis(name: str, *, gmsh_step_id: str = "gmsh", step_at_ten:
 
     Refuses by name a value that is not a positive integer (``bool``
     excluded): ``1/N`` would otherwise be a ``ZeroDivisionError`` or a
-    negative length surfacing at gmsh's command line. ``step_at_ten`` derives
-    ``deltaT`` from ``N`` as :func:`number_cells_axis` does, since the native
-    ``Allrun -mesh tet -N`` does too.
+    negative length surfacing at gmsh's command line. It is the native
+    ``Allrun -mesh tet -N``, so :func:`allrun_time_controls` reads it too.
     """
 
     def resolve(value: Any, staged_case_root: Path) -> AxisResult:
-        return AxisResult(
-            patches=() if step_at_ten is None else (_derived_time_step(name, value, staged_case_root, step_at_ten),),
-            command_arguments={gmsh_step_id: GMSH_LC_KEY + (str(1.0 / value),)},
-        )
+        del staged_case_root  # this axis reads nothing from the staged case
+        return AxisResult(command_arguments={gmsh_step_id: GMSH_LC_KEY + (str(1.0 / value),)})
 
     return AxisContract(
         name=name, value_kind="integer", unit=None, exclusive_minimum=0, resolve=resolve,
         description=(
             "Cells N along the unit cube's edge for the tet route: the gmsh step gets -setnumber lc 1/N; "
-            "unset, the template's own default applies." + _time_step_description(step_at_ten)
+            "unset, the template's own default applies."
         ),
     )

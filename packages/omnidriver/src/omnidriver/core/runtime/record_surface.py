@@ -110,6 +110,7 @@ def record_surface(
     keys = stack.call("select_applicable_record_keys", listed, Path(native_case_root))
     return {
         "axes": axes,
+        "derivations": [derivation.to_json() for derivation in record.derivations],
         "keys": [dict(entry) for entry in keys],
         **({"keys_omitted": {
             "count": len(listed) - len(keys),

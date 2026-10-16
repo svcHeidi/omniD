@@ -9,6 +9,7 @@ import copy
 import fnmatch
 import os
 import shutil
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Mapping, Sequence
@@ -35,6 +36,7 @@ from ..tutorial_records import (
 )
 
 if TYPE_CHECKING:
+    from ..planning_types import StrictDiagnostic
     from ..plugin_interface import DriverContext
 
 
@@ -59,6 +61,9 @@ class RecordCommitResult:
     #: Every input this case resolved (name, native/supplied, its path, its
     #: files) -- carried onto ``resolvedEntry.inputs`` by ``record_case_spec``.
     resolved_inputs: tuple[ResolvedInput, ...] = ()
+    #: What a plan should say of the study, beside its patches (a key that a
+    #: removal took with it).
+    notes: tuple[StrictDiagnostic, ...] = ()
 
     @property
     def status(self) -> str:
@@ -195,6 +200,8 @@ def _resolve_and_split(
     study_by_source: Mapping[str, Mapping[str, Any]],
     staged_case_root: Path,
     driver_context: "DriverContext",
+    notes: "list | None" = None,
+    derive: bool = True,
 ) -> tuple[
     tuple[SourcedPatch, ...], tuple[SourcedPatch, ...],
     dict[str, tuple[str, ...]], dict[str, dict[tuple[str, ...], tuple[str, ...]]],
@@ -212,6 +219,8 @@ def _resolve_and_split(
         staged_case_root=staged_case_root,
         direct_key_validator=validator,
         workflow_step_ids=workflow_step_ids,
+        notes=notes,
+        derive=derive,
     )
     to_write, unchanged = split_unchanged(
         combined,
@@ -251,6 +260,7 @@ def _serialize_sourced_patch(sourced: SourcedPatch, *, status: str) -> dict[str,
         "source": sourced.source,
         "status": status,
         **({"removes": True} if sourced.patch.removes else {}),
+        **({"derived": True} if sourced.patch.yields else {}),
     }
 
 
@@ -292,11 +302,12 @@ def preview_record_case(
             record, cases_root=cases_root, staged_case_root=staged_case_root,
             driver_context=driver_context, inputs=inputs, strict_inputs=False,
         )
+        notes: list = []
         (
             to_write, unchanged, command_arguments, replacements, workflow_step_ids, workflow_variant, parallel_request,
         ) = _resolve_and_split(
             record, study_by_source=study_by_source,
-            staged_case_root=staged_case_root, driver_context=driver_context,
+            staged_case_root=staged_case_root, driver_context=driver_context, notes=notes,
         )
         dag = _workflow_dag_for_record(
             record, workflow_step_ids=workflow_step_ids, command_arguments=command_arguments,
@@ -327,6 +338,7 @@ def preview_record_case(
             "workflow_variant": workflow_variant,
             "parallel": parallel,
             "workflow_commands": _workflow_commands(dag),
+            "notes": [dataclasses.asdict(note) for note in notes],
         }
 
 
@@ -496,11 +508,12 @@ def commit_record_case(
         record, cases_root=cases_root, staged_case_root=staged_case_root,
         driver_context=driver_context, inputs=inputs,
     )
+    notes: list = []
     (
         to_write, unchanged, command_arguments, replacements, workflow_step_ids, _variant, parallel_request,
     ) = _resolve_and_split(
         record, study_by_source=study_by_source,
-        staged_case_root=staged_case_root, driver_context=driver_context,
+        staged_case_root=staged_case_root, driver_context=driver_context, notes=notes,
     )
     committed = None
     if to_write:
@@ -514,7 +527,7 @@ def commit_record_case(
     return RecordCommitResult(
         committed=committed, unchanged=unchanged, command_arguments=command_arguments, replacements=replacements,
         workflow_step_ids=workflow_step_ids, parallel_request=parallel_request,
-        resolved_inputs=resolved_inputs,
+        resolved_inputs=resolved_inputs, notes=tuple(notes),
     )
 
 
@@ -545,7 +558,7 @@ def apply_record_study(
         )
     to_write, unchanged, *_ = _resolve_and_split(
         record, study_by_source={"apply": study}, staged_case_root=case_root,
-        driver_context=driver_context,
+        driver_context=driver_context, derive=False,
     )
 
     def refuse_a_broken_case() -> None:
@@ -815,6 +828,7 @@ def commit_and_build_record_spec(
         replacements=commit_result.replacements,
         parallel_request=commit_result.parallel_request,
         resolved_inputs=commit_result.resolved_inputs,
+        notes=commit_result.notes,
         driver_context=driver_context,
     )
     return commit_result, spec
@@ -830,6 +844,7 @@ def record_case_spec(
     replacements: Mapping[str, Mapping[tuple[str, ...], tuple[str, ...]]] | None = None,
     parallel_request: Any = None,
     resolved_inputs: tuple[ResolvedInput, ...] = (),
+    notes: "tuple[StrictDiagnostic, ...]" = (),
     driver_context: "DriverContext | None" = None,
 ) -> Any:
     """Build the ``TutorialSpec`` a committed record case's workflow plans and
@@ -866,6 +881,8 @@ def record_case_spec(
         metadata["parallel"] = parallel
     if resolved_inputs:
         metadata["inputs"] = [resolved.to_json() for resolved in resolved_inputs]
+    if notes:
+        metadata["study_notes"] = [dataclasses.asdict(note) for note in notes]
     return TutorialSpec(
         name=case_id,
         case_root=case_root,

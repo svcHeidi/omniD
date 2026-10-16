@@ -12,7 +12,7 @@ from omnidriver.core.tutorial_records import (
 )
 
 from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
-from .manufactured_solution_axes import number_cells_axis
+from .manufactured_solution_axes import allrun_time_controls, number_cells_axis
 from .routes import block_mesh_step
 
 GRAPH_FILE_AXIS_NAME = "graphFile"
@@ -68,9 +68,10 @@ def _graph_file_axis(name: str) -> AxisContract:
 #: The time step this case's native Allrun takes at N = 10, scaled with the cell size squared.
 _ALLRUN_STEP_AT_TEN = 0.008971136
 
+
 AXES = (
     _graph_file_axis(GRAPH_FILE_AXIS_NAME),
-    number_cells_axis(NUMBER_CELLS_AXIS_NAME, documents=(_BLOCK_MESH_DICT_DOCUMENT,), step_at_ten=_ALLRUN_STEP_AT_TEN),
+    number_cells_axis(NUMBER_CELLS_AXIS_NAME, documents=(_BLOCK_MESH_DICT_DOCUMENT,)),
 )
 
 #: `GRAPH_FILES` as case-relative paths, which `consumes` requires; the native
@@ -128,4 +129,5 @@ RECORD = TutorialRecord(
     },
     variant_selector=VARIANT_SELECTOR_NAME,
     default_variant=COUPLED_VARIANT,
+    derivations=(allrun_time_controls(_ALLRUN_STEP_AT_TEN),),
 )
