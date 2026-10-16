@@ -96,8 +96,8 @@ def _reclaimable_local_record(record: dict[str, object], hostname: str) -> bool:
 
 
 @contextmanager
-def _lease_record_guard(path: Path) -> Iterator[None]:
-    """Serialize access to the lease record; the guard file stays put (deleting it would recreate the read/unlink race)."""
+def record_guard(path: Path) -> Iterator[None]:
+    """Serialize access to a record file through a guard file beside it; the guard stays put (deleting it would recreate the read/unlink race)."""
     if os.name not in {"posix", "nt"}:
         raise AttemptLeaseError(
             "attempt leases require host-local advisory locking for safe recovery"
@@ -152,7 +152,7 @@ def _acquire_local_lease(
         "token": token,
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
-    with _lease_record_guard(path):
+    with record_guard(path):
         while True:
             try:
                 descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

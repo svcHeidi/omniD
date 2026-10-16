@@ -1,13 +1,21 @@
-"""Which source built what a run uses: content digests, a tree's digest, and git identity."""
+"""Which source built what a run uses: content digests, a tree's digest, git identity, and the build record a stack whose binaries cannot identify themselves keeps beside them."""
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
+from ..plugin_interface import SolverBuild, SourceIdentity
+from .attempt_lease import record_guard
 from .provenance import component_for_path
+
+#: The record a stack whose binaries cannot identify themselves keeps beside them.
+RECORD_FILENAME = "omnidriver-build.json"
+RECORD_VERSION = 1
 
 
 def file_digest(path: Path) -> str | None:
@@ -54,3 +62,57 @@ def _git(directory: Path, *args: str) -> str | None:
     except (OSError, subprocess.TimeoutExpired):
         return None
     return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def recorded_build(name: str, path: Path | None) -> SolverBuild:
+    """``name`` at ``path`` as the record beside it states it: ``recorded`` with the record's
+    source when the record names this file's digest, else ``unknown``."""
+    if path is None or not Path(path).is_file():
+        return SolverBuild(name=name, path=path, digest=None, known="unknown")
+    path = Path(path)
+    digest = file_digest(path)
+    entry = _products(path.parent).get(name)
+    if digest is None or not isinstance(entry, Mapping) or entry.get("digest") != digest:
+        return SolverBuild(name=name, path=path, digest=digest, known="unknown")
+    return SolverBuild(name=name, path=path, digest=digest, known="recorded", source=_identity(entry.get("source")))
+
+
+def write_records(builds: Iterable[SolverBuild], source: SourceIdentity) -> tuple[Path, ...]:
+    """Record each build that exists as built from ``source``, merged into the record beside it;
+    the record files written."""
+    by_directory: dict[Path, list[SolverBuild]] = {}
+    for build in builds:
+        if build.path is not None and build.digest is not None:
+            by_directory.setdefault(Path(build.path).parent, []).append(build)
+    recorded_at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    written = []
+    for directory, group in sorted(by_directory.items()):
+        record = directory / RECORD_FILENAME
+        with record_guard(record):
+            products = dict(_products(directory))
+            for build in group:
+                products[build.name] = {"digest": build.digest, "recordedAt": recorded_at, "source": source.to_json()}
+            temporary = record.with_name(RECORD_FILENAME + ".tmp")
+            temporary.write_text(json.dumps({"version": RECORD_VERSION, "products": products}, indent=2, sort_keys=True) + "\n")
+            os.replace(temporary, record)
+        written.append(record)
+    return tuple(written)
+
+
+def _products(directory: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads((Path(directory) / RECORD_FILENAME).read_text())
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(payload, dict) or payload.get("version") != RECORD_VERSION:
+        return {}
+    products = payload.get("products")
+    return products if isinstance(products, dict) else {}
+
+
+def _identity(raw: Any) -> SourceIdentity | None:
+    if not isinstance(raw, Mapping):
+        return None
+    git = raw.get("git")
+    return SourceIdentity(repository=raw.get("repository"), digest=raw.get("digest"),
+                          git=dict(git) if isinstance(git, Mapping) else None)
