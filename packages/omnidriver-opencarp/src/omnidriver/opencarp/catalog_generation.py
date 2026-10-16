@@ -86,15 +86,12 @@ def parse_help_detail(concrete: str, text: str) -> dict[str, Any]:
 
 
 def build_identity(binary: str, env: Mapping[str, str] | None) -> dict[str, str]:
-    identity = {}
-    for line in _run(binary, ["-buildinfo"], env).splitlines():
-        if line.startswith("*** GIT tag:"):
-            identity["tag"] = line.split(":", 1)[1].strip()
-        elif line.startswith("*** GIT hash:"):
-            identity["hash"] = line.split(":", 1)[1].strip()
-    if set(identity) != {"tag", "hash"}:
+    from .environment import buildinfo_identity
+
+    identity = buildinfo_identity(_run(binary, ["-buildinfo"], env))
+    if identity is None or None in identity.values():
         raise CatalogError("-buildinfo printed no tag/hash; is DYLD_LIBRARY_PATH set? (A4-A6)")
-    return identity
+    return {"tag": identity["tag"], "hash": identity["commit"]}
 
 
 def build_catalog(binary: str = "openCARP", env: Mapping[str, str] | None = None) -> dict[str, Any]:

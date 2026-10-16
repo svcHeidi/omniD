@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from .plugin_interface import DriverContext
 
 
+from .environment_connection import load_environment
 from .runtime.artifacts import predict_data_artifacts
 from .runtime.execution_context import resolve_execution_context
 from .runtime.models import DataArtifact
@@ -19,6 +20,7 @@ from .runtime.repository_staging import copy_repository_scripts, staged_case_pat
 from .runtime.run_command import omnidriver_run_command
 from .runtime.run_document_adapter import build_run_document
 from .runtime.run_document_exec import RUN_DOCUMENT_FILENAME
+from .runtime import solver_provenance
 from .runtime.run_model import RunDocument
 from .runtime.strict_audit import _build_simulation_audit
 from .runtime.workflow import (
@@ -345,6 +347,13 @@ def _strict_plan_for_spec(
         environment_source=environment_source,
         driver_context=driver_context,
     )
+    solvers = solver_provenance.solver_entries(
+        Path(spec.case_root), workflow_dag=workflow_dag, driver_context=driver_context,
+        env=os.environ if environment_source is None else load_environment(driver_context, environment_source),
+    )
+    env_diagnostics = tuple(env_diagnostics) + solver_provenance.provenance_diagnostics(solvers)
+    if solvers:
+        run_document.solverProvenance = solver_provenance.to_json(solvers)
     plugin_diagnostics = driver_context.stack.call(
         "get_plan_diagnostics",
         Path(spec.case_root),

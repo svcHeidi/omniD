@@ -86,6 +86,11 @@ class TorchCorPlugin:
         ),)
 
     # -- commands and environment
+    def get_solver_builds(self, env, *, repository, used_paths):
+        from .provenance import torchcor_solver_builds
+
+        return torchcor_solver_builds(env, repository=repository)
+
     def get_solver_commands(self):
         return SOLVER_COMMANDS
 

@@ -241,10 +241,56 @@
         }
       },
       "additionalProperties": true
+    },
+    "solverProvenance": {
+      "type": "array",
+      "description": "One item per solver that answered get_solver_builds: the supplied repository's identity and each build the run uses, with the source it was built from (core.runtime.solver_provenance.to_json).",
+      "items": {"$ref": "#/$defs/solverEntry"}
     }
   },
   "additionalProperties": false,
   "$defs": {
+    "sourceIdentity": {
+      "type": ["object", "null"],
+      "required": ["repository", "digest", "git"],
+      "properties": {
+        "repository": {"type": ["string", "null"]},
+        "digest": {"oneOf": [{"$ref": "#/$defs/sha256Digest"}, {"type": "null"}]},
+        "git": {
+          "type": ["object", "null"],
+          "properties": {
+            "commit": {"type": ["string", "null"]},
+            "tag": {"type": ["string", "null"]},
+            "dirty": {"type": ["boolean", "null"]}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "solverBuild": {
+      "type": "object",
+      "required": ["name", "path", "digest", "known", "source", "matchesRepository"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "path": {"type": ["string", "null"]},
+        "digest": {"oneOf": [{"$ref": "#/$defs/sha256Digest"}, {"type": "null"}]},
+        "known": {"enum": ["recorded", "self_reported", "live", "unknown"]},
+        "source": {"$ref": "#/$defs/sourceIdentity"},
+        "matchesRepository": {"type": ["boolean", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "solverEntry": {
+      "type": "object",
+      "required": ["solver", "repository", "builds"],
+      "properties": {
+        "solver": {"type": "string", "minLength": 1},
+        "repository": {"$ref": "#/$defs/sourceIdentity"},
+        "builds": {"type": "array", "items": {"$ref": "#/$defs/solverBuild"}}
+      },
+      "additionalProperties": false
+    },
     "workflowStepStatus": {
       "enum": ["pending", "running", "completed", "failed", "skipped"]
     },

@@ -147,6 +147,11 @@ class OpenFOAMEnvironmentPlugin:
         ) if Path(case_root).is_dir() else []
         return (start, *(f"{name}/{start}" for name in replicas))
 
+    def get_solver_builds(self, env, *, repository, used_paths):
+        from .build_products import wmake_solver_builds
+
+        return wmake_solver_builds(env, repository=repository, used_paths=used_paths)
+
     def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
         from .plan_diagnostics import plan_diagnostics
 

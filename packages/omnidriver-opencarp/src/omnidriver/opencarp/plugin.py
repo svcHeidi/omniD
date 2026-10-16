@@ -120,6 +120,13 @@ class OpenCARPPlugin:
         return tuple(item for item in case_diagnostics(case_root) if item.level != "error")
 
     # -- commands and environment
+    def get_solver_builds(self, env, *, repository, used_paths):
+        from .environment import opencarp_solver_builds
+
+        return opencarp_solver_builds(
+            env, used_paths=used_paths, solver=repository.plugin if repository is not None else self.plugin_id,
+        )
+
     def get_solver_commands(self):
         return SOLVER_COMMANDS
 

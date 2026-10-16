@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import os
-import re
 import shlex
 import shutil
 from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
@@ -75,107 +71,6 @@ def _required_executables(
         executables=tuple(executables),
         is_parallel=is_parallel,
         mpi_launcher_in_dag=mpi_launcher_in_dag,
-    )
-
-
-_SOURCE_SUFFIXES = frozenset({".C", ".H", ".cu", ".cuh"})
-
-
-def _supplied_src_root(driver_context: Any | None) -> Path | None:
-    """The stack's supplied C++ source root (``cxx_mapping.source_root``), or ``None``; never discovered."""
-    if driver_context is None:
-        return None
-    mapping = driver_context.stack.call("get_profile").cxx_mapping
-    return mapping.source_root(os.environ) if mapping is not None else None
-
-
-#: A wmake library rule: the library a ``Make/files`` builds from the sources
-#: beside its ``Make`` directory.
-_LIB_RULE = re.compile(r"^\s*LIB\s*=\s*\$\(FOAM_USER_LIBBIN\)/(\S+)", re.MULTILINE)
-
-
-def _sources(directory: Path) -> list[tuple[float, Path]]:
-    """Every C++/CUDA source under ``directory`` with its mtime; wmake's ``Make`` and ``lnInclude`` are not source."""
-    found: list[tuple[float, Path]] = []
-    for dirpath, dirnames, filenames in os.walk(directory):
-        dirnames[:] = [name for name in dirnames if name not in {"Make", "lnInclude"}]
-        for name in filenames:
-            if os.path.splitext(name)[1] in _SOURCE_SUFFIXES:
-                path = Path(dirpath, name)
-                found.append((os.path.getmtime(path), path))
-    return found
-
-
-def _stale_build(name: str, built: Path, sources: list[tuple[float, Path]], root: Path) -> StrictDiagnostic | None:
-    """A warning naming ``built`` when sources under ``root`` are newer than it."""
-    newer = [(mtime, path) for mtime, path in sources if mtime > os.path.getmtime(built)]
-    if not newer:
-        return None
-    newest_mtime, newest = max(newer)
-
-    def when(stamp: float) -> str:
-        return datetime.fromtimestamp(stamp).strftime("%Y-%m-%d %H:%M:%S")
-
-    return diagnostic(
-        "warning",
-        "stale_build",
-        f"{name} ({built}, built {when(os.path.getmtime(built))}) is older than {len(newer)} source "
-        f"file(s) under {root}, the newest {newest.relative_to(root)} ({when(newest_mtime)}): the plan and "
-        "the scan read that source, so they describe a state this binary was not built from; "
-        "rebuild (e.g. wmake / wmake libso) before running.",
-        source="environment",
-        field=name,
-    )
-
-
-def _build_staleness_diagnostics(
-    workflow_dag: dict[str, Any] | None,
-    checked_env: dict[str, str],
-    *,
-    src_root: Path | str | None,
-    driver_context: Any | None = None,
-) -> tuple[StrictDiagnostic, ...]:
-    """Warn, never block, when a user-compiled utility or library built from ``src_root`` is older than its sources."""
-    if src_root is None:
-        return ()
-    src_root = Path(src_root)
-    if not src_root.exists():
-        return ()
-
-    user_appbin = checked_env.get("FOAM_USER_APPBIN")
-    if not user_appbin:
-        return ()
-    user_appbin_resolved = Path(user_appbin).resolve()
-
-    # Find plan binaries that actually live under the user appbin before doing
-    # the (potentially large) source-tree walk.
-    candidates: list[tuple[str, str]] = []
-    path = checked_env.get("PATH")
-    for executable in _required_executables(workflow_dag, driver_context).executables:
-        resolved = shutil.which(executable, path=path)
-        if not resolved:
-            continue
-        try:
-            Path(resolved).resolve().relative_to(user_appbin_resolved)
-        except ValueError:
-            continue
-        candidates.append((executable, resolved))
-
-    if not candidates:
-        return ()
-
-    sources = _sources(src_root)
-    built = [(executable, Path(resolved), sources) for executable, resolved in candidates]
-    libbin = checked_env.get("FOAM_USER_LIBBIN")
-    if libbin:
-        for make_files in sorted(src_root.rglob("Make/files")):
-            for lib in _LIB_RULE.findall(make_files.read_text(errors="replace")):
-                path = next((p for p in Path(libbin).glob(f"{lib}.*") if p.suffix in {".so", ".dylib"}), None)
-                if path is not None:
-                    built.append((lib, path, _sources(make_files.parent.parent)))
-    return tuple(
-        found for name, path, own in built
-        if (found := _stale_build(name, path, own, src_root)) is not None
     )
 
 
@@ -302,12 +197,5 @@ def _environment_diagnostics(
 
     if requirements.mpi_launcher_in_dag:
         diagnostics.extend(_mpi_family_diagnostics(checked_env))
-
-    diagnostics.extend(
-        _build_staleness_diagnostics(
-            workflow_dag, checked_env, src_root=_supplied_src_root(driver_context),
-            driver_context=driver_context,
-        )
-    )
 
     return tuple(diagnostics)

@@ -759,12 +759,21 @@ keyed by a digest of the `*.C`/`*.H` files and of the scanner itself: every
 plan recomputes the digest and rescans only when either changed, and an
 unreadable or altered cache file is rescanned.
 
-Preflight links the binary to this source: a user-compiled solver under
-`$FOAM_USER_APPBIN`, or a library under `$FOAM_USER_LIBBIN` that a
-`Make/files` below the source root builds, that is older than the sources it
-is built from gets a `stale_build` warning naming it, the number of newer
-source files and the newest of them. The plan and the scan read that source,
-so they describe a state the binary was not built from.
+Every plan lists, in its run document's `solverProvenance`, each solver it uses
+and each build of it the run runs: path, digest, and the source it was built
+from. How that source is known is the solver's: a wmake build (cardiacFOAM,
+cardiacCore) through the build record `omnidriver build-record --repo <src>`
+writes beside the products after `./Allwmake` (`recorded`); openCARP from its
+own `-buildinfo` tag and hash (`self_reported`); TorchCor from the editable
+package the stack's `python3` imports (`live`). `build-record` credits the
+repository only with products whose file changed since their last record: a
+product not rebuilt since another worktree recorded it keeps that record and is
+listed under `kept`, with the repository it names. With no build of the
+repository where the environment says it is built (outside the solver's shell,
+say), it refuses as `nothing_built`. A build recorded from other
+source than the supplied repository gets a `stale_build` warning naming both
+repositories, commits and digests; a build nothing identifies gets a
+`build_source_unknown` note. Neither blocks a plan.
 
 The catalogues stay the source of truth, and a key that appears in or
 disappears from the C++ never fails a plan. A plan compares them with the scan:
@@ -918,6 +927,8 @@ expression of other parameters is a string under its own key
 | `case_edit_interrupted` | an earlier edit of the case was interrupted; plan again |
 | `cxx_source_undeclared` | the stack declares no C++ source to scan |
 | `cxx_source_not_scanned` | the C++ source could not be scanned |
+| `build_products_undeclared` | the stack lists no build of the repository that only a build record can identify |
+| `nothing_built` | the stack lists builds of the repository but none exists where the environment says it is built; run in the solver's shell after building |
 | `run_without_report` | a child run exited without a JSON report |
 | `case_timeout` | a sweep case exceeded --case-timeout-s |
 | `sweep_stopped` | a signal stopped the sweep |
