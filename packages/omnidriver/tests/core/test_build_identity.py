@@ -1,6 +1,7 @@
 """Which source a build came from: digests, git identity and the contract member."""
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from pathlib import Path
 
@@ -17,7 +18,6 @@ def _git(root: Path, *args: str) -> None:
 def test_file_digest_is_the_content_hash_and_none_for_an_absent_file(tmp_path):
     binary = tmp_path / "solver"
     binary.write_bytes(b"one")
-    import hashlib
     assert file_digest(binary) == "sha256:" + hashlib.sha256(b"one").hexdigest()
     assert file_digest(tmp_path / "absent") is None
 
@@ -51,6 +51,18 @@ def test_git_identity_reads_commit_and_dirty_only_at_the_given_root(tmp_path):
 def test_a_git_file_that_is_no_repository_gives_no_identity(tmp_path):
     (tmp_path / ".git").write_text("gitdir: /nowhere/at/all\n")
     assert git_identity(tmp_path) is None
+
+
+def test_an_invalid_git_directory_inside_a_repository_gives_no_identity(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    (repo / "a.C").write_text("a")
+    _git(repo, "add", "a.C")
+    _git(repo, "commit", "-q", "-m", "one")
+    inner = repo / "inner"
+    (inner / ".git").mkdir(parents=True)
+    assert git_identity(inner) is None
 
 
 def test_source_identity_serialises_every_field():

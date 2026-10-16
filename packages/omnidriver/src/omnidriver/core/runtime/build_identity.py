@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 from pathlib import Path
 from typing import Any, Iterable
@@ -30,7 +31,8 @@ def tree_digest(root: Path, files: Iterable[Path]) -> str:
 
 def git_identity(directory: Path) -> dict[str, Any] | None:
     """``{"commit", "dirty"}`` of the checkout rooted at ``directory``; ``None`` without a usable
-    ``directory/.git``. No parent directory is searched."""
+    ``directory/.git``. No parent directory is searched. ``dirty`` is true when tracked files differ
+    from ``HEAD``; untracked files are ignored."""
     directory = Path(directory)
     if not (directory / ".git").exists():
         return None
@@ -42,8 +44,12 @@ def git_identity(directory: Path) -> dict[str, Any] | None:
 
 
 def _git(directory: Path, *args: str) -> str | None:
+    # An unusable .git makes git discover the enclosing repository; the ceiling stops that, and an
+    # inherited GIT_DIR or GIT_WORK_TREE would bypass the directory altogether.
+    env = {key: value for key, value in os.environ.items() if key not in ("GIT_DIR", "GIT_WORK_TREE")}
+    env["GIT_CEILING_DIRECTORIES"] = str(directory.resolve().parent)
     try:
-        proc = subprocess.run(("git", "-C", str(directory), *args),
+        proc = subprocess.run(("git", "-C", str(directory), *args), env=env,
                               capture_output=True, text=True, timeout=60, check=False)
     except (OSError, subprocess.TimeoutExpired):
         return None
