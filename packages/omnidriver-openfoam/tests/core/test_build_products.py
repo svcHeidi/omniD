@@ -69,6 +69,38 @@ def test_products_come_from_make_files_and_land_in_the_user_platform(tmp_path):
     assert products(root, env)[0] == ("myFoam", None)
 
 
+def _module_repository(root: Path) -> Path:
+    (root / "solver" / "Make").mkdir(parents=True)
+    (root / "solver" / "Make" / "files").write_text("x.C\n\nEXE = $(FOAM_MODULE_APPBIN)/x\n")
+    (root / "lib" / "Make").mkdir(parents=True)
+    (root / "lib" / "Make" / "files").write_text("y.C\n\nLIB = $(FOAM_MODULE_LIBBIN)/liby\n")
+    return root
+
+
+def test_module_products_land_in_the_user_platform_when_no_module_folder_is_set(tmp_path):
+    root = _module_repository(tmp_path / "repo")
+    env = _install(tmp_path)
+    (Path(env["FOAM_USER_APPBIN"]) / "x").write_bytes(b"solver")
+    (Path(env["FOAM_USER_LIBBIN"]) / "liby.so").write_bytes(b"library")
+    assert dict(products(root, env)) == {
+        "x": Path(env["FOAM_USER_APPBIN"]) / "x",
+        "liby": Path(env["FOAM_USER_LIBBIN"]) / "liby.so",
+    }
+
+
+def test_module_products_are_found_in_the_module_folder_first(tmp_path):
+    root = _module_repository(tmp_path / "repo")
+    env = _install(tmp_path)
+    (Path(env["FOAM_USER_APPBIN"]) / "x").write_bytes(b"older copy")
+    module_bin, module_lib = tmp_path / "module" / "bin", tmp_path / "module" / "lib"
+    module_bin.mkdir(parents=True)
+    module_lib.mkdir(parents=True)
+    (module_bin / "x").write_bytes(b"solver")
+    (module_lib / "liby.dylib").write_bytes(b"library")
+    env = {**env, "FOAM_MODULE_APPBIN": str(module_bin), "FOAM_MODULE_LIBBIN": str(module_lib)}
+    assert dict(products(root, env)) == {"x": module_bin / "x", "liby": module_lib / "liby.dylib"}
+
+
 def test_a_recorded_build_from_this_repository_matches_and_says_nothing(tmp_path):
     root = _repository(tmp_path / "repo")
     env = _install(tmp_path)

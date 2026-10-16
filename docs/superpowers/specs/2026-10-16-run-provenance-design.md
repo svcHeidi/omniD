@@ -120,8 +120,13 @@ cardiacCore ("one reality"):
 
 - **products:** each `Make/files` under the repository root, outside
   `tutorials/`, `lnInclude/` and `platforms/`: `EXE = $(FOAM_USER_APPBIN)/<name>`
-  is an executable in `env["FOAM_USER_APPBIN"]`, `LIB = $(FOAM_USER_LIBBIN)/<lib>`
-  a library `<lib>.so` or `<lib>.dylib` in `env["FOAM_USER_LIBBIN"]`;
+  or `EXE = $(FOAM_MODULE_APPBIN)/<name>` is an executable, `LIB =
+  $(FOAM_USER_LIBBIN)/<lib>` or `LIB = $(FOAM_MODULE_LIBBIN)/<lib>` a library
+  `<lib>.so` or `<lib>.dylib`. cardiacFOAM's solver and most of its libraries
+  use the `FOAM_MODULE_*` form, and wmake puts an unset `FOAM_MODULE_*` folder
+  at the user one, so either form is looked for in `env["FOAM_MODULE_APPBIN"]`
+  then `env["FOAM_USER_APPBIN"]` (libraries: `FOAM_MODULE_LIBBIN` then
+  `FOAM_USER_LIBBIN`), each when set; the first existing file is the product;
 - **source digest:** every `*.C`, `*.H`, `*.cu`, `*.cuh` file and every
   `Make/files` and `Make/options` under the repository root, outside
   `tutorials/`, `lnInclude/`, `platforms/` and `.git/`, hashed in sorted
