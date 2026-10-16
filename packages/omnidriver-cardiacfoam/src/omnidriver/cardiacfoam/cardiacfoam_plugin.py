@@ -146,6 +146,12 @@ class CardiacFoamPlugin:
 
         return patch_mutation(request, owner_id=self.plugin_id)
 
+    def get_case_runtime_conventions(self):
+        """OpenFOAM's generated paths, and the ``local/`` folder a tutorial's ``Allrun`` writes."""
+        from omnidriver.cardiacfoam.case_provenance import case_runtime_conventions
+
+        return case_runtime_conventions()
+
     def get_generated_output_globs(self, case_root, resolved_case) -> tuple:
         """Fixed mesh-diagnostic outputs nothing in src/ or applications/ reads."""
         from omnidriver.cardiacfoam.case_provenance import (
