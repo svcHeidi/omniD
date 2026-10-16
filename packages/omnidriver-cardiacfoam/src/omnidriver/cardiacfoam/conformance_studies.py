@@ -34,6 +34,24 @@ _CABLE_CONDUCTIVITY = {
 _COMMANDS = ("blockMesh", "cardiacFoam")
 _PARALLEL = ("decomposePar", "reconstructPar", "mpirun")
 
+_PURKINJE_COUPLING = "constant/electroProperties:monodomainSolverCoeffs.domainCouplings.purkinjeToMyocardium"
+
+
+def _purkinje_restitution_2d_study(end_time: float, r_pvj: float) -> ConformanceStudy:
+    """The variant's native run (2.45 s, 0.9 s, 0.32 s) cut to ``end_time``; ``r_pvj`` is its native junction resistance."""
+    return ConformanceStudy(
+        requires=_COMMANDS,
+        base_study={"system/controlDict:endTime": end_time},
+        # The variant's `electroProperties` is an overlay the checks that read the native folder never
+        # see, so the patch and its sibling sit in documents the folder holds.
+        patch=("system/blockMeshDict:hex_cell_counts", [75, 75, 1]),
+        untouched=("system/fvSchemes", ("gradSchemes", "default")),
+        sweep_name=f"{_PURKINJE_COUPLING}.rPvj",
+        sweep_values=(r_pvj, 2 * r_pvj),
+        unknown_name=f"{_PURKINJE_COUPLING}.rPv",
+    )
+
+
 # One study per record, each cut short so a real run takes seconds.
 STUDIES: dict[str, ConformanceStudy] = {
     "manufacturedEikonalECG": ConformanceStudy(
@@ -173,6 +191,41 @@ STUDIES: dict[str, ConformanceStudy] = {
         sweep_values=("purkinjeGraph.nodes011", "purkinjeGraph.nodes021"),
         unknown_name="constant/electroProperties:monodomainSolverCoeffs.domainCouplings.couplingA.rPv",
     ),
+    "cable1DEikonalCV": ConformanceStudy(
+        # A quarter of the native 400 cells; the whole run takes a few seconds.
+        requires=_COMMANDS,
+        base_study={"dx": 0.0002},
+        # A catalogued boolean the native case sets `false`.
+        patch=("constant/electroProperties:eikonalSolverCoeffs.sealedHeartBoundary", True),
+        untouched=("constant/electroProperties", ("eikonalSolverCoeffs", "eikonalAdvectionDiffusionApproach")),
+        sweep_name="dx",
+        sweep_values=(0.0002, 0.0001),
+        unknown_name="constant/electroProperties:eikonalSolverCoeffs.c",
+    ),
+    "ionicHeterogeneity": ConformanceStudy(
+        # The utility is meshless and takes about a second at the native 101 samples. It exits 1
+        # when a transition band is too thin to keep adjacent waveforms smooth (0.08 and below).
+        requires=("ionicHeterogeneityProbe",),
+        base_study={},
+        patch=("constant/electroProperties:singleCellSolverCoeffs.ionicHeterogeneity.transitionWidth", 0.12),
+        untouched=("constant/electroProperties", ("singleCellSolverCoeffs", "ionicModel")),
+        sweep_name="constant/electroProperties:singleCellSolverCoeffs.ionicHeterogeneity.transitionWidth",
+        sweep_values=(0.1, 0.12),
+        unknown_name="constant/electroProperties:singleCellSolverCoeffs.ionicHeterogeneity.transitionWidt",
+    ),
+    "rotorInstability": ConformanceStudy(
+        # The native run is 4 s; 0.02 s is one write and takes about ten seconds.
+        requires=_COMMANDS + ("postProcess",),
+        base_study={"system/controlDict:endTime": 0.02},
+        patch=("constant/electroProperties:monodomainSolverCoeffs.tissue", "endocardialCells"),
+        untouched=("constant/electroProperties", ("monodomainSolverCoeffs", "ionicModel")),
+        sweep_name="system/controlDict:deltaT",
+        sweep_values=(5e-05, 1e-04),
+        unknown_name="constant/electroProperties:monodomainSolverCoeffs.tissu",
+    ),
+    "purkinjeRestitution2DAntegrade": _purkinje_restitution_2d_study(0.1, 5000.0),
+    "purkinjeRestitution2DRetrograde": _purkinje_restitution_2d_study(0.1, 5000.0),
+    "purkinjeRestitution2DMonodomain": _purkinje_restitution_2d_study(0.05, 10000.0),
     "niederer2011": ConformanceStudy(
         # Hex route at the coarsest cartesianConvergence dx (0.5 mm); a few seconds. The quantity
         # runs to 0.15 s so all nine probes activate (P8 at 0.143 s); a decomposed solve differs

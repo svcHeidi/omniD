@@ -221,7 +221,9 @@ def _check_input_relative(label: str, value: str) -> tuple[str, ...]:
 @dataclass(frozen=True)
 class RecordInput:
     """Data a record's steps read but that is not in its native case folder:
-    a patient anatomy bundle, a shared mesh, a 1D graph.
+    a patient anatomy bundle, a shared mesh, a 1D graph. It may equally choose
+    among files the folder holds, by overlaying one variant's file onto the
+    name the solver reads.
 
     ``files`` is a tuple of ``(path inside the input, case-relative
     destination)`` pairs; ``(".", destination)`` takes the input's own root,

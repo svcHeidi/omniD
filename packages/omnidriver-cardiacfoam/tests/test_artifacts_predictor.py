@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from omnidriver.cardiacfoam.artifacts_predictor import _predict_verification
+from omnidriver.cardiacfoam.artifacts_predictor import _predict_verification, predict_cardiac_artifacts
 from omnidriver.core.plugin_interface import load_plugin_context
 from omnidriver.core.runtime.artifacts import predict_data_artifacts as _predict
 from omnidriver.core.runtime.models import (
@@ -685,6 +685,8 @@ class TestPredictorComposesUtilityProduces(unittest.TestCase):
                         "steps": [
                             {"id": "mesh", "command": "blockMesh",
                              "depends_on": []},
+                            {"id": "solve", "command": "cardiacFoam",
+                             "depends_on": ["mesh"]},
                         ],
                     },
                 },
@@ -715,6 +717,48 @@ class TestPredictorComposesUtilityProduces(unittest.TestCase):
                     a.produced_by, ("setTorsoOrganConductivityField",
                                     "sweepCurrents", "ionicHeterogeneityProbe"),
                 )
+
+
+class TestPredictorFollowsTheSolverTheWorkflowRuns(unittest.TestCase):
+    """A workflow that runs no solver predicts none of a solver's outputs, whatever solver its ``electroProperties`` names."""
+
+    def _spec_running(self, case_root: Path, *commands: str | tuple[str, ...]) -> TutorialSpec:
+        base = _make_spec(case_root)
+        steps = [
+            {"id": f"step{i}", "command": command[0], "args": list(command[1:]), "depends_on": []}
+            for i, command in enumerate(c if isinstance(c, tuple) else (c,) for c in commands)
+        ]
+        return TutorialSpec(
+            name=base.name, case_root=base.case_root,
+            metadata={**base.metadata, "workflow_dag": {"steps": steps}},
+        )
+
+    def test_a_utility_only_workflow_predicts_no_solver_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            case_root = Path(temp) / "case"
+            case_root.mkdir()
+            _write_pde_electro_properties(case_root, solver="singleCellSolver", ionic_model="BuenoOrovio")
+            spec = self._spec_running(case_root, "ionicHeterogeneityProbe")
+            self.assertEqual(predict_cardiac_artifacts(case_root, spec), ())
+
+    def test_the_same_case_with_a_solve_step_predicts_the_solvers_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            case_root = Path(temp) / "case"
+            case_root.mkdir()
+            _write_pde_electro_properties(case_root, solver="singleCellSolver", ionic_model="BuenoOrovio")
+            spec = self._spec_running(case_root, "cardiacFoam")
+            self.assertIn("single_cell_trace", {a.artifact_id for a in predict_cardiac_artifacts(case_root, spec)})
+
+
+    def test_a_parallel_solve_launched_by_mpirun_predicts_the_solvers_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            case_root = Path(temp) / "case"
+            case_root.mkdir()
+            _write_pde_electro_properties(case_root, solver="monodomainSolver", ionic_model="TNNP")
+            spec = self._spec_running(
+                case_root, ("decomposePar", "-force"), ("mpirun", "-np", "6", "cardiacFoam", "-parallel"), "reconstructPar",
+            )
+            self.assertIn("monodomain_vm_series", {a.artifact_id for a in predict_cardiac_artifacts(case_root, spec)})
 
 
 class TestPredictorActiveTension(unittest.TestCase):
