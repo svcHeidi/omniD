@@ -6,9 +6,12 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any, Mapping
 
 from omnidriver.core.planning_types import StrictDiagnostic
+from omnidriver.core.plugin_interface import SolverBuild, SolverEntry, SourceIdentity
+from omnidriver.core.runtime.build_identity import file_digest
 
 from .catalog import load_catalog
 
@@ -20,6 +23,35 @@ AUXILIARY_COMMANDS = frozenset({"mesher", "igbextract", "igbhead"})
 REDACTION_PATTERNS = (r"(?<=://)[^/\s@]+(?=@)",)
 # ``-buildinfo``'s tag line, e.g. ``*** GIT tag:            v18.1`` (v18.1).
 _GIT_TAG = re.compile(r"GIT tag:\s*(\S+)")
+_GIT_HASH = re.compile(r"GIT hash:\s*(\S+)")
+_PLUGIN_ID = "org.omnidriver.opencarp"
+
+
+def buildinfo_identity(buildinfo: str) -> dict[str, str | None] | None:
+    """``-buildinfo``'s tag and hash, or ``None`` when it prints neither; no other line is read."""
+    tag, commit = _GIT_TAG.search(buildinfo), _GIT_HASH.search(buildinfo)
+    if tag is None and commit is None:
+        return None
+    return {"tag": tag.group(1) if tag else None, "commit": commit.group(1) if commit else None}
+
+
+def opencarp_solver_builds(env: Mapping[str, str], *, used_paths: frozenset | None) -> tuple[SolverEntry, ...]:
+    """openCARP as its own ``-buildinfo`` reports it, when a plan runs it."""
+    solver = shutil.which("openCARP", path=env.get("PATH", ""))
+    if solver is None or (used_paths is not None and Path(solver).resolve() not in used_paths):
+        return ()
+    try:
+        identity = buildinfo_identity(subprocess.run(
+            [solver, "-buildinfo"], capture_output=True, text=True, env=dict(env), timeout=60,
+        ).stdout)
+    except (OSError, subprocess.TimeoutExpired):
+        identity = None
+    build = SolverBuild(
+        name="openCARP", path=Path(solver), digest=file_digest(Path(solver)),
+        known="self_reported" if identity else "unknown",
+        source=SourceIdentity(git=identity) if identity else None,
+    )
+    return (SolverEntry(solver=_PLUGIN_ID, repository=None, builds=(build,)),)
 
 
 def opencarp_environment_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:
