@@ -1,4 +1,4 @@
-# Run provenance: which source built the binary a run used
+# Run provenance: which source built what a run used
 
 **Status:** approved design, 2026-10-16. Implementation on `feat/run-provenance`.
 
@@ -7,50 +7,80 @@
 On 2026-10-16 a native-main tutorial ran to completion on a `cardiacFoam` built
 from PR #59, and nothing said so. Two gaps allowed it:
 
-- **The run document names no solver.** The binary and library digests exist,
-  but only in `workflow_state.json`'s `resume_snapshot`, where they guard a
-  resume. Nothing records which source those binaries came from.
+- **The run document names no solver build.** The binary and library digests
+  exist, but only in `workflow_state.json`'s `resume_snapshot`, where they guard
+  a resume. Nothing records which source those binaries came from.
 - **`stale_build` compares file times.** A `git archive` tree sets every file to
   its commit time, and a binary built from another worktree is newer than all
   of them, so the check passes. It also warns wrongly the other way: a fresh
   archive of the very source a binary was built from is "newer" than the binary.
 
-A digest of the binary cannot say which source produced it. That link must be
-written when the binary is built.
+omniD drives four solvers, and each knows its own build differently. Provenance
+has to cover every solver a run uses.
 
 ## Decisions (owner, 2026-10-16)
 
 | question | decision |
 |---|---|
-| who records the link | an omniD command run after the native build: `omnidriver build-record --repo <src>` |
-| where the record lives | beside the built products, found from the binary on `PATH` |
-| a binary recorded from other source than the plan reads | a `stale_build` warning; the run is not refused |
-| a binary with no record (or rebuilt since) | a `build_source_unknown` note; no file-time fallback |
+| scope | every solver omniD drives, each through its own plugin |
+| shape in the run document | a JSON list, one entry per solver, each listing its builds |
+| where the link is written, for a build that cannot identify itself | `omnidriver build-record --repo <src>`, run after the native build, writes a record beside the products |
+| a build recorded from other source than the plan reads | a `stale_build` warning; the run is not refused |
+| a build whose source nothing states | a `build_source_unknown` note; no file-time fallback |
+| cardiacFOAM's `cardiacFoam.build.json` | unchanged: it inspects the backend (full or lightweight, the linked libraries), and its digests are only its own cache key. The build record is the one place for provenance |
 
-## What is recorded
+## How each solver knows its build
 
-### The build record
+| solver | how the source of what runs is known | `known` |
+|---|---|---|
+| cardiacFOAM, cardiacCore (wmake) | nothing in a binary says where it came from: the build record beside it | `recorded` |
+| openCARP | the binary reports its own git tag and hash (`-buildinfo`'s tag and hash lines, which the plugin already reads; the repository line embeds a CI token and is never read) | `self_reported` |
+| TorchCor | an editable install: the code that runs is the repository's own package (`torchcor.__file__` inside `repository.source`), read when the plan is made | `live` |
+| any of them, when that evidence is missing | — | `unknown` |
+
+## The contract
+
+One optional member joins `provider_stack.MEMBERS`:
+
+| member | composition | absent answer |
+|---|---|---|
+| `get_solver_builds(env, *, repository)` | `sequence` | `()` |
+
+It answers a `SolverBuild` for each product the stack's plans run (the solver,
+its libraries, the stack's own utilities), and nothing for a binary it did not
+build (a system `blockMesh`). `SolverBuild` is a core dataclass beside
+`RuntimeDependency`:
+
+| field | meaning |
+|---|---|
+| `solver` | the provider id that answered |
+| `name`, `path` | the product and where it is under `env`; `path` is `None` when it is not there |
+| `digest` | `sha256:<hex>` of the file, `None` when absent |
+| `known` | `recorded`, `self_reported`, `live` or `unknown` |
+| `source` | a `SourceIdentity` (`repository`, `digest`, `git`: `{commit, tag, dirty}` with each part optional), or `None` |
+
+`repository` is the supplied `Repository` or `None`. No contract version bump:
+the member is optional, and a provider that does not implement it is
+unchanged at version 3.
+
+Core owns the shared parts, so no plugin re-implements them:
+
+- **`SourceIdentity` of a repository:** `git rev-parse HEAD` and `dirty` when
+  `git status --porcelain --untracked-files=no` prints anything, read only when
+  `<repository>/.git` exists (a directory or a worktree's file); no parent is
+  searched. A tree with no `.git` (an archive) has `git: null`. The digest is the
+  plugin's (which files a build reads is the solver's knowledge).
+- **The build record** (below): reading, writing and matching it.
+
+## The build record (wmake)
 
 `omnidriver build-record --repo <dir>` runs in the solver's own shell after a
-build. The repository is supplied, never searched for. The command:
-
-1. asks the stack for the products the repository builds and where they land
-   (`get_build_products`, below). A product whose file does not exist is
-   reported as not built and not recorded;
-2. asks the stack for the digest of the sources a build reads
-   (`get_build_source_digest`);
-3. reads the repository's git identity when `<dir>/.git` exists (a directory or
-   a worktree's file): `git rev-parse HEAD`, and `dirty` when
-   `git status --porcelain --untracked-files=no` prints anything. Only the
-   repository root is read; no parent directory is searched. A tree with no
-   `.git` (an archive) has `git: null`; its digest still identifies it;
-4. hashes each built product (sha256 of its bytes, the same content hash the
-   resume snapshot uses);
-5. writes one entry per product into `omnidriver-build.json` in the product's
-   own directory, merging with the entries already there, so two worktrees that
-   build into one platform folder each replace only their own products. The
-   write is atomic (a temporary file, then `os.replace`) and serialised by an
-   exclusive lock file beside it.
+build. The repository is supplied, never searched for. For each product the
+stack lists for it whose file exists, it writes an entry into
+`omnidriver-build.json` in the product's own directory, merging with the
+entries there, so two worktrees that build into one platform folder each
+replace only their own products. The write is atomic (a temporary file, then
+`os.replace`) and serialised by an exclusive lock file beside it.
 
 ```json
 {
@@ -69,116 +99,115 @@ build. The repository is supplied, never searched for. The command:
 }
 ```
 
-The command prints one JSON report: the source identity, the products recorded
-(name, path, digest, record file), and those not built. A stack that declares
-no build products refuses with the new code `build_products_undeclared`.
+It prints one JSON report: the repository's identity, the products recorded
+(name, path, digest, record file) and those not built. A stack that lists no
+recordable product for the repository refuses with the new code
+`build_products_undeclared`.
 
-### The run document
+A recorded entry applies only while its `digest` equals the file's: a binary
+rebuilt without recording is `unknown`.
 
-A plan that stages its case (`plan --strict`, `run`, `step`, a sweep case) writes an optional
-`solverProvenance` section into the run document:
-
-```json
-"solverProvenance": {
-  "source": {"repository": "…", "digest": "sha256:…", "git": {"commit": "…", "dirty": false}},
-  "binaries": [
-    {"name": "cardiacFoam", "path": "…", "digest": "sha256:…",
-     "builtFrom": {"repository": "…", "digest": "sha256:…", "git": {…}, "recordedAt": "…"},
-     "matchesSource": false}
-  ]
-}
-```
-
-- `source` is the supplied repository's identity, computed the same way as in
-  a build record; `null` when no repository is supplied (openCARP through
-  `--plugin`, for example).
-- `binaries` lists every runtime dependency the plan's provenance enumeration
-  finds: the set the resume snapshot hashes (`enumerate_case_inputs`, its
-  `runtime_dependency` components), computed on the staged case at plan time.
-  So every solver's run document carries its binary digests, whether or not its
-  plugin knows how it is built.
-- `builtFrom` is the matching entry of the record beside the binary, when one
-  exists and its `digest` equals the binary's; otherwise `null`.
-- `matchesSource` is `true` or `false` when both `builtFrom` and `source` exist,
-  otherwise `null`.
-
-The resume snapshot is unchanged and keeps guarding a resume: a binary rebuilt
-between plan and run still invalidates it.
-
-## The preflight
-
-The file-time comparison is deleted (`_sources`, `_stale_build` and
-`_build_staleness_diagnostics` in `openfoam/environment_preflight.py`). Core
-judges every stack the same way from `solverProvenance`, for the binaries that
-are products of the supplied repository:
-
-| state | diagnostic |
-|---|---|
-| `matchesSource` is `true` | none |
-| `matchesSource` is `false` | `stale_build` warning, one per recorded source tree, naming its products, both repositories, both commits and both digests |
-| a product with no record, or whose record's digest differs from the file (rebuilt without recording) | one `build_source_unknown` info note listing them, and saying to run `omnidriver build-record --repo <repository>` after building |
-| no repository supplied | none |
-
-A warning never blocks a plan, as before.
-
-## The plugin contract
-
-Two optional members join `provider_stack.MEMBERS`:
-
-| member | composition | absent answer | answers |
-|---|---|---|---|
-| `get_build_products(repository_root, env)` | `sequence` | `()` | `BuildProduct(name, path, kind)` for each product the repository builds; `path` is where the build puts it under `env`, `kind` is `executable` or `library` |
-| `get_build_source_digest(repository_root)` | `single` | `None` | `sha256:<hex>` of the files a build of the repository reads |
-
-`BuildProduct` is a core dataclass beside `RuntimeDependency`. No contract
-version bump: both members are optional, and a provider that implements
-neither is unchanged at version 3.
-
-**The OpenFOAM layer** implements both, once, for cardiacFOAM and cardiacCore
-("one reality"):
+**The OpenFOAM layer** implements the member once, for cardiacFOAM and
+cardiacCore ("one reality"):
 
 - **products:** each `Make/files` under the repository root, outside
   `tutorials/`, `lnInclude/` and `platforms/`: `EXE = $(FOAM_USER_APPBIN)/<name>`
-  is an executable in `env["FOAM_USER_APPBIN"]`, and
-  `LIB = $(FOAM_USER_LIBBIN)/<lib>` a library `<lib>.so` or `<lib>.dylib` in
-  `env["FOAM_USER_LIBBIN"]`;
-- **source digest:** every `*.C`, `*.H`, `*.cu` and `*.cuh` file and every
+  is an executable in `env["FOAM_USER_APPBIN"]`, `LIB = $(FOAM_USER_LIBBIN)/<lib>`
+  a library `<lib>.so` or `<lib>.dylib` in `env["FOAM_USER_LIBBIN"]`;
+- **source digest:** every `*.C`, `*.H`, `*.cu`, `*.cuh` file and every
   `Make/files` and `Make/options` under the repository root, outside
   `tutorials/`, `lnInclude/`, `platforms/` and `.git/`, hashed in sorted
   relative-path order as path and bytes. A tutorial edit does not change it; a
   build-option edit does.
 
-openCARP and TorchCor implement neither now: their run documents carry binary
-digests and, with a repository, its identity, with `builtFrom: null`.
+**openCARP** answers `openCARP` (and each other program a plan runs that prints
+`-buildinfo`) as `self_reported`, `source.git` holding the tag and hash.
+**TorchCor** answers its package as `live` when `torchcor.__file__`, read with
+the stack's `python3`, lies inside `repository.source`: the digest of that
+tree's `*.py` files and the repository's git identity. Otherwise `unknown`.
+
+## The run document
+
+A plan that stages its case (`plan --strict`, `run`, `step`, a sweep case)
+writes an optional `solverProvenance` list into the run document, one entry per
+solver that answered:
+
+```json
+"solverProvenance": [
+  {
+    "solver": "org.cardiacfoam",
+    "repository": {"repository": "…", "digest": "sha256:…", "git": {"commit": "…", "dirty": false}},
+    "builds": [
+      {"name": "cardiacFoam", "path": "…", "digest": "sha256:…", "known": "recorded",
+       "source": {"repository": "…", "digest": "sha256:…", "git": {"commit": "04e6bd84…", "dirty": false}},
+       "matchesRepository": false}
+    ]
+  }
+]
+```
+
+- `repository` is the supplied repository's identity (its digest from that
+  solver's own rule), or `null` with none supplied.
+- `matchesRepository` is `true` or `false` when the build's `source.digest` and
+  the repository's digest both exist, otherwise `null`. A `self_reported` build
+  carries a commit and no digest, so it is `null`; its tag and hash are recorded.
+- A solver that implements no `get_solver_builds` has no entry; its binaries
+  stay hashed in the resume snapshot, as today.
+
+Several solvers used in one session, a cross-solver comparison or a
+cardiacCore-then-cardiacFOAM chain, each leave their entries in their own runs'
+documents, so the solvers behind every result are listed.
+
+The resume snapshot is unchanged and keeps guarding a resume.
+
+## The preflight
+
+The file-time comparison is deleted (`_sources`, `_stale_build` and
+`_build_staleness_diagnostics` in `openfoam/environment_preflight.py`). Core
+judges every solver the same way from `solverProvenance`:
+
+| state | diagnostic |
+|---|---|
+| `matchesRepository` is `true`, or a `self_reported` or `live` build | none |
+| `matchesRepository` is `false` | `stale_build` warning, one per solver and recorded source, naming its builds, both repositories, both commits and both digests |
+| `known` is `unknown` | one `build_source_unknown` info note per solver listing the builds, and, for a recording stack, saying to run `omnidriver build-record --repo <repository>` after building |
+
+A warning never blocks a plan, as before.
 
 ## Tests
 
 No test runs a solver or a real build.
 
-- **Core:** the record writer (merge, atomic replace, lock), the git reader on a
-  `git init` repository (clean, dirty, no `.git`), `solverProvenance` and the
-  preflight table above, through the toy plugin given both members.
+- **Core:** the record writer (merge, atomic replace, lock); the git reader on a
+  `git init` repository (clean, dirty, no `.git`); `solverProvenance` and the
+  preflight table above through a test provider that answers each `known`.
 - **OpenFOAM layer:** products and digest on a temporary repository with
   `Make/files` and sources; a tutorial edit leaves the digest unchanged, a
-  `Make/options` edit changes it. The four file-time tests in
-  `test_environment_preflight.py` are rewritten for digests (match, mismatch,
-  no record, a system binary that no `Make/files` builds), not deleted.
+  `Make/options` edit changes it; a recorded, a mismatched, an unrecorded and a
+  rebuilt product. The file-time tests in `test_environment_preflight.py` are
+  rewritten for digests, not deleted.
+- **openCARP:** `-buildinfo` output (verbatim lines from the installed v18.1,
+  committed as a fixture) parsed into tag and hash; a binary that prints none is
+  `unknown`.
+- **TorchCor:** a package location inside and outside `repository.source`.
 - **CLI:** `build-record` with no `--repo` refuses with `usage`; a stack with no
-  products refuses with `build_products_undeclared`.
+  recordable products refuses with `build_products_undeclared`.
 - The verification shapes of `CLAUDE.md`: all packages, core alone, the
   installed wheel, the static gates.
 
 ## Documentation
 
-- `AGENT_GUIDE.md`: the `stale_build` paragraph is rewritten for digests and the
-  build record.
-- `CLAUDE.md`: an invariant row, "a plan compares a binary's recorded source
-  with the supplied one by digest", with its guarding tests.
+- `AGENT_GUIDE.md`: the `stale_build` paragraph is rewritten for digests, the
+  build record and the per-solver `known`.
+- `CLAUDE.md`: an invariant row, "a plan compares each solver build's source
+  with the supplied repository by digest", with its guarding tests.
 - `docs/superpowers/ROADMAP.md` §5.2: the "Binary versus source" item is
-  removed.
+  removed; a follow-up is added: whether cardiacFOAM's backend inspection
+  (`cardiacFoam.build.json`, with its file-time self-heal) moves into the build
+  record.
 
 ## Out of scope
 
 - omniD running the native build itself.
-- Build products of solvers without a `Make/files` (openCARP, TorchCor).
+- A session-level summary beyond each run document's list.
 - Refusing a run on a mismatch.
