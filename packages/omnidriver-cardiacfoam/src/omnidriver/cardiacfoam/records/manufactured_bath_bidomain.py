@@ -36,11 +36,16 @@ RECORD = TutorialRecord(
     workflow_steps=(
         # A file an earlier step writes is that step's `produces`, not a
         # `consumes`: it does not exist when the case is planned.
+        # The native Allrun's default dimension is 3D, which the case's own
+        # `dimension "3D"` states.
         block_mesh_step(
-            BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",), default_dict="system/blockMeshDict.1D",
+            BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",), default_dict="system/blockMeshDict.3D",
         ),
+        *gmsh_route(_TET_TEMPLATE, _TET_MESH, "myocardium", "bath"),
         WorkflowStep(
-            # The cellZones file and the four sets topoSetDict names.
+            # The cellZones file and the four sets topoSetDict names. Both
+            # routes run it, as the native Allrun does: on the tet mesh it
+            # rebuilds the zones the template's Physical Volumes named.
             step_id="topoSet", command=("topoSet",),
             consumes=("system/topoSetDict",),
             produces=(
@@ -51,9 +56,6 @@ RECORD = TutorialRecord(
                 "constant/polyMesh/sets/myocardiumCells",
             ),
         ),
-        # The template's two Physical Volumes become two cellZones and two
-        # cellSets beside the five mesh files, so there is no topoSet step.
-        *gmsh_route(_TET_TEMPLATE, _TET_MESH, "myocardium", "bath"),
         WorkflowStep(
             # The one field it writes, and the `0/` it creates to hold it
             # (the native case has no `0/`).
@@ -65,15 +67,28 @@ RECORD = TutorialRecord(
         # `<dim>_<N>_cells.dat`, whose N the verifier derives from the
         # resolved mesh (`3D_17_cells.dat` at tet lc=0.1).
         solve_step((WITH_DEFAULT_VALUES, "postProcessing/*_cells.dat")),
+        # The interface diagnostics of the solved field, then of the
+        # manufactured field in its place, each with the per-face errors.
         WorkflowStep(
             step_id="interfaceMetrics",
-            command=("bathBidomainInterfaceMetrics", "-latestTime"),
-            produces=("postProcessing/bathBidomainInterfaceMetrics.csv",),
+            command=("bathBidomainInterfaceMetrics", "-latestTime", "-writeFaceErrors"),
+            produces=("postProcessing/bathBidomainInterfaceMetrics.csv", "postProcessing/bathBidomainFaceErrors.csv"),
+        ),
+        WorkflowStep(
+            step_id="interfaceMetricsExact",
+            command=("bathBidomainInterfaceMetrics", "-latestTime", "-exactFields", "-writeFaceErrors"),
+            produces=(
+                "postProcessing/bathBidomainInterfaceMetricsExactField.csv",
+                "postProcessing/bathBidomainFaceErrorsExactField.csv",
+            ),
         ),
     ),
     workflow_variants={
-        "hex": ("mesh", "topoSet", "setConductivity", "solve"),
-        "tet": ("gmsh", "gmshToFoam", "checkMesh", "setConductivity", "solve", "interfaceMetrics"),
+        "hex": ("mesh", "checkMesh", "topoSet", "setConductivity", "solve", "interfaceMetrics", "interfaceMetricsExact"),
+        "tet": (
+            "gmsh", "gmshToFoam", "checkMesh", "topoSet", "setConductivity", "solve",
+            "interfaceMetrics", "interfaceMetricsExact",
+        ),
     },
     variant_selector="mesh",
     default_variant="hex",

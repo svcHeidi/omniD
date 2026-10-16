@@ -84,7 +84,10 @@ STUDIES: dict[str, ConformanceStudy] = {
     ),
     "manufacturedBathBidomain": ConformanceStudy(
         # Hex route, 1D N=10, endTime 0.02 at the native Allrun's step for N=10 (3 steps); a real run takes about a second.
-        requires=("blockMesh", "topoSet", "setTorsoOrganConductivityField", "cardiacFoam"),
+        requires=(
+            "blockMesh", "checkMesh", "topoSet", "setTorsoOrganConductivityField", "cardiacFoam",
+            "bathBidomainInterfaceMetrics",
+        ),
         base_study={
             "dimension": "1D", "numberCells": 10, "system/controlDict:endTime": 0.02,
             "system/controlDict:deltaT": 0.02 / 3,
