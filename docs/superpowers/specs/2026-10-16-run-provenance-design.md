@@ -44,24 +44,32 @@ One optional member joins `provider_stack.MEMBERS`:
 
 | member | composition | absent answer |
 |---|---|---|
-| `get_solver_builds(env, *, repository)` | `sequence` | `()` |
+| `get_solver_builds(env, *, repository, used_paths)` | `sequence` | `()` |
 
-It answers a `SolverBuild` for each product the stack's plans run (the solver,
-its libraries, the stack's own utilities), and nothing for a binary it did not
-build (a system `blockMesh`). `SolverBuild` is a core dataclass beside
+A provider answers at most one `SolverEntry`, its item in the run document's
+list. `repository` is the supplied `Repository` or `None`. `used_paths` is the
+set of resolved paths the plan runs (its step executables and the stack's
+`get_extra_provenance_paths`), so an entry lists only what this run uses;
+`build-record` passes `None`, meaning every product. Core dataclasses, beside
 `RuntimeDependency`:
 
-| field | meaning |
+| `SolverEntry` field | meaning |
 |---|---|
-| `solver` | the provider id that answered |
-| `name`, `path` | the product and where it is under `env`; `path` is `None` when it is not there |
-| `digest` | `sha256:<hex>` of the file, `None` when absent |
-| `known` | `recorded`, `self_reported`, `live` or `unknown` |
-| `source` | a `SourceIdentity` (`repository`, `digest`, `git`: `{commit, tag, dirty}` with each part optional), or `None` |
+| `solver` | the solver's name: the repository's `plugin` when a repository is supplied, else the provider id |
+| `repository` | the supplied repository's `SourceIdentity` under this solver's digest rule, or `None` |
+| `builds` | `SolverBuild` values |
+| `recordable` | `true` when this solver's builds are known only through a build record |
 
-`repository` is the supplied `Repository` or `None`. No contract version bump:
-the member is optional, and a provider that does not implement it is
-unchanged at version 3.
+| `SolverBuild` field | meaning |
+|---|---|
+| `name`, `path` | the product and where it is under `env`; `path` is `None` when it is not there |
+| `digest` | `sha256:<hex>` of the file (for a `live` package, of its source tree), `None` when absent |
+| `known` | `recorded`, `self_reported`, `live` or `unknown` |
+| `source` | a `SourceIdentity` (`repository`, `digest`, `git`: `{commit, tag, dirty}`, each part optional), or `None` |
+
+A binary the solver did not build (a system `blockMesh`) is in no entry. No
+contract version bump: the member is optional, and a provider that does not
+implement it is unchanged at version 3.
 
 Core owns the shared parts, so no plugin re-implements them:
 
@@ -75,8 +83,8 @@ Core owns the shared parts, so no plugin re-implements them:
 ## The build record (wmake)
 
 `omnidriver build-record --repo <dir>` runs in the solver's own shell after a
-build. The repository is supplied, never searched for. For each product the
-stack lists for it whose file exists, it writes an entry into
+build. The repository is supplied, never searched for. For each build of a
+`recordable` entry whose file exists, it writes an entry into
 `omnidriver-build.json` in the product's own directory, merging with the
 entries there, so two worktrees that build into one platform folder each
 replace only their own products. The write is atomic (a temporary file, then
@@ -100,8 +108,8 @@ replace only their own products. The write is atomic (a temporary file, then
 ```
 
 It prints one JSON report: the repository's identity, the products recorded
-(name, path, digest, record file) and those not built. A stack that lists no
-recordable product for the repository refuses with the new code
+(name, path, digest, record file) and those not built. A stack with no
+`recordable` entry for the repository refuses with the new code
 `build_products_undeclared`.
 
 A recorded entry applies only while its `digest` equals the file's: a binary
@@ -120,8 +128,8 @@ cardiacCore ("one reality"):
   relative-path order as path and bytes. A tutorial edit does not change it; a
   build-option edit does.
 
-**openCARP** answers `openCARP` (and each other program a plan runs that prints
-`-buildinfo`) as `self_reported`, `source.git` holding the tag and hash.
+**openCARP** answers `openCARP` as `self_reported`, `source.git` holding the tag and
+hash; its other programs (`mesher`, `igbextract`) print no build identity and are in no entry.
 **TorchCor** answers its package as `live` when `torchcor.__file__`, read with
 the stack's `python3`, lies inside `repository.source`: the digest of that
 tree's `*.py` files and the repository's git identity. Otherwise `unknown`.
