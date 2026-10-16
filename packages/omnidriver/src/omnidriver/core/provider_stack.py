@@ -91,6 +91,7 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     "get_generated_output_globs": ("sequence", None),
     "get_input_roots": ("sequence", None),
     "get_extra_provenance_paths": ("sequence", None),
+    "get_solver_builds": ("sequence", None),
     "get_log_redaction_patterns": ("set", None),
     "get_artifact_value_reader": ("single", None),
     # records

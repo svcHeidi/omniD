@@ -36,6 +36,47 @@ class RuntimeDependency:
     required: bool
 
 
+#: How a solver build's source is known: a build record beside it, the binary's own report, the
+#: editable package read when the plan is made, or nothing.
+KNOWN = ("recorded", "self_reported", "live", "unknown")
+
+
+@dataclass(frozen=True)
+class SourceIdentity:
+    """Which source a build came from: the tree's digest under its solver's rule, and its git
+    identity (``commit``, ``tag``, ``dirty``, each optional) when known."""
+
+    repository: str | None = None
+    digest: str | None = None
+    git: Mapping[str, Any] | None = None
+
+    def to_json(self) -> dict[str, Any]:
+        return {"repository": self.repository, "digest": self.digest,
+                "git": dict(self.git) if self.git is not None else None}
+
+
+@dataclass(frozen=True)
+class SolverBuild:
+    """One product a run uses: where it is, its content digest, and the source it was built from."""
+
+    name: str
+    path: Path | None
+    digest: str | None
+    known: str
+    source: SourceIdentity | None = None
+
+
+@dataclass(frozen=True)
+class SolverEntry:
+    """One solver's item in a run document's ``solverProvenance`` list. ``recordable`` marks a
+    solver whose builds are known only through a build record."""
+
+    solver: str
+    repository: SourceIdentity | None
+    builds: tuple[SolverBuild, ...]
+    recordable: bool = False
+
+
 @dataclass(frozen=True)
 class CaseRuntimeConventions:
     """The paths an environment generates while a case runs.
@@ -219,6 +260,12 @@ class SolverPlugin(Protocol):
 
     def get_extra_provenance_paths(self, case_root: Path) -> tuple[RuntimeDependency, ...]:
         """Run-time dependencies outside the case tree."""
+
+    def get_solver_builds(
+        self, env: Mapping[str, str], *, repository: "Repository | None", used_paths: frozenset[Path] | None,
+    ) -> tuple[SolverEntry, ...]:
+        """At most one entry: which source built each product this solver's plans run.
+        ``used_paths`` holds the resolved paths a plan runs; ``None`` asks for every product."""
 
     def get_log_redaction_patterns(self) -> frozenset[str]:
         """Regexes whose every match in a kept step log becomes ``[REDACTED]``."""
