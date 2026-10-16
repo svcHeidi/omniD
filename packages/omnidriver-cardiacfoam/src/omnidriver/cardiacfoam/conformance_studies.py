@@ -34,6 +34,24 @@ _CABLE_CONDUCTIVITY = {
 _COMMANDS = ("blockMesh", "cardiacFoam")
 _PARALLEL = ("decomposePar", "reconstructPar", "mpirun")
 
+_PURKINJE_COUPLING = "constant/electroProperties:monodomainSolverCoeffs.domainCouplings.purkinjeToMyocardium"
+
+
+def _purkinje_restitution_2d_study(end_time: float, r_pvj: float) -> ConformanceStudy:
+    """The variant's native run (2.45 s, 0.9 s, 0.32 s) cut to ``end_time``; ``r_pvj`` is its native junction resistance."""
+    return ConformanceStudy(
+        requires=_COMMANDS,
+        base_study={"system/controlDict:endTime": end_time},
+        # The variant's `electroProperties` is an overlay the checks that read the native folder never
+        # see, so the patch and its sibling sit in documents the folder holds.
+        patch=("system/blockMeshDict:hex_cell_counts", [75, 75, 1]),
+        untouched=("system/fvSchemes", ("gradSchemes", "default")),
+        sweep_name=f"{_PURKINJE_COUPLING}.rPvj",
+        sweep_values=(r_pvj, 2 * r_pvj),
+        unknown_name=f"{_PURKINJE_COUPLING}.rPv",
+    )
+
+
 # One study per record, each cut short so a real run takes seconds.
 STUDIES: dict[str, ConformanceStudy] = {
     "manufacturedEikonalECG": ConformanceStudy(
@@ -199,6 +217,9 @@ STUDIES: dict[str, ConformanceStudy] = {
         sweep_values=(5e-05, 1e-04),
         unknown_name="constant/electroProperties:monodomainSolverCoeffs.tissu",
     ),
+    "purkinjeRestitution2DAntegrade": _purkinje_restitution_2d_study(0.1, 5000.0),
+    "purkinjeRestitution2DRetrograde": _purkinje_restitution_2d_study(0.1, 5000.0),
+    "purkinjeRestitution2DMonodomain": _purkinje_restitution_2d_study(0.05, 10000.0),
     "niederer2011": ConformanceStudy(
         # Hex route at the coarsest cartesianConvergence dx (0.5 mm); a few seconds. The quantity
         # runs to 0.15 s so all nine probes activate (P8 at 0.143 s); a decomposed solve differs

@@ -21,6 +21,7 @@ from .manufactured_monodomain_1d3d import RECORD as _MANUFACTURED_MONODOMAIN_1D3
 from .cable_1d_eikonal_cv import RECORD as _CABLE_1D_EIKONAL_CV_RECORD
 from .ionic_heterogeneity import RECORD as _IONIC_HETEROGENEITY_RECORD
 from .rotor_instability import RECORD as _ROTOR_INSTABILITY_RECORD
+from .purkinje_restitution_2d import RECORDS as _PURKINJE_RESTITUTION_2D_RECORDS
 
 #: Built with build_tutorial_record_catalog, not a dict comprehension: two
 #: records sharing a name are refused by name, not silently overwritten.
@@ -38,4 +39,5 @@ TUTORIAL_RECORDS = build_tutorial_record_catalog((
     _CABLE_1D_EIKONAL_CV_RECORD,
     _IONIC_HETEROGENEITY_RECORD,
     _ROTOR_INSTABILITY_RECORD,
+    *_PURKINJE_RESTITUTION_2D_RECORDS,
 ), conformance=STUDIES)
