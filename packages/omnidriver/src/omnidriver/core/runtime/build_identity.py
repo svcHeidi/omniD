@@ -116,3 +116,33 @@ def _identity(raw: Any) -> SourceIdentity | None:
     git = raw.get("git")
     return SourceIdentity(repository=raw.get("repository"), digest=raw.get("digest"),
                           git=dict(git) if isinstance(git, Mapping) else None)
+
+
+def build_record_report(driver_context: Any, env: Mapping[str, str]) -> dict[str, Any]:
+    """``build-record``: record every existing build of the stack's recordable solvers as built from
+    the supplied repository; the JSON report, or a refusal payload."""
+    from ..refusal import failure
+
+    repository = driver_context.repository
+    entries = [
+        entry for entry in driver_context.stack.call("get_solver_builds", env, repository=repository, used_paths=None)
+        if entry.recordable and entry.repository is not None
+    ]
+    if not entries:
+        return failure(
+            None, code="build_products_undeclared", action="build-record",
+            error=f"nothing in {repository.root} is a build only a record can identify: its solver's builds "
+                  "identify themselves, or the stack lists none",
+        )
+    recorded: list[dict[str, Any]] = []
+    not_built: list[dict[str, Any]] = []
+    records: set[Path] = set()
+    for entry in entries:
+        present = [build for build in entry.builds if build.digest is not None]
+        records.update(write_records(present, entry.repository))
+        recorded += [{"solver": entry.solver, "name": b.name, "path": str(b.path), "digest": b.digest} for b in present]
+        not_built += [{"solver": entry.solver, "name": b.name} for b in entry.builds if b.digest is None]
+    return {
+        "action": "build-record", "status": "ok", "repository": entries[0].repository.to_json(),
+        "recorded": recorded, "not_built": not_built, "records": sorted(str(path) for path in records),
+    }

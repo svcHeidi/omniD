@@ -43,6 +43,7 @@ CODES: dict[str, str] = {
     "case_edit_interrupted": "an earlier edit of the case was interrupted; plan again",
     "cxx_source_undeclared": "the stack declares no C++ source to scan",
     "cxx_source_not_scanned": "the C++ source could not be scanned",
+    "build_products_undeclared": "the stack lists no build of the repository that only a build record can identify",
     "run_without_report": "a child run exited without a JSON report",
     "case_timeout": "a sweep case exceeded --case-timeout-s",
     "sweep_stopped": "a signal stopped the sweep",

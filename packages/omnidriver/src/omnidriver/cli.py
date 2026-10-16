@@ -626,7 +626,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "action",
         choices=[
-            "describe", "catalog", "env", "scan", "check", "plan", "step", "run", "sweep-plan", "sweep-run", "compare",
+            "describe", "catalog", "env", "scan", "build-record", "check", "plan", "step", "run", "sweep-plan", "sweep-run", "compare",
         ],
         help="Pipeline stage to execute",
     )
@@ -1039,10 +1039,16 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         args.parallel is not None, args.inputs,
     )):
         parser.error("action=scan takes only --plugin or --repo, and --scratch-dir: it rescans the stack's C++ source")
+    if args.action == "build-record" and (not args.repo or any((
+        args.entry, args.case, args.run_document, args.cases_root, args.spec, args.output_dir,
+        args.parallel is not None, args.inputs,
+    ))):
+        parser.error("action=build-record takes only --repo: it records what that repository built, "
+                     "run in the solver's shell after building")
     if args.action == "describe" and not args.entry and not args.case and (args.parallel is not None or args.inputs):
         parser.error("--parallel/--input preview a record: pass --entry or --case, or omit them to list the stack")
     if not args.run_document and not args.entry and not args.case and not (args.uncatalogued or args.unread or args.named) and args.action not in {
-        "sweep-plan", "sweep-run", "compare", "env", "scan", "check", "describe",
+        "sweep-plan", "sweep-run", "compare", "env", "scan", "build-record", "check", "describe",
     }:
         parser.error("--entry or --case is required (or use --run-document with action=run/step)")
 
@@ -1257,6 +1263,13 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
         report = environment_report(driver_context)
         print(json.dumps(report, indent=2))
         return 0 if report["status"] in ("ok", "degraded") else 1
+
+    if args.action == "build-record":
+        from .core.runtime.build_identity import build_record_report
+
+        report = build_record_report(driver_context, os.environ)
+        print(json.dumps(report, indent=2))
+        return 0 if report["status"] == "ok" else 1
 
     if args.action == "scan" or args.uncatalogued or args.unread:
         return _scan_or_uncatalogued(args, driver_context)
