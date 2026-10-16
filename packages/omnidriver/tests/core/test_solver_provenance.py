@@ -1,6 +1,7 @@
 """Each solver's builds a plan uses, as the run document's list, and how the preflight judges them."""
 from __future__ import annotations
 
+import os
 import stat
 from pathlib import Path
 
@@ -110,3 +111,30 @@ def test_a_stack_with_no_solver_builds_writes_no_list(tmp_path):
     report = strict_plan(record, overrides={"cases_root": str(cases_root)}, scratch_root=tmp_path / "scratch",
                          driver_context=ctx)
     assert "solverProvenance" not in report.run_document.to_json()
+
+
+class _LoadedEnvironmentPlugin(E2EFolderPlugin):
+    def get_loaded_environment(self, *, environment_source, driver_context):
+        return {**os.environ, "LOADED_FROM": environment_source}
+
+    def get_solver_builds(self, env, *, repository, used_paths):
+        self.seen.append(env.get("LOADED_FROM"))
+        return ()
+
+
+def test_the_builds_are_read_in_the_environment_the_run_executes_in(tmp_path):
+    case = tmp_path / "cases" / "myCase"
+    (case / "system").mkdir(parents=True)
+    script = case / "run-test-case"
+    script.write_text("#!/bin/sh\n")
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    plugin = _LoadedEnvironmentPlugin()
+    plugin.seen = []
+    ctx = driver_context(plugin, source="test:provenance")
+    record, cases_root = case_folder_record(case, driver_context=ctx)
+
+    strict_plan(record, overrides={"cases_root": str(cases_root)}, scratch_root=tmp_path / "scratch",
+                environment_source="/opt/solver/bashrc", driver_context=ctx)
+    strict_plan(record, overrides={"cases_root": str(cases_root)}, scratch_root=tmp_path / "scratch2",
+                driver_context=ctx)
+    assert plugin.seen == ["/opt/solver/bashrc", None]

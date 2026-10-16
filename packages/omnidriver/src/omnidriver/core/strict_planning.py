@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from .plugin_interface import DriverContext
 
 
+from .environment_connection import load_environment
 from .runtime.artifacts import predict_data_artifacts
 from .runtime.execution_context import resolve_execution_context
 from .runtime.models import DataArtifact
@@ -347,7 +348,8 @@ def _strict_plan_for_spec(
         driver_context=driver_context,
     )
     solvers = solver_provenance.solver_entries(
-        Path(spec.case_root), workflow_dag=workflow_dag, driver_context=driver_context, env=os.environ,
+        Path(spec.case_root), workflow_dag=workflow_dag, driver_context=driver_context,
+        env=os.environ if environment_source is None else load_environment(driver_context, environment_source),
     )
     env_diagnostics = tuple(env_diagnostics) + solver_provenance.provenance_diagnostics(solvers)
     if solvers:
