@@ -5,6 +5,7 @@ from typing import Callable, Iterable
 from omnidriver.core.runtime.models import DataArtifact, TutorialSpec
 from omnidriver.cardiacfoam.ionic_model_catalog import IONIC_MODEL_CATALOG
 from omnidriver.cardiacfoam.detection import (
+    electro_properties_declares_block,
     detect_ionic_model_name,
     detect_myocardium_solver_name,
     detect_ionic_export_list,
@@ -125,7 +126,7 @@ def _predict_ecg(case_root: Path) -> tuple[DataArtifact, ...]:
     properties = case_root / "constant" / "electroProperties"
     if not properties.exists():
         return ()
-    if not electro_properties_has_block(properties, "ecgDomains"):
+    if not electro_properties_declares_block(properties, "ecgDomains"):
         return ()
     text = properties.read_text()
     artifacts: list[DataArtifact] = []
@@ -190,7 +191,11 @@ def _predict_verification(case_root: Path) -> tuple[DataArtifact, ...]:
             #   rotatedAnisotropy_3D_19_cells.dat (manufacturedAnisotropicMonodomainVerifier)
             #   bathBidomain_3D_19_cells.dat      (manufacturedFDABathBidomainVerifier)
             #   <dimension>_19_cells.dat          (manufacturedFDABidomainVerifier)
-            path_pattern="postProcessing/manufactured*Summary*.dat" if "Eikonal" in verifier_type else "postProcessing/*_cells.dat",
+            # manufacturedEikonalVerifier writes its own file; an ECG verifier's summary exists only with the ECG.
+            path_pattern=(
+                "postProcessing/manufacturedEikonalActivationTime.dat" if verifier_type == "manufacturedEikonalVerifier"
+                else "postProcessing/*_cells.dat"
+            ),
             format="csv_probe",
             description=f"Manufactured-solution L1/L2/Linf error norms emitted by {verifier_type}",
             produced_by=verifier_type,

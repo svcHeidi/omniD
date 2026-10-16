@@ -75,6 +75,16 @@ def electro_properties_has_block(
     return hasattr(value, "keys")
 
 
+def electro_properties_declares_block(electro_properties_path: Path, block_name: str) -> bool:
+    """Return True if ``block_name`` is a block at the top of ``electro_properties_path`` or in its active ``<solver>Coeffs``."""
+    if electro_properties_has_block(electro_properties_path, block_name):
+        return True
+    try:
+        return hasattr(_coeffs_scope(electro_properties_path)[block_name], "keys")
+    except (KeyError, ValueError):
+        return False
+
+
 def detect_verification_model_type(
     electro_properties_path: Path,
 ) -> str | None:

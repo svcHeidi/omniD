@@ -26,14 +26,10 @@ AXES = (
 )
 
 #: `eikonalMyocardiumDomain` does not override `electroModel::end()`, so the
-#: solve writes `.withDefaultValues` (unlike `singleCellSolver`).
-_SOLVE_OUTPUTS = (
-    WITH_DEFAULT_VALUES,
-    "postProcessing/manufacturedEikonalActivationTime.dat",
-    "postProcessing/eikonalECG.dat",
-    "postProcessing/manufacturedEikonalECG_ECG.dat",
-    "postProcessing/manufacturedEikonalECGSummary_ECG.dat",
-)
+#: solve writes `.withDefaultValues` (unlike `singleCellSolver`). The ECG files
+#: are written in 3D only (the `dimension` axis removes the ECG below it), so the
+#: predictor names them from the resolved case rather than the step.
+_SOLVE_OUTPUTS = (WITH_DEFAULT_VALUES, "postProcessing/manufacturedEikonalActivationTime.dat")
 
 # The native Allrun meshes with `blockMesh -dict system/blockMeshDict.3D`.
 _MESH_STEP = block_mesh_step(

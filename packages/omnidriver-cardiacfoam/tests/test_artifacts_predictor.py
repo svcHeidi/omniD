@@ -889,13 +889,14 @@ def test_verification_artifact_pattern_matches_every_real_verifier_filename(tmp_
         )
 
 
-def test_eikonal_verification_artifact_pattern_is_unaffected(tmp_path):
+def test_the_eikonal_verifier_summary_is_its_own_file_not_the_ecgs(tmp_path):
+    """manufacturedEikonalVerifier writes manufacturedEikonalActivationTime.dat; the ECG summary exists only in 3D."""
     case_root = tmp_path / "eikonal"
     _electro_properties(
         case_root,
         myocardium_solver="eikonalSolver",
-        verifier_type="manufacturedEikonalECGVerifier",
+        verifier_type="manufacturedEikonalVerifier",
     )
 
     artifacts = _predict_verification(case_root)
-    assert artifacts[0].path_pattern == "postProcessing/manufactured*Summary*.dat"
+    assert artifacts[0].path_pattern == "postProcessing/manufacturedEikonalActivationTime.dat"

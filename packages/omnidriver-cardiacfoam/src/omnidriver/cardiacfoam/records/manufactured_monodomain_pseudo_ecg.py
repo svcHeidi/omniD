@@ -41,14 +41,10 @@ AXES = (
 )
 
 #: The pseudo-ECG verifier's myocardium domain calls `electroModel::end()`, so
-#: the solve writes `.withDefaultValues`.
-_SOLVE_OUTPUTS = (
-    WITH_DEFAULT_VALUES,
-    "postProcessing/*_cells.dat",
-    "postProcessing/pseudoECG.dat",
-    "postProcessing/manufacturedPseudoECG_ECG.dat",
-    "postProcessing/manufacturedPseudoECGSummary_ECG.dat",
-)
+#: the solve writes `.withDefaultValues`. The ECG files are written in 3D only
+#: (the `dimension` axis removes the ECG below it), so the predictor names them
+#: from the resolved case rather than the step.
+_SOLVE_OUTPUTS = (WITH_DEFAULT_VALUES, "postProcessing/*_cells.dat")
 
 RECORD = TutorialRecord(
     name="manufacturedMonodomainPseudoECG",
