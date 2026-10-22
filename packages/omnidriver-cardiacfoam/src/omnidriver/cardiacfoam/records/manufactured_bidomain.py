@@ -9,7 +9,7 @@ from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
 from .manufactured_solution_axes import (
     BLOCK_MESH_DICT_DOCUMENTS, allrun_time_controls, dimension_axis, number_cells_axis, tet_number_cells_axis,
 )
-from .routes import block_mesh_step, gmsh_route, solve_step
+from .routes import block_mesh_step, gmsh_route, redistribute_restart_state_step, solve_step
 
 #: The `bidomainSolverCoeffs` scope of `myocardiumSolver bidomainSolver`, which
 #: the native case already holds.
@@ -18,10 +18,10 @@ _BIDOMAIN_SOLVER_COEFFS = ("bidomainSolverCoeffs",)
 _TET_TEMPLATE = "box.geo.template"
 _TET_MESH = "box.msh"
 
-#: ``Allrun`` meshes the hex box with ``blockMesh -dict system/blockMeshDict.<dim>D``, 3D by default. The gmsh step has
-#: no default: with no ``tetNumberCells``, gmsh uses the template's own ``DefineConstant`` ``lc`` default, rather than
-#: restating it and forcing it after a template change.
+#: ``Allrun`` meshes the hex box with ``blockMesh -dict system/blockMeshDict.<dim>D``, 3D by default.
 _MESH_DICT_DEFAULT = "system/blockMeshDict.3D"
+#: The N ``Allrun`` meshes at when given no ``-N``, hex and tet alike.
+_ALLRUN_N = 20
 
 #: The time step the native Allrun takes at N = 10; it scales it with the cell size squared.
 _ALLRUN_STEP_AT_TEN = 0.00892857
@@ -48,12 +48,13 @@ RECORD = TutorialRecord(
         block_mesh_step(
             BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",), default_dict=_MESH_DICT_DEFAULT,
         ),
-        *gmsh_route(_TET_TEMPLATE, _TET_MESH, "internal"),
+        *gmsh_route(_TET_TEMPLATE, _TET_MESH, "internal", allrun_n=_ALLRUN_N),
         solve_step((WITH_DEFAULT_VALUES, "postProcessing/*_cells.dat")),
+        redistribute_restart_state_step(),
     ),
     workflow_variants={
-        "hex": ("mesh", "checkMesh", "solve"),
-        "tet": ("gmsh", "gmshToFoam", "checkMesh", "solve"),
+        "hex": ("mesh", "checkMesh", "solve", "redistributeRestartState"),
+        "tet": ("gmsh", "gmshToFoam", "checkMesh", "solve", "redistributeRestartState"),
     },
     variant_selector="mesh",
     default_variant="hex",

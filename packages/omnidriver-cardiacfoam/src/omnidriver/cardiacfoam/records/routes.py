@@ -8,7 +8,7 @@ from __future__ import annotations
 from omnidriver.core.tutorial_records import DefaultArgument, WorkflowStep
 
 from .case_outputs import ELECTRO_PROPERTIES, POLY_MESH_OUTPUTS, gmsh_to_foam_outputs
-from .manufactured_solution_axes import MESH_DICT_KEY
+from .manufactured_solution_axes import GMSH_LC_KEY, MESH_DICT_KEY
 
 #: The documents ``cardiacFoam`` itself reads in every record.
 SOLVE_DOCUMENTS: tuple[str, ...] = (
@@ -37,16 +37,20 @@ def solve_step(produces: tuple, *, consumes: tuple[str, ...] = ()) -> WorkflowSt
     )
 
 
-def gmsh_route(template: str, mesh: str, *physical_volumes: str) -> tuple[WorkflowStep, ...]:
+def gmsh_route(
+    template: str, mesh: str, *physical_volumes: str, allrun_n: int | None = None,
+) -> tuple[WorkflowStep, ...]:
     """The tet route's mesh steps: ``gmsh`` on ``template`` into ``mesh``,
     ``gmshToFoam``, ``checkMesh``. ``physical_volumes`` are the template's
-    ``Physical Volume`` names (``gmsh_to_foam_outputs``). The gmsh step
-    declares no ``-setnumber lc`` default, so the template's own
-    ``DefineConstant`` applies unless an axis names it."""
+    ``Physical Volume`` names (``gmsh_to_foam_outputs``). ``allrun_n`` is the
+    ``N`` the case's ``Allrun -mesh tet`` meshes at when given no ``-N``: the
+    gmsh step's default is then ``-setnumber lc 1/N``, which an axis naming
+    ``lc`` replaces. Without it the template's own ``DefineConstant`` applies."""
+    defaults = () if allrun_n is None else (DefaultArgument(key=GMSH_LC_KEY, values=(str(1.0 / allrun_n),)),)
     return (
         WorkflowStep(
             step_id="gmsh", command=("gmsh", "-3", template, "-o", mesh, "-format", "msh2"),
-            consumes=(template,), produces=(mesh,),
+            default_arguments=defaults, consumes=(template,), produces=(mesh,),
         ),
         WorkflowStep(
             step_id="gmshToFoam", command=("gmshToFoam", mesh),
@@ -70,3 +74,10 @@ def cable_cv_summary_step() -> WorkflowStep:
             "postProcessing/*_activation_times.csv", "postProcessing/*_segments.csv",
         ),
     )
+
+
+def redistribute_restart_state_step() -> WorkflowStep:
+    """``redistributeRestartState`` after the parallel solve's ``reconstructPar``, for a record whose ``Allrun`` runs it
+    in its parallel branch: the models' restart-state files, which ``reconstructPar`` leaves in the processor
+    directories. A serial run leaves it out."""
+    return WorkflowStep(step_id="redistributeRestartState", command=("redistributeRestartState",), parallel_only=True)

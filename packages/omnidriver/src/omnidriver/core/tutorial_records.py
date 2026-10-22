@@ -372,6 +372,10 @@ class WorkflowStep:
     ``case_id_argument`` names the tokens after which the step is given the
     id of the case it runs in (a sweep case's id, a single plan's record
     name), last on its command line, for a script that names its outputs by it.
+
+    A ``parallel_only`` step runs only when the run is parallel, after the
+    stack's parallel form of the solve, as a native script's parallel branch
+    runs it; a serial run leaves it out.
     """
 
     step_id: str
@@ -380,6 +384,7 @@ class WorkflowStep:
     consumes: tuple[str, ...] = ()
     default_arguments: tuple[DefaultArgument, ...] = ()
     case_id_argument: tuple[str, ...] = ()
+    parallel_only: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "command", tuple(self.command))

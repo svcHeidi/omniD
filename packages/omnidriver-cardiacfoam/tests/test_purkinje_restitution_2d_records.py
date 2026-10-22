@@ -71,7 +71,9 @@ def test_a_purkinje_record_stages_its_variants_dictionaries_under_the_names_the_
 
 def test_the_monodomain_variant_alone_can_advance_the_network_without_the_tissue():
     record = TUTORIAL_RECORDS[PURKINJE_RECORDS["monodomain"]]
-    assert record.workflow_variants == {"coupled": ("mesh", "solve"), "graphOnly": ("mesh", "solveGraphOnly")}
+    assert record.workflow_variants == {
+        "coupled": ("mesh", "solve", "redistributeRestartState"), "graphOnly": ("mesh", "solveGraphOnly"),
+    }
     assert record.default_variant == "coupled"
     [graph_only] = [step for step in record.workflow_steps if step.step_id == "solveGraphOnly"]
     assert graph_only.command == ("runPurkinjeGraph", "-conductionDomain", "purkinjeNetwork")

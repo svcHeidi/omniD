@@ -234,15 +234,17 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    native run: pseudo-ECG 3D, bidomain 3D and bathBidomain 3D at N = 10, and
    monodomain1D3D at N = 10. A record run is not the native default run in
    these places:
-   - eikonalECG 3D reports all 161 electrodes, where the Allrun's default
-     `-electrodes five` removes `R*` and keeps 5 (the activation time is
-     identical); its `tet-errorLocalisation` route runs `writeCellCentres`,
-     and a study sets `writeErrorField` itself (`-errorField` does both);
-   - a tet route with no `tetNumberCells` meshes at the template's `lc`
-     (N = 10) with the case's N = 20 time step, which no Allrun runs
-     (`Allrun -mesh tet` defaults to N = 20); gmsh's `seed` is no axis; a tet
-     study at 1D or 2D, or naming `numberCells`, is not refused, though the
-     Allrun refuses `-mesh tet` below 3D;
+   - eikonalECG 3D reports all 161 electrodes unless a study names the
+     `electrodes five` axis, where the Allrun's default `-electrodes five`
+     keeps 5 (the activation time is identical); `-errorField` is only the
+     `tet-errorLocalisation` route (`writeCellCentres`, and a study sets
+     `writeErrorField`), while the Allrun also takes it on hex;
+   - gmsh's `seed` (bath and eikonalECG `-seed`) is no axis; a tet study at
+     1D or 2D, or naming `numberCells`, is not refused, though the Allrun
+     refuses `-mesh tet` below 3D;
+   - the four pseudo-ECG studies restate the conductivity, the verifier and
+     `anisotropic` as keys where the `field` axis now says it in one word;
+     moving them to the axis is a native edit;
    - the three `sphericalShell` cases have no record, and `--case` does not
      plan them (§3): foamlib reads neither the `#ifeq` block of their
      `electroProperties` nor the `#eval` lines of their `blockMeshDict`;

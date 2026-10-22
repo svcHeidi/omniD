@@ -24,10 +24,10 @@ BLOCK_MESH_DICT_DOCUMENTS: tuple[str, ...] = tuple(
 #: its native default under this key (``DefaultArgument``).
 MESH_DICT_KEY: tuple[str, ...] = ("-dict",)
 
-#: The gmsh argument a tet axis passes. The gmsh steps declare no default for
-#: it: with no study value, gmsh uses the template's own ``DefineConstant``
-#: default, and an axis that names it adds it (``WorkflowStep.argv`` appends
-#: a contribution no default claims).
+#: The gmsh argument a tet axis passes. A record whose ``Allrun -mesh tet`` has
+#: a default ``N`` declares ``lc = 1/N`` as the gmsh step's default
+#: (``gmsh_route``'s ``allrun_n``), which the axis replaces; otherwise gmsh uses
+#: the template's own ``DefineConstant`` and the axis adds the argument.
 GMSH_LC_KEY: tuple[str, ...] = ("-setnumber", "lc")
 
 
@@ -196,7 +196,8 @@ def tet_number_cells_axis(name: str, *, gmsh_step_id: str = "gmsh") -> AxisContr
     ``lc = 1/N``, not a study-supplied ``lc``: every native
     ``.geo.template`` parameterises resolution by a cell count ``N`` along
     the unit cube's edge (the hex route's vocabulary). With the axis unnamed,
-    a case gets the template's own default.
+    a case gets the gmsh step's default: the ``Allrun``'s default ``N`` where
+    the record declares it, else the template's own.
 
     Refuses by name a value that is not a positive integer (``bool``
     excluded): ``1/N`` would otherwise be a ``ZeroDivisionError`` or a
@@ -212,6 +213,6 @@ def tet_number_cells_axis(name: str, *, gmsh_step_id: str = "gmsh") -> AxisContr
         name=name, value_kind="integer", unit=None, exclusive_minimum=0, resolve=resolve,
         description=(
             "Cells N along the unit cube's edge for the tet route: the gmsh step gets -setnumber lc 1/N; "
-            "unset, the template's own default applies."
+            "unset, the Allrun's default N where the record declares it, else the template's own lc."
         ),
     )

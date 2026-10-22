@@ -1,0 +1,44 @@
+# applications/utilities/redistributeRestartState/utility.manifest.toml
+
+name = "redistributeRestartState"
+description = "Gather or scatter the restart-state files of cardiacFoam's ionic and active-tension models across the processor boundary."
+category = "post-processing"
+
+purpose = """
+cardiacFoam's ionic and active-tension models write their restart state as
+<time>/<region>/<model>State, one row per cell, which decomposePar and
+reconstructPar leave alone. By default this utility reconstructs: for every
+selected time it gathers the processor files through each processor's
+cellProcAddressing into the undecomposed case. With -decompose it scatters the
+undecomposed files into the processor directories. A file whose row count
+differs from the processor's cell count is reported and skipped. A tutorial's
+Allrun runs it after reconstructPar in its parallel branch.
+"""
+
+inputs = [
+  "processor*/<time>/<region>/<model>State",
+  "processor*/constant/polyMesh/cellProcAddressing",
+]
+
+requires_mesh = true
+example = "redistributeRestartState -case ./case"
+
+[[flags]]
+name = "-decompose"
+description = "Scatter the undecomposed state files into the processor directories instead of gathering them."
+takes_value = false
+argument_kind = "switch"
+
+[[flags]]
+name = "-region"
+description = "The mesh region whose state files are moved."
+takes_value = true
+argument_kind = "word"
+
+[[produces]]
+artifact_id = "restart_state_time_dirs"
+path_pattern = "{instance}/"
+format = "openfoam_time_dirs"
+description = "The reconstructed time directories, which now hold each model's <model>State."
+produced_by = "redistributeRestartState"
+instance_indexed = true

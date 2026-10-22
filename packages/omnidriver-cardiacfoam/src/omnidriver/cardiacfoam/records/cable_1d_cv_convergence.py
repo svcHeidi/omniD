@@ -9,7 +9,7 @@ from omnidriver.core.tutorial_records import TutorialRecord
 
 from .cable_axes import cable_dx_axis
 from .case_outputs import WITH_DEFAULT_VALUES
-from .routes import block_mesh_step, cable_cv_summary_step, solve_step
+from .routes import block_mesh_step, cable_cv_summary_step, redistribute_restart_state_step, solve_step
 
 DX_AXIS_NAME = "dx"
 
@@ -27,6 +27,7 @@ RECORD = TutorialRecord(
             (WITH_DEFAULT_VALUES, "postProcessing/cableProbes/*/Vm", "postProcessing/cableProbes/*/activationTime"),
             consumes=("system/cableProbes",),
         ),
+        redistribute_restart_state_step(),
         cable_cv_summary_step(),
     ),
 )

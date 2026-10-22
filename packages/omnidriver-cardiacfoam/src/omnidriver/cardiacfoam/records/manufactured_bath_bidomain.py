@@ -9,10 +9,12 @@ from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
 from .manufactured_solution_axes import (
     BLOCK_MESH_DICT_DOCUMENTS, allrun_time_controls, dimension_axis, number_cells_axis, tet_number_cells_axis,
 )
-from .routes import block_mesh_step, gmsh_route, solve_step
+from .routes import block_mesh_step, gmsh_route, redistribute_restart_state_step, solve_step
 
 _TET_TEMPLATE = "three_domain_box.geo.template"
 _TET_MESH = "three_domain_box.msh"
+#: The N ``Allrun`` meshes at when given no ``-N``, hex and tet alike.
+_ALLRUN_N = 20
 
 #: The time step the native Allrun takes at N = 10; it scales it with the cell size squared.
 _ALLRUN_STEP_AT_TEN = 0.00892857
@@ -42,7 +44,7 @@ RECORD = TutorialRecord(
         block_mesh_step(
             BLOCK_MESH_DICT_DOCUMENTS + ("system/controlDict",), default_dict="system/blockMeshDict.3D",
         ),
-        *gmsh_route(_TET_TEMPLATE, _TET_MESH, "myocardium", "bath"),
+        *gmsh_route(_TET_TEMPLATE, _TET_MESH, "myocardium", "bath", allrun_n=_ALLRUN_N),
         WorkflowStep(
             # The cellZones file and the four sets topoSetDict names. Both
             # routes run it, as the native Allrun does: on the tet mesh it
@@ -68,6 +70,7 @@ RECORD = TutorialRecord(
         # `<dim>_<N>_cells.dat`, whose N the verifier derives from the
         # resolved mesh (`3D_17_cells.dat` at tet lc=0.1).
         solve_step((WITH_DEFAULT_VALUES, "postProcessing/*_cells.dat")),
+        redistribute_restart_state_step(),
         # The interface diagnostics of the solved field, then of the
         # manufactured field in its place, each with the per-face errors.
         WorkflowStep(
@@ -85,9 +88,12 @@ RECORD = TutorialRecord(
         ),
     ),
     workflow_variants={
-        "hex": ("mesh", "checkMesh", "topoSet", "setConductivity", "solve", "interfaceMetrics", "interfaceMetricsExact"),
+        "hex": (
+            "mesh", "checkMesh", "topoSet", "setConductivity", "solve", "redistributeRestartState",
+            "interfaceMetrics", "interfaceMetricsExact",
+        ),
         "tet": (
-            "gmsh", "gmshToFoam", "checkMesh", "topoSet", "setConductivity", "solve",
+            "gmsh", "gmshToFoam", "checkMesh", "topoSet", "setConductivity", "solve", "redistributeRestartState",
             "interfaceMetrics", "interfaceMetricsExact",
         ),
     },

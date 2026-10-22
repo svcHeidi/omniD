@@ -7,7 +7,7 @@ from __future__ import annotations
 from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
 
 from .case_outputs import WITH_DEFAULT_VALUES
-from .routes import block_mesh_step, solve_step
+from .routes import block_mesh_step, redistribute_restart_state_step, solve_step
 
 #: `controlDict` runs the `rotorpoints` function during the solve too; the
 #: probe file is declared on the step that rewrites it last.
@@ -19,6 +19,7 @@ RECORD = TutorialRecord(
     workflow_steps=(
         block_mesh_step(("system/blockMeshDict", "system/controlDict")),
         solve_step((WITH_DEFAULT_VALUES,), consumes=("system/rotorpoints",)),
+        redistribute_restart_state_step(),
         WorkflowStep(
             step_id="samplePoints",
             command=("postProcess", "-func", _ROTOR_POINTS_FUNCTION, "-latestTime"),

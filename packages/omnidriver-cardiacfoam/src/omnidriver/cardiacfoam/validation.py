@@ -548,6 +548,24 @@ def _evaluate_ecg_anisotropic_consistency(context: dict[str, Any]) -> list["Stri
     return errors
 
 
+def _evaluate_anisotropic_verifier_dimension(context: dict[str, Any]) -> list["StrictDiagnostic"]:
+    """The anisotropic tissue verifier is 3D only: manufacturedAnisotropicMonodomainVerifier stops on any geometric
+    dimension but 3, as ``Allrun -field anisotropic`` refuses ``-dim`` 1 or 2."""
+    if context.get("verificationModel.type") != _TISSUE_ANISOTROPIC_VERIFIER:
+        return []
+    dimension = str(context.get("dimension", "")).strip('"')
+    if dimension in ("", "3D"):
+        return []
+    return [_diagnostic_from_phase(
+        phase="physics", field="dimension", level="error",
+        message=(
+            f"dimension is {dimension}, but $ELECTRO_MODEL_COEFFS.verificationModel.type is "
+            f"{_TISSUE_ANISOTROPIC_VERIFIER!r}, whose sin^2 field is 3D only; run it in 3D, or take the FDA field "
+            "(the pseudo-ECG record's field axis, fda)."
+        ),
+    )]
+
+
 _RPVJ_COUPLER = "reactionDiffusionPvjCoupler"
 _GRAPH_FILE_SUFFIX = ".purkinjeGraphModelCoeffs.graphFile"
 
@@ -1143,6 +1161,7 @@ def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]
         + _evaluate_personalized_templates(context)
         + _evaluate_tissue_compatibility(context)
         + _evaluate_ecg_anisotropic_consistency(context)
+        + _evaluate_anisotropic_verifier_dimension(context)
         + _evaluate_conductivity_diagonal(context)
     )
 

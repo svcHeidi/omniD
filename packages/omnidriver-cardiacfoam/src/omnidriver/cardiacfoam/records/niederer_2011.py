@@ -14,7 +14,7 @@ from omnidriver.openfoam.case_planning import cell_counts_from_dx
 from ..activation_probes import ACTIVATION_PROBES_FORMAT
 from .case_outputs import WITH_DEFAULT_VALUES
 from .manufactured_solution_axes import GMSH_LC_KEY
-from .routes import block_mesh_step, gmsh_route, solve_step
+from .routes import block_mesh_step, gmsh_route, redistribute_restart_state_step, solve_step
 
 _PHYSICS_DOCUMENT = "constant/physicsProperties"
 _BLOCK_MESH_DICT_DOCUMENT = "system/blockMeshDict"
@@ -93,8 +93,10 @@ RECORD = TutorialRecord(
     variant_selector=MESH_SELECTOR_NAME,
     default_variant=HEX_VARIANT,
     workflow_variants={
-        HEX_VARIANT: ("mesh", "solve", "samplePoints", "sampleLines"),
-        TET_VARIANT: ("gmsh", "gmshToFoam", "checkMesh", "solve", "samplePoints", "sampleLines"),
+        HEX_VARIANT: ("mesh", "solve", "redistributeRestartState", "samplePoints", "sampleLines"),
+        TET_VARIANT: (
+            "gmsh", "gmshToFoam", "checkMesh", "solve", "redistributeRestartState", "samplePoints", "sampleLines",
+        ),
     },
     workflow_steps=(
         block_mesh_step((_BLOCK_MESH_DICT_DOCUMENT,)),
@@ -102,6 +104,7 @@ RECORD = TutorialRecord(
         *gmsh_route(_TET_GEO_TEMPLATE_RELPATH, _TET_MSH_RELPATH, "internal"),
         # electroModel::end() writes electroProperties.withDefaultValues for this solver.
         solve_step((WITH_DEFAULT_VALUES,), consumes=("system/Niedererpoints", "system/Niedererlines")),
+        redistribute_restart_state_step(),
         WorkflowStep(
             step_id="samplePoints",
             command=("postProcess", "-func", _POINTS_FUNCTION, "-latestTime"),

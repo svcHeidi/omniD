@@ -3,7 +3,13 @@ Native case: ``manufacturedSolutions/eikonalECG``; hex, tet and the tet route wi
 
 from __future__ import annotations
 
-from omnidriver.core.tutorial_records import TutorialRecord, WorkflowStep
+import re
+from pathlib import Path
+from typing import Any
+
+from omnidriver.core.tutorial_records import (
+    AxisContract, AxisPatch, AxisResult, TutorialRecord, TutorialRecordError, WorkflowStep,
+)
 
 from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
 from .manufactured_solution_axes import (
@@ -13,6 +19,79 @@ from .routes import block_mesh_step, gmsh_route, solve_step
 
 _TET_TEMPLATE_RELPATH = "box.geo.template"
 _TET_MESH = "box.msh"
+#: The N ``Allrun`` meshes at when given no ``-N``, hex and tet alike.
+_ALLRUN_N = 20
+
+_ECG = ("eikonalSolverCoeffs", "ecgDomains", "ECG")
+
+#: ``Allrun -template``: what each manufactured template writes beneath the ECG domain. singleEvent is the case's own
+#: sampling (-6 to 92 by 0.25), so it sets the template word alone.
+_TEMPLATES: dict[str, tuple[tuple[tuple[str, ...], Any, str], ...]] = {
+    "singleEvent": ((("verificationModel", "template"), "singleEvent", "enum"),),
+    "sine": (
+        (("sampling", "start"), 0.0, "scalar"),
+        (("sampling", "end"), 2.0, "scalar"),
+        (("sampling", "deltaT"), 0.01, "scalar"),
+        (("verificationModel", "template"), "sine", "enum"),
+    ),
+}
+
+#: ``Allrun -electrodes five`` writes ``#remove "R.*"`` into the electrode positions: only E1-E5 stay.
+_FIVE_ELECTRODES_REMOVE = re.compile("R.*")
+_ELECTRODES = ("five", "all")
+
+
+def template_axis(name: str) -> AxisContract:
+    """``Allrun -template``: the manufactured ECG template and the sampling window it is read over."""
+
+    def resolve(value: Any, staged_case_root: Path) -> AxisResult:
+        del staged_case_root  # this axis reads nothing from the staged case
+        if value not in _TEMPLATES:
+            raise TutorialRecordError(f"template axis {name!r}: {value!r} is not one of {sorted(_TEMPLATES)}", code="axis_rule")
+        return AxisResult(patches=tuple(
+            AxisPatch(document=ELECTRO_PROPERTIES, key_path=_ECG + key_path, value=item, value_kind=kind)
+            for key_path, item, kind in _TEMPLATES[value]
+        ))
+
+    return AxisContract(
+        name=name, value_kind="enum", unit=None, resolve=resolve,
+        description=(
+            f"The manufactured ECG template, one of {sorted(_TEMPLATES)} (Allrun -template): singleEvent, the case's "
+            "own, one action-potential-like event sampled from -6 to 92 by 0.25; sine, sin(2 pi s) sampled from 0 to 2 "
+            "by 0.01 (the ECG domain's sampling start, end and deltaT, and verificationModel.template)."
+        ),
+    )
+
+
+def electrodes_axis(name: str) -> AxisContract:
+    """``Allrun -electrodes``: five removes every electrode the case names ``R.*``, as the Allrun's ``#remove "R.*"``
+    does; all keeps the case's electrodes."""
+
+    def resolve(value: Any, staged_case_root: Path) -> AxisResult:
+        if value not in _ELECTRODES:
+            raise TutorialRecordError(f"electrodes axis {name!r}: {value!r} is not one of {list(_ELECTRODES)}", code="axis_rule")
+        if value == "all":
+            return AxisResult()
+        from foamlib import FoamFile
+
+        positions = FoamFile(Path(staged_case_root) / ELECTRO_PROPERTIES).get(_ECG + ("electrodePositions",))
+        names = [str(key) for key in getattr(positions, "keys", lambda: ())() if key is not None]
+        return AxisResult(patches=tuple(
+            AxisPatch(
+                document=ELECTRO_PROPERTIES, key_path=_ECG + ("electrodePositions", electrode),
+                value=None, value_kind="vector3", removes=True,
+            )
+            for electrode in names if _FIVE_ELECTRODES_REMOVE.fullmatch(electrode)
+        ))
+
+    return AxisContract(
+        name=name, value_kind="enum", unit=None, resolve=resolve,
+        description=(
+            f"The ECG electrodes, one of {list(_ELECTRODES)} (Allrun -electrodes): five keeps E1-E5 and removes every "
+            "electrode named R.*; all keeps the case's 161. Unset, the case's own electrodes stay."
+        ),
+    )
+
 
 #: The dimension axis takes no `solver_coefficients`: `eikonalSolverCoeffs` has
 #: no `dimension` key (unlike bidomain's and bath's), so it sets the mesh step's
@@ -23,6 +102,8 @@ AXES = (
     ),
     number_cells_axis("numberCells"),
     tet_number_cells_axis("tetNumberCells", gmsh_step_id="gmsh"),
+    template_axis("template"),
+    electrodes_axis("electrodes"),
 )
 
 #: `eikonalMyocardiumDomain` does not override `electroModel::end()`, so the
@@ -49,7 +130,7 @@ RECORD = TutorialRecord(
     native_case_relpath="manufacturedSolutions/eikonalECG",
     axes=AXES,
     workflow_steps=(
-        _MESH_STEP, _SOLVE_STEP, *gmsh_route(_TET_TEMPLATE_RELPATH, _TET_MESH, "internal"),
+        _MESH_STEP, _SOLVE_STEP, *gmsh_route(_TET_TEMPLATE_RELPATH, _TET_MESH, "internal", allrun_n=_ALLRUN_N),
         _WRITE_CELL_CENTRES_STEP,
     ),
     variant_selector="mesh",

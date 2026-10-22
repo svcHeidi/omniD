@@ -210,15 +210,13 @@ def _records_with_a_gmsh_step():
             yield record, steps
 
 
-def test_no_gmsh_step_restates_its_templates_lc_default():
-    """With no study value gmsh runs without ``-setnumber``, so the template's own DefineConstant default applies."""
-    records = list(_records_with_a_gmsh_step())
-    assert {record.name for record, _ in records} >= {
-        "manufacturedBidomain", "manufacturedEikonalECG", "niederer2011",
-    }
-    for record, steps in records:
-        assert steps["gmsh"].default_arguments == (), record.name
-        assert "-setnumber" not in steps["gmsh"].argv(()), record.name
+def test_a_manufactured_gmsh_step_defaults_to_the_allruns_n_and_niederer_to_the_template():
+    """``Allrun -mesh tet`` meshes at its default N = 20 (lc 0.05); Niederer's tet route has no Allrun, so gmsh takes
+    the template's own DefineConstant."""
+    steps = {record.name: steps["gmsh"] for record, steps in _records_with_a_gmsh_step()}
+    for name in ("manufacturedBidomain", "manufacturedBathBidomain", "manufacturedEikonalECG", "manufacturedMonodomainPseudoECG"):
+        assert steps[name].argv()[-3:] == ("-setnumber", "lc", "0.05"), name
+    assert "-setnumber" not in steps["niederer2011"].argv()
 
 
 @pytest.mark.parametrize(("record_name", "study", "lc"), [
@@ -267,3 +265,66 @@ def test_every_axis_of_every_record_says_what_it_sets_and_the_niederer_lengths_a
     niederer = {axis.name: axis.to_json() for axis in records["niederer2011"].axes}
     for name in ("dx", "tetDx"):
         assert (niederer[name]["unit"], niederer[name]["exclusive_minimum"]) == ("m", 0)
+
+
+_EIKONAL_ECG_ELECTRO = Path(__file__).parent / "fixtures" / "eikonal_ecg" / "electroProperties"
+_ECG = "constant/electroProperties::eikonalSolverCoeffs.ecgDomains.ECG."
+
+
+def _with_eikonal_ecg_case(tmp_path):
+    (tmp_path / "constant").mkdir()
+    shutil.copy(_EIKONAL_ECG_ELECTRO, tmp_path / "constant" / "electroProperties")
+    return tmp_path
+
+
+def test_the_sine_template_sets_its_sampling_and_template_as_allrun_minus_template_sine_does(tmp_path):
+    patches, _ = _resolve("manufacturedEikonalECG", {"template": "sine"}, tmp_path)
+    assert patches == {
+        _ECG + "sampling.start": 0.0, _ECG + "sampling.end": 2.0, _ECG + "sampling.deltaT": 0.01,
+        _ECG + "verificationModel.template": "sine",
+    }
+    assert _resolve("manufacturedEikonalECG", {"template": "singleEvent"}, tmp_path)[0] == {
+        _ECG + "verificationModel.template": "singleEvent",
+    }
+
+
+def test_five_electrodes_remove_every_r_electrode_and_keep_e1_to_e5(tmp_path):
+    case = _with_eikonal_ecg_case(tmp_path)
+    patches, _ = _resolve("manufacturedEikonalECG", {"electrodes": "five"}, case)
+    removed = sorted(slot.removeprefix(_ECG + "electrodePositions.") for slot in patches)
+    assert len(removed) == 156 and all(name.startswith("R") for name in removed)
+    assert _resolve("manufacturedEikonalECG", {"electrodes": "all"}, case)[0] == {}
+
+
+@pytest.mark.parametrize(("record_name", "study"), [
+    ("manufacturedEikonalECG", {"template": "square"}),
+    ("manufacturedEikonalECG", {"electrodes": "three"}),
+    ("manufacturedMonodomainPseudoECG", {"field": "rotated"}),
+])
+def test_an_allrun_option_axis_refuses_a_word_its_allrun_refuses(record_name, study, tmp_path):
+    with pytest.raises(TutorialRecordError, match="is not one of"):
+        _resolve(record_name, study, tmp_path)
+
+
+def test_the_fda_field_sets_its_conductivity_verifier_and_pseudo_ecg_reference(tmp_path):
+    patches, _ = _resolve("manufacturedMonodomainPseudoECG", {"field": "fda"}, tmp_path)
+    coeffs = "constant/electroProperties::monodomainSolverCoeffs."
+    assert patches == {
+        coeffs + "conductivity": {"value": [0.111453302, 0, 0, 0.121585420, 0, 0.030396355], "dimensions": [-1, -3, 3, 0, 0, 2, 0]},
+        coeffs + "verificationModel.type": "manufacturedFDAMonodomainVerifier",
+        coeffs + "ecgDomains.ECG.verificationModel.anisotropic": False,
+    }
+
+
+@pytest.mark.parametrize(("verifier", "dimension", "refused"), [
+    ("manufacturedAnisotropicMonodomainVerifier", '"2D"', True),
+    ("manufacturedAnisotropicMonodomainVerifier", '"3D"', False),
+    ("manufacturedFDAMonodomainVerifier", '"1D"', False),
+])
+def test_the_anisotropic_field_is_refused_below_3d(verifier, dimension, refused):
+    from omnidriver.cardiacfoam.validation import cross_field_diagnostics
+
+    found = cross_field_diagnostics({
+        "myocardiumSolver": "monodomainSolver", "verificationModel.type": verifier, "dimension": dimension,
+    })
+    assert any(item.field == "dimension" and item.level == "error" for item in found) == refused

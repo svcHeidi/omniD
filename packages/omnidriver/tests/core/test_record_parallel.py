@@ -229,6 +229,28 @@ def test_the_count_is_read_from_the_committed_case(tmp_path, monkeypatch):
     assert commit.parallel_request is True
 
 
+@pytest.mark.parametrize("parallel, steps", [
+    (False, ["solve"]), (True, ["solve.split", "solve", "solve.join", "redistribute"]),
+])
+def test_a_parallel_only_step_runs_after_the_parallel_form_and_not_in_serial(tmp_path, monkeypatch, parallel, steps):
+    monkeypatch.delenv("SLURM_NTASKS", raising=False)
+    cases_root = _native_toy_case(tmp_path)
+    context = _toy_context()
+    toy = context.stack.call("get_tutorial_records")["toyTutorial"]
+    record = dataclasses.replace(toy, workflow_steps=(
+        *toy.workflow_steps,
+        WorkflowStep(step_id="redistribute", command=("cp", "solved.marker", "redistributed.marker"), parallel_only=True),
+    ))
+    _commit, spec = commit_and_build_record_spec(
+        record, case_id="c", cases_root=cases_root, staged_case_root=tmp_path / "staged",
+        study_by_source={"base": {"parallel": parallel}}, driver_context=context,
+    )
+    dag = spec.metadata["workflow_dag"]["steps"]
+    assert [step["id"] for step in dag] == steps
+    if parallel:
+        assert dag[-1]["depends_on"] == ["solve.join"]
+
+
 def test_the_preview_shows_the_parallel_form_the_uncommitted_study_would_run(tmp_path, monkeypatch):
     monkeypatch.delenv("SLURM_NTASKS", raising=False)
     cases_root = _native_toy_case(tmp_path, cells="2")

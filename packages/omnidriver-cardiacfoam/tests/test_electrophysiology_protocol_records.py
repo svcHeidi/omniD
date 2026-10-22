@@ -39,7 +39,7 @@ def _allrun_commands(case: Path) -> list[tuple[str, ...]]:
 
 def _step_commands(record_name: str, *, among: tuple[str, ...] | None = None) -> list[tuple[str, ...]]:
     steps = TUTORIAL_RECORDS[record_name].workflow_steps
-    return [step.command for step in steps if among is None or step.step_id in among]
+    return [step.command for step in steps if not step.parallel_only and (among is None or step.step_id in among)]
 
 
 def _plan(record: str, tmp_path, study: dict | None = None):
@@ -66,6 +66,19 @@ def test_a_records_steps_run_what_the_native_allrun_runs(record, case):
         # The README's manual CV call, which table_summary.py reads back per case.
         native.append(("./setup/extract_cv.py",))
     assert _step_commands(record) == native
+
+
+@pytest.mark.parametrize("record, case", [
+    ("cable1DEikonalCV", PROTOCOLS / "cableProtocol" / "eikonal1DCableCV"),
+    ("ionicHeterogeneity", PROTOCOLS / "ionicHeterogeneity"),
+    ("rotorInstability", PROTOCOLS / "rotorInstability"),
+    ("purkinjeRestitution2DAntegrade", PROTOCOLS / "purkinjeRestitution2D"),
+])
+def test_a_records_parallel_only_steps_are_what_its_allrun_adds_after_reconstructpar(record, case):
+    allrun = [shlex.split(line.strip()) for line in (case / "Allrun").read_text().splitlines()]
+    native = [tuple(words[1:]) for words in allrun if words[:2] == ["runApplication", "redistributeRestartState"]]
+    steps = [step.command for step in TUTORIAL_RECORDS[record].workflow_steps if step.parallel_only]
+    assert steps == native
 
 
 @pytest.mark.parametrize("record", NEW_RECORDS)

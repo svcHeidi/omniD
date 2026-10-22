@@ -8,7 +8,7 @@ from __future__ import annotations
 from omnidriver.core.tutorial_records import RecordInput, TutorialRecord, WorkflowStep
 
 from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
-from .routes import block_mesh_step, solve_step
+from .routes import block_mesh_step, redistribute_restart_state_step, solve_step
 
 _NATIVE_CASE = "electrophysiologyProtocols/purkinjeRestitution2D"
 _CONTROL_DICT = "system/controlDict"
@@ -33,10 +33,11 @@ def _variant_input(word: str) -> RecordInput:
     )
 
 
-def _mesh_and_solve() -> tuple[WorkflowStep, WorkflowStep]:
+def _mesh_and_solve() -> tuple[WorkflowStep, ...]:
     return (
         block_mesh_step(("system/blockMeshDict", _CONTROL_DICT)),
         solve_step((WITH_DEFAULT_VALUES, *_NETWORK_OUTPUTS), consumes=(_PURKINJE_GRAPH,)),
+        redistribute_restart_state_step(),
     )
 
 
@@ -66,7 +67,7 @@ MONODOMAIN_RECORD = TutorialRecord(
         ),
     ),
     workflow_variants={
-        COUPLED_VARIANT: ("mesh", _SOLVE_STEP_ID),
+        COUPLED_VARIANT: ("mesh", _SOLVE_STEP_ID, "redistributeRestartState"),
         GRAPH_ONLY_VARIANT: ("mesh", _GRAPH_ONLY_STEP_ID),
     },
     variant_selector=SOLVER_SELECTOR_NAME,

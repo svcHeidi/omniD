@@ -213,6 +213,9 @@ def _resolve_and_split(
     )
     workflow_step_ids, workflow_variant = _resolve_workflow_route(record, reserved_values)
     parallel_request = _parallel_request(record, reserved_values)
+    if parallel_request is None:
+        parallel_only = {step.step_id for step in record.workflow_steps if step.parallel_only}
+        workflow_step_ids = tuple(step_id for step_id in workflow_step_ids if step_id not in parallel_only)
     combined, command_arguments, replacements = resolve_case_patches(
         record,
         study_by_source=study_by_source,

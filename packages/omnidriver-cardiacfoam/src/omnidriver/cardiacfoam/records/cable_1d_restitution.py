@@ -18,7 +18,7 @@ from omnidriver.openfoam.literals import parse_scalar_list_literal, parse_vector
 
 from .cable_axes import cable_dx_axis
 from .case_outputs import ELECTRO_PROPERTIES, WITH_DEFAULT_VALUES
-from .routes import block_mesh_step, solve_step
+from .routes import block_mesh_step, redistribute_restart_state_step, solve_step
 
 #: The `monodomainSolverCoeffs` scope of `myocardiumSolver monodomainSolver`,
 #: which the native case already holds.
@@ -196,6 +196,7 @@ RECORD = TutorialRecord(
         solve_step(
             (WITH_DEFAULT_VALUES, "postProcessing/cableProbes/*/Vm"), consumes=("system/cableProbes",),
         ),
+        redistribute_restart_state_step(),
         WorkflowStep(
             step_id=POSTPROCESS_STEP_ID,
             command=("Allrun.post",),
