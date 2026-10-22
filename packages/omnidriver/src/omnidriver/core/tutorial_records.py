@@ -368,6 +368,10 @@ class WorkflowStep:
     ``path_pattern`` that core ``str.format``-s. A utility manifest's
     ``produces`` is unioned with the step's own. An entry may be a
     :class:`ProducedPath`; a plain path means :data:`PLAIN_FILE_FORMAT`.
+
+    ``case_id_argument`` names the tokens after which the step is given the
+    id of the case it runs in (a sweep case's id, a single plan's record
+    name), last on its command line, for a script that names its outputs by it.
     """
 
     step_id: str
@@ -375,6 +379,7 @@ class WorkflowStep:
     produces: tuple[str, ...] = ()
     consumes: tuple[str, ...] = ()
     default_arguments: tuple[DefaultArgument, ...] = ()
+    case_id_argument: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "command", tuple(self.command))
@@ -383,6 +388,14 @@ class WorkflowStep:
                 f"workflow step {self.step_id!r} default_arguments must be a sequence of DefaultArgument, not one"
             )
         object.__setattr__(self, "default_arguments", tuple(self.default_arguments))
+        if isinstance(self.case_id_argument, str) or not all(
+            isinstance(token, str) and token for token in self.case_id_argument
+        ):
+            raise TutorialRecordError(
+                f"workflow step {self.step_id!r} case_id_argument must be a sequence of non-empty tokens, "
+                f"not {self.case_id_argument!r}"
+            )
+        object.__setattr__(self, "case_id_argument", tuple(self.case_id_argument))
         for default in self.default_arguments:
             if not isinstance(default, DefaultArgument):
                 raise TutorialRecordError(
@@ -397,6 +410,11 @@ class WorkflowStep:
                     f"exactly once in the step's default command line {list(default_line)!r}, and occurs "
                     f"{count} times; an axis passing it could not say which argument it replaces"
                 )
+        if self.case_id_argument and _token_runs(default_line, self.case_id_argument):
+            raise TutorialRecordError(
+                f"workflow step {self.step_id!r}: case_id_argument {list(self.case_id_argument)!r} occurs in the "
+                f"step's default command line {list(default_line)!r}; the case id would be passed twice"
+            )
         for field_name in ("produces", "consumes"):
             value = getattr(self, field_name)
             if isinstance(value, str):

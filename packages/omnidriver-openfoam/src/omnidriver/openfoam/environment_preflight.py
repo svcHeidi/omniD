@@ -35,7 +35,7 @@ def _required_executables(
         if (
             name
             and name not in _INTERPRETER_SKIP
-            and name not in case_scripts
+            and name.removeprefix("./") not in case_scripts
             and find_script(name, driver_context) is None
             and name not in executables
         ):

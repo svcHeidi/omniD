@@ -30,10 +30,18 @@ def generated_output_globs(
     return _GENERATED_OUTPUT_GLOBS
 
 
+#: The case-local scripts a record step runs, by path from the case root (``./<path>`` on the step).
+_CASE_SCRIPTS: tuple[str, ...] = ("setup/extract_cv.py",)
+
+
 def case_runtime_conventions() -> CaseRuntimeConventions:
-    """OpenFOAM's generated paths and ``local/``.
+    """OpenFOAM's generated paths and ``local/``, and the case-local scripts a record runs.
 
     A tutorial's ``Allrun`` writes its options into ``local/``, which the case's dictionaries ``#includeIfPresent``; one
     left by a native run would override what omniD writes, so staging drops it."""
     conventions = openfoam_case_runtime_conventions()
-    return replace(conventions, generated_directory_names=(*conventions.generated_directory_names, "local"))
+    return replace(
+        conventions,
+        generated_directory_names=(*conventions.generated_directory_names, "local"),
+        case_script_commands=(*conventions.case_script_commands, *_CASE_SCRIPTS),
+    )

@@ -311,7 +311,7 @@ def preview_record_case(
         )
         dag = _workflow_dag_for_record(
             record, workflow_step_ids=workflow_step_ids, command_arguments=command_arguments,
-            replacements=replacements,
+            replacements=replacements, case_id=record.name,
         )
         dag, parallel = _apply_parallel_request(
             record, dag, request=parallel_request, driver_context=driver_context,
@@ -592,14 +592,18 @@ def _workflow_dag_for_record(
     workflow_step_ids: tuple[str, ...],
     command_arguments: Mapping[str, tuple[str, ...]],
     replacements: Mapping[str, Mapping[tuple[str, ...], tuple[str, ...]]] | None = None,
+    case_id: str,
 ) -> dict[str, Any]:
-    """The selected steps as the ``{"steps": [...]}`` DAG, chained in declaration order, with axis arguments in ``WorkflowStep.argv``."""
+    """The selected steps as the ``{"steps": [...]}`` DAG, chained in declaration order, with axis arguments in
+    ``WorkflowStep.argv`` and ``case_id`` after a step's ``case_id_argument``."""
     steps_by_id = {step.step_id: step for step in record.workflow_steps}
     dag_steps: list[dict[str, Any]] = []
     depends_on: list[str] = []
     for step_id in workflow_step_ids:
         step = steps_by_id[step_id]
         argv = list(step.argv(command_arguments.get(step_id, ()), (replacements or {}).get(step_id)))
+        if step.case_id_argument:
+            argv += [*step.case_id_argument, case_id]
         step_entry: dict[str, Any] = {
             "id": step_id,
             "command": argv[0],
@@ -863,7 +867,7 @@ def record_case_spec(
     case_root = Path(staged_case_root)
     workflow_dag = _workflow_dag_for_record(
         record, workflow_step_ids=workflow_step_ids, command_arguments=command_arguments,
-        replacements=replacements,
+        replacements=replacements, case_id=case_id,
     )
     parallel = None
     if parallel_request is not None:

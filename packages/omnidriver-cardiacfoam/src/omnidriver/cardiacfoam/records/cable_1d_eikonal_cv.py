@@ -1,5 +1,6 @@
 """``cable1DEikonalCV``, the eikonal conduction-velocity record on the 1D cable.
-Native case: ``electrophysiologyProtocols/cableProtocol/eikonal1DCableCV``; ``blockMesh`` then ``cardiacFoam``.
+Native case: ``electrophysiologyProtocols/cableProtocol/eikonal1DCableCV``; ``blockMesh``, ``cardiacFoam``, then the
+case's own ``setup/extract_cv.py``.
 """
 
 from __future__ import annotations
@@ -8,7 +9,7 @@ from omnidriver.core.tutorial_records import TutorialRecord
 
 from .cable_axes import cable_dx_axis
 from .case_outputs import WITH_DEFAULT_VALUES
-from .routes import block_mesh_step, solve_step
+from .routes import block_mesh_step, cable_cv_summary_step, solve_step
 
 DX_AXIS_NAME = "dx"
 
@@ -30,5 +31,6 @@ RECORD = TutorialRecord(
             ),
             consumes=("0/activationTime", "system/cableProbes"),
         ),
+        cable_cv_summary_step(),
     ),
 )

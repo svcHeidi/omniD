@@ -1,6 +1,7 @@
 """The records over ``eikonal1DCableCV``, ``ionicHeterogeneity`` and ``rotorInstability``, against the native
-cases committed verbatim as fixtures (their ``Allrun``, ``constant/`` and ``system/``): each record's steps run
-what ``Allrun`` runs, and each plans clean. Nothing runs a solver."""
+cases committed verbatim as fixtures (their ``Allrun``, ``constant/`` and ``system/``, and the cable's
+``setup/extract_cv.py``): each record's steps run what ``Allrun`` runs, then the cable's CV summary, and each plans
+clean. Nothing runs a solver."""
 from __future__ import annotations
 
 import re
@@ -61,6 +62,9 @@ def _foam_value(case: Path, document: str, key: str) -> str:
 ])
 def test_a_records_steps_run_what_the_native_allrun_runs(record, case):
     native = _allrun_commands(case)
+    if record == "cable1DEikonalCV":
+        # The README's manual CV call, which table_summary.py reads back per case.
+        native.append(("./setup/extract_cv.py",))
     assert _step_commands(record) == native
 
 

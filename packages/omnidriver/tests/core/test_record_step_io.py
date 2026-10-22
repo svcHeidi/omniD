@@ -39,7 +39,7 @@ def test_unselected_steps_declare_nothing():
 
 
 def test_dag_carries_ids_and_consumed_paths():
-    dag = _workflow_dag_for_record(RECORD, workflow_step_ids=("mesh", "solve"), command_arguments={})
+    dag = _workflow_dag_for_record(RECORD, workflow_step_ids=("mesh", "solve"), command_arguments={}, case_id="toy")
     by_id = {step["id"]: step for step in dag["steps"]}
     assert by_id["mesh"]["produces"] == [record_artifact_id("mesh", 0), record_artifact_id("mesh", 1)]
     assert by_id["solve"]["consumes"] == ["in.par"]
