@@ -12,7 +12,7 @@ _SRC = "src/electroModels/"
 _DOMAIN = _SRC + "electroDomains/myocardiumDomain/"
 _MONODOMAIN = _SRC + "myocardiumModels/monodomainSolver/monodomainSolver.C"
 _BATCHED = "src/ionicModels/ionicModel/batchedIonicModel.H"
-_BATH_README = "tutorials/manufacturedSolutions/bathBidomain/README.md"
+_TEMPORAL_README = "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/temporalConvergence/README.md"
 
 
 def _source(file: str, excerpt: str, reading: str) -> dict[str, Any]:
@@ -31,9 +31,9 @@ def _claim(stated_by: list[dict[str, Any]], **attributes: Any) -> dict[str, Any]
 TIME_COUPLING_SCHEME: Final = {
     "godunov": _claim(
         [_source(
-            _BATH_README, "explicit first-order `godunov` (Lie splitting)",
-            "the authors state godunov as an explicit first-order Lie splitting, in the README of the bath bidomain "
-            "manufactured-solution tutorial",
+            _TEMPORAL_README, "Godunov splitting is first order whichever time scheme `Vm` uses",
+            "the authors state godunov splitting first order with either ddt(Vm) scheme, in the README of the "
+            "pseudo-ECG manufactured solution's temporal-convergence study",
         )],
         formal_order={"time": 1},
     ),

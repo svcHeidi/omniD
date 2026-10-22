@@ -50,5 +50,5 @@ def test_an_order_no_author_states_is_labelled_inferred():
     assert [s["claim"] for s in sbdf2["stated_by"] if s["kind"] == "inferred"] == ["formal_order"]
     assert sbdf2["composes"]["kind"] == "inferred"
     assert [s["file"] for s in TIME_COUPLING_SCHEME["godunov"]["stated_by"]] == [
-        "tutorials/manufacturedSolutions/bathBidomain/README.md",
+        "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/temporalConvergence/README.md",
     ]

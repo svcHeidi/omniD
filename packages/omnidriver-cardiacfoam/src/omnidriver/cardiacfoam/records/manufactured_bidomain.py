@@ -18,10 +18,9 @@ _BIDOMAIN_SOLVER_COEFFS = ("bidomainSolverCoeffs",)
 _TET_TEMPLATE = "box.geo.template"
 _TET_MESH = "box.msh"
 
-#: The native Allrun does not mesh; the case's regression script meshes with
-#: this dictionary. The gmsh step has no default: with no
-#: ``tetNumberCells``, gmsh uses the template's own ``DefineConstant`` ``lc``
-#: default, rather than restating it and forcing it after a template change.
+#: ``Allrun`` meshes the hex box with ``blockMesh -dict system/blockMeshDict.<dim>D``, 3D by default. The gmsh step has
+#: no default: with no ``tetNumberCells``, gmsh uses the template's own ``DefineConstant`` ``lc`` default, rather than
+#: restating it and forcing it after a template change.
 _MESH_DICT_DEFAULT = "system/blockMeshDict.3D"
 
 #: The time step the native Allrun takes at N = 10; it scales it with the cell size squared.

@@ -1079,22 +1079,25 @@ cardiacFoam-specific:**
   take no `region` entry. But see the electromechanics note below before
   driving such a case at all.
 
-> ### Electromechanics has no tutorial
+> ### Electromechanics has no tutorial record
 >
-> **Do not invent one, and do not try to resurrect the old one.**
-> `manufacturedMonodomainTotalLagrangianEM`, the factory tutorial for this,
-> is deleted rather than migrated: it never worked
-> (these cases lay their dicts out per region --
-> `constant/electro/electroProperties`, `constant/solid/solidProperties` --
-> while the planner looks for `constant/electroProperties`). Electromechanics
-> has not been rebuilt as a tutorial record yet. The native case is
-> untouched, and the electromechanics/active-tension catalog content
-> described above still stands -- only the tutorial entry is gone.
+> **Do not invent one.** cardiacFOAM ships two electromechanical cases,
+> `manufacturedSolutions/monodomainTotalLagrangianEM` and
+> `electromechanicsProtocols/springSupportedSlab`, and omniD has a record for
+> neither. Both lay their dictionaries out per region
+> (`constant/electroMechanicalProperties`, `constant/physicsProperties`,
+> `constant/electro/electroProperties`, `constant/solid/solidProperties`, ...),
+> while every cardiacFoam record's `solve` step reads
+> `constant/electroProperties`. A record for them waits on per-region
+> documents. The native cases are untouched, and the
+> electromechanics/active-tension catalog content described above still
+> stands.
 >
-> This is a deliberately deferred gap, not a defect to discover. The entry
-> name is refused like any other unknown entry; if you are here because you
-> want electromechanics to work, the correct response is to report that it
-> has no tutorial yet and stop -- not to add one as a side quest.
+> This is a deliberately deferred gap, not a defect to discover. Either name
+> is refused like any other unknown entry; `--case` on either folder plans its
+> own `Allrun` as one step, with no axis and no study key. If you are here
+> because you want electromechanics to work, the correct response is to
+> report that it has no record yet and stop -- not to add one as a side quest.
 
 Outputs land where OpenFOAM puts them:
 `postProcessing/<functionObjectName>/<time>/<field>`.
@@ -1274,7 +1277,7 @@ If your agent depends on any of these, expect failure and consider a workaround 
 Every cardiacFoam tutorial is a **tutorial record**
 (`docs/superpowers/specs/2026-09-24-tutorials-are-pointers-design.md`), a
 thin declarative pointer at a native case plus its studies, not Python that
-builds cases. Electromechanics has no tutorial yet (see above).
+builds cases. Electromechanics has no tutorial record yet (see above).
 
 To add a new tutorial, add a `TutorialRecord` under
 `omnidriver/cardiacfoam/records/` and wire it into

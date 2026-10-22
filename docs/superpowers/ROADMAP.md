@@ -127,8 +127,11 @@ What the catalogue holds of the sealed wall, as cardiacFOAM PR #59
   `conormalHarmonic` heart/bath interface, and the three spherical-shell
   verifiers with their keys.
 - **Tutorial cases with no omniD record:** the three `sphericalShell` cases
-  (bidomain, eikonalECG, monodomainPseudoECG). They run through `--case`, or
-  get a record.
+  (bidomain, eikonalECG, monodomainPseudoECG). `--case` does not run them
+  either (open, §5 2a): `plan --strict --case` refuses the eikonalECG and
+  pseudo-ECG shells (`case_rule`: foamlib cannot decode the `#ifeq` block at
+  line 21 of `constant/electroProperties`) and stops the bidomain shell on the
+  `#eval` lines of `system/blockMeshDict` (`configuration_unresolved`).
 
 **Order when the owner is ready:**
 1. Fast-forward native `main` to `omnid/tutorials-are-pointers`, or merge the
@@ -240,10 +243,13 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      (`Allrun -mesh tet` defaults to N = 20); gmsh's `seed` is no axis; a tet
      study at 1D or 2D, or naming `numberCells`, is not refused, though the
      Allrun refuses `-mesh tet` below 3D;
-   - the Niederer `obliqueWall` studies (decision D1) and
-     `benchmarks/niederer2011/oblique/README.md` still name `sealedWallTrace`;
-     the verifier's drift snippets are pinned to native `277dfeb1`, before #59;
-   - records for the three `sphericalShell` cases.
+   - the three `sphericalShell` cases have no record, and `--case` does not
+     plan them (§3): foamlib reads neither the `#ifeq` block of their
+     `electroProperties` nor the `#eval` lines of their `blockMeshDict`;
+   - the electromechanical cases (`monodomainTotalLagrangianEM`,
+     `springSupportedSlab`) and the idealized heart have no record; parked by
+     the owner. EM needs per-region documents: `solve_step` reads
+     `constant/electroProperties`.
 3. **Uncatalogued cardiacFOAM keys:** 12 for electromechanics (they wait for
    it) and `offsetField` (a field-file key that no catalogued document holds).
    `torsoSurface`, read by `ecgModelIO::loadSurface`, is catalogued at
@@ -290,22 +296,12 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      once the owner merges it.
 4a. **Verifier findings, owner's calls** (2026-10-10, `cardiacfoam.md` AB,
    `opencarp.md` N):
-   - restore `dt_values` in `sweep_hex_convergence.json` on
-     the omniD native branch (dropped by `b6a2ccbc1`, present at native
-     `277dfeb19`; the exported sweep runs every level at the finest dt);
    - whether to report openCARP v18.1's Line-element defect upstream (quadrature
      on [-1, 1] against shape functions on [0, 1]).
-   - the gmsh tet templates (`cardiacfoam.md` AD6): all 8 on native main (`277dfeb19`)
-     use `lc = __LC__;`, none `DefineConstant`, while five omniD records
-     (`manufactured_monodomain_pseudo_ecg`, `manufactured_bidomain`,
-     `manufactured_eikonal_ecg`, `manufactured_bath_bidomain`, `niederer_2011`) pass
-     `gmsh -setnumber lc`, so gmsh writes a 14-node mesh, exits 0, and `gmshToFoam` fails.
-     Native `60805b27` (take `lc` via `DefineConstant`) is only on the `omnid/*` branches,
-     not an ancestor of native main, and the template comment on main names
-     `render_tet_geo`, which exists on neither. The owner chose the native
-     `DefineConstant` templates (`60805b27`, being prepared on a native branch to merge) and a
-     README note on generating the tet meshes; omniD's records stay, and its tet routes fail
-     against native main until that merge. omniD's strict plan refuses a `-setnumber` name a template does not declare;
+   - the gmsh tet templates (`cardiacfoam.md` AD6): native main (`277dfeb19`) still has
+     `lc = __LC__;`, which omniD's `gmsh -setnumber lc` cannot set. #59 moves each template
+     to its case root with `DefineConstant[ lc ... ]`, which the records follow; settled when
+     #59 merges. omniD's strict plan refuses a `-setnumber` name a template does not declare;
    - cardiacFOAM with `gradSchemes Gauss linear` does not converge on gmsh tets
      (FDA and rotated problems alike); the tutorial's base case uses `leastSquares`
      and converges at second order. On hex, Gauss linear converges. Whether a tet case should refuse or note `Gauss linear` is open;
@@ -318,8 +314,8 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    goal is an agent that reasons with each solver's mapping and tries the
    benchmark on each one. Frame and mesh alignment is the agent's own
    preprocessing, not an omniD feature. Evidence: `torchcor.md` G-I,
-   `opencarp.md` M, `cardiacfoam.md` Y, Z and AA. Studies are in
-   `benchmarks/niederer2011/oblique/`.
+   `opencarp.md` M, `cardiacfoam.md` Y, Z and AA. The openCARP and TorchCor
+   oblique studies are in `benchmarks/niederer2011/oblique/`.
    - At dx 0.5, the mesh decides the result. The finite-element solvers agree
      within 0.5 ms on a shared mesh, but move 17-26 ms between structured and
      unstructured tets. cardiacFOAM on any tet mesh agrees with itself within
@@ -327,9 +323,12 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - At dx 0.2, on native meshes, P8 is 38.0 (TorchCor), 40.6 (openCARP) and
      54.6 ms (cardiacFOAM). The first two are inside the paper's 37.8-48.7 ms
      at dx 0.1.
-   - Oblique (45 degrees): the like-for-like cardiacFOAM study is
-     `godunov_AB` (sealed walls, conormal). Its `zeroGradient` wall gives
-     P3 = P7 and P4 = P8 exactly.
+   - Oblique (45 degrees): cardiacFOAM has no study now. #59 removed the
+     native `obliqueWall` study pending its redesign (decision D1), since every
+     arm set a wall trace the sealed-wall design no longer reads; its arms
+     under `sealedHeartBoundary` and `sealedWallLeastSquares` are the owner's
+     to decide. The measurements in `cardiacfoam.md` AA were made on the
+     removed walls.
    - Open: dx 0.1 on all three; TorchCor on a GPU (no CUDA here); TorchCor's
      F2-F4, F6-F8 (`torchcor.md`; F6, whether `et = 0.2` upstream is a typo, is
      for its author).

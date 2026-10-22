@@ -40,11 +40,31 @@ file: constant/electroProperties/monodomainSolverCoeffs at line 22 to 58.
 FOAM exiting
 '''
 
-# cardiacFOAM src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C: the constructor.
+# cardiacFOAM 15b3e183 src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C, verbatim lines 31,
+# 40-62: the constructor, which reads sealedHeartBoundary. The scanned tree holds this file alone.
 SCANNED = '''defineTypeNameAndDebug(monodomainSolver, 0);
-monodomainSolver::monodomainSolver(const dictionary& electroProperties)
+monodomainSolver::monodomainSolver
+(
+    const fvMesh& mesh,
+    const fvMesh& supportMesh,
+    const fvMeshSubset* meshSubsetPtr,
+    const dictionary& electroProperties
+)
 :
-    sealedWall_(electroProperties.get<word>("sealedWallTrace"))
+    conductivity_
+    (
+        initialiseConductivity
+        (
+            mesh,
+            supportMesh,
+            meshSubsetPtr,
+            electroProperties
+        )
+    ),
+    sealedHeartBoundary_
+    (
+        electroProperties.get<Switch>("sealedHeartBoundary")
+    )
 {}
 '''
 
@@ -78,13 +98,11 @@ def test_the_key_and_the_dictionary_are_named_and_a_key_the_scanned_source_never
     tmp_path, monkeypatch,
 ):
     case = _case(tmp_path)
-    (found,) = fatal_error_diagnostics(
-        ABSOLUTE.format(case=case.resolve()), case, _context(_mapping(tmp_path, monkeypatch, SCANNED)),
-    )
+    (found,) = fatal_error_diagnostics(RELATIVE, case, _context(_mapping(tmp_path, monkeypatch, SCANNED)))
     assert (found.level, found.code, found.field, found.source) == (
-        "error", "solver_entry_missing", "sealedHeartBoundary", "constant/electroProperties",
+        "error", "solver_entry_missing", "ionicModel", "constant/electroProperties",
     )
-    assert "sealedHeartBoundary is missing from monodomainSolverCoeffs in constant/electroProperties" in found.message
+    assert "ionicModel is missing from monodomainSolverCoeffs in constant/electroProperties" in found.message
     assert found.message.endswith(f"{REBUILD_HINT}.")
     assert "the solver binary reads keys the scanned source does not" in found.message
 
@@ -92,9 +110,9 @@ def test_the_key_and_the_dictionary_are_named_and_a_key_the_scanned_source_never
 def test_a_key_the_scanned_source_reads_carries_no_claim_about_the_build(tmp_path, monkeypatch):
     case = _case(tmp_path)
     (found,) = fatal_error_diagnostics(
-        RELATIVE.replace("ionicModel", "sealedWallTrace"), case, _context(_mapping(tmp_path, monkeypatch, SCANNED)),
+        ABSOLUTE.format(case=case.resolve()), case, _context(_mapping(tmp_path, monkeypatch, SCANNED)),
     )
-    assert "sealedWallTrace is missing from monodomainSolverCoeffs in constant/electroProperties" in found.message
+    assert "sealedHeartBoundary is missing from monodomainSolverCoeffs in constant/electroProperties" in found.message
     assert "built from different source" not in found.message
 
 

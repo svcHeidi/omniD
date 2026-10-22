@@ -20,15 +20,12 @@ _ECG_VERIFICATION_MODEL = ("ecgDomains", "ECG", "verificationModel")
 _TET_TEMPLATE = "box.geo.template"
 _TET_MESH = "box.msh"
 
-#: The native `Allrun` has no mesh step; the case's regression script meshes
-#: with this dictionary.
+#: ``Allrun`` meshes the hex box with ``blockMesh -dict system/blockMeshDict.<dim>D``, 3D by default.
 _MESH_DICT_DEFAULT = "system/blockMeshDict.3D"
 
 #: The time step the native Allrun takes at N = 10; it scales it with the cell size squared.
 _ALLRUN_STEP_AT_TEN = 0.00892857
 
-# The tet `fvSchemes` overlay is not modelled: every entry it sets already
-# equals `system/fvSchemes`.
 AXES = (
     dimension_axis(
         "dimension", mesh_step_id="mesh",
