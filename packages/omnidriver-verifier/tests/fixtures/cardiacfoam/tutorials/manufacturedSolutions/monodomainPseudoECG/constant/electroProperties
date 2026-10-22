@@ -1,8 +1,8 @@
-// cardiacFOAM 277dfeb1933990da366d4b30dd9ef40b3e94c87c tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties, verbatim lines 22-23, 26-27, 43
+// cardiacFOAM 15b3e18324d597bc396c3e314f6461143d300301 tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties, verbatim lines 22, 25-26, 42-43
     sealedHeartBoundary false;
-    sealedWallTrace     zeroGradient;
 // ...
     chi             [ 0 -1 0 0 0 0 0 ] 3;
     cm              [ -1 -4 4 0 0 2 0 ] 2;
 // ...
+    dimension    "3D";
     solutionAlgorithm    implicit;

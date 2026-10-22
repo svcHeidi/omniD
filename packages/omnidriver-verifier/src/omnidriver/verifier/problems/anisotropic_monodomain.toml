@@ -11,7 +11,7 @@ mesh_progression = ["hex", "tet"]
 cites = ["doi:10.1002/cnm.2615", "https://cdrh-rst.fda.gov/node/1576"]
 
 [native.cardiacfoam]
-commit = "277dfeb1933990da366d4b30dd9ef40b3e94c87c"
+commit = "15b3e18324d597bc396c3e314f6461143d300301"
 ionic_model = "monodomainFDAManufactured"
 verification_model = "manufacturedAnisotropicMonodomainVerifier"
 record = "manufacturedMonodomainPseudoECG"
@@ -132,7 +132,7 @@ fields = ["src/verificationModels/monodomainVerification/manufacturedAnisotropic
 exact = ["src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainReference.H"]
 cell_model = ["src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H", "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured.C"]
 source = ["src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainReference.H"]
-boundary = ["src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties"]
+boundary = ["src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C", "src/numericsModels/sealedWall/sealedWallPolicy.C", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties"]
 initial = ["src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainVerifier.C"]
-refinement = ["tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/sweep_tet_generic.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/box.geo.template", "derived: the temporal ladder is fda_monodomain's dt halving, on the N = 40 mesh (derived by the agent, to keep a 3D case within the owner's skip of N = 160); steps from time.report_when and dt"]
+refinement = ["tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/sweep_tet_generic.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/box.geo.template", "tutorials/manufacturedSolutions/monodomainPseudoECG/Allrun", "derived: the temporal ladder is fda_monodomain's dt halving, on the N = 40 mesh (derived by the agent, to keep a 3D case within the owner's skip of N = 160); steps from time.report_when and dt"]
 norms = ["src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainVerifier.C", "src/verificationModels/verificationUtils.H"]

@@ -1,8 +1,9 @@
 """Gate 2 for the anisotropic problem: its data equals what cardiacFOAM's code states, read from verbatim snippets.
 
 What it shares with the FDA problem (the cell model, the solver's equation, the units, the wall, the norm) is read
-from the FDA fixtures through the FDA gate's own checks; the spatial factor, the source, the conductivity, the
-verifier's configuration and the ladders are read from the snippets in ``fixtures/cardiacfoam_anisotropic``.
+from the FDA fixtures through the FDA gate's own checks, as are the studies' rows of this problem's verifier; the
+spatial factor, the source, the conductivity and the verifier's configuration are read from the snippets in
+``fixtures/cardiacfoam_anisotropic``.
 """
 from __future__ import annotations
 
@@ -22,11 +23,7 @@ OWN_KEY = "anisotropic:"
 REFERENCE = OWN_KEY + "src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainReference.H"
 VERIFIER = OWN_KEY + "src/verificationModels/monodomainVerification/manufacturedAnisotropicMonodomainVerifier.C"
 ELECTRO = OWN_KEY + f"{fda.CASE}/constant/electroProperties"
-SWEEP = OWN_KEY + f"{fda.CASE}/setup/studies/cartesianConvergence/sweep_hex_convergence.json"
-TET_SWEEP = OWN_KEY + f"{fda.CASE}/setup/studies/tetConvergence/sweep_tet_generic.json"
-# The FDA gate reads the template at its tet-study commit; this problem's tet ladder is the one at its own commit.
-TET_GEO = OWN_KEY + f"{fda.CASE}/setup/studies/tetConvergence/box.geo.template"
-OWN = (REFERENCE, VERIFIER, ELECTRO, SWEEP, TET_SWEEP, TET_GEO)
+OWN = (REFERENCE, VERIFIER, ELECTRO)
 # OpenFOAM's symmTensor components in storage order, and the conductivity entries the data names them by.
 SYMM_TENSOR = ("xx", "xy", "xz", "yy", "yz", "zz")
 # The tensor is symmetric, so the C++'s transposed component is the same parameter.
@@ -142,40 +139,34 @@ def _configuration_drift(snippets: dict[str, str], problem: dict, commit: str) -
 
 
 def _ladder_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
-    """The hex sweep's last four rows and the tet sweep's two anisotropic groups: tensor, verifier, cells and dt."""
+    """The hex and tet studies' rows of this verifier (one 3D row per hex level, two tet rows per level, one per
+    gradient scheme): tensor, cells and dt."""
     found = []
     parameters = problem["parameters"]
     wanted = [parameters[f"sigma_{entry}"] for entry in SYMM_TENSOR]
 
-    def tensor(line: str) -> list[float]:
-        return [float(v) for v in line.split("(")[1].split(")")[0].split()]
-
-    hex_body = [line.strip() for line in fda._body(snippets[SWEEP], commit)]
-    conductivity, *verifiers_and_levels = hex_body
-    verifiers = [line.strip('",') for line in verifiers_and_levels[:4]]
-    levels = [float(line) for line in verifiers_and_levels[4:]]
+    hex_rows = fda._study_rows(snippets[fda.SWEEP], problem, commit)
     hex_ladder = problem["refinement"]["hex"]
-    if tensor(conductivity) != wanted:
-        found.append("hex conductivity")
-    if set(verifiers) != {problem["native"]["cardiacfoam"]["verification_model"]}:
+    if not hex_rows:
         found.append("hex verifier")
-    if levels != [*hex_ladder["cells_per_axis"], *hex_ladder["dt"]]:
+    if any(row[fda.CONDUCTIVITY]["value"] != wanted for row in hex_rows):
+        found.append("hex conductivity")
+    levels = [(row["dimension"], row["numberCells"], row[fda.DELTA_T]) for row in hex_rows]
+    if levels != [(f"{d}D", n, dt) for d in hex_ladder["dimensions"]
+                  for n, dt in zip(hex_ladder["cells_per_axis"], hex_ladder["dt"])]:
         found.append("hex refinement")
 
     tet = problem["refinement"]["tet"]
-    first, last, verifier_first, verifier_last, *ladder = [line.strip() for line in fda._body(snippets[TET_SWEEP], commit)]
-    if tensor(first.strip('",')) != wanted or tensor(last.strip('",')) != wanted:
-        found.append("tet conductivity")
-    if {verifier_first.strip('",'), verifier_last.strip('",')} != {problem["native"]["cardiacfoam"]["verification_model"]}:
+    tet_rows = fda._study_rows(snippets[fda.TET_SWEEP], problem, commit)
+    if not tet_rows:
         found.append("tet verifier")
-    values = [float(line) for line in ladder]
-    cells, dts = values[:8], values[8:]
-    if cells != 2 * tet["cells_per_axis"] or dts != 2 * tet["dt"]:
+    if any(row[fda.CONDUCTIVITY]["value"] != wanted for row in tet_rows):
+        found.append("tet conductivity")
+    ladder = dict(zip(tet["cells_per_axis"], tet["dt"]))
+    if (list(dict.fromkeys(row["tetNumberCells"] for row in tet_rows)) != tet["cells_per_axis"]
+            or any(ladder[row["tetNumberCells"]] != row[fda.DELTA_T] for row in tet_rows)):
         found.append("tet refinement")
-    geo = " ".join(fda._body(snippets[TET_GEO], commit))
-    edge = problem["domain"]["box"][0][1] - problem["domain"]["box"][0][0]
-    if (edge != 1 or "(lc = 1/N)" not in geo
-            or not all(f"Mesh.MeshSize{bound} = lc;" in geo for bound in ("Min", "Max"))):
+    if not fda.tet_mesh_size_is_one_over_n(snippets, problem, commit):
         found.append("tet mesh size")
     return found
 
@@ -202,11 +193,11 @@ def test_the_problem_data_matches_cardiacfoam():
         (VERIFIER, "vector::one", "vector(2, 2, 2)", "verifier domain"),
         (VERIFIER, "& centres = mesh.C()", "& centres = mesh.Cf()", "norm points"),
         (VERIFIER, "u2Norms =", "u3Norms =", "norm fields"),
-        (SWEEP, "0.0398782", "0.0398", "hex conductivity"),
-        (SWEEP, "0.000140174", "0.000140", "hex refinement"),
-        (TET_SWEEP, "-0.0130256", "-0.0130", "tet conductivity"),
-        (TET_SWEEP, "0.000560538", "0.00056", "tet refinement"),
-        (TET_GEO, "(lc = 1/N)", "(lc = 2/N)", "tet mesh size"),
+        (fda.SWEEP, "0.0398782", "0.0398", "hex conductivity"),
+        (fda.SWEEP, "0.000140174, 0.000140174]", "0.000140174, 0.000140]", "hex refinement"),
+        (fda.TET_SWEEP, "-0.0130256", "-0.0130", "tet conductivity"),
+        (fda.TET_SWEEP, '"tetNumberCells": [10, 10', '"tetNumberCells": [10, 12', "tet refinement"),
+        (fda.TET_GEO, "MeshSizeMin = lc;", "MeshSizeMin = lc/2;", "tet mesh size"),
         (fda.IONIC, "CONSTANTS[Beta] = -8.6", "CONSTANTS[Beta] = -8.7", "ionic Beta"),
         (fda.IONIC, "pow(STATES[u2], 3)", "pow(STATES[u2], 2)", "rate u2"),
     ],
@@ -223,7 +214,7 @@ def test_a_changed_snippet_is_reported(snippet, old, new, reported):
     [
         ("parameters", "sigma_xy", 0.0084931, "conductivity"),
         ("parameters", "Beta", -8.7, "ionic Beta"),
-        ("native", "cardiacfoam", {"commit": "277dfeb1933990da366d4b30dd9ef40b3e94c87c", "ionic_model": "x",
+        ("native", "cardiacfoam", {"commit": "15b3e18324d597bc396c3e314f6461143d300301", "ionic_model": "x",
                                    "verification_model": "manufacturedAnisotropicMonodomainVerifier",
                                    "record": "r"}, "verifier configuration"),
     ],

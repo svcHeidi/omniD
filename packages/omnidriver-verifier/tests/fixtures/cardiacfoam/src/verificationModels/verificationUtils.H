@@ -1,4 +1,4 @@
-// cardiacFOAM 277dfeb1933990da366d4b30dd9ef40b3e94c87c src/verificationModels/verificationUtils.H, verbatim lines 74, 216-220, 241-244
+// cardiacFOAM 15b3e18324d597bc396c3e314f6461143d300301 src/verificationModels/verificationUtils.H, verbatim lines 78, 220-224, 245-248
     return time.value() + 0.5*time.deltaTValue() >= time.endTime().value();
 // ...
         const scalar diff = Foam::mag(numeric[i] - exact[i]);

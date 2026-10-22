@@ -1,4 +1,7 @@
-// cardiacFOAM 277dfeb1933990da366d4b30dd9ef40b3e94c87c src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C, verbatim lines 272, 279, 358-359
+// cardiacFOAM 15b3e18324d597bc396c3e314f6461143d300301 src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C, verbatim lines 225-226, 278, 285, 364-365
+        dimensionedScalar("Vm", dimVoltage, -0.084),
+        "zeroGradient"
+// ...
             "ionicCurrent",
 // ...
         dimensionedScalar("zero", dimVoltage/dimTime, 0.0),

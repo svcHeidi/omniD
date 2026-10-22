@@ -10,11 +10,7 @@ mesh_progression = ["hex", "tet"]
 cites = ["doi:10.1002/cnm.2615", "https://cdrh-rst.fda.gov/node/1576"]
 
 [native.cardiacfoam]
-commit = "277dfeb1933990da366d4b30dd9ef40b3e94c87c"
-# The tet study the verifier's tet runs executed: native `omnid/tutorials-are-pointers`, whose template takes lc
-# from `gmsh -setnumber lc`. `commit` holds no such template (its `__LC__` placeholder is rendered by a helper
-# that native main does not contain), so the tet study files are read at this commit.
-tet_study_commit = "a7b8e845c76579aec8fa0ff7b5e13a21547c1242"
+commit = "15b3e18324d597bc396c3e314f6461143d300301"
 ionic_model = "monodomainFDAManufactured"
 verification_model = "manufacturedFDAMonodomainVerifier"
 record = "manufacturedMonodomainPseudoECG"
@@ -93,9 +89,9 @@ dt = [0.00892857, 0.00224215, 0.000560538, 0.000140174]
 steps = [22, 89, 357, 1427]
 dt_scales_as = "h**2"
 
-# gmsh Delaunay tetrahedra of the unit cube at target element size lc = 1/cells_per_axis (the native README's
-# stated rule, supplied to gmsh by the runner; the template's own code reads whatever lc it is given); the native
-# study runs the FDA verifier on this ladder with the diagonal sigma above.
+# gmsh Delaunay tetrahedra of the unit cube at target element size lc = 1/cells_per_axis (`Allrun -mesh tet`
+# gives gmsh that lc; the template reads whatever lc it is given); the native study runs the FDA verifier on this
+# ladder with the diagonal sigma above.
 [refinement.tet]
 dimensions = [3]
 cells_per_axis = [10, 20, 40, 80]
@@ -136,7 +132,7 @@ fields = ["src/verificationModels/monodomainVerification/manufacturedFDAReferenc
 exact = ["src/verificationModels/monodomainVerification/manufacturedFDAReference.H"]
 cell_model = ["src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured_2014.H", "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured.C"]
 source = ["tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties", "https://cdrh-rst.fda.gov/node/1576"]
-boundary = ["src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties"]
+boundary = ["src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C", "src/numericsModels/sealedWall/sealedWallPolicy.C", "tutorials/manufacturedSolutions/monodomainPseudoECG/constant/electroProperties"]
 initial = ["src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.C"]
-refinement = ["tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/sweep_tet_generic.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/box.geo.template", "chosen: the temporal ladder (mesh fixed, dt 0.025 halved five times, N = 640 in 1D and 2D)", "derived: steps from time.report_when and dt; dt_scales_as from the ladder"]
+refinement = ["tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/cartesianConvergence/sweep_hex_convergence.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/sweep_tet_generic.json", "tutorials/manufacturedSolutions/monodomainPseudoECG/box.geo.template", "tutorials/manufacturedSolutions/monodomainPseudoECG/Allrun", "chosen: the temporal ladder (mesh fixed, dt 0.025 halved five times, N = 640 in 1D and 2D)", "derived: steps from time.report_when and dt; dt_scales_as from the ladder"]
 norms = ["src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.C", "src/verificationModels/verificationUtils.H"]

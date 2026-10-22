@@ -1,0 +1,5 @@
+// cardiacFOAM 15b3e18324d597bc396c3e314f6461143d300301 tutorials/manufacturedSolutions/monodomainPseudoECG/box.geo.template, verbatim lines 7, 14-15
+DefineConstant[ lc = { 0.1, Name "lc" }, seed = { 1, Name "seed" } ];
+// ...
+Mesh.MeshSizeMin = lc;
+Mesh.MeshSizeMax = lc;

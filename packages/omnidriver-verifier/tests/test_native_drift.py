@@ -5,6 +5,7 @@ refreshed from the new commit.
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -19,19 +20,24 @@ IONIC = "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomain
 IONIC_CURRENT = "src/ionicModels/verificationModels/monodomainFDAManufactured/monodomainFDAManufactured.C"
 SOLVER = "src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C"
 DOMAIN = "src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C"
-WALL = "src/electroModels/electroDomains/myocardiumDomain/sealedWall/conormalZeroFluxFvPatchScalarField.C"
+POLICY = "src/numericsModels/sealedWall/sealedWallPolicy.C"
 REFERENCE = "src/verificationModels/monodomainVerification/manufacturedFDAReference.H"
 VERIFIER = "src/verificationModels/monodomainVerification/manufacturedFDAMonodomainVerifier.C"
 UTILS = "src/verificationModels/verificationUtils.H"
 CASE = "tutorials/manufacturedSolutions/monodomainPseudoECG"
 ELECTRO = f"{CASE}/constant/electroProperties"
+ALLRUN = f"{CASE}/Allrun"
 CONTROL = f"{CASE}/system/controlDict"
 BLOCKMESH = {d: f"{CASE}/system/blockMeshDict.{d}D" for d in (1, 2, 3)}
 SWEEP = f"{CASE}/setup/studies/cartesianConvergence/sweep_hex_convergence.json"
 TET_SWEEP = f"{CASE}/setup/studies/tetConvergence/sweep_tet_generic.json"
-TET_GEO = f"{CASE}/setup/studies/tetConvergence/box.geo.template"
-SNIPPETS = (IONIC, IONIC_CURRENT, SOLVER, DOMAIN, WALL, REFERENCE, VERIFIER, UTILS, ELECTRO, CONTROL, SWEEP,
+TET_GEO = f"{CASE}/box.geo.template"
+SNIPPETS = (IONIC, IONIC_CURRENT, SOLVER, DOMAIN, POLICY, REFERENCE, VERIFIER, UTILS, ELECTRO, ALLRUN, CONTROL, SWEEP,
             TET_SWEEP, TET_GEO, *BLOCKMESH.values())
+# The study keys a sweep row sets, read from the whole study file.
+CONDUCTIVITY = "constant/electroProperties:monodomainSolverCoeffs.conductivity"
+VERIFIER_TYPE = "constant/electroProperties:monodomainSolverCoeffs.verificationModel.type"
+DELTA_T = "system/controlDict:deltaT"
 
 # The C++ names its constants and state indices; the data names them so.
 CXX_NAMES = {"Chi": "chi", "Fx": "F", "Gx": "G"}
@@ -53,8 +59,8 @@ CXX_IM_TERMS = {
     "manufacturedSourceCorrection(integrationPtI)": "0",
 }
 CXX_REPORT_TERMS = {"time.endTime().value()": "end", "time.deltaTValue()": "dt", "time.value()": "t"}
-# sealedWallTrace, through conormalWallPatchTypes, to the patch type every non-constraint patch takes.
-CXX_WALL_TRACES = {"zeroGradient": "zero_normal_gradient"}
+# The patch type myocardiumDomain gives Vm on every non-constraint patch, which an unsealed wall keeps.
+CXX_PATCH_TYPES = {"zeroGradient": "zero_normal_gradient"}
 CXX_POINTS = {"C()": "cell_centres"}
 # The time the exact fields are evaluated at: the mesh time, reached after a level's steps.
 CXX_NORM_TIMES = {"mesh.time().value()": "steps*dt"}
@@ -148,9 +154,8 @@ def _units_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[s
             exponents = tuple(int(v) for v in " ".join(line).split("[")[1].split("]")[0].split())
             if SI_UNITS.get(exponents) != units[name]:
                 found.append(f"units {name}")
-    conductivity = _body(snippets[SWEEP], commit)[0]
-    exponents = tuple(int(v) for v in conductivity.split("[")[1].split("]")[0].split())
-    if SI_UNITS.get(exponents) != units["sigma"]:
+    if any(SI_UNITS.get(tuple(row[CONDUCTIVITY]["dimensions"])) != units["sigma"]
+           for row in _study_rows(snippets[SWEEP], problem, commit)):
         found.append("units sigma")
 
     current_dims, chi_dims, cm_dims = (
@@ -169,12 +174,15 @@ def _units_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[s
 
 
 def _boundary_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[str]:
+    """``sealedHeartBoundary false`` leaves every wall ``stock`` (``sealedWallPolicy::wallStates``), so each face keeps
+    the patch type myocardiumDomain builds Vm with."""
     electro = {line.split()[0]: line.split()[-1].rstrip(";") for line in _body(snippets[ELECTRO], commit)}
-    wall = " ".join(" ".join(_body(snippets[WALL], commit)).split())
-    trace = electro["sealedWallTrace"]
-    physical = f': word("{trace}")' in wall and "constraintType(t) ? t : physicalType" in wall
-    if (electro["sealedHeartBoundary"] != "false" or not physical
-            or CXX_WALL_TRACES.get(trace) != problem["boundary"]["all_faces"]):
+    domain = " ".join(" ".join(_body(snippets[DOMAIN], commit)).split())
+    policy = " ".join(" ".join(_body(snippets[POLICY], commit)).split())
+    vm = re.search(r'dimensionedScalar\("Vm", \w+, [-+.\deE]+\), "(\w+)"', domain)
+    unsealed_is_stock = "label(stock));" in policy and "if (!seal) { return result; }" in policy
+    if (electro["sealedHeartBoundary"] != "false" or not unsealed_is_stock or vm is None
+            or CXX_PATCH_TYPES.get(vm.group(1)) != problem["boundary"]["all_faces"]):
         return ["boundary"]
     return []
 
@@ -283,43 +291,75 @@ def drift(snippets: dict[str, str], problem: dict) -> list[str]:
     found += _time_drift(snippets, problem, commit)
     found += _norms_drift(snippets, problem, commit)
 
-    conductivity, *ladder = _body(snippets[SWEEP], commit)
-    xx, _, _, yy, _, zz = (float(v) for v in conductivity.split("(")[1].split(")")[0].split())
-    parameters = problem["parameters"]
-    if (xx, yy, zz) != (parameters["sigma_xx"], parameters["sigma_yy"], parameters["sigma_zz"]):
+    rows = _study_rows(snippets[SWEEP], problem, commit)
+    if any(row[CONDUCTIVITY]["value"] != _diagonal(problem) for row in rows):
         found.append("conductivity")
-    values = [float(line) for line in ladder]
     hex_ladder = problem["refinement"]["hex"]
-    if values != [*hex_ladder["cells_per_axis"], *hex_ladder["dt"]]:
+    by_dimension = {
+        d: [(row["numberCells"], row[DELTA_T]) for row in rows if row["dimension"] == f"{d}D"]
+        for d in hex_ladder["dimensions"]
+    }
+    ladder = list(zip(hex_ladder["cells_per_axis"], hex_ladder["dt"]))
+    if len(rows) != sum(map(len, by_dimension.values())) or any(levels != ladder for levels in by_dimension.values()):
         found.append("hex refinement")
     found += _tet_drift(snippets, problem)
     return found
 
 
-def _tet_drift(snippets: dict[str, str], problem: dict) -> list[str]:
-    """The tet study's FDA rows (its first four, one per level) against the tet ladder, read at the commit the tet
-    runs executed; the template's mesh size is the lc the runner supplies (the study's README states lc = 1/N)."""
-    commit = problem["native"]["cardiacfoam"]["tet_study_commit"]
-    dimension, verifier, *values = _body(snippets[TET_SWEEP], commit)
-    conductivity, ladder = values[:6], values[6:]
-    tet = problem["refinement"]["tet"]
+def _study(text: str, commit: str) -> tuple[dict, list[dict]]:
+    """A whole study file: its ``base`` and one ``{key: value}`` per row of its zip sweep."""
+    study = json.loads("\n".join(_body(text, commit)))
+    columns = study["sweep"]["independent"]
+    return study["base"], [dict(zip(columns, values)) for values in zip(*columns.values(), strict=True)]
+
+
+def _study_rows(text: str, problem: dict, commit: str) -> list[dict]:
+    """The rows of a study that run this problem's verifier."""
+    verifier = problem["native"]["cardiacfoam"]["verification_model"]
+    return [row for row in _study(text, commit)[1] if row[VERIFIER_TYPE] == verifier]
+
+
+def _diagonal(problem: dict) -> list[float]:
+    """The diagonal conductivity as OpenFOAM's symmTensor (xx xy xz yy yz zz)."""
     parameters = problem["parameters"]
+    return [parameters["sigma_xx"], 0, 0, parameters["sigma_yy"], 0, parameters["sigma_zz"]]
+
+
+def _tet_drift(snippets: dict[str, str], problem: dict) -> list[str]:
+    """The tet study's rows of this problem's verifier (two per level, one per gradient scheme) against the tet
+    ladder. The study sets no dimension, so its rows run the base case's; the template's mesh size is the lc
+    ``Allrun -mesh tet`` gives gmsh, 1/N."""
+    commit = problem["native"]["cardiacfoam"]["commit"]
+    base, _ = _study(snippets[TET_SWEEP], commit)
+    rows = _study_rows(snippets[TET_SWEEP], problem, commit)
+    tet = problem["refinement"]["tet"]
+    electro = {line.split()[0]: line.split()[-1].rstrip(";") for line in _body(snippets[ELECTRO], commit)}
     found = []
-    if [int(dimension.split(":")[1].strip(' ",').removesuffix("D"))] != tet["dimensions"]:
+    if base.get("mesh") != "tet" or any("dimension" in row for row in rows) or [
+        int(electro["dimension"].strip('"').removesuffix("D"))
+    ] != tet["dimensions"]:
         found.append("tet dimensions")
-    xx, _, _, yy, _, zz = (float(v.strip(", ")) for v in conductivity)
-    if (xx, yy, zz) != (parameters["sigma_xx"], parameters["sigma_yy"], parameters["sigma_zz"]):
+    if any(row[CONDUCTIVITY]["value"] != _diagonal(problem) for row in rows):
         found.append("tet conductivity")
-    if verifier.strip().strip('",') != problem["native"]["cardiacfoam"]["verification_model"]:
+    if not rows:
         found.append("tet verifier")
-    if [float(line.strip(", ")) for line in ladder] != [*tet["cells_per_axis"], *tet["dt"]]:
+    ladder = dict(zip(tet["cells_per_axis"], tet["dt"]))
+    if (list(dict.fromkeys(row["tetNumberCells"] for row in rows)) != tet["cells_per_axis"]
+            or any(ladder[row["tetNumberCells"]] != row[DELTA_T] for row in rows)):
         found.append("tet refinement")
-    geo = " ".join(_body(snippets[TET_GEO], commit))
-    edge = problem["domain"]["box"][0][1] - problem["domain"]["box"][0][0]
-    if (edge != 1 or "DefineConstant[ lc =" not in geo
-            or not all(f"Mesh.MeshSize{bound} = lc;" in geo for bound in ("Min", "Max"))):
+    if not tet_mesh_size_is_one_over_n(snippets, problem, commit):
         found.append("tet mesh size")
     return found
+
+
+def tet_mesh_size_is_one_over_n(snippets: dict[str, str], problem: dict, commit: str) -> bool:
+    """Whether the unit cube's template meshes at the lc it is given and ``Allrun -mesh tet`` gives it 1/N."""
+    geo = " ".join(_body(snippets[TET_GEO], commit))
+    allrun = " ".join(" ".join(_body(snippets[ALLRUN], commit)).split())
+    edge = problem["domain"]["box"][0][1] - problem["domain"]["box"][0][0]
+    return (edge == 1 and "DefineConstant[ lc =" in geo
+            and all(f"Mesh.MeshSize{bound} = lc;" in geo for bound in ("Min", "Max"))
+            and """printf "%.17g", 1/N""" in allrun and '-setnumber lc "$lc"' in allrun)
 
 
 def test_the_problem_data_matches_cardiacfoam():
@@ -342,9 +382,9 @@ def test_the_problem_data_matches_cardiacfoam():
         (DOMAIN, "dimVoltage/dimTime", "dimCurrent/dimArea", "units Iion"),
         (DOMAIN, '"chi", dimArea/dimVolume', '"chi", dimArea', "units chi"),
         (ELECTRO, "[ -1 -4 4 0 0 2 0 ]", "[ -1 -2 4 0 0 2 0 ]", "units Cm"),
-        (ELECTRO, "zeroGradient;", "conormal;", "boundary"),
-        (WALL, ': word("zeroGradient")', ': word("fixedValue")', "boundary"),
-        (WALL, "? t : physicalType", "? t : word(\"fixedValue\")", "boundary"),
+        (ELECTRO, "sealedHeartBoundary false;", "sealedHeartBoundary true;", "boundary"),
+        (DOMAIN, '"zeroGradient"', '"fixedValue"', "boundary"),
+        (POLICY, "return result;", "result = sealed;", "boundary"),
         (BLOCKMESH[2], "(1 1 0)", "(1 2 0)", "domain 2D"),
         (REFERENCE, "cos(3.0*", "cos(4.0*", "field F 3D"),
         (REFERENCE, "Foam::pow(Gx[i], -0.5)", "Foam::pow(Gx[i], 0.5)", "exact u2"),
@@ -358,14 +398,18 @@ def test_the_problem_data_matches_cardiacfoam():
         (VERIFIER, "& centres = Vm.mesh().C()", "& centres = Vm.mesh().Cf()", "initial points"),
         (VERIFIER, "t = mesh.time().value()", "t = mesh.time().endTime().value()", "norm time"),
         (VERIFIER, "u2Norms =", "u3Norms =", "norm fields"),
-        (SWEEP, "0.121585420", "0.121585", "conductivity"),
+        (SWEEP, "0.12158542", "0.121585", "conductivity"),
+        (SWEEP, "0, 0, 2, 0]", "0, 0, 1, 0]", "units sigma"),
         (SWEEP, "0.000140174", "0.000140", "hex refinement"),
-        (TET_SWEEP, '"3D"', '"2D"', "tet dimensions"),
+        (SWEEP, '"2D", "3D", "3D", "1D"', '"2D", "3D", "3D", "2D"', "hex refinement"),
+        (TET_SWEEP, '"mesh": "tet"', '"mesh": "hex"', "tet dimensions"),
+        (ELECTRO, 'dimension    "3D"', 'dimension    "2D"', "tet dimensions"),
         (TET_SWEEP, "0.030396355", "0.0398782", "tet conductivity"),
-        (TET_SWEEP, "manufacturedFDAMonodomainVerifier", "manufacturedAnisotropicMonodomainVerifier", "tet verifier"),
+        (TET_SWEEP, '"tetNumberCells": [10', '"tetNumberCells": [12', "tet refinement"),
         (TET_SWEEP, "0.000560538", "0.00056", "tet refinement"),
         (TET_GEO, "DefineConstant[ lc =", "DefineConstant[ mc =", "tet mesh size"),
         (TET_GEO, "MeshSizeMax = lc;", "MeshSizeMax = 2*lc;", "tet mesh size"),
+        (ALLRUN, "1/N", "2/N", "tet mesh size"),
     ],
 )
 def test_a_changed_snippet_is_reported(snippet, old, new, reported):
@@ -383,6 +427,8 @@ def test_a_changed_snippet_is_reported(snippet, old, new, reported):
         ("time", "report_when", "t + dt >= end", "report rule"),
         ("norms", "points", "nodes", "norm points"),
         ("domain", "box", [[0, 1], [0, 2], [0, 1]], "domain 2D"),
+        ("native", "cardiacfoam", {"commit": "15b3e18324d597bc396c3e314f6461143d300301",
+                                   "verification_model": "manufacturedShellMonodomainVerifier"}, "tet verifier"),
     ],
 )
 def test_a_changed_datum_is_reported(block, key, value, reported):

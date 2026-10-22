@@ -1,6 +1,0 @@
-// cardiacFOAM a7b8e845c76579aec8fa0ff7b5e13a21547c1242 tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/tetConvergence/box.geo.template, verbatim lines 12, 19, 20
-DefineConstant[ lc = { 0.1, Name "lc" } ];
-// ...
-Mesh.MeshSizeMin = lc;
-// ...
-Mesh.MeshSizeMax = lc;

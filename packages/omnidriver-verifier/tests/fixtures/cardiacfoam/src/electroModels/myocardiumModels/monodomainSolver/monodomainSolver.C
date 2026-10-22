@@ -1,4 +1,4 @@
-// cardiacFOAM 277dfeb1933990da366d4b30dd9ef40b3e94c87c src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C, verbatim lines 128, 174-177
+// cardiacFOAM 15b3e18324d597bc396c3e314f6461143d300301 src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C, verbatim lines 130, 176-179
 void monodomainSolver::solveDiffusionImplicit
 // ...
             domain.chi()*domain.Cm()*fvm::ddt(domain.VmRef())
