@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.core.case_write import CaseKeyNotFound
+from omnidriver.core.tutorial_records import TutorialRecordError
 
 from . import foam_backend
 from .literals import _format_value
@@ -382,6 +383,31 @@ def splice_raw_entry_text(
     return True
 
 
+def _refuse_a_shadowed_pattern(file_path: Path, key: str, scope: str | list[str] | tuple[str, ...] | None) -> None:
+    """Refuse a quoted ``key`` whose unquoted twin ``scope`` already holds.
+
+    OpenFOAM reads a quoted key as a pattern and looks a word up literally before it tries any pattern
+    (:func:`_resolve_pattern_scope` mirrors that), so the quoted entry would be written beside the literal one and
+    never read in its place."""
+    if len(key) < 3 or not (key.startswith('"') and key.endswith('"')):
+        return
+    literal = key[1:-1]
+    lines = _explode_inline_blocks(_mask_comments(file_path.read_text()).splitlines(keepends=True))
+    try:
+        start, end = _resolve_search_region(lines, scope)
+    except KeyError:
+        return
+    twin = re.compile(rf"^\s*{re.escape(literal)}(?=\s|;|\{{|$)")
+    if any(twin.match(lines[index]) for index in _iter_direct_child_lines(lines, start, end)):
+        where = ".".join(foam_backend.normalize_scope(scope))
+        raise TutorialRecordError(
+            f"{key} in {where + ' of ' if where else ''}{file_path.name}: the dictionary holds {literal} unquoted, "
+            f"and OpenFOAM looks a key up literally before it tries a quoted pattern, so the quoted entry would never "
+            f"be read; name the key unquoted ({literal}) to replace the entry",
+            code="shadowed_key",
+        )
+
+
 def update_foam_entry(
     file_path: Path,
     key: str,
@@ -402,6 +428,7 @@ def update_foam_entry(
     """
     if not file_path.exists():
         raise FileNotFoundError(f"Dictionary file not found: {file_path}")
+    _refuse_a_shadowed_pattern(file_path, key, scope)
 
     key_pattern = re.compile(rf"^\s*{re.escape(key)}(?=\s|;|$)")
     source = file_path.read_text()

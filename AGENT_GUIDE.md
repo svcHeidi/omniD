@@ -917,6 +917,7 @@ expression of other parameters is a string under its own key
 | `catalog_rule` | a study value breaks its catalogue entry's rule (refusals[].detail.rule) |
 | `axis_rule` | an axis value breaks the axis's kind, bound or menu, or the axis refused it |
 | `case_rule` | the resolved case breaks the stack's case rules (one refusal per rule) |
+| `shadowed_key` | a study key spells, as a pattern, a key its document already holds literally, so the solver would never read it |
 | `cases_failed` | a sweep ran or planned, and at least one case failed; each case carries its own code |
 | `cases_blocked` | a sweep planned, and every case that is not ok is blocked (a valid plan whose environment is not ready) |
 | `benchmark_unreadable` | a --benchmarks reference could not be read or is not a point reference |

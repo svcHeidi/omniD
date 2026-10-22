@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from omnidriver.core.tutorial_records import TutorialRecordError
 from omnidriver.openfoam.mutators import (
     read_foam_entries,
     read_foam_entry,
@@ -545,6 +546,35 @@ def test_name_matching_no_pattern_still_fails_closed(tmp_path):
     path = tmp_path / "fvSolution"
     path.write_text(REGEX_KEYED)
     assert read_foam_entry(path, "tolerance", scope=["solvers", "nope"]) is None
+
+
+#: cardiacFOAM's tutorials/manufacturedSolutions/bidomain/system/fvSchemes, verbatim.
+_BIDOMAIN_FV_SCHEMES = Path(__file__).parent / "fixtures" / "fvSchemes.manufacturedBidomain"
+
+
+def test_a_quoted_key_whose_literal_twin_the_scope_holds_is_refused_not_appended(tmp_path):
+    path = tmp_path / "fvSchemes"
+    path.write_bytes(_BIDOMAIN_FV_SCHEMES.read_bytes())
+    with pytest.raises(TutorialRecordError) as refused:
+        update_foam_entry(path, '"ddt(Vm)"', "Euler", scope=["ddtSchemes"], add_if_missing=True)
+    assert refused.value.code == "shadowed_key"
+    assert "ddt(Vm)" in str(refused.value)
+    assert path.read_bytes() == _BIDOMAIN_FV_SCHEMES.read_bytes()
+
+
+def test_the_unquoted_key_replaces_the_entry_in_place(tmp_path):
+    path = tmp_path / "fvSchemes"
+    path.write_bytes(_BIDOMAIN_FV_SCHEMES.read_bytes())
+    update_foam_entry(path, "ddt(Vm)", "Euler", scope=["ddtSchemes"], add_if_missing=True)
+    assert read_foam_entry(path, "ddt(Vm)", scope=["ddtSchemes"]) == "Euler"
+    assert path.read_text().count("ddt(Vm)") == 1
+
+
+def test_a_quoted_pattern_with_no_literal_twin_is_still_written(tmp_path):
+    path = tmp_path / "fvSchemes"
+    path.write_bytes(_BIDOMAIN_FV_SCHEMES.read_bytes())
+    update_foam_entry(path, '"div\\(.*\\)"', "Gauss linear", scope=["divSchemes"], add_if_missing=True)
+    assert read_foam_entry(path, '"div\\(.*\\)"', scope=["divSchemes"]).split() == ["Gauss", "linear"]
 
 
 _SINGLE_PATTERN_BLOCK = (
