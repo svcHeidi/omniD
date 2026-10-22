@@ -1298,6 +1298,48 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='vector3', allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedEikonalECGVerifier',)},
         ),
+        # manufacturedTemplate.H's readManufacturedTemplate compares the word
+        # with "sine" only, so any other spelling runs the single event.
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.template',
+            phases=frozenset({'physics'}),
+            description='The manufactured voltage template U(s), s = t - psi, that eikonalECG evaluates and the eikonal-ECG verifier integrates: one action-potential-like event (singleEvent), or sin(2 pi s) (sine).',
+            source_refs=('src/electroModels/ecgModels/eikonalECG/manufacturedTemplate.H', 'src/electroModels/ecgModels/eikonalECG/eikonalECG.C', 'src/verificationModels/ecgVerification/manufacturedEikonalECGVerifier.C'),
+            value_kind='enum', enum_values=('singleEvent', 'sine'), default='singleEvent',
+            allowed_bindings={"<name>": None},
+            applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedEikonalECGVerifier',)},
+        ),
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.templateDuration',
+            phases=frozenset({'physics'}),
+            description='Duration of the singleEvent template: the time from the middle of its upstroke (s = 0) to the middle of its repolarisation.',
+            source_refs=('src/electroModels/ecgModels/eikonalECG/manufacturedTemplate.H',),
+            value_kind='scalar', unit='ms', default='64', allowed_bindings={"<name>": None},
+            applicable_when={
+                "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedEikonalECGVerifier',),
+                "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.template": ('singleEvent',),
+            },
+        ),
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.templateRise',
+            phases=frozenset({'physics'}),
+            description='Rise time of the singleEvent template: its tanh upstroke goes from 10% to 90% in this time, and its repolarisation back in the same.',
+            source_refs=('src/electroModels/ecgModels/eikonalECG/manufacturedTemplate.H',),
+            value_kind='scalar', unit='ms', default='4', allowed_bindings={"<name>": None},
+            applicable_when={
+                "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedEikonalECGVerifier',),
+                "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.template": ('singleEvent',),
+            },
+        ),
+        DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.domain',
+            phases=frozenset({'physics'}),
+            description='The manufactured ECG reference domain: the unit cube, or the 3D sealed spherical shell.',
+            source_refs=('src/verificationModels/ecgVerification/manufacturedPseudoECGVerifier.C', 'src/verificationModels/ecgVerification/manufacturedEikonalECGVerifier.C'),
+            value_kind='enum', enum_values=('cube', 'shell'), default='cube', allowed_bindings={"<name>": None},
+            constraints=('Native FatalError for shell unless verificationModel.dimension resolves to 3D, and for shell with anisotropic yes.',),
+            applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedPseudoECGVerifier', 'manufacturedEikonalECGVerifier')},
+        ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.referenceQuadratureOrder',
             phases=frozenset({'physics'}), description='Reference quadrature order for pseudo- or eikonal-ECG manufactured verification.',

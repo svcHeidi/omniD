@@ -232,6 +232,14 @@ class TestConductionSystemSchemaContract(unittest.TestCase):
         )
         self.assertNotIn(prefix + "alpha", entries)
         self.assertEqual(entries[prefix + "k"].value_kind, "vector3")
+        self.assertEqual(
+            {leaf: (entries[prefix + leaf].enum_values, entries[prefix + leaf].default) for leaf in ("template", "domain")},
+            {"template": (("singleEvent", "sine"), "singleEvent"), "domain": (("cube", "shell"), "cube")},
+        )
+        self.assertEqual(
+            {leaf: (entries[prefix + leaf].value_kind, entries[prefix + leaf].default) for leaf in ("templateDuration", "templateRise")},
+            {"templateDuration": ("scalar", "64"), "templateRise": ("scalar", "4")},
+        )
 
     def test_purkinjeGraphModelCoeffs_chi_and_cm_documented(self):
         chi_keys = [p for p in self.entries if p.endswith(".purkinjeGraphModelCoeffs.chi")]

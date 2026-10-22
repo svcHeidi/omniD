@@ -141,6 +141,8 @@
       "$ELECTRO_MODEL_COEFFS.bathPotentialDomain.interfaceConductivityInterpolation": "parsed by extracellularPotentialDomain.C (lookupOrDefault<word>)",
       "$ELECTRO_MODEL_COEFFS.conductivitySource": "uniform dict literal / field read from disk, parsed as a plain word by conductivityFieldIO.C",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.dimension": "1D/2D/3D, a plain word (cfg.lookup) in manufacturedPseudoECGVerifier.C and manufacturedEikonalECGVerifier.C",
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.template": "singleEvent/sine, a plain lookupOrDefault<word> manufacturedTemplate.H compares with \"sine\" only",
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.domain": "cube/shell, a plain lookupOrDefault<word> compared against two literals in manufacturedPseudoECGVerifier.C and manufacturedEikonalECGVerifier.C, with a FatalError otherwise",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.tissue": "eikonalTemplateGenerator.C hands ionicModelConfig to ionicModel::New, which reads tissue as the top-level tissue enum",
       "startFrom": "an upstream OpenFOAM controlDict word read by Foam::Time, not a runtime table of cardiacFoam's",
       "stopAt": "an upstream OpenFOAM controlDict word read by Foam::Time, not a runtime table of cardiacFoam's",
