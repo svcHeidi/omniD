@@ -140,7 +140,7 @@ RECORD = TutorialRecord(
 
 
 def test_the_dag_carries_the_default_when_no_axis_contributes():
-    dag = _workflow_dag_for_record(RECORD, workflow_step_ids=("mesh", "solve"), command_arguments={}, case_id="toy")
+    dag = _workflow_dag_for_record(RECORD, workflow_step_ids=("mesh", "solve"), command_arguments={})
     mesh = dag["steps"][0]
     assert (mesh["command"], mesh["args"]) == ("mesher", ["-dict", "system/meshDict.3D"])
 
@@ -148,30 +148,6 @@ def test_the_dag_carries_the_default_when_no_axis_contributes():
 def test_the_dag_carries_the_axis_argument_in_place_of_the_default():
     dag = _workflow_dag_for_record(
         RECORD, workflow_step_ids=("mesh", "solve"),
-        command_arguments={"mesh": ("-dict", "system/meshDict.1D")}, case_id="toy",
+        command_arguments={"mesh": ("-dict", "system/meshDict.1D")},
     )
     assert dag["steps"][0]["args"] == ["-dict", "system/meshDict.1D"]
-
-
-def test_a_step_is_given_the_case_id_after_its_case_id_argument_last():
-    summary = WorkflowStep(
-        step_id="summary", command=("./summary.py",),
-        default_arguments=(DefaultArgument(key=("--output-dir",), values=("out",)),), case_id_argument=("--case-id",),
-    )
-    record = TutorialRecord(name="toy", native_case_relpath="toy", workflow_steps=(MESH, summary))
-    dag = _workflow_dag_for_record(
-        record, workflow_step_ids=("mesh", "summary"), command_arguments={"summary": ("-v",)}, case_id="dx_0.1",
-    )
-    assert dag["steps"][1]["args"] == ["--output-dir", "out", "-v", "--case-id", "dx_0.1"]
-    assert "--case-id" not in dag["steps"][0]["args"]
-
-
-@pytest.mark.parametrize("case_id_argument", ["--case-id", ("",)])
-def test_a_malformed_case_id_argument_is_refused(case_id_argument):
-    with pytest.raises(TutorialRecordError, match="case_id_argument"):
-        WorkflowStep(step_id="summary", command=("summary",), case_id_argument=case_id_argument)
-
-
-def test_a_case_id_argument_the_command_line_already_holds_is_refused():
-    with pytest.raises(TutorialRecordError, match="passed twice"):
-        WorkflowStep(step_id="summary", command=("summary", "--case-id", "x"), case_id_argument=("--case-id",))

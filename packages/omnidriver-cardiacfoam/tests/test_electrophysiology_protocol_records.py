@@ -68,6 +68,17 @@ def test_a_records_steps_run_what_the_native_allrun_runs(record, case):
     assert _step_commands(record) == native
 
 
+@pytest.mark.parametrize("record", ["cable1DCVConvergence", "cable1DEikonalCV"])
+def test_a_cable_cv_record_writes_its_summary_where_table_summary_collects_it(record):
+    """``extract_cv.py`` writes ``<output-dir>/<case folder>_cv_summary.json``; ``table_summary.py`` globs
+    ``cases/*/postProcessing/*_cv_summary.json``."""
+    dag = record_execution._workflow_dag_for_record(
+        TUTORIAL_RECORDS[record], workflow_step_ids=TUTORIAL_RECORDS[record].step_ids(), command_arguments={},
+    )
+    summary = next(step for step in dag["steps"] if step["id"] == "cvSummary")
+    assert [summary["command"], *summary["args"]] == ["./setup/extract_cv.py", "--output-dir", "postProcessing"]
+
+
 #: The native ``Allrun`` of every case a record with a parallel route points at, verbatim: beside the case fixture
 #: where there is one, else under ``fixtures/allruns``.
 ALLRUNS = Path(__file__).resolve().parent / "fixtures" / "allruns"

@@ -62,12 +62,11 @@ def gmsh_route(
 
 def cable_cv_summary_step() -> WorkflowStep:
     """The cable's own ``setup/extract_cv.py``: the conduction velocity from the solve's ``activationTime`` probes,
-    written as ``postProcessing/<case id>_cv_summary.json`` (and its CSVs), which the case's ``table_summary.py``
-    collects from each case of a sweep."""
+    written as ``postProcessing/<case folder>_cv_summary.json`` (and its CSVs), which the case's ``table_summary.py``
+    collects from each case of a sweep (``<output>/cases/<case id>/``)."""
     return WorkflowStep(
         step_id="cvSummary", command=("./setup/extract_cv.py",),
         default_arguments=(DefaultArgument(key=("--output-dir",), values=("postProcessing",)),),
-        case_id_argument=("--case-id",),
         consumes=("setup/extract_cv.py",),
         produces=(
             "postProcessing/cv_summary.txt", "postProcessing/*_cv_summary.json",

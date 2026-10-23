@@ -46,7 +46,7 @@ def _native_toy_case(tmp_path: Path, cells: str = "2") -> Path:
 
 
 def _serial(record=THREE_STEPS):
-    return _workflow_dag_for_record(record, workflow_step_ids=record.step_ids(), command_arguments={}, case_id=record.name)
+    return _workflow_dag_for_record(record, workflow_step_ids=record.step_ids(), command_arguments={})
 
 
 def _reader(values):
