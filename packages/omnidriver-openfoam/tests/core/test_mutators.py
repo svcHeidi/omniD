@@ -570,11 +570,35 @@ def test_the_unquoted_key_replaces_the_entry_in_place(tmp_path):
     assert path.read_text().count("ddt(Vm)") == 1
 
 
-def test_a_quoted_pattern_with_no_literal_twin_is_still_written(tmp_path):
+def test_a_quoted_pattern_beside_a_literal_it_does_not_spell_is_still_written(tmp_path):
     path = tmp_path / "fvSchemes"
     path.write_bytes(_BIDOMAIN_FV_SCHEMES.read_bytes())
+    update_foam_entry(path, "div(phi)", "Gauss upwind", scope=["divSchemes"], add_if_missing=True)
     update_foam_entry(path, '"div\\(.*\\)"', "Gauss linear", scope=["divSchemes"], add_if_missing=True)
     assert read_foam_entry(path, '"div\\(.*\\)"', scope=["divSchemes"]).split() == ["Gauss", "linear"]
+    assert read_foam_entry(path, "div(phi)", scope=["divSchemes"]).split() == ["Gauss", "upwind"]
+
+
+def test_a_quoted_pattern_that_can_match_only_its_literal_twin_is_refused(tmp_path):
+    path = tmp_path / "fvSchemes"
+    path.write_bytes(_BIDOMAIN_FV_SCHEMES.read_bytes())
+    update_foam_entry(path, "div(phi)", "Gauss upwind", scope=["divSchemes"], add_if_missing=True)
+    with pytest.raises(TutorialRecordError) as refused:
+        update_foam_entry(path, '"div\\(phi\\)"', "Gauss linear", scope=["divSchemes"], add_if_missing=True)
+    assert refused.value.code == "shadowed_key" and "div(phi) unquoted" in str(refused.value)
+
+
+def test_a_quoted_scope_segment_whose_unquoted_block_the_dictionary_holds_is_refused(tmp_path):
+    path = tmp_path / "fvSolution"
+    path.write_text(
+        "FoamFile { version 2.0; class dictionary; object fvSolution; }\n"
+        "solvers\n{\n    Vm\n    {\n        tolerance 1e-11;\n    }\n}\n"
+    )
+    before = path.read_text()
+    with pytest.raises(TutorialRecordError) as refused:
+        update_foam_entry(path, "tolerance", 1e-12, scope=["solvers", '"Vm"'], add_if_missing=True)
+    assert refused.value.code == "shadowed_key"
+    assert path.read_text() == before
 
 
 _SINGLE_PATTERN_BLOCK = (

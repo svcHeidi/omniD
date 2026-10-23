@@ -296,6 +296,16 @@ def test_five_electrodes_remove_every_r_electrode_and_keep_e1_to_e5(tmp_path):
     assert _resolve("manufacturedEikonalECG", {"electrodes": "all"}, case)[0] == {}
 
 
+def test_five_electrodes_are_refused_by_name_on_a_case_with_no_electrode_positions(tmp_path):
+    (tmp_path / "constant").mkdir()
+    (tmp_path / "constant" / "electroProperties").write_text(
+        "FoamFile { version 2.0; class dictionary; object electroProperties; }\n"
+        "eikonalSolverCoeffs\n{\n    ecgDomains\n    {\n        ECG\n        {\n        }\n    }\n}\n"
+    )
+    with pytest.raises(TutorialRecordError, match="electrodePositions"):
+        _resolve("manufacturedEikonalECG", {"electrodes": "five"}, tmp_path)
+
+
 @pytest.mark.parametrize(("record_name", "study"), [
     ("manufacturedEikonalECG", {"template": "square"}),
     ("manufacturedEikonalECG", {"electrodes": "three"}),

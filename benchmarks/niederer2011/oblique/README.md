@@ -9,11 +9,9 @@ and TorchCor, on the campaign's grid (Δx 0.5, 0.2, 0.1 mm × Δt 0.05, 0.01,
 | `opencarp_obliqueWall.json` | openCARP `niedererNVersion` | `fibers.imbrication 90` (mesher), `mass_lumping 0` as the campaign |
 | `torchcor_obliqueWall.json` | TorchCor `nversion` (`--repo` the TorchCor cases repository) | `case.json:fibre` (1, 0, 1)/√2 |
 
-**cardiacFOAM has no counterpart.** Its native `obliqueWall` study was removed
-pending its redesign (the owner's decision D1): every arm of it set a wall
-trace the sealed-wall design no longer reads. When a study under
-`sealedHeartBoundary` and `sealedWallLeastSquares` returns, it is compared
-here; until then these two files compare openCARP with TorchCor only.
+**cardiacFOAM has no counterpart:** its oblique study awaits a redesign under
+`sealedHeartBoundary` and `sealedWallLeastSquares` (the owner's decision D1).
+Until it exists, these two files compare openCARP with TorchCor only.
 
 ## The fibre
 

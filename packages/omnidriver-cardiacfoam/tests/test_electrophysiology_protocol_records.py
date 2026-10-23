@@ -68,14 +68,19 @@ def test_a_records_steps_run_what_the_native_allrun_runs(record, case):
     assert _step_commands(record) == native
 
 
-@pytest.mark.parametrize("record, case", [
-    ("cable1DEikonalCV", PROTOCOLS / "cableProtocol" / "eikonal1DCableCV"),
-    ("ionicHeterogeneity", PROTOCOLS / "ionicHeterogeneity"),
-    ("rotorInstability", PROTOCOLS / "rotorInstability"),
-    ("purkinjeRestitution2DAntegrade", PROTOCOLS / "purkinjeRestitution2D"),
-])
-def test_a_records_parallel_only_steps_are_what_its_allrun_adds_after_reconstructpar(record, case):
-    allrun = [shlex.split(line.strip()) for line in (case / "Allrun").read_text().splitlines()]
+#: The native ``Allrun`` of every case a record with a parallel route points at, verbatim: beside the case fixture
+#: where there is one, else under ``fixtures/allruns``.
+ALLRUNS = Path(__file__).resolve().parent / "fixtures" / "allruns"
+
+
+def _allrun(record) -> Path:
+    beside_case = TUTORIALS / record.native_case_relpath / "Allrun"
+    return beside_case if beside_case.is_file() else ALLRUNS / record.native_case_relpath / "Allrun"
+
+
+@pytest.mark.parametrize("record", sorted(name for name, record in TUTORIAL_RECORDS.items() if not record.serial_only))
+def test_a_records_parallel_only_steps_are_what_its_allrun_adds_after_reconstructpar(record):
+    allrun = [line.split() for line in _allrun(TUTORIAL_RECORDS[record]).read_text().splitlines()]
     native = [tuple(words[1:]) for words in allrun if words[:2] == ["runApplication", "redistributeRestartState"]]
     steps = [step.command for step in TUTORIAL_RECORDS[record].workflow_steps if step.parallel_only]
     assert steps == native

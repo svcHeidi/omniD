@@ -143,6 +143,13 @@ def test_a_declared_entrypoint_is_also_not_path_checked():
     assert "run.sh" not in reqs_with_context.executables
 
 
+def test_a_declared_case_script_given_as_a_path_from_the_case_is_not_path_checked():
+    """A step names a case script by ``./<path>``, as core's allowlist accepts it; an undeclared one is still looked for."""
+    ctx = _fake_context_declaring_entrypoint("setup/extract_cv.py")
+    reqs = _required_executables(_dag("./setup/extract_cv.py", "./setup/other.py", "blockMesh"), ctx)
+    assert reqs.executables == ("./setup/other.py", "blockMesh")
+
+
 def test_mpi_wrapper_checks_launcher_and_program(clean_env):
     clean_env.setattr(shutil, "which", _which_factory({"mpirun"}))
     diags = _diags(

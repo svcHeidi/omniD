@@ -214,12 +214,13 @@ def test_a_changed_snippet_is_reported(snippet, old, new, reported):
     [
         ("parameters", "sigma_xy", 0.0084931, "conductivity"),
         ("parameters", "Beta", -8.7, "ionic Beta"),
-        ("native", "cardiacfoam", {"commit": "15b3e18324d597bc396c3e314f6461143d300301", "ionic_model": "x",
-                                   "verification_model": "manufacturedAnisotropicMonodomainVerifier",
-                                   "record": "r"}, "verifier configuration"),
+        (("native", "cardiacfoam"), "ionic_model", "x", "verifier configuration"),
     ],
 )
 def test_a_changed_datum_is_reported(block, key, value, reported):
     problem = load_problem("anisotropic_monodomain")
-    problem[block][key] = value
+    container = problem
+    for part in block if isinstance(block, tuple) else (block,):
+        container = container[part]
+    container[key] = value
     assert reported in drift(_snippets(), problem)

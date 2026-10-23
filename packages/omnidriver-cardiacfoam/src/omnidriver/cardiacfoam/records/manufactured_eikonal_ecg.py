@@ -75,7 +75,12 @@ def electrodes_axis(name: str) -> AxisContract:
         from foamlib import FoamFile
 
         positions = FoamFile(Path(staged_case_root) / ELECTRO_PROPERTIES).get(_ECG + ("electrodePositions",))
-        names = [str(key) for key in getattr(positions, "keys", lambda: ())() if key is not None]
+        if not hasattr(positions, "keys"):
+            raise TutorialRecordError(
+                f"electrodes axis {name!r}: {ELECTRO_PROPERTIES} holds no {'.'.join(_ECG)}.electrodePositions "
+                "dictionary to keep five electrodes of", code="axis_rule",
+            )
+        names = [str(key) for key in positions.keys() if key is not None]
         return AxisResult(patches=tuple(
             AxisPatch(
                 document=ELECTRO_PROPERTIES, key_path=_ECG + ("electrodePositions", electrode),

@@ -383,29 +383,52 @@ def splice_raw_entry_text(
     return True
 
 
+#: A character a pattern reads as more than itself, once its escaped characters are taken out.
+_PATTERN_SYNTAX = re.compile(r"[.^$*+?{}\[\]|()\\]")
+
+
+def _shadowing_words(name: str) -> tuple[str, ...]:
+    """The words whose literal entry shadows a quoted ``name``: its text as written (``"ddt(Vm)"`` meant as the term
+    ``ddt(Vm)``), and the one word a pattern of escaped characters only can match (``"div\\(phi\\)"``)."""
+    body = name[1:-1]
+    words = [body]
+    if not _PATTERN_SYNTAX.search(re.sub(r"\\.", "", body)):
+        words.append(re.sub(r"\\(.)", r"\1", body))
+    return tuple(dict.fromkeys(words))
+
+
 def _refuse_a_shadowed_pattern(file_path: Path, key: str, scope: str | list[str] | tuple[str, ...] | None) -> None:
-    """Refuse a quoted ``key`` whose unquoted twin ``scope`` already holds.
+    """Refuse a quoted ``key``, or a quoted segment of ``scope``, whose unquoted twin the dictionary already holds there.
 
     OpenFOAM reads a quoted key as a pattern and looks a word up literally before it tries any pattern
     (:func:`_resolve_pattern_scope` mirrors that), so the quoted entry would be written beside the literal one and
     never read in its place."""
-    if len(key) < 3 or not (key.startswith('"') and key.endswith('"')):
-        return
-    literal = key[1:-1]
-    lines = _explode_inline_blocks(_mask_comments(file_path.read_text()).splitlines(keepends=True))
-    try:
-        start, end = _resolve_search_region(lines, scope)
-    except KeyError:
-        return
-    twin = re.compile(rf"^\s*{re.escape(literal)}(?=\s|;|\{{|$)")
-    if any(twin.match(lines[index]) for index in _iter_direct_child_lines(lines, start, end)):
-        where = ".".join(foam_backend.normalize_scope(scope))
-        raise TutorialRecordError(
-            f"{key} in {where + ' of ' if where else ''}{file_path.name}: the dictionary holds {literal} unquoted, "
-            f"and OpenFOAM looks a key up literally before it tries a quoted pattern, so the quoted entry would never "
-            f"be read; name the key unquoted ({literal}) to replace the entry",
-            code="shadowed_key",
-        )
+    path = foam_backend.normalize_scope(scope) + (key,)
+    lines = None
+    for depth, name in enumerate(path):
+        if len(name) < 3 or not (name.startswith('"') and name.endswith('"')):
+            continue
+        if lines is None:
+            lines = _explode_inline_blocks(_mask_comments(file_path.read_text()).splitlines(keepends=True))
+        try:
+            start, end = _resolve_search_region(lines, path[:depth] or None)
+        except KeyError:
+            return
+        held = [
+            word for word in _shadowing_words(name)
+            if any(
+                re.match(rf"^\s*{re.escape(word)}(?=\s|;|\{{|$)", lines[index])
+                for index in _iter_direct_child_lines(lines, start, end)
+            )
+        ]
+        if held:
+            where = ".".join(path[:depth])
+            raise TutorialRecordError(
+                f"{name} in {where + ' of ' if where else ''}{file_path.name}: the dictionary holds {held[0]} unquoted, "
+                f"and OpenFOAM looks a word up literally before it tries a quoted pattern, so the quoted entry would "
+                f"never be read; name it unquoted ({held[0]}) to edit the entry the dictionary holds",
+                code="shadowed_key",
+            )
 
 
 def update_foam_entry(

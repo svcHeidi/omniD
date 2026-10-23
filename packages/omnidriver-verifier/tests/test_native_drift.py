@@ -427,11 +427,13 @@ def test_a_changed_snippet_is_reported(snippet, old, new, reported):
         ("time", "report_when", "t + dt >= end", "report rule"),
         ("norms", "points", "nodes", "norm points"),
         ("domain", "box", [[0, 1], [0, 2], [0, 1]], "domain 2D"),
-        ("native", "cardiacfoam", {"commit": "15b3e18324d597bc396c3e314f6461143d300301",
-                                   "verification_model": "manufacturedShellMonodomainVerifier"}, "tet verifier"),
+        (("native", "cardiacfoam"), "verification_model", "manufacturedShellMonodomainVerifier", "tet verifier"),
     ],
 )
 def test_a_changed_datum_is_reported(block, key, value, reported):
     problem = load_problem("fda_monodomain")
-    problem[block][key] = value
+    container = problem
+    for part in block if isinstance(block, tuple) else (block,):
+        container = container[part]
+    container[key] = value
     assert reported in drift(_snippets(), problem)
