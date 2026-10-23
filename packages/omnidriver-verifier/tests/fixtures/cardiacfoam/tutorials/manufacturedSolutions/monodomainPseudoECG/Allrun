@@ -1,3 +1,3 @@
-# cardiacFOAM 15b3e18324d597bc396c3e314f6461143d300301 tutorials/manufacturedSolutions/monodomainPseudoECG/Allrun, verbatim lines 223-224
+# cardiacFOAM d684422bc085c40bd8a08a633e5c6e517d32626b tutorials/manufacturedSolutions/monodomainPseudoECG/Allrun, verbatim lines 223-224
     lc=$(awk -v N="$N" 'BEGIN { printf "%.17g", 1/N }')
     runApplication gmsh -3 box.geo.template -setnumber lc "$lc" -setnumber seed "$seed" -o local/box.msh
