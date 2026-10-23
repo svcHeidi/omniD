@@ -370,14 +370,14 @@ _TREE_ROOT_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$PURKINJE_TREE.hisBundleSeed",
         description="Common His/root point shared by the LV and RV trees in the glued output.",
-        source_refs=("cases/bivCase/system/generatePurkinjeTreeDict", _TREE_SOURCE),
+        source_refs=("tutorials/idealizedHeart/humanEndocardial/system/generatePurkinjeTreeDict", _TREE_SOURCE),
         value_kind="vector3",
         required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.growthModel",
         description="Cable-growth marching algorithm.",
-        source_refs=("cases/bivCase/system/generatePurkinjeTreeDict", _TREE_SOURCE, _TREE_README),
+        source_refs=("tutorials/idealizedHeart/humanEndocardial/system/generatePurkinjeTreeDict", _TREE_SOURCE, _TREE_README),
         value_kind="enum",
         enum_values=("legacy", "surfaceFollow"),
         typical_value="legacy",

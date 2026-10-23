@@ -15,10 +15,14 @@ records what they read and wrote.
   `0/sheet` and the `0/uvc_*` fields, none of which are in the tracked case
   folder. It is supplied, never discovered.
 - **`idealizedHeart`, `idealizedHeartEndocardial`,
-  `idealizedHeartPigTransmural`** run on cardiacFOAM's idealized
-  biventricular mesh, committed natively, so they need no `--input`. They use
-  the `cobiveco` convention (`0/tm`, `0/tv`, `0/apicobasal`). The endocardial
-  and pig-transmural variants end in `generatePurkinjeTree`.
+  `idealizedHeartPigTransmural`** are the native `tutorials/idealizedHeart`
+  variants `humanSlab`, `humanEndocardial` and `pigMorphometricTransmural`.
+  They run on the idealized biventricular mesh the variants share
+  (`tutorials/idealizedHeart/mesh`, Git LFS), which a record reads as its
+  native `mesh` input in place of the copy each `Allrun` makes, so they need
+  no `--input`. They use the `cobiveco` convention (`0/tm`, `0/tv`,
+  `0/apicobasal`). The endocardial and pig-transmural variants end in
+  `generatePurkinjeTree`.
 - No record runs `refine1Dgraph` or the Purkinje graph hand-off to
   cardiacFOAM; the graph conversion utilities are declared, not sequenced.
 
