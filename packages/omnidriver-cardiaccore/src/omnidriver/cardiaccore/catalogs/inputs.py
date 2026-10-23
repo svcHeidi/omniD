@@ -12,13 +12,15 @@ from omnidriver.core.contracts.dictionary import DictEntry, build_group
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 
 
-_CONDUCTIVITY_SOURCE = "src/setCardiacConductivity/setCardiacConductivity.C"
-_ANATOMY_SOURCE = "src/setCardiacAnatomy/setCardiacAnatomy.C"
-_SLAB_SOURCE = "src/setPurkinjeSlab/setPurkinjeSlab.C"
-_MORPHOMETRY_SOURCE = "src/setPurkinjeMorphometry/setPurkinjeMorphometry.C"
+_CONDUCTIVITY_SOURCE = "applications/utilities/setCardiacConductivity/setCardiacConductivity.C"
+_ANATOMY_SOURCE = "applications/utilities/setCardiacAnatomy/setCardiacAnatomy.C"
+_SLAB_SOURCE = "applications/utilities/setPurkinjeSlab/setPurkinjeSlab.C"
+_MORPHOMETRY_SOURCE = "applications/utilities/setPurkinjeMorphometry/setPurkinjeMorphometry.C"
 _COORDINATES_CONVENTION_SOURCE = "src/coordinatesConvention/coordinatesConvention.H"
-_TREE_SOURCE = "src/generatePurkinjeTree/generatePurkinjeTree.C"
-_TREE_README = "src/generatePurkinjeTree/README.md"
+_ANATOMY_README = "applications/utilities/setCardiacAnatomy/README.md"
+_AHA_SEGMENT_NAMES = "applications/utilities/setCardiacAnatomy/aha_segment_names.json"
+_TREE_SOURCE = "applications/utilities/generatePurkinjeTree/generatePurkinjeTree.C"
+_TREE_README = "applications/utilities/generatePurkinjeTree/README.md"
 
 
 CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
@@ -193,22 +195,22 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
 ANATOMY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$CARDIAC_ANATOMY.zApicalMid",
-        description="Longitudinal-coordinate threshold separating apical and mid AHA regions.",
-        source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE),
+        description="LV longitudinal cutoff between the apical and mid AHA segment rings (the RV rings take their own cutoffs from the RV's longitudinal range).",
+        source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE, _ANATOMY_README, _AHA_SEGMENT_NAMES),
         value_kind="scalar",
         required=True,
     ),
     DictEntry(
         driver_path="$CARDIAC_ANATOMY.zMidBasal",
-        description="Longitudinal-coordinate threshold separating mid and basal AHA regions.",
-        source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE),
+        description="LV longitudinal cutoff between the mid and basal AHA segment rings (the RV rings take their own cutoffs from the RV's longitudinal range).",
+        source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE, _ANATOMY_README, _AHA_SEGMENT_NAMES),
         value_kind="scalar",
         required=True,
     ),
     DictEntry(
         driver_path="$CARDIAC_ANATOMY.zApexCap",
-        description="Longitudinal-coordinate extent assigned to the apical cap.",
-        source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE),
+        description="Longitudinal cutoff below which LV cells are the apex (AHA segment 17), whatever their angle.",
+        source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE, _ANATOMY_README, _AHA_SEGMENT_NAMES),
         value_kind="scalar",
         required=True,
     ),
@@ -218,7 +220,7 @@ ANATOMY_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "Number of longitudinal bands used to recalibrate the RV free-wall "
             "boundary. Optional; the C++ default is 10."
         ),
-        source_refs=(_ANATOMY_SOURCE, "src/setCardiacAnatomy/README.md"),
+        source_refs=(_ANATOMY_SOURCE, _ANATOMY_README),
         value_kind="integer",
         typical_value="10",
     ),

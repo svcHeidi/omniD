@@ -1,5 +1,5 @@
 name = "setCardiacAnatomy"
-description = "Assign AHA segment labels and their short-axis angle."
+description = "Assign AHA segment labels (LV 1-17, RV 18-26) and their short-axis angle."
 category = "field-setup"
 
 purpose = "Declared from cardiacCore's native bivCase wrapper and utility documentation."
@@ -15,7 +15,7 @@ example = "setCardiacAnatomy -case <case>"
 artifact_id = "aha_segment"
 path_pattern = "0/AHA_Segment"
 format = "openfoam_field"
-description = "AHA segment label"
+description = "AHA segment ID per cell: LV 1-17, RV free wall 18-26, 0 outside ventricularCellZone"
 produced_by = "setCardiacAnatomy"
 
 [[produces]]

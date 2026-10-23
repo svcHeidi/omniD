@@ -69,7 +69,9 @@ The native generator owns endocardial-surface definition. It uses named LV/RV
 endocardial patches when those are available; otherwise it uses the selected
 UVC convention and natively recovers the RV-facing septum. The helper scripts
 do not re-create that UVC/endoseptal logic. After `setCardiacAnatomy`, each
-chamber has its own `aha_angle` frame: do not compare raw LV and RV angles.
+cell carries `aha_angle` from one shared LV-centred frame (the RV has no
+frame of its own), and `AHA_Segment` is 1-17 on the LV and 18-26 on the RV free
+wall; cardiacCore's `aha_segment_names.json` names every ID.
 
 For a selected tree study, keep this audit chain explicit: native face-set
 construction → `setCardiacAnatomy` AHA fields → seed placement

@@ -12,7 +12,7 @@ requires:
 cxx_mapping:
   source_root:
     variable: OMNIDRIVER_CARDIACCORE_TREE
-    relative: src
+    relative: .
   reviewed_allowlist: dict_key_allowlist.json
 case_profile:
   dictionaries:
