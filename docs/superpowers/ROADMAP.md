@@ -1,6 +1,6 @@
 # omnidriver: where it stands
 
-Read this first, after `CLAUDE.md`. It describes the state as of 2026-10-10.
+Read this first, after `CLAUDE.md`. It describes the state as of 2026-10-24.
 History lives in `plans/` and `specs/`; this file is only the present and what
 is next.
 
@@ -9,7 +9,7 @@ is next.
 | repository | remote | notes |
 |---|---|---|
 | omniD (`svcHeidi/omniD`) | `main` = `origin/main` | The only long-lived branch; a commit cannot name its own hash, so `git log -1` is the head. Local-only and ignored: `.venv`, caches, `.claude/`, `.superpowers/` (agent reports), `omnidriver-runtime.yaml` (the owner's machine config) |
-| cardiacFOAM (`solids4foam/cardiacFoam`) | `origin/main` at `0b1bf13c`; `origin/omnid/tutorials-are-pointers` at `e3e3fc8a` | omniD's native landing branch contains native `main`: 60 commits ahead, none behind. The owner's local `omnid/tutorials-are-pointers` is at `c7d5bd1c`, 19 behind its remote. The owner's feature branches are theirs (§3) |
+| cardiacFOAM (`solids4foam/cardiacFoam`) | cardiacFOAM `main`; PR #59 merges into it with a merge commit | omniD relates to cardiacFOAM by version, not by commit: v0.1, released after #59 merges. The owner's feature branches are theirs (§3) |
 | cardiacCore (`svcHeidi/cardiacCore`) | `main` at `4d2b22a` | The owner's checkout is behind, with local work (§4) |
 
 Pass 2 (`plans/2026-10-01-pass2-convergence.md`) is complete.
@@ -88,30 +88,29 @@ Pass 2 (`plans/2026-10-01-pass2-convergence.md`) is complete.
 
 ## 3. cardiacFOAM: exactly where it stands
 
-Native `origin/main` (`0b1bf13c`, 2026-10-04) has PRs #49 (spring-supported
-slab), #50 (single-cell pre-pacing), #51 (the insulated wall) and #52 (ECG and
-conduction-block regressions). `origin/omnid/tutorials-are-pointers` has merged
-it. The ten records plan `ok` against that tree, with only `uncatalogued`
-notes.
+PR #59 (`feat/mono-bi-eikonal-verification`: monodomain, bidomain and eikonal
+verification, the sealed-wall gradient, the bounded eikonal, the sealed-shell
+manufactured solutions) merges into cardiacFOAM `main` with a merge commit, and
+cardiacFOAM v0.1 is released after it. omniD follows v0.1; nothing in omniD
+relates to a cardiacFOAM commit except the interim pin noted in §5 4a.
 
-| branch | relation to `origin/omnid/tutorials-are-pointers` |
+| branch or PR | state |
 |---|---|
-| `origin/main` | contained in it; native `main` can fast-forward to it |
-| `origin/feat/heart-in-bath` (one commit, `bdd84052`, on top of `main`) | merging it directly conflicts in one file, `monodomain1DCableCV/README.md` |
-| `origin/omnid/heart-in-bath` (`6b1ecb2f`) | pre-resolved: our branch with heart-in-bath merged in; it merges cleanly. Its `bathBidomain/insulatedWall` uses `interfaceConductivityInterpolation conormalHarmonic`, a value chosen by an `if` chain. The scan reads the literals the chain compares as the menu, so the case plans `ok` and `conormalHarmonic` is an `uncatalogued` note |
-| `origin/omnid/insulated-wall` | contained in it; no longer needed |
+| PR #53 (`omnid/tutorials-are-pointers`) | superseded by #59: its head is contained in #59, so the merge commit marks it merged |
+| PR #57 (`feat/heart-in-bath`) | closed |
+| `feat/bath-transmission-mms` | the bath work. A follow-up: rebase onto `main` after #59 |
+| `omnid/heart-in-bath`, `omnid/insulated-wall` | superseded; no longer needed |
 
-**Provisional work.** The heart in a bath is only on a feature branch, so it is
+**Provisional work.** The bath is only on a feature branch, so it is
 provisional, and omnidriver treats it that way:
 - it adds no catalogue entry and no record for it;
 - nothing on omniD `main` depends on it;
 - scanning such a branch shows its keys only as `uncatalogued` notes.
 
-`omnid/heart-in-bath` is provisional too. When the work lands on native `main`,
-omnidriver's change is small: catalogue entries for its keys, and a record for
-any new tutorial a study needs. A few omniD tests use verbatim snippets of the
-C++ as frozen fixtures for the generic scanner; they test the mechanism, not
-the feature.
+When it lands on native `main`, omnidriver's change is small: catalogue entries
+for its keys, and a record for any new tutorial a study needs. A few omniD
+tests use verbatim snippets of the C++ as frozen fixtures for the generic
+scanner; they test the mechanism, not the feature.
 
 What the catalogue holds of the sealed wall, as cardiacFOAM PR #59
 (`feat/mono-bi-eikonal-verification`) has it:
@@ -134,13 +133,12 @@ What the catalogue holds of the sealed wall, as cardiacFOAM PR #59
   `#eval` lines of `system/blockMeshDict` (`configuration_unresolved`).
 
 **Order when the owner is ready:**
-1. Fast-forward native `main` to `omnid/tutorials-are-pointers`, or merge the
-   reverse; it contains `main`.
-2. When `feat/heart-in-bath` lands on `main`, merge it into our branch (one
-   README conflict), or take `omnid/heart-in-bath`.
-3. Run `omnidriver catalog --uncatalogued`, and describe the new keys in the
+1. Merge #59 into cardiacFOAM `main` (merge commit), then tag v0.1.
+2. Land omniD's follow-up to #59 on omniD `main`.
+3. Rebase `feat/bath-transmission-mms` onto `main` (follow-up).
+4. Run `omnidriver catalog --uncatalogued`, and describe the new keys in the
    catalogue.
-4. Add records for the new cases where a study needs them.
+5. Add records for the new cases where a study needs them.
 
 **The installed `cardiacFoam`** (in `~/OpenFOAM/simaocastro-v2412`) was built
 from the insulated-wall work, which is native `main` now. Against tutorials
@@ -198,8 +196,9 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
 ## 5. Next
 
 1. **Electrophysiology testing and training** with the records, `check` and
-   the catalogues. Then **electromechanics**: the owner builds its record,
-   and omniD supports it through `WorkflowStep` features as needed.
+   the catalogues. omniD's goal is normal use of the solver, not the details
+   of its manufactured cases. **Electromechanics is parked** until the owner
+   moves to it; its keys and records wait with it.
 2. **Left for the electrophysiology tests**, each needing a decision the code
    cannot make alone:
    - *A key only the binary reads* is set today in a `--case` copy.
@@ -252,7 +251,7 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
      `springSupportedSlab`) and the idealized heart have no record; parked by
      the owner. EM needs per-region documents: `solve_step` reads
      `constant/electroProperties`.
-3. **Uncatalogued cardiacFOAM keys:** 12 for electromechanics (they wait for
+3. **Uncatalogued cardiacFOAM keys:** 12 for electromechanics (parked with
    it) and `offsetField` (a field-file key that no catalogued document holds).
    `torsoSurface`, read by `ecgModelIO::loadSurface`, is catalogued at
    `ecgDomains.<name>.torsoSurface`, the block that function's dictionary
@@ -266,9 +265,9 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    whether the native code should check the length of `pvjResistances` and the
    range of `rootStimulus.node`;
 
-4. **1D-3D PVJ coupling: fixed on cardiacFOAM PR #53** (`a6f0361d`, not merged to
-   native main; the measurements, before and after, are in
-   `docs/solver-learning/cardiacfoam-pvj-coupling.md`). The branch has:
+4. **1D-3D PVJ coupling: fixed on cardiacFOAM PR #53**, which reaches native
+   `main` with #59 (the measurements, before and after, are in
+   `docs/solver-learning/cardiacfoam-pvj-coupling.md`). It has:
    - a conservative bidirectional junction: the network node loses the junction
      current from the volume `pi rho^2 L` (`purkinjeFibreRadius`, read only on that branch)
      and the tissue receives the current the network solved, whatever `pvjCouplingScheme`; charge balances every step, and
@@ -292,18 +291,20 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
    - on the bath-bidomain branch only: its reaction/diffusion split skips the
      SBDF2 `VmRate` and `Iion` refresh that `advance()` does, so bath with SBDF2
      differs from the normal advance.
-   - `purkinjeFibreRadius`: not catalogued, because native main reads no such key
-     (the scan reports it `unread` there). Native `60f4cb597` (on `omnid/*` branches,
-     not on main) reads it with `lookupOrDefault` 2e-5 m; the catalogue entry follows
-     once the owner merges it.
+   - `purkinjeFibreRadius`: not catalogued, because native `main` reads no such key
+     (the scan reports it `unread` there). An `omnid/*` branch, not on `main`, reads
+     it with `lookupOrDefault` 2e-5 m; the catalogue entry follows if that reaches `main`.
 4a. **Verifier findings, owner's calls** (2026-10-10, `cardiacfoam.md` AB,
    `opencarp.md` N):
    - whether to report openCARP v18.1's Line-element defect upstream (quadrature
      on [-1, 1] against shape functions on [0, 1]).
-   - the gmsh tet templates (`cardiacfoam.md` AD6): native main (`277dfeb19`) still has
+   - the gmsh tet templates (`cardiacfoam.md` AD6): native `main` before #59 has
      `lc = __LC__;`, which omniD's `gmsh -setnumber lc` cannot set. #59 moves each template
      to its case root with `DefineConstant[ lc ... ]`, which the records follow; settled when
      #59 merges. omniD's strict plan refuses a `-setnumber` name a template does not declare;
+   - the verifier's two problem files (`fda_monodomain.toml`, `anisotropic_monodomain.toml`)
+     and their drift fixtures pin a cardiacFOAM #59 commit. That pin is interim
+     provenance until the v0.1 tag, which replaces it;
    - cardiacFOAM with `gradSchemes Gauss linear` does not converge on gmsh tets
      (FDA and rotated problems alike); the tutorial's base case uses `leastSquares`
      and converges at second order. On hex, Gauss linear converges. Whether a tet case should refuse or note `Gauss linear` is open;
