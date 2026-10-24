@@ -40,7 +40,7 @@ file: constant/electroProperties/monodomainSolverCoeffs at line 22 to 58.
 FOAM exiting
 '''
 
-# cardiacFOAM 15b3e183 src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C, verbatim lines 31,
+# cardiacFoam #59 src/electroModels/myocardiumModels/monodomainSolver/monodomainSolver.C, verbatim lines 31,
 # 40-62: the constructor, which reads sealedHeartBoundary. The scanned tree holds this file alone.
 SCANNED = '''defineTypeNameAndDebug(monodomainSolver, 0);
 monodomainSolver::monodomainSolver

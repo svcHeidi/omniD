@@ -11,6 +11,7 @@ mesh_progression = ["hex", "tet"]
 cites = ["doi:10.1002/cnm.2615", "https://cdrh-rst.fda.gov/node/1576"]
 
 [native.cardiacfoam]
+# Interim: the commit the fixtures were read at, until the solver's first release (v0.1), when it becomes the v0.1 tag.
 commit = "d684422bc085c40bd8a08a633e5c6e517d32626b"
 ionic_model = "monodomainFDAManufactured"
 verification_model = "manufacturedAnisotropicMonodomainVerifier"
