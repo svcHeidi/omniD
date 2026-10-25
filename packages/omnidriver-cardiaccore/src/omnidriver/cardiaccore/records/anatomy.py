@@ -1,5 +1,5 @@
 """cardiacCore's shared anatomy input and workflow steps.
-``step()`` mirrors native ``Allrun``'s ``<utility> -case .``; ``ANATOMY`` has no native case location, so a study supplies ``--input anatomy=<bundle dir>``.
+``step()`` mirrors native ``Allrun``'s ``<utility> -case .``; ``ANATOMY`` has no native case location, so a study supplies ``--input anatomy=<bundle dir>``; no record declares it today.
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ MESH = tuple(f"constant/polyMesh/{name}" for name in ("boundary", "faces", "neig
 #: ``coordinatesConventionDict``'s ``uvc_*`` names.
 UVC = ("0/uvc_transmural", "0/uvc_intraventricular", "0/uvc_longitudinal")
 
-#: The one input every cardiacCore record needs: no native location, so
-#: ``--input anatomy=<bundle dir>`` is always required.
+#: A bring-your-own anatomy input: no native location, so
+#: ``--input anatomy=<bundle dir>`` is always required of a record that declares it.
 ANATOMY = RecordInput(
     name="anatomy",
     files=tuple((path, path) for path in (*MESH, "0/fiber", "0/sheet", *UVC)),
@@ -35,33 +35,7 @@ def step(step_id: str, utility: str, *, consumes: tuple[str, ...], produces: tup
     )
 
 
-CONDUCTIVITY = step(
-    "conductivity", "setCardiacConductivity",
-    consumes=(*MESH, "0/fiber", "0/sheet"),
-    produces=("0/Conductivity",),
-)
-
-#: ``setCardiacAnatomy`` also writes ``0/aha_z``, and ``0/phiRV`` and ``0/groove_interface``
-#: while the dictionary leaves ``auxiliaryFields`` at its default; a record's produces must declare
-#: what its dictionary makes the utility write.
-ANATOMY_STEP = step(
-    "anatomy", "setCardiacAnatomy",
-    consumes=(CONV, "0/uvc_longitudinal", "0/uvc_intraventricular"),
-    produces=("0/aha_angle", "0/aha_z", "0/phiRV", "0/groove_interface", "0/AHA_Segment"),
-)
-
-MORPHOMETRY = step(
-    "purkinje_morphometry", "setPurkinjeMorphometry",
-    consumes=(CONV, "0/uvc_longitudinal", "0/uvc_intraventricular"),
-    produces=(
-        "0/PurkinjeLongitudinalRegion", "0/PurkinjeCircumferentialRegion",
-        "0/PurkinjeTerminalWeightSubendocardial", "0/PurkinjeTerminalWeightIntramural",
-    ),
-)
-
-#: ``generatePurkinjeTree``'s outputs, shared by ``humanEndocardial``/
-#: ``pigMorphometricTransmural``. Declared here though unused by
-#: ``humanSlab``, so those records need not restate them.
+#: ``generatePurkinjeTree``'s outputs, shared by the endocardial and pig-transmural records.
 TREE_OUT = (
     *(f"constant/polyMesh/sets/{name}" for name in ("LVEndoFaces", "RVEndoFaces", "EpiFaces", "RVSeptalEndoFaces")),
     *(f"postProcessing/generatePurkinjeTree/{name}" for name in (

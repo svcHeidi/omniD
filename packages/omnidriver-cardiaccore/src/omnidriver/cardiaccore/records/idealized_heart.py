@@ -1,4 +1,4 @@
-"""The idealized-heart records: three variants under ``tutorials/idealizedHeart`` on its one shared mesh (Git LFS), needing no ``--input``.
+"""The idealized-heart records: three variants under ``idealizedHeart`` in the tutorials root on its one shared mesh (Git LFS), needing no ``--input``.
 The mesh is the native ``mesh`` input, overlaid onto the staged variant as each variant's ``Allrun`` copies it. They use the ``cobiveco`` convention, so steps declare their own field paths instead of ``anatomy.py``'s ``uvc_*``.
 """
 
@@ -27,11 +27,11 @@ IDEALIZED_MESH = MESH + tuple(
 
 #: The variants' shared mesh and fields: a variant folder has none until its
 #: `Allrun` copies `../mesh` in, so the record reads it from the native
-#: location, as `anatomy.ANATOMY` reads a supplied bundle.
+#: location, as a supplied input would be read.
 MESH_INPUT = RecordInput(
     name="mesh",
     files=tuple((path, path) for path in (*IDEALIZED_MESH, "0/fiber", "0/sheet", *COBIVECO)),
-    native_relpath="tutorials/idealizedHeart/mesh",
+    native_relpath="idealizedHeart/mesh",
 )
 
 CONDUCTIVITY = step(
@@ -56,10 +56,10 @@ MORPHOMETRY = step(
     ),
 )
 
-#: Mirrors humanSlab's workflow (conductivity, anatomy, slab, morphometry).
+#: Mirrors the native humanSlab variant's workflow (conductivity, anatomy, slab, morphometry).
 IDEALIZED_HEART = TutorialRecord(
     name="idealizedHeart",
-    native_case_relpath="tutorials/idealizedHeart/humanSlab",
+    native_case_relpath="idealizedHeart/humanSlab",
     inputs=(MESH_INPUT,),
     workflow_steps=(
         CONDUCTIVITY,
@@ -78,7 +78,7 @@ IDEALIZED_HEART = TutorialRecord(
 #: not a step.
 IDEALIZED_HEART_ENDOCARDIAL = TutorialRecord(
     name="idealizedHeartEndocardial",
-    native_case_relpath="tutorials/idealizedHeart/humanEndocardial",
+    native_case_relpath="idealizedHeart/humanEndocardial",
     inputs=(MESH_INPUT,),
     workflow_steps=(
         CONDUCTIVITY,
@@ -96,7 +96,7 @@ IDEALIZED_HEART_ENDOCARDIAL = TutorialRecord(
 #: allLeaves+transmural).
 IDEALIZED_HEART_PIG_TRANSMURAL = TutorialRecord(
     name="idealizedHeartPigTransmural",
-    native_case_relpath="tutorials/idealizedHeart/pigMorphometricTransmural",
+    native_case_relpath="idealizedHeart/pigMorphometricTransmural",
     inputs=(MESH_INPUT,),
     workflow_steps=(
         CONDUCTIVITY,

@@ -8,17 +8,11 @@ records what they read and wrote.
 
 ## Records and their inputs
 
-- **`humanSlab`** runs `setCardiacConductivity`, `setCardiacAnatomy`,
-  `setPurkinjeSlab` and `setPurkinjeMorphometry` over `cases/bivCase`, in the
-  native `Allrun`'s order. It needs one supplied input, `anatomy`
-  (`--input anatomy=<dir>`): the mesh (`constant/polyMesh`), `0/fiber`,
-  `0/sheet` and the `0/uvc_*` fields, none of which are in the tracked case
-  folder. It is supplied, never discovered.
 - **`idealizedHeart`, `idealizedHeartEndocardial`,
-  `idealizedHeartPigTransmural`** are the native `tutorials/idealizedHeart`
-  variants `humanSlab`, `humanEndocardial` and `pigMorphometricTransmural`.
+  `idealizedHeartPigTransmural`** are the native `idealizedHeart`
+  tutorials' variants `humanSlab`, `humanEndocardial` and `pigMorphometricTransmural`.
   They run on the idealized biventricular mesh the variants share
-  (`tutorials/idealizedHeart/mesh`, Git LFS), which a record reads as its
+  (`idealizedHeart/mesh` in the tutorials root, Git LFS), which a record reads as its
   native `mesh` input in place of the copy each `Allrun` makes, so they need
   no `--input`. They use the `cobiveco` convention (`0/tm`, `0/tv`,
   `0/apicobasal`). The endocardial and pig-transmural variants end in

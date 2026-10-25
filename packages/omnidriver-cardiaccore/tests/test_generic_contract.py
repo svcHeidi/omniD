@@ -19,7 +19,7 @@ def test_plugin_has_a_valid_context() -> None:
     assert context.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
     assert len(context.stack.call("get_dict_entries")) == 52
     assert set(context.stack.call("get_tutorial_records")) == {
-        "humanSlab", "idealizedHeart", "idealizedHeartEndocardial", "idealizedHeartPigTransmural",
+        "idealizedHeart", "idealizedHeartEndocardial", "idealizedHeartPigTransmural",
     }
     assert context.stack.call("get_case_runtime_conventions").case_entrypoints == ("Allrun",)
 

@@ -27,7 +27,7 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.df",
         description="Longitudinal conductivity coefficient used to construct Conductivity.",
-        source_refs=("cases/bivCase/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
+        source_refs=("tutorials/template/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
         notes=(
             "The utility constructs a dimensional conductivity field, but this adapter "
             "has not independently verified the physical unit for this input."
@@ -38,7 +38,7 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.ds",
         description="Sheet-direction conductivity coefficient used to construct Conductivity; read only when sheetField is set.",
-        source_refs=("cases/bivCase/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
+        source_refs=("tutorials/template/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
         notes=(
             "The utility constructs a dimensional conductivity field, but this adapter "
             "has not independently verified the physical unit for this input."
@@ -52,7 +52,7 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.dn",
         description="Normal-direction conductivity coefficient used to construct Conductivity; read only when sheetField is set.",
-        source_refs=("cases/bivCase/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
+        source_refs=("tutorials/template/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
         notes=(
             "The utility constructs a dimensional conductivity field, but this adapter "
             "has not independently verified the physical unit for this input."
@@ -75,7 +75,7 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "Conductivity across the fibre, along every direction normal to it, used when sheetField is absent: "
             "Conductivity is dt*I + (df - dt)*f f for the unit fibre f. Not read when sheetField is set."
         ),
-        source_refs=("cases/bivCase/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
+        source_refs=("tutorials/template/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
         notes=(
             "The utility constructs a dimensional conductivity field, but this adapter "
             "has not independently verified the physical unit for this input."
@@ -86,7 +86,7 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$CARDIAC_CONDUCTIVITY.fiberField",
         description="Name of the vector field defining the fibre direction.",
-        source_refs=("cases/bivCase/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
+        source_refs=("tutorials/template/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
         value_kind="word",
         required=True,
     ),
@@ -96,7 +96,7 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "Name of the vector field defining the sheet direction; its presence selects the orthotropic basis. "
             "Absent, the utility writes a transversely isotropic Conductivity from the fibre alone, from df and dt."
         ),
-        source_refs=("cases/bivCase/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
+        source_refs=("tutorials/template/system/setCardiacConductivityDict", _CONDUCTIVITY_SOURCE),
         value_kind="word",
         co_required_with=(
             "$CARDIAC_CONDUCTIVITY.ds",
@@ -241,7 +241,7 @@ SLAB_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$PURKINJE_SLAB.thickness",
         description="Sub-endocardial slab thickness in the case's transmural-coordinate units.",
-        source_refs=("cases/bivCase/system/setPurkinjeSlabDict", _SLAB_SOURCE),
+        source_refs=("tutorials/template/system/setPurkinjeSlabDict", _SLAB_SOURCE),
         value_kind="scalar",
         constraints=("Must lie between zero and the configured transmural-coordinate range.",),
         # This utility is optional at the adapter level: a selected workflow
@@ -251,7 +251,7 @@ SLAB_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$PURKINJE_SLAB.multiplier",
         description="Conductivity multiplier applied within the Purkinje slab.",
-        source_refs=("cases/bivCase/system/setPurkinjeSlabDict", _SLAB_SOURCE),
+        source_refs=("tutorials/template/system/setPurkinjeSlabDict", _SLAB_SOURCE),
         value_kind="scalar",
         required=False,
     ),
@@ -268,7 +268,7 @@ MORPHOMETRY_ENTRIES: Final[tuple[DictEntry, ...]] = (
             "Weight blending the subendocardial and intramural terminal-sampling "
             "fields written by setPurkinjeMorphometry."
         ),
-        source_refs=("cases/bivCase/system/setPurkinjeMorphometryDict", _MORPHOMETRY_SOURCE),
+        source_refs=("tutorials/template/system/setPurkinjeMorphometryDict", _MORPHOMETRY_SOURCE),
         value_kind="scalar",
         typical_value="0.56",
         required=False,
@@ -281,7 +281,7 @@ MORPHOMETRY_ENTRIES: Final[tuple[DictEntry, ...]] = (
 # the `coordinates` sub-block gives real field-name defaults via getOrDefault,
 # and `transmural.{endocardium,epicardium}` are named by anatomical meaning
 # because CObiveco's `tm` has endocardium > epicardium. Confirmed against
-# cases/bivCase/system/coordinatesConventionDict.
+# tutorials/template/system/coordinatesConventionDict and the idealized heart's own.
 #
 # Shared across setCardiacAnatomy, setPurkinjeSlab, setPurkinjeMorphometry
 # and generatePurkinjeTree: each utility's coordinatesConvention.H reader only
@@ -292,7 +292,7 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.coordinateSystem",
         description="Selects which ventricular coordinate system the case's fields follow.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
+        source_refs=("tutorials/template/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="enum",
         required=True,
         enum_values=("uvc", "cobiveco"),
@@ -313,7 +313,7 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.coordinates.transmuralField",
         description="Name of the volScalarField carrying the transmural coordinate.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
+        source_refs=("tutorials/idealizedHeart/humanSlab/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="word",
         typical_value="transmural",
         notes="Read from a subOrEmptyDict, so the whole 'coordinates' block is optional: a case whose fields already carry the canonical names (transmural/intraventricular/apicobasal) needs no 'coordinates' block at all.",
@@ -321,28 +321,28 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.coordinates.intraventricularField",
         description="Name of the volScalarField carrying the LV/RV intraventricular coordinate.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
+        source_refs=("tutorials/idealizedHeart/humanSlab/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="word",
         typical_value="intraventricular",
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.coordinates.longitudinalField",
         description="Name of the volScalarField carrying the apex-to-base longitudinal coordinate.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
+        source_refs=("tutorials/template/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="word",
         typical_value="apicobasal",
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.intraventricularChambers.LV",
         description="Intraventricular coordinate value identifying the LV chamber.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
+        source_refs=("tutorials/template/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
         required=True,
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.intraventricularChambers.RV",
         description="Intraventricular coordinate value identifying the RV chamber.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
+        source_refs=("tutorials/template/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
         required=True,
         notes="isLeftVentricle()/isRightVentricle() classify a cell by proximity to LV vs RV; the LV/RV seam is their midpoint.",
@@ -350,14 +350,14 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.transmural.endocardium",
         description="Transmural-coordinate value at the endocardium. Not necessarily numerically smaller than epicardium (e.g. CObiveco's tm reads 1=endocardium, 0=epicardium).",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
+        source_refs=("tutorials/template/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
         required=True,
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.transmural.epicardium",
         description="Transmural-coordinate value at the epicardium.",
-        source_refs=("cases/bivCase/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
+        source_refs=("tutorials/template/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
         required=True,
     ),

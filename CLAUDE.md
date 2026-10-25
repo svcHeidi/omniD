@@ -88,7 +88,7 @@ export `DYLD_LIBRARY_PATH`, which macOS strips when bash starts).
 ```bash
 omnidriver check --repo <cardiacFOAM> --scratch-dir <scratch> --record singleCell --benchmarks <omnidriver>/benchmarks
 omnidriver check --plugin opencarp --cases-root <opencarp>/share/tutorials --scratch-dir <scratch> --benchmarks <omnidriver>/benchmarks
-omnidriver check --plugin cardiaccore --cases-root <cardiacCore> --scratch-dir <scratch> --input anatomy=<humanSlab bundle>
+omnidriver check --repo <cardiacCore> --scratch-dir <scratch> --record idealizedHeart
 omnidriver check --repo <torchcor-cases> --scratch-dir <scratch> --record nversion --benchmarks <omnidriver>/benchmarks
 ```
 

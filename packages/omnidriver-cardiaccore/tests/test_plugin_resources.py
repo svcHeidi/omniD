@@ -34,5 +34,5 @@ def test_guidance_is_read_from_the_package() -> None:
     (item,) = CardiacCorePlugin().get_agent_guidance()
 
     assert item["title"]
-    assert "--input anatomy=" in item["text"]
+    assert "idealizedHeart/mesh" in item["text"]
     assert "system/<utility>Dict:<dotted.key>" in item["text"]

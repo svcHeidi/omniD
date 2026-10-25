@@ -65,7 +65,6 @@ FIELD_CONVENTIONS = {
 
 SUPPORT_BOUNDARY = {
     "supported_records": (
-        "humanSlab",
         "idealizedHeart",
         "idealizedHeartEndocardial",
         "idealizedHeartPigTransmural",
