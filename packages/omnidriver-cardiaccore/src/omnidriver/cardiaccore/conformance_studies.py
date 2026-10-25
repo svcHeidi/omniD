@@ -8,14 +8,14 @@ _HUMAN_SLAB_UTILITIES = ("setCardiacConductivity", "setCardiacAnatomy", "setPurk
 
 # Every idealized-heart variant shares one native mesh (no supplied input at all) and one physics
 # phase (setCardiacConductivity + setCardiacAnatomy), so their patch and sweep keys are the same
-# real, pre-existing `setCardiacAnatomyDict` entries.
+# real, pre-existing `setCardiacConductivityDict` entries (`setCardiacAnatomyDict` is empty).
 _IDEALIZED = dict(
     base_study={},
-    patch=("system/setCardiacAnatomyDict:zApicalMid", 0.30),
-    untouched=("system/setCardiacAnatomyDict", ("zMidBasal",)),
-    sweep_name="system/setCardiacAnatomyDict:zApexCap",
-    sweep_values=(0.06, 0.10),
-    unknown_name="system/setCardiacAnatomyDict:zApicalMi",
+    patch=("system/setCardiacConductivityDict:df", 0.12),
+    untouched=("system/setCardiacConductivityDict", ("ds",)),
+    sweep_name="system/setCardiacConductivityDict:dn",
+    sweep_values=(0.012, 0.016),
+    unknown_name="system/setCardiacConductivityDict:dff",
     timeout_s=300.0,
 )
 
@@ -25,7 +25,7 @@ STUDIES: dict[str, ConformanceStudy] = {
         base_study={},
         # Both keys are in the native dict (`thickness 0.1;`, `multiplier 3.0;`).
         patch=("system/setPurkinjeSlabDict:thickness", 0.2),
-        untouched=("system/setCardiacAnatomyDict", ("zApicalMid",)),
+        untouched=("system/setCardiacConductivityDict", ("df",)),
         sweep_name="system/setPurkinjeSlabDict:multiplier",
         sweep_values=(2.0, 4.0),
         unknown_name="system/setPurkinjeSlabDict:thicknes",

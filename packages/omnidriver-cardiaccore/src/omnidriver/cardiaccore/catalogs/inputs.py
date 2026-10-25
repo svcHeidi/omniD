@@ -194,25 +194,36 @@ CONDUCTIVITY_ENTRIES: Final[tuple[DictEntry, ...]] = (
 
 ANATOMY_ENTRIES: Final[tuple[DictEntry, ...]] = (
     DictEntry(
-        driver_path="$CARDIAC_ANATOMY.zApicalMid",
-        description="LV longitudinal cutoff between the apical and mid AHA segment rings (the RV rings take their own cutoffs from the RV's longitudinal range).",
-        source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE, _ANATOMY_README, _AHA_SEGMENT_NAMES),
-        value_kind="scalar",
-        required=True,
+        driver_path="$CARDIAC_ANATOMY.auxiliaryFields",
+        description=(
+            "Whether setCardiacAnatomy also writes phiRV and groove_interface (and AHA_ValveArea when "
+            "valveAreaMaskField is set). False writes only AHA_Segment, aha_angle and aha_z. Optional; "
+            "the C++ default is true."
+        ),
+        source_refs=(_ANATOMY_SOURCE, _ANATOMY_README),
+        value_kind="boolean",
+        typical_value="true",
     ),
     DictEntry(
-        driver_path="$CARDIAC_ANATOMY.zMidBasal",
-        description="LV longitudinal cutoff between the mid and basal AHA segment rings (the RV rings take their own cutoffs from the RV's longitudinal range).",
-        source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE, _ANATOMY_README, _AHA_SEGMENT_NAMES),
-        value_kind="scalar",
-        required=True,
+        driver_path="$CARDIAC_ANATOMY.ventricularCellZone",
+        description=(
+            "Name of a cellZone of ventricular myocardium. Cells outside it get AHA_Segment 0 and never set "
+            "a cavity range. Optional; without it every cell is classified, which assumes the mesh holds "
+            "ventricles only. The zone must exist among the mesh's cellZones."
+        ),
+        source_refs=(_ANATOMY_SOURCE, _ANATOMY_README),
+        value_kind="word",
     ),
     DictEntry(
-        driver_path="$CARDIAC_ANATOMY.zApexCap",
-        description="Longitudinal cutoff below which LV cells are the apex (AHA segment 17), whatever their angle.",
-        source_refs=("cases/bivCase/system/setCardiacAnatomyDict", _ANATOMY_SOURCE, _ANATOMY_README, _AHA_SEGMENT_NAMES),
-        value_kind="scalar",
-        required=True,
+        driver_path="$CARDIAC_ANATOMY.valveAreaMaskField",
+        description=(
+            "Name of a 0/ scalar field that is 0 in the valve area (fiberFoam's abSolveMask: 1 = solved "
+            "myocardium, 0 = the basal band around the valve rings). Those cells never set a cavity range and, "
+            "unless auxiliaryFields is false, are flagged in AHA_ValveArea. Optional; the field must exist in "
+            "the start time directory."
+        ),
+        source_refs=(_ANATOMY_SOURCE, _ANATOMY_README),
+        value_kind="word",
     ),
     DictEntry(
         driver_path="$CARDIAC_ANATOMY.rvLocalBands",

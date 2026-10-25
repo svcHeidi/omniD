@@ -70,8 +70,10 @@ endocardial patches when those are available; otherwise it uses the selected
 UVC convention and natively recovers the RV-facing septum. The helper scripts
 do not re-create that UVC/endoseptal logic. After `setCardiacAnatomy`, each
 cell carries `aha_angle` from one shared LV-centred frame (the RV has no
-frame of its own), and `AHA_Segment` is 1-17 on the LV and 18-26 on the RV free
-wall; cardiacCore's `aha_segment_names.json` names every ID.
+frame of its own) and `aha_z`, its position along its own ventricle's cavity.
+`AHA_Segment` is 1-17 on the LV and 18-26 on the RV free wall, its rings
+thresholds on `aha_z`; cardiacCore's `aha_segment_names.json` names every ID
+and the utility's `README.md` defines `aha_z`.
 
 For a selected tree study, keep this audit chain explicit: native face-set
 construction → `setCardiacAnatomy` AHA fields → seed placement

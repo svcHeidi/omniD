@@ -280,7 +280,7 @@ based:
 | Utility | x candidates | y outputs |
 | --- | --- | --- |
 | `setCardiacConductivity` | `df`, `ds`, `dn`, field-name selections | `Conductivity`, optional paired tensors |
-| `setCardiacAnatomy` | anatomical dictionary settings | `AHA_Segment`, `aha_angle` |
+| `setCardiacAnatomy` | anatomical dictionary settings | `AHA_Segment`, `aha_angle`, `aha_z` |
 | `setPurkinjeSlab` | thickness, multiplier | `PurkinjeLayer`, updated `Conductivity` |
 | `setPurkinjeMorphometry` | its documented dictionary settings | region labels and terminal-weight fields |
 

@@ -1,5 +1,5 @@
 name = "setCardiacAnatomy"
-description = "Assign AHA segment labels (LV 1-17, RV 18-26) and their short-axis angle."
+description = "Assign AHA segment labels (LV 1-17, RV 18-26), their short-axis angle and the position along each ventricle's cavity the rings are cut on."
 category = "field-setup"
 
 purpose = "Declared from cardiacCore's native bivCase wrapper and utility documentation."
@@ -25,13 +25,21 @@ format = "openfoam_field"
 description = "Short-axis polar angle"
 produced_by = "setCardiacAnatomy"
 
-# setCardiacAnatomy.C writes phiRV and groove_interface too; omitting them fails a record's restage validation.
+[[produces]]
+artifact_id = "aha_z"
+path_pattern = "0/aha_z"
+format = "openfoam_field"
+description = "Position along the cell's own ventricle's cavity (0 at the cavity end, 1 at the base); the AHA rings are thresholds on it. 0 outside ventricularCellZone"
+produced_by = "setCardiacAnatomy"
+
+# The next three are written unless the dictionary sets auxiliaryFields false.
 [[produces]]
 artifact_id = "phi_rv"
 path_pattern = "0/phiRV"
 format = "openfoam_field"
 description = "RV-relative circumferential angle"
 produced_by = "setCardiacAnatomy"
+optional = true
 
 [[produces]]
 artifact_id = "groove_interface"
@@ -39,3 +47,12 @@ path_pattern = "0/groove_interface"
 format = "openfoam_field"
 description = "Interventricular groove marker"
 produced_by = "setCardiacAnatomy"
+optional = true
+
+[[produces]]
+artifact_id = "aha_valve_area"
+path_pattern = "0/AHA_ValveArea"
+format = "openfoam_field"
+description = "1/0 per cell: the valve area. Written only with valveAreaMaskField set and auxiliaryFields true"
+produced_by = "setCardiacAnatomy"
+optional = true

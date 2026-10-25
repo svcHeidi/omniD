@@ -41,12 +41,13 @@ CONDUCTIVITY = step(
     produces=("0/Conductivity",),
 )
 
-#: ``setCardiacAnatomy`` also writes ``0/phiRV`` and ``0/groove_interface``,
-#: which every record's produces must declare.
+#: ``setCardiacAnatomy`` also writes ``0/aha_z``, and ``0/phiRV`` and ``0/groove_interface``
+#: while the dictionary leaves ``auxiliaryFields`` at its default; a record's produces must declare
+#: what its dictionary makes the utility write.
 ANATOMY_STEP = step(
     "anatomy", "setCardiacAnatomy",
     consumes=(CONV, "0/uvc_longitudinal", "0/uvc_intraventricular"),
-    produces=("0/aha_angle", "0/phiRV", "0/groove_interface", "0/AHA_Segment"),
+    produces=("0/aha_angle", "0/aha_z", "0/phiRV", "0/groove_interface", "0/AHA_Segment"),
 )
 
 MORPHOMETRY = step(

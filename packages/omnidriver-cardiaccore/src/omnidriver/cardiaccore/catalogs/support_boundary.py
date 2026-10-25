@@ -46,8 +46,9 @@ FIELD_CONVENTIONS = {
         "constructs face sets from the declared convention."
     ),
     "angles": (
-        "setCardiacAnatomy writes AHA_Segment and aha_angle in separate LV/RV angle frames; "
-        "do not compare their raw angles across chambers."
+        "setCardiacAnatomy writes AHA_Segment, aha_angle and aha_z; see "
+        "applications/utilities/setCardiacAnatomy/README.md for what each holds and "
+        "aha_segment_names.json for the segment names."
     ),
     "outputs": "generatePurkinjeTree writes LVEndoFaces/RVEndoFaces/RVSeptalEndoFaces/EpiFaces",
     "cobiveco_raw": {

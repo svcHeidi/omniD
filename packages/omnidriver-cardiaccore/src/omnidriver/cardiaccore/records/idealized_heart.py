@@ -44,7 +44,7 @@ CONDUCTIVITY = step(
 ANATOMY_STEP = step(
     "anatomy", "setCardiacAnatomy",
     consumes=(CONV, "0/apicobasal", "0/tv"),
-    produces=("0/aha_angle", "0/phiRV", "0/groove_interface", "0/AHA_Segment"),
+    produces=("0/aha_angle", "0/aha_z", "0/phiRV", "0/groove_interface", "0/AHA_Segment"),
 )
 
 MORPHOMETRY = step(

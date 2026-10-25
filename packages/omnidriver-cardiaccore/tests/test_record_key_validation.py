@@ -10,15 +10,18 @@ from omnidriver.cardiaccore.record_key_validation import record_key_catalog, rec
 DOCUMENT = "system/setCardiacConductivityDict"
 ANATOMY_DOCUMENT = "system/setCardiacAnatomyDict"
 
-# cardiacCore applications/utilities/setCardiacAnatomy/setCardiacAnatomy.C at chore/repo-layout (a1f9296):
-# main from its head to the read of ventricularCellZone, closed with a brace.
+# cardiacCore applications/utilities/setCardiacAnatomy/setCardiacAnatomy.C at chore/repo-layout (0c1bf46):
+# main from its head to the read of valveAreaMaskField, closed with a brace.
 SET_CARDIAC_ANATOMY_MAIN = r'''int main(int argc, char *argv[])
 {
     argList::addNote
     (
-        "Tag LV cells with AHA 17-segment IDs using ventricular coordinates and a "
-        "geometric {L,S,LxS} frame derived from LV/RV centroids. Writes the "
-        "per-cell short-axis angle as the field 'aha_angle'."
+        "Tag cells with AHA segment IDs: LV 1-17 and RV free wall 18-26. The "
+        "rings are cut on aha_z, the position along each ventricle's cavity, "
+        "and the sectors on aha_angle, the short-axis angle in a geometric "
+        "{L,S,LxS} frame derived from the LV/RV centroids. Writes AHA_Segment, "
+        "aha_angle and aha_z, and, unless auxiliaryFields is false, phiRV, "
+        "groove_interface and AHA_ValveArea."
     );
 
     #include "setRootCase.H"
@@ -50,26 +53,49 @@ SET_CARDIAC_ANATOMY_MAIN = r'''int main(int argc, char *argv[])
     const word& longFieldName = coordinatesConvention.longitudinalField;
     const word& intravFieldName = coordinatesConvention.intraventricularField;
 
-    const scalar zApicalMid = anatDict.get<scalar>("zApicalMid");
-    const scalar zMidBasal  = anatDict.get<scalar>("zMidBasal");
-    const scalar zApexCap   = anatDict.get<scalar>("zApexCap");
     const label rvLocalBands = anatDict.getOrDefault<label>("rvLocalBands", 10);
 
-    // Optional: restrict AHA_Segment to a named cell zone (ventricular
-    // myocardium only). isLeftVentricle()/isRightVentricle() are a strict
-    // either/or over every cell the utility is given -- fine for every
-    // case so far, because every one of them was already pre-filtered to
-    // ventricles-only mesh content before reaching here (see
-    // docs/superpowers/specs/2026-10-21-aha-segmentation-standardization-RESULTS.md).
-    // Nothing currently enforces that, though: a mesh carrying atrial or
-    // other non-ventricular tissue would silently get a plausible-looking
-    // but meaningless 1-26 label on it. When ventricularCellZone names an
-    // existing cellZone, cells outside it are left at AHA_Segment's default
-    // 0 (the same "not a real segment" sentinel applications/scripts/bullseye.py already
-    // uses for AHA_ValveArea) instead of being classified. Omitted (the
-    // default): every cell is processed, unchanged from before this guard.
+    // The auxiliary fields (phiRV, groove_interface, AHA_ValveArea) are
+    // evidence for the sector assignment; they are written unless this is
+    // false. AHA_Segment, aha_angle and aha_z are always written.
+    const bool auxiliaryFields =
+        anatDict.getOrDefault<bool>("auxiliaryFields", true);
+
+    // ventricularCellZone names a cellZone of ventricular myocardium. Cells
+    // outside it are left at AHA_Segment 0, the value for "not a segment".
+    // Without it every cell is classified, which assumes the mesh holds
+    // ventricles only.
     const word ventricularCellZoneName =
         anatDict.getOrDefault<word>("ventricularCellZone", word::null);
+    boolList isVentricular(mesh.nCells(), true);
+    if (!ventricularCellZoneName.empty())
+    {
+        const label zoneID = mesh.cellZones().findZoneID(ventricularCellZoneName);
+        if (zoneID < 0)
+        {
+            FatalErrorInFunction
+                << "ventricularCellZone '" << ventricularCellZoneName
+                << "' not found among this mesh's cellZones."
+                << exit(FatalError);
+        }
+        isVentricular = false;
+        const labelList& zoneCells = mesh.cellZones()[zoneID];
+        forAll(zoneCells, i)
+        {
+            isVentricular[zoneCells[i]] = true;
+        }
+        Info<< "ventricularCellZone '" << ventricularCellZoneName << "': "
+            << zoneCells.size() << " of " << mesh.nCells()
+            << " cells classified; the rest get AHA_Segment = 0." << endl;
+    }
+
+    // valveAreaMaskField names the mask a valve-aware coordinate solve wrote
+    // (fiberFoam's abSolveMask: 1 = solved myocardium, 0 = the basal band
+    // around the valve rings). Cells where it is 0 are the valve area: they
+    // are flagged in AHA_ValveArea and never set a cavity range. No AHA
+    // scheme is defined over valve-adjacent tissue.
+    const word valveAreaMaskFieldName =
+        anatDict.getOrDefault<word>("valveAreaMaskField", word::null);
 }
 '''
 
@@ -89,12 +115,9 @@ def test_a_key_the_catalogue_lacks_is_refused_naming_the_catalogue_and_how_to_li
     assert refused.value.code == "unknown_key"
 
 
-def test_a_key_the_supplied_cxx_reads_is_accepted_at_the_type_it_reads(tmp_path, monkeypatch):
-    utility = tmp_path / "tree" / "applications" / "utilities" / "setCardiacAnatomy"
-    utility.mkdir(parents=True)
-    (utility / "setCardiacAnatomy.C").write_text(SET_CARDIAC_ANATOMY_MAIN)
-    monkeypatch.setenv("OMNIDRIVER_CARDIACCORE_TREE", str(tmp_path / "tree"))
+def test_an_anatomy_key_is_checked_at_the_type_the_catalogue_gives_it():
     assert record_key_validator(ANATOMY_DOCUMENT, ("ventricularCellZone",), "myocardium") == ("word", True)
+    assert record_key_validator(ANATOMY_DOCUMENT, ("auxiliaryFields",), False) == ("boolean", True)
     with pytest.raises(ValueError):
         record_key_validator(ANATOMY_DOCUMENT, ("ventricularCellZone",), 2.5)
 
@@ -131,11 +154,18 @@ def test_the_catalogue_lists_every_key_the_validator_accepts(tmp_path):
     assert (DOCUMENT, "fiberField") in listed and (DOCUMENT, "conductivityExtracellular.dn") in listed
 
 
-def test_an_anatomy_entry_that_cites_a_segment_cites_the_readme_and_the_name_table():
+def test_the_anatomy_reads_the_scanner_sees_agree_with_the_anatomy_catalogue(tmp_path):
     from omnidriver.cardiaccore.catalogs.inputs import CATALOG
+    from omnidriver.openfoam.dict_keys_scanner import scan_source
 
-    cited = [entry for entry in CATALOG.documents["setCardiacAnatomyDict"] if "AHA" in entry.description]
-    assert {entry.driver_path.rpartition(".")[2] for entry in cited} == {"zApicalMid", "zMidBasal", "zApexCap"}
-    for entry in cited:
-        assert "applications/utilities/setCardiacAnatomy/README.md" in entry.source_refs
-        assert "applications/utilities/setCardiacAnatomy/aha_segment_names.json" in entry.source_refs
+    utility = tmp_path / "applications" / "utilities" / "setCardiacAnatomy"
+    utility.mkdir(parents=True)
+    (utility / "setCardiacAnatomy.C").write_text(SET_CARDIAC_ANATOMY_MAIN)
+    reads = {read.key: read for read in scan_source(tmp_path).reads if read.function == "main"}
+    entries = {entry.driver_path.rpartition(".")[2]: entry for entry in CATALOG.documents["setCardiacAnatomyDict"]}
+
+    assert set(reads) == set(entries)
+    for key in ("auxiliaryFields", "rvLocalBands"):
+        assert reads[key].default == entries[key].typical_value
+    for key in ("ventricularCellZone", "valveAreaMaskField"):
+        assert reads[key].type == "word" and entries[key].value_kind == "word"

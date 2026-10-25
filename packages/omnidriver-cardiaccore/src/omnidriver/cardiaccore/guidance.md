@@ -68,10 +68,12 @@ infer one from field names, and never convert one into the other's spelling.
 - `generatePurkinjeTree` recovers the RV-facing septum and applies a
   per-vertex transmural flip only under `uvc`; under `cobiveco` neither runs.
   Hence `RVSeptalEndoFaces` is produced under `uvc` only.
-- `setCardiacAnatomy` writes `AHA_Segment` and `aha_angle` from one shared,
-  LV-centred frame (the RV gets no origin or basis of its own), so a raw
-  `aha_angle` is not an RV-local angle. `AHA_Segment` is 1-17 on LV cells (AHA,
-  Cerqueira 2002), 18-26 on RV free-wall cells (cardiacCore's own convention)
+- `setCardiacAnatomy` writes `AHA_Segment`, `aha_angle` and `aha_z` (the
+  position along each ventricle's own cavity; the rings are thresholds on it,
+  and no cutoff is entered; the utility's `README.md` defines it). `aha_angle`
+  comes from one shared, LV-centred frame (the RV gets no origin or basis of
+  its own), so a raw `aha_angle` is not an RV-local angle. `AHA_Segment` is
+  1-17 on LV cells (AHA, Cerqueira 2002), 18-26 on RV free-wall cells (cardiacCore's own convention)
   and 0 outside `ventricularCellZone`; the names are in cardiacCore's
   `applications/utilities/setCardiacAnatomy/aha_segment_names.json`.
 
