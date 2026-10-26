@@ -33,6 +33,15 @@ def _utility_commands(utility_manifests: dict[str, Any]) -> dict[str, list[str]]
     }
 
 
+def _manifest_listing(manifest: Any) -> dict[str, Any]:
+    """What a step needs to call the utility: its purpose, flags, positional arguments and outputs."""
+    from dataclasses import asdict
+
+    listing = asdict(manifest)
+    del listing["name"], listing["source_path"]
+    return listing
+
+
 def build_capability_manifest(
     *,
     environment_commands: Iterable[str] = (),
@@ -51,7 +60,8 @@ def build_capability_manifest(
     ``case_script_commands`` defaults to an empty set. Core calls this through
     :func:`capability_manifest`, from the composed stack.
 
-    ``allowed_commands`` names exactly what a workflow DAG step may invoke;
+    ``allowed_commands`` names exactly what a workflow DAG step may invoke,
+    and ``utility_manifests`` each allowed utility's manifest;
     ``samplable_fields`` names the fields a function object may sample for the
     resolved model, split by region (the stack's ``get_samplable_fields``). A
     caller with nothing resolved passes ``None`` and gets
@@ -71,6 +81,11 @@ def build_capability_manifest(
                 "The active environment may also authorize discovered runtime "
                 "applications through its command contract."
             ),
+        },
+        "utility_manifests": {
+            command: _manifest_listing(manifest)
+            for command, manifest in sorted((utility_manifests or {}).items())
+            if command in utility_produces(utility_manifests or {})
         },
         "samplable_fields": {
             **{region: sorted(names) for region, names in fields.items()},

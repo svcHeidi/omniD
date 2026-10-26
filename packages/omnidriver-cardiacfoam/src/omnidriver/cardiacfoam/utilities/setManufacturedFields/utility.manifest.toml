@@ -1,0 +1,45 @@
+name = "setManufacturedFields"
+description = "Write the conductivity fields the case's manufactured-solution verification model prescribes."
+category = "verification"
+
+purpose = """
+Reads myocardiumSolver and its <solver>Coeffs from constant/electroProperties,
+selects the verification model they name, and has it write the conductivity
+fields its manufactured solution prescribes into 0/, so a sealed-shell
+verification case needs no hand-written conductivity file. The eikonal and
+monodomain shell verifiers write 0/Conductivity, the bidomain shell verifier
+0/ConductivityIntracellular and 0/ConductivityExtracellular. Serial only: it
+writes the undecomposed case.
+"""
+
+inputs = [
+  "constant/polyMesh",
+  "constant/electroProperties",
+]
+
+requires_mesh = true
+example = "setManufacturedFields -case ./sphericalShell"
+
+[[produces]]
+artifact_id = "manufactured_conductivity"
+path_pattern = "0/Conductivity"
+format = "openfoam_field"
+description = "The conductivity tensor of an eikonal or monodomain shell verifier."
+produced_by = "setManufacturedFields"
+optional = true
+
+[[produces]]
+artifact_id = "manufactured_conductivity_intracellular"
+path_pattern = "0/ConductivityIntracellular"
+format = "openfoam_field"
+description = "The intracellular conductivity tensor of the bidomain shell verifier."
+produced_by = "setManufacturedFields"
+optional = true
+
+[[produces]]
+artifact_id = "manufactured_conductivity_extracellular"
+path_pattern = "0/ConductivityExtracellular"
+format = "openfoam_field"
+description = "The extracellular conductivity tensor of the bidomain shell verifier."
+produced_by = "setManufacturedFields"
+optional = true

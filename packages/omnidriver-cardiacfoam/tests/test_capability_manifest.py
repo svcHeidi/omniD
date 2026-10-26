@@ -134,3 +134,14 @@ def test_unknown_model_is_not_an_error():
         samplable_fields=_resolved(ionic_model="NotARealModel")
     )
     assert "Vm" in manifest["samplable_fields"]["region0"]
+
+
+def test_describe_lists_each_allowed_utilitys_flags_arguments_and_outputs():
+    manifest = build_capability_manifest()["utility_manifests"]
+    restart = manifest["setIonicRestartState"]
+    assert [(flag["name"], flag["default"]) for flag in restart["flags"]][0] == ("-dict", "system/setIonicRestartStateDict")
+    assert restart["produces"][0]["path_pattern"] == "{instance}/"
+    assert {item["path_pattern"] for item in manifest["setManufacturedFields"]["produces"]} == {
+        "0/Conductivity", "0/ConductivityIntracellular", "0/ConductivityExtracellular",
+    }
+    assert "heartBoundaryLeakage" not in manifest, "it writes nothing to the case, so no step may be credited with it"

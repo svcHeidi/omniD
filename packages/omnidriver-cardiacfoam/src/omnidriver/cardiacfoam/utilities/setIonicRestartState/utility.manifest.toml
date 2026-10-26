@@ -1,0 +1,41 @@
+name = "setIonicRestartState"
+description = "Seed a myocardium's per-cell ionic restart state from single-cell states, one per ionicHeterogeneity region."
+category = "field-setup"
+
+purpose = """
+Reads the case's ionicHeterogeneity block (mode namedRegions; transitionMode
+hard or blend) from constant/electroProperties, and the state map dictionary
+that names one single-cell <Model>State restart file per region. It writes
+<startTime>/<Model>State through the solver's own restart format, so every
+myocardium cell starts at its region's state, blended across a blend
+transition. Runs serial, or with -parallel after decomposePar.
+"""
+
+inputs = [
+  "constant/electroProperties",
+  "system/setIonicRestartStateDict",
+]
+
+requires_mesh = true
+example = "setIonicRestartState -case ./case"
+
+[[flags]]
+name = "-dict"
+description = "State map dictionary (default: system/setIonicRestartStateDict)."
+takes_value = true
+argument_kind = "path"
+default = "system/setIonicRestartStateDict"
+
+[[flags]]
+name = "-region"
+description = "The mesh region whose state is written."
+takes_value = true
+argument_kind = "word"
+
+[[produces]]
+artifact_id = "ionic_restart_state"
+path_pattern = "{instance}/"
+format = "openfoam_time_dirs"
+description = "The start-time directory, which now holds the ionic model's <Model>State."
+produced_by = "setIonicRestartState"
+instance_indexed = true

@@ -43,7 +43,8 @@ def test_cardiac_utilities_come_from_the_plugin() -> None:
 def test_the_solver_is_the_only_command_credited_with_a_runs_artifacts() -> None:
     """Only solver_commands() may be credited with a run's artifacts (normalize_workflow_dag)."""
     assert _CTX.stack.call("get_solver_commands") == frozenset({"cardiacFoam"})
-    assert _CTX.stack.call("get_auxiliary_commands") == frozenset(_CTX.stack.call("get_utility_manifests"))
+    manifests = _CTX.stack.call("get_utility_manifests")
+    assert _CTX.stack.call("get_auxiliary_commands") == frozenset(name for name, manifest in manifests.items() if manifest.produces)
 
 
 def test_utility_manifests_are_not_a_shared_mutable_dict() -> None:
