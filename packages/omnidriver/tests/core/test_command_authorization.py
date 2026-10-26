@@ -98,3 +98,28 @@ def test_mpi_wrapped_authorized_solver_is_accepted() -> None:
         getattr(p, "code", None) == "unauthorized_mpi_payload"
         for p in problems
     )
+
+
+def test_a_manifest_that_declares_outputs_authorises_its_utility(tmp_path) -> None:
+    """Auxiliary commands are the stack's, derived from its manifests, so no provider restates them."""
+    from pathlib import Path
+
+    from omnidriver.core.utility_catalog import ProducesEntry, UtilityManifest
+
+    def manifest(name: str, produces: tuple) -> UtilityManifest:
+        return UtilityManifest(
+            name=name, description="d", purpose="", inputs=(), requires_mesh=False, flags=(), example="",
+            category="mesh", source_path=Path(tmp_path), produces=produces,
+        )
+
+    class WithUtilities(ToyProvider):
+        def get_utility_manifests(self) -> dict:
+            return {
+                "writes": manifest("writes", (ProducesEntry(artifact_id="f", path_pattern="0/field", format="openfoam_field"),)),
+                "silent": manifest("silent", ()),
+            }
+
+    context = driver_context(WithUtilities(), source="test:commands")
+    assert context.stack.call("get_auxiliary_commands") == frozenset({"writes"})
+    assert validate_workflow_commands(_dag("writes"), driver_context=context) == ()
+    assert {d.code for d in validate_workflow_commands(_dag("silent"), driver_context=context)}

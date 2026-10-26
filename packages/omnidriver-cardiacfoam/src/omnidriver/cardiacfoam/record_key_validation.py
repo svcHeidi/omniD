@@ -1,6 +1,7 @@
 """cardiacFOAM's tutorial-record key catalogue and validator, on ``omnidriver-openfoam``'s shared validator (:func:`make_validator`).
 
-Covers ``constant/electroProperties``, ``constant/physicsProperties``, ``constant/prePacingProperties`` and the keys of ``system/controlDict`` the catalogue lists (any other controlDict key is written as asked); ``record_key_catalog`` lists what is accepted for one case."""
+Covers ``constant/electroProperties``, ``constant/physicsProperties`` and ``constant/prePacingProperties``; the OpenFOAM
+layer adds ``system/controlDict`` and ``system/fvSchemes``. ``record_key_catalog`` lists what is accepted for one case."""
 
 from __future__ import annotations
 
@@ -8,10 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.openfoam.case_rules import match_dynamic_entry
-from omnidriver.openfoam.control_dict import CONTROL_DICT_DOCUMENT, control_dict_document, control_dict_listing
-from omnidriver.openfoam.fv_schemes import FV_SCHEMES_DOCUMENT, fv_schemes_document, fv_schemes_listing
 from omnidriver.openfoam.record_key_validation import (
-    CataloguedDocument, listed_entry, make_validator, narrow_to_selectors, open_system_documents,
+    CataloguedDocument, listed_entry, make_validator, narrow_to_selectors,
 )
 
 from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES, PRE_PACING_PROPERTY_ENTRIES
@@ -125,8 +124,6 @@ record_key_validator = make_validator(
             scan=lambda key_path: (_PRE_PACING_TOKEN, *key_path),
             members=_pre_pacing_declares_members,
         ),
-        CONTROL_DICT_DOCUMENT: control_dict_document(),
-        FV_SCHEMES_DOCUMENT: fv_schemes_document(),
     },
     mapping=cardiacfoam_mapping,
     owner="cardiacFOAM",
@@ -168,7 +165,7 @@ def record_key_catalog(case_root: Path) -> tuple[dict[str, Any], ...]:
             listed_entry(PRE_PACING_DOCUMENT, path.removeprefix(f"{_PRE_PACING_TOKEN}."), entry)
             for path, entry in _PRE_PACING_ENTRIES_BY_PATH.items()
         ]
-    return (*entries, *control_dict_listing(case_root), *fv_schemes_listing(case_root), *open_system_documents(case_root))
+    return tuple(entries)
 
 
 #: What a cardiacFOAM record fixes about its case: the solver, which decides which keys exist at all.

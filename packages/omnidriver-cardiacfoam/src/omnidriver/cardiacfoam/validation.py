@@ -583,7 +583,7 @@ class _Graph(NamedTuple):
 @lru_cache(maxsize=8)
 def _read_graph(path: str, stamp: tuple[int, int]) -> _Graph:
     """A graph file once per file version: a plan judges the case twice."""
-    from omnidriver.openfoam.mutators import read_foam_entries
+    from omnidriver.openfoam.dictionary_reader import read_foam_entries
 
     from .common_dict_entries import PURKINJE_GRAPH_ENTRIES
 
@@ -1169,15 +1169,14 @@ def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]
 
 def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDiagnostic", ...]:
     """Every rule the resolved case at ``case_root`` violates: the catalogue's
-    relations over its ``electroProperties``, ``prePacingProperties``,
-    ``controlDict`` and the Purkinje graph each conduction network names, the
+    relations over its ``electroProperties``, ``prePacingProperties``
+    and the Purkinje graph each conduction network names, the
     keys the supplied C++ (``mapping``) requires, and cardiacFOAM's
     cross-field rules. A case with no ``electroProperties``
     violates none. ``physicsProperties``' one key is judged by ``physics_layout``."""
     from foamlib import FoamFile
 
     from omnidriver.openfoam.case_rules import flatten, read_leaves, rule_diagnostics
-    from omnidriver.openfoam.control_dict import control_dict_diagnostics
 
     from .cardiacfoam_plugin import CardiacFoamPlugin
     from .record_key_validation import _ELECTRO_ENTRIES_BY_PATH
@@ -1208,7 +1207,6 @@ def case_diagnostics(case_root: Path, *, mapping: Any = None) -> tuple["StrictDi
         item if item.field in ("", "myocardiumSolver") else replace(item, field=f"{solver}Coeffs.{item.field}")
         for item in rule_diagnostics(entries, rule_context, document=document, mapping=mapping, catalogue=catalogue)
     ]
-    found += control_dict_diagnostics(case_root)
     pre_pacing = region_document(case_root, "electro", "prePacingProperties")
     if pre_pacing is not None:
         relative = pre_pacing.relative_to(case_root).as_posix()

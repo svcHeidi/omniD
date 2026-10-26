@@ -53,7 +53,7 @@ uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
 | all packages | `python -m pytest packages/ -q -m "not slow"` | ordinary regressions |
 | core alone | `python -m pytest packages/omnidriver/tests -q` | core reaching into a sibling package |
 | **installed wheel** | see below | core reading repo-relative state at import time |
-| static gates | `python3 scripts/check-import-boundaries.py`, `scripts/check-case-writes.py`, `scripts/check-core-shape.py`, and `scripts/check-benchmark-references.py` | import direction; a tutorial-record/axis module writing a case directly instead of through `commit_case_write`; core gaining a new OpenFOAM layout token or growing its recorded debt; a benchmark reference under `benchmarks/` that fails to load, misnames its own id, or cites nothing |
+| static gates | `python3 scripts/check-import-boundaries.py`, `scripts/check-case-writes.py`, `scripts/check-core-shape.py`, `scripts/check-openfoam-shape.py`, and `scripts/check-benchmark-references.py` | import direction; a tutorial-record/axis module writing a case directly instead of through `commit_case_write`; core gaining a new OpenFOAM layout token or growing its recorded debt; the OpenFOAM layer gaining a cardiac token (`scripts/openfoam-shape-baseline.txt`, empty); a benchmark reference under `benchmarks/` that fails to load, misnames its own id, or cites nothing |
 
 The wheel shape is the one people skip and the one that found the worst
 defects. Rebuild it after **every** source change or it tests stale code:

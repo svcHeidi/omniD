@@ -1,4 +1,4 @@
-"""``CardiacFoamPlugin.get_record_key_catalog`` over a native case committed verbatim as a fixture
+"""The cardiacFOAM stack's ``get_record_key_catalog`` over a native case committed verbatim as a fixture
 (``restitutionCurves_s1s2Protocol``): it lists what ``record_key_validator`` accepts and nothing it
 refuses; both are the same three rules (``record_key_validation``)."""
 from __future__ import annotations
@@ -9,13 +9,15 @@ from foamlib import FoamFile
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.record_key_validation import record_key_validator
+from omnidriver.core.plugin_interface import load_plugin_context
 from omnidriver.core.runtime.record_surface import ANY_KEY
 
 CASE = Path(__file__).resolve().parent / "fixtures" / "tutorials" / "electrophysiologyProtocols" / "restitutionCurves_s1s2Protocol"
 
 
-def _catalogue():
-    return CardiacFoamPlugin().get_record_key_catalog(CASE, driver_context=None)
+def _catalogue(case=CASE):
+    context = load_plugin_context("cardiacfoam")
+    return context.stack.call("get_record_key_catalog", case, driver_context=context)
 
 
 def test_the_coeffs_token_is_the_cases_own_solver_scope():
@@ -75,7 +77,7 @@ def test_a_pre_pacing_file_the_case_holds_is_listed_by_the_keys_a_study_may_set(
     case = tmp_path / "case"
     shutil.copytree(CASE, case)
     (case / "constant" / "prePacingProperties").write_text("FoamFile { version 2.0; format ascii; class dictionary; object x; }\n")
-    keys = {e["key"] for e in CardiacFoamPlugin().get_record_key_catalog(case, driver_context=None) if e["document"] == "constant/prePacingProperties"}
+    keys = {e["key"] for e in _catalogue(case) if e["document"] == "constant/prePacingProperties"}
     assert {"tolerance", "maxBeats", "regions.<region_name>.maxBeats", "singleCellStimulus.stim_start", "regions.<region_name>.singleCellStimulus.stim_start"} <= keys
     assert not [key for key in keys if "$" in key]
 

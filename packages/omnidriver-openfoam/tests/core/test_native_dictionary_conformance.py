@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.openfoam.mutators import read_foam_entry
+from omnidriver.openfoam.dictionary_reader import read_foam_entry
 from omnidriver.openfoam.openfoam_environment import openfoam_bashrc
 
 

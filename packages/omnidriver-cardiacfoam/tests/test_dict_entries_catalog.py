@@ -6,7 +6,6 @@ import unittest
 from pathlib import Path
 
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
-from omnidriver.dict_entries import all_documented_driver_paths
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 from omnidriver.cardiacfoam.active_tension_catalog import ACTIVE_TENSION_MODEL_CATALOG
 from omnidriver.cardiacfoam.common_dict_entries import PHYSICS_PROPERTY_ENTRIES
@@ -25,7 +24,7 @@ class TestDictEntryCatalog(unittest.TestCase):
         physics_paths = {entry.driver_path for entry in PHYSICS_PROPERTY_ENTRIES}
         self.assertEqual(physics_paths, {"type"})
 
-        documented = set(all_documented_driver_paths(_CTX))
+        documented = {entry.driver_path for entry in _CTX.stack.call("get_dict_entries")}
         expected = {
             "myocardiumSolver",
             "$ELECTRO_MODEL_COEFFS.solutionAlgorithm",
@@ -48,7 +47,7 @@ class TestDictEntryCatalog(unittest.TestCase):
         self.assertTrue(expected.issubset(documented))
 
     def test_catalog_paths_are_unique(self) -> None:
-        documented = all_documented_driver_paths(_CTX)
+        documented = [entry.driver_path for entry in _CTX.stack.call("get_dict_entries")]
         self.assertEqual(len(documented), len(set(documented)))
 
     def test_catalog_exposes_gui_value_hints_for_key_entries(self) -> None:

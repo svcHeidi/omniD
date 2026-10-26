@@ -1,0 +1,140 @@
+name = "heartBoundaryLeakage"
+description = "Net current through the sealed heart boundary, one line per selected time."
+category = "verification"
+
+purpose = """
+For each selected time, sums V*laplacian(G, field) over the heart cells with
+each potential zeroGradient on every heart patch, and prints one line of
+columns: L_<field> and Lnorm_<field> per field, then the columns each
+optional diagnostic adds (-insulationDelta, -restDrift, -gradientBias,
+-refPoint). It writes nothing to the case: the report is its standard output.
+"""
+
+inputs = [
+  "constant/polyMesh",
+  "<time>/Vm",
+  "<time>/phiE",
+  "0/ConductivityIntracellular",
+]
+
+requires_mesh = true
+example = "heartBoundaryLeakage -time '0.01,0.02' -refPoint '(0 0 0)'"
+
+[[flags]]
+name = "-zone"
+description = "Heart cellZone, or none for the whole mesh."
+takes_value = true
+argument_kind = "word"
+default = "myocardium"
+
+[[flags]]
+name = "-exposedPatch"
+description = "Patch holding the faces the zone exposes (default: the first non-empty, non-coupled patch)."
+takes_value = true
+argument_kind = "word"
+
+[[flags]]
+name = "-conductivity"
+description = "Conductivity field in 0/."
+takes_value = true
+argument_kind = "word"
+default = "ConductivityIntracellular"
+
+[[flags]]
+name = "-fields"
+description = "The potentials to sum."
+takes_value = true
+argument_kind = "wordList"
+default = "(Vm phiE)"
+
+[[flags]]
+name = "-refPoint"
+description = "phiERefPoint; adds the reference-cell columns."
+takes_value = true
+argument_kind = "point"
+
+[[flags]]
+name = "-refValue"
+description = "phiEReferenceValue."
+takes_value = true
+argument_kind = "scalar"
+default = "0"
+
+[[flags]]
+name = "-sigmaBath"
+description = "Bath conductivity field in 0/."
+takes_value = true
+argument_kind = "word"
+default = "bodyAndOrgansConductivity"
+
+[[flags]]
+name = "-analyticField"
+description = "xy replaces each potential by x*y."
+takes_value = true
+argument_kind = "word"
+
+[[flags]]
+name = "-insulated"
+description = "Use insulatedFaceConductivity."
+argument_kind = "switch"
+
+[[flags]]
+name = "-insulationDelta"
+description = "Add max|laplacian sealed - laplacian| per field."
+argument_kind = "switch"
+
+[[flags]]
+name = "-gradientBias"
+description = "Add the wall-cell grad(phiE) departure from the global mesh."
+argument_kind = "switch"
+
+[[flags]]
+name = "-phiETrace"
+description = "Heart phiE trace for -gradientBias: zeroGradient, global or conductivityWeighted."
+takes_value = true
+argument_kind = "word"
+default = "zeroGradient"
+
+[[flags]]
+name = "-conductivityExtracellular"
+description = "Extracellular conductivity field in 0/ for -phiETrace conductivityWeighted."
+takes_value = true
+argument_kind = "word"
+default = "ConductivityExtracellular"
+
+[[flags]]
+name = "-exactPhiE"
+description = "bathFDA: the exact manufactured grad(phiE) as the -gradientBias reference."
+takes_value = true
+argument_kind = "word"
+
+[[flags]]
+name = "-mmsK"
+description = "bathFDA k (default 1/sqrt(2))."
+takes_value = true
+argument_kind = "scalar"
+
+[[flags]]
+name = "-mmsAlpha"
+description = "bathFDA alpha."
+takes_value = true
+argument_kind = "scalar"
+default = "0.01"
+
+[[flags]]
+name = "-mmsSe"
+description = "bathFDA s_e, required with -exactPhiE."
+takes_value = true
+argument_kind = "scalar"
+
+[[flags]]
+name = "-restDrift"
+description = "Add max|Vm - restValue| on wall and interior heart cells."
+argument_kind = "switch"
+
+[[flags]]
+name = "-restValue"
+description = "Vm rest value for -restDrift."
+takes_value = true
+argument_kind = "scalar"
+default = "-0.084"

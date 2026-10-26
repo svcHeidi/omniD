@@ -6,18 +6,6 @@
     ]
   },
   "unseen_reads": {
-    "read by upstream OpenFOAM's Foam::Time from system/controlDict, not by cardiacFOAM's source": [
-      "deltaT",
-      "endTime",
-      "purgeWrite",
-      "startFrom",
-      "startTime",
-      "stopAt",
-      "writeControl",
-      "writeFormat",
-      "writeFrequency",
-      "writeInterval"
-    ],
     "read by upstream OpenFOAM's ODESolver from the dictionary ionicModel, or the active-tension model's ODESolver sub-dictionary, hands to ODESolver::New": [
       "$ELECTRO_MODEL_COEFFS.absTol",
       "$ELECTRO_MODEL_COEFFS.maxSteps",
@@ -143,11 +131,7 @@
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.dimension": "1D/2D/3D, a plain word (cfg.lookup) in manufacturedPseudoECGVerifier.C and manufacturedEikonalECGVerifier.C",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.template": "singleEvent/sine, a plain lookupOrDefault<word> manufacturedTemplate.H compares with \"sine\" only",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.domain": "cube/shell, a plain lookupOrDefault<word> compared against two literals in manufacturedPseudoECGVerifier.C and manufacturedEikonalECGVerifier.C, with a FatalError otherwise",
-      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.tissue": "eikonalTemplateGenerator.C hands ionicModelConfig to ionicModel::New, which reads tissue as the top-level tissue enum",
-      "startFrom": "an upstream OpenFOAM controlDict word read by Foam::Time, not a runtime table of cardiacFoam's",
-      "stopAt": "an upstream OpenFOAM controlDict word read by Foam::Time, not a runtime table of cardiacFoam's",
-      "writeControl": "an upstream OpenFOAM controlDict word read by Foam::Time, not a runtime table of cardiacFoam's",
-      "writeFormat": "an upstream OpenFOAM controlDict word read by Foam::Time, not a runtime table of cardiacFoam's"
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.tissue": "eikonalTemplateGenerator.C hands ionicModelConfig to ionicModel::New, which reads tissue as the top-level tissue enum"
     },
     "internal_bases": {
       "electroModel": "a lower-level table the myocardiumSolver key resolves through; its values appear in the union enum",

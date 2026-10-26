@@ -84,12 +84,12 @@ def test_plugin_contract_rejects_an_invalid_stable_id() -> None:
 
 def test_driver_context_rejects_duplicate_catalog_paths() -> None:
     plugin = _Plugin("example.duplicates", "duplicates")
-    plugin.get_dict_entries = lambda: (
-        DictEntry(driver_path="shared", description="first", value_kind="word"),
-        DictEntry(driver_path="shared", description="second", value_kind="word"),
-    )
+    plugin.get_dictionary_catalog = lambda: DictionaryCatalog({
+        "first": (DictEntry(driver_path="shared", description="first", value_kind="word"),),
+        "second": (DictEntry(driver_path="shared", description="second", value_kind="word"),),
+    })
 
-    with pytest.raises(TypeError, match="duplicate paths: shared"):
+    with pytest.raises(ValueError, match="duplicate path 'shared'"):
         driver_context(plugin, source="test")
 
 
@@ -97,12 +97,9 @@ def test_context_identity_binds_the_dictionary_vocabulary() -> None:
     plugin = _Plugin("example.identity", "identity")
     baseline = driver_context(plugin, source="test").identity.capability_digest
 
-    plugin.get_dict_entries = lambda: (
-        DictEntry(
-            driver_path="system/controlDict:endTime", description="end time",
-            value_kind="scalar",
-        ),
-    )
+    plugin.get_dictionary_catalog = lambda: DictionaryCatalog({"controlDict": (
+        DictEntry(driver_path="endTime", description="end time", value_kind="scalar"),
+    )})
     vocabulary_changed = driver_context(plugin, source="test").identity.capability_digest
 
     assert baseline != vocabulary_changed

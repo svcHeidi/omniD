@@ -27,9 +27,10 @@ example = "1DgraphToFoam myGraph.vtk -case ./purkinje_run -name purkinjeGraph"
 
 [[flags]]
 name = "-name"
-description = "Name of the graph object written under constant/ (default: purkinjeGraph)."
+description = "Name of the graph object written under constant/."
 takes_value = true
 argument_kind = "word"
+default = "purkinjeGraph"
 
 [[produces]]
 artifact_id = "purkinje_graph_dict"

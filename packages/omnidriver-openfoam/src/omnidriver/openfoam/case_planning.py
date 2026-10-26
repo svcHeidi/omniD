@@ -210,49 +210,6 @@ def read_hex_block_extent_m(document_path: Path) -> tuple[float, float, float] |
     return tuple(extents)  # type: ignore[return-value]
 
 
-_LINE_COMMENT = re.compile(r"//[^\n]*")
-_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-
-
-def _named_block_body(text: str, name: str) -> str | None:
-    """Body of `name { ... }` in `text` (brace-depth aware, first match), or `None`."""
-    match = re.search(rf"(?<![\w.]){re.escape(name)}\s*\{{", text)
-    if match is None:
-        return None
-    depth = 1
-    index = match.end()
-    while index < len(text) and depth > 0:
-        if text[index] == "{":
-            depth += 1
-        elif text[index] == "}":
-            depth -= 1
-        index += 1
-    return text[match.end():index - 1]
-
-
-def read_nested_entry(document_path: Path, key: str, *, scope: Sequence[str]) -> str | None:
-    """`key`'s raw value text (trailing `;` and comments stripped) inside a
-    nested dictionary `scope` (e.g. `("monodomainSolverCoeffs",
-    "externalStimulus")`). `None` if the document, scope, or key is absent.
-
-    Text-level only, deliberately not `mutators.read_foam_entry`, which this
-    package's axes/records may not import (`scripts/check-case-writes.py`
-    bans the whole module).
-    """
-    path = Path(document_path)
-    if not path.is_file():
-        return None
-    text = _BLOCK_COMMENT.sub("", _LINE_COMMENT.sub("", path.read_text()))
-    for name in scope:
-        text = _named_block_body(text, name)
-        if text is None:
-            return None
-    match = re.search(rf"(?<![\w.]){re.escape(key)}\s+(.*?);", text, re.DOTALL)
-    if match is None:
-        return None
-    return match.group(1).strip()
-
-
 def _patch_format() -> str:
     """``case_rendering.FORMAT``, imported lazily because ``case_rendering`` imports this module."""
     from .case_rendering import FORMAT

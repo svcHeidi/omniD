@@ -6,10 +6,8 @@ from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.cardiacfoam.case_introspection import (
     samplable_fields as _samplable_fields,
 )
-from omnidriver.cardiacfoam.command_authorization import (
-    CARDIAC_SOLVER_COMMANDS,
-    utility_manifests,
-)
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.cardiacfoam.command_authorization import CARDIAC_SOLVER_COMMANDS
 from omnidriver.openfoam.command_authorization import openfoam_runtime_commands
 from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
 import functools
@@ -22,7 +20,7 @@ build_capability_manifest = functools.partial(
     build_capability_manifest,
     environment_commands=openfoam_runtime_commands(),
     plugin_commands=CARDIAC_AUTHORIZED_COMMANDS,
-    utility_manifests=dict(utility_manifests()),
+    utility_manifests=CardiacFoamPlugin().get_utility_manifests(),
     case_script_commands=frozenset(
         openfoam_case_runtime_conventions().case_script_commands
     ),
@@ -85,7 +83,7 @@ def test_samplable_fields_for_tnnp_single_cell():
     manifest = build_capability_manifest(
         samplable_fields=_resolved(solver="singleCellSolver", ionic_model="TNNP")
     )
-    electro = manifest["samplable_fields"]["electro"]
+    electro = manifest["samplable_fields"]["region0"]
     assert "membrane_V" in electro
     assert "Vm" in electro
     assert "bananas" not in electro
@@ -96,7 +94,7 @@ def test_species_labels_are_not_samplable_fields():
     manifest = build_capability_manifest(
         samplable_fields=_resolved(solver="monodomainSolver", ionic_model="TNNP")
     )
-    electro = manifest["samplable_fields"]["electro"]
+    electro = manifest["samplable_fields"]["region0"]
     assert "human" not in electro
     assert "pig" not in electro
     assert "generic" not in electro
@@ -135,4 +133,15 @@ def test_unknown_model_is_not_an_error():
     manifest = build_capability_manifest(
         samplable_fields=_resolved(ionic_model="NotARealModel")
     )
-    assert "Vm" in manifest["samplable_fields"]["electro"]
+    assert "Vm" in manifest["samplable_fields"]["region0"]
+
+
+def test_describe_lists_each_allowed_utilitys_flags_arguments_and_outputs():
+    manifest = build_capability_manifest()["utility_manifests"]
+    restart = manifest["setIonicRestartState"]
+    assert [(flag["name"], flag["default"]) for flag in restart["flags"]][0] == ("-dict", "system/setIonicRestartStateDict")
+    assert restart["produces"][0]["path_pattern"] == "{instance}/"
+    assert {item["path_pattern"] for item in manifest["setManufacturedFields"]["produces"]} == {
+        "0/Conductivity", "0/ConductivityIntracellular", "0/ConductivityExtracellular",
+    }
+    assert "heartBoundaryLeakage" not in manifest, "it writes nothing to the case, so no step may be credited with it"

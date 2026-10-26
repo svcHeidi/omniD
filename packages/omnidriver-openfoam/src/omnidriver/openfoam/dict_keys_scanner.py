@@ -11,7 +11,7 @@ import os
 import re
 import tempfile
 from dataclasses import asdict, dataclass, field, replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Iterable, Iterator, Mapping
 
 from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, catalogued_paths, slot_key
@@ -1500,6 +1500,8 @@ class CatalogReport:
     uncatalogued: list[dict]
     unresolved: list[dict]
     selector_values: dict[str, list[str]]
+    #: What a ``source_refs`` path is relative to when no repository places the source: the scanned root itself.
+    relative_to: str | None = None
 
     def to_json(self) -> dict[str, object]:
         return asdict(self)
@@ -1551,20 +1553,42 @@ def cxx_value_kind(scan: Scan, entry) -> str | None:
     return kinds.pop()
 
 
-def _entry_arguments(read: DictRead, required: bool, driver_path: str | None) -> dict[str, object]:
+def _entry_arguments(
+    read: DictRead, required: bool, driver_path: str | None, source_prefix: PurePosixPath,
+) -> dict[str, object]:
     """The ``DictEntry`` arguments the scan establishes for an uncatalogued read."""
     return {
         "driver_path": driver_path,
         "value_kind": value_kind_of(read.type),
         "required": required,
         "typical_value": read.default,
-        "source_refs": [f"src/{read.file}"],
+        "source_refs": [str(source_prefix / read.file)],
     }
+
+
+_BOOLEANS = {"true": True, "on": True, "yes": True, "false": False, "off": False, "no": False}
+_CAST = re.compile(r"(?:Foam::)?(?:word|string|fileName|scalar|label|Switch|bool)\s*\((.*)\)", re.DOTALL)
+
+
+def _default_value(text: str, *, cxx: bool) -> object | None:
+    """A default as a comparable value: a number, a switch or a word. In C++ (``cxx``) a word is a string literal,
+    and anything else (``vector::zero``, ``SMALL``, a call) is an expression, ``None``, which is not compared."""
+    text = text.strip()
+    if cxx and (cast := _CAST.fullmatch(text)) is not None:
+        return _default_value(cast.group(1), cxx=True)
+    literal = _literal(text) if cxx else text
+    word = text if literal is None else literal
+    if word.lower() in _BOOLEANS:
+        return _BOOLEANS[word.lower()]
+    try:
+        return float(word)
+    except ValueError:
+        return literal
 
 
 def catalog_report(
     source_root: Path, *, allowlist_path: Path, catalogue,
-    cache_root: Path | None = None, force: bool = False,
+    cache_root: Path | None = None, force: bool = False, source_prefix: PurePosixPath | None = None,
 ) -> CatalogReport:
     """Compare ``catalogue`` (a ``DictionaryCatalog``) with the scan of
     ``source_root``, document by document: a read is compared only with the
@@ -1576,11 +1600,24 @@ def catalog_report(
     optional paths read without a default where every caller tests the key
     first) and ``runtime_selection`` (which selection table each enum draws
     its menu from). A read counts against an
-    entry's type or required flag only when it is anchored to it
-    (``_anchored``), so a same-named key elsewhere never counts."""
+    entry's type, required flag or default only when it is anchored to it
+    (``_anchored``), so a same-named key elsewhere never counts.
+
+    ``source_prefix`` is the scanned root's path within the supplied
+    repository, which a suggested entry's ``source_refs`` start with; without
+    one they are relative to ``source_root``, which the report names in
+    ``relative_to``."""
+    from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
+
+    from .layer_documents import layer_catalogue
     from .rtst_scanner import runtime_selection_report
 
+    # The layer's documents are read by OpenFOAM's source, never the solver's this scans.
+    catalogue = DictionaryCatalog({
+        name: entries for name, entries in catalogue.documents.items() if name not in layer_catalogue().documents
+    })
     scan = cached_scan(source_root, cache_root=cache_root, force=force)
+    prefix = PurePosixPath(".") if source_prefix is None else PurePosixPath(source_prefix)
     reviewed = json.loads(Path(allowlist_path).read_text())
     caller_guarded = {path for paths in reviewed.get("caller_guarded", {}).values() for path in paths}
     unseen = {path: why for why, paths in reviewed.get("unseen_reads", {}).items() for path in paths}
@@ -1628,6 +1665,16 @@ def catalog_report(
                     f"{entry.driver_path}: catalogue says required; the C++ gives it a default ("
                     + ", ".join(sorted({f"{read.default} at {read.file}:{read.line}" for read in reads})) + ")"
                 )
+            catalogued_default = _default_value(entry.default, cxx=False) if entry.default else None
+            scanned_defaults = {
+                value: read for read in reads if read.default is not None
+                and (value := _default_value(read.default, cxx=True)) is not None
+            }
+            if catalogued_default is not None and scanned_defaults and catalogued_default not in scanned_defaults:
+                disagreements.append(
+                    f"{entry.driver_path}: catalogue default {entry.default!r}; the C++ defaults it to "
+                    + ", ".join(sorted({f"{read.default} ({read.file}:{read.line})" for read in scanned_defaults.values()}))
+                )
             if (
                 not entry.required and not entry.required_when and reads and entry.driver_path not in caller_guarded
                 and all(_unconditional(read, guarded) for read in reads)
@@ -1672,7 +1719,7 @@ def catalog_report(
             "type": read.type, "value_kind": value_kind_of(read.type), "default": read.default,
             "method": read.method, "required": required, "source": f"{read.file}:{read.line}",
             "function": read.function, "selected_as": [list(pair) for pair in read.selected_as],
-            **({"entry": _entry_arguments(read, required, driver_path)} if not read.subdict else {}),
+            **({"entry": _entry_arguments(read, required, driver_path, prefix)} if not read.subdict else {}),
         })
 
     selection = runtime_selection_report(
@@ -1703,6 +1750,7 @@ def catalog_report(
             for read in scan.reads if read.scope is None and read.key is not None and read.method not in _PROBES
         ],
         selector_values={**{path: sorted(menu.values) for path, menu in menus.items()}, **selection["selector_values"]},
+        relative_to=str(source_root) if source_prefix is None else None,
     )
 
 

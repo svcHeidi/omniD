@@ -1,0 +1,33 @@
+"""The built case's default blockMeshDict and its dx-derived cell count."""
+
+import re
+
+import pytest
+
+from omnidriver.cardiacfoam.case_builder import default_block_mesh_dict_text
+
+
+def _cell_counts(text: str) -> tuple[int, int, int]:
+    match = re.search(r"hex \([^)]*\)\s*\((\d+)\s+(\d+)\s+(\d+)\)", text)
+    assert match is not None, text
+    return tuple(int(g) for g in match.groups())
+
+
+def test_default_block_mesh_dict_has_a_fixed_default_cell_count_with_no_dx():
+    text = default_block_mesh_dict_text()
+    assert _cell_counts(text) == (4, 4, 4)
+
+
+def test_dx_controls_cell_count_finer_mesh_for_smaller_dx():
+    coarse = default_block_mesh_dict_text(dx_m=0.001)
+    fine = default_block_mesh_dict_text(dx_m=0.0004)
+    coarse_cells = _cell_counts(coarse)
+    fine_cells = _cell_counts(fine)
+    assert coarse_cells == (2, 2, 2)
+    assert fine_cells == (5, 5, 5)
+    assert fine_cells[0] > coarse_cells[0]
+
+
+def test_dx_that_does_not_evenly_divide_default_slab_raises():
+    with pytest.raises(ValueError, match="does not evenly divide"):
+        default_block_mesh_dict_text(dx_m=0.0003)

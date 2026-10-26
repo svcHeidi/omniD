@@ -1,17 +1,17 @@
-"""cardiacFoam's runtime dependencies resolve from an injected environment, so no OpenFOAM needs sourcing."""
+"""What a case loads at run time resolves from an injected environment, so no OpenFOAM needs sourcing."""
 
 from __future__ import annotations
 
-import stat
 from pathlib import Path
 
 import pytest
 
-from omnidriver.cardiacfoam.runtime_evidence import (
-    _LIBRARY_CATALOG,
-    _parse_control_dict_libs,
-    resolve_runtime_dependencies,
-)
+from omnidriver.openfoam.build_products import _control_dict_libs as _parse_control_dict_libs
+from omnidriver.openfoam.build_products import case_runtime_dependencies
+
+
+def resolve_runtime_dependencies(case_root: Path, *, env):
+    return case_runtime_dependencies(case_root, env=env)
 
 
 def _write_control_dict(tmp_path: Path, body: str) -> Path:
@@ -27,7 +27,7 @@ class TestParseControlDictLibs:
     """Edge cases of _parse_control_dict_libs."""
 
     def test_returns_empty_tuple_when_libs_is_absent(self, tmp_path: Path) -> None:
-        p = _write_control_dict(tmp_path, "application cardiacFoam;\n")
+        p = _write_control_dict(tmp_path, "application simpleFoam;\n")
         assert _parse_control_dict_libs(p) == ()
 
     def test_returns_empty_tuple_when_libs_is_an_empty_list(self, tmp_path: Path) -> None:
@@ -56,80 +56,44 @@ def _make_lib(directory: Path, name: str, extension: str, content: bytes = b"x")
     return lib
 
 
-def _make_executable(path: Path, content: str) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content)
-    path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-    return path
+def _loading(case_root: Path, entry: str) -> Path:
+    (case_root / "system").mkdir(parents=True, exist_ok=True)
+    (case_root / "system" / "controlDict").write_text(f'libs\n(\n    "{entry}"\n);\n')
+    return case_root
 
 
 def test_finds_a_library_in_whichever_defined_directory_holds_it(tmp_path: Path) -> None:
-    """libphysicsModel is declared under FOAM_MODULE_LIBBIN in Make/files but installs to FOAM_USER_LIBBIN."""
+    """A library whose Make/files names FOAM_MODULE_LIBBIN can install to FOAM_USER_LIBBIN."""
     user_libbin = tmp_path / "user_libbin"
     _make_lib(user_libbin, "physicsModel", ".dylib")
     env = {"FOAM_USER_LIBBIN": str(user_libbin), "PATH": ""}
 
-    deps = {d.name: d for d in resolve_runtime_dependencies(tmp_path / "case", env=env)}
+    deps = {d.name: d for d in resolve_runtime_dependencies(_loading(tmp_path / "case", "libphysicsModel.so"), env=env)}
     assert deps["physicsModel"].path == user_libbin / "libphysicsModel.dylib"
-
-
-def test_missing_foam_module_libbin_does_not_crash_the_search(tmp_path: Path) -> None:
-    """FOAM_MODULE_LIBBIN is unset in a plain sourced shell."""
-    env = {"FOAM_USER_LIBBIN": str(tmp_path / "nonexistent"), "PATH": ""}
-    deps = resolve_runtime_dependencies(tmp_path / "case", env=env)
-    assert deps
 
 
 def test_tries_both_platform_extensions(tmp_path: Path) -> None:
     lib_dir = tmp_path / "libbin"
-    _make_lib(lib_dir, "electroModels", ".so")
+    _make_lib(lib_dir, "fieldFunctionObjects", ".so")
     env = {"FOAM_LIBBIN": str(lib_dir), "PATH": ""}
-    deps = {d.name: d for d in resolve_runtime_dependencies(tmp_path / "case", env=env)}
-    assert deps["electroModels"].path == lib_dir / "libelectroModels.so"
+    deps = {d.name: d for d in resolve_runtime_dependencies(_loading(tmp_path / "case", "libfieldFunctionObjects.so"), env=env)}
+    assert deps["fieldFunctionObjects"].path == lib_dir / "libfieldFunctionObjects.so"
 
 
-def test_a_required_library_absent_everywhere_is_reported_not_omitted(tmp_path: Path) -> None:
-    env = {"PATH": ""}
-    deps = {d.name: d for d in resolve_runtime_dependencies(tmp_path / "case", env=env)}
-    assert deps["electroModels"].path is None
-    assert deps["electroModels"].required is True
-
-
-def test_an_optional_library_absent_in_lightweight_mode_is_still_reported(
-    tmp_path: Path,
-) -> None:
-    """libelectroMechanicalModels is absent in the lightweight (no-solids4foam) build, a normal state."""
-    env = {"PATH": ""}
-    deps = {d.name: d for d in resolve_runtime_dependencies(tmp_path / "case", env=env)}
-    assert "electroMechanicalModels" in deps
-    assert deps["electroMechanicalModels"].path is None
-    assert deps["electroMechanicalModels"].required is False
-
-
-def test_the_solver_binary_resolves_on_path(tmp_path: Path) -> None:
-    bin_dir = tmp_path / "bin"
-    fake_solver = _make_executable(bin_dir / "cardiacFoam", "#!/bin/sh\necho v1\n")
-    env = {"PATH": str(bin_dir)}
-    deps = {d.name: d for d in resolve_runtime_dependencies(tmp_path / "case", env=env)}
-    assert deps["cardiacFoam"].path == fake_solver
-    assert deps["cardiacFoam"].required is True
-
-
-def test_the_solver_binary_absent_from_path_is_unavailable(tmp_path: Path) -> None:
-    env = {"PATH": ""}
-    deps = {d.name: d for d in resolve_runtime_dependencies(tmp_path / "case", env=env)}
-    assert deps["cardiacFoam"].path is None
-    assert deps["cardiacFoam"].required is True
+def test_a_loaded_library_absent_everywhere_is_reported_not_omitted(tmp_path: Path) -> None:
+    deps = {d.name: d for d in resolve_runtime_dependencies(_loading(tmp_path / "case", "libmissing.so"), env={"PATH": ""})}
+    assert deps["missing"].path is None
+    assert deps["missing"].required is True
 
 
 def test_a_bare_library_named_in_controldict_libs_becomes_required(tmp_path: Path) -> None:
-    """libverificationModels is not linked into cardiacFoam; manufactured tutorials load it via controlDict libs."""
+    """A library no solver links, loaded by the case's controlDict libs, as cardiacFOAM's manufactured tutorials load libverificationModels."""
     case_root = tmp_path / "case"
     lib_dir = tmp_path / "user_libbin"
     _make_lib(lib_dir, "verificationModels", ".dylib")
     (case_root / "system").mkdir(parents=True)
     (case_root / "system" / "controlDict").write_text(
-        'application cardiacFoam;\n\nlibs\n(\n    "libverificationModels.so"\n);\n'
+        'application simpleFoam;\n\nlibs\n(\n    "libverificationModels.so"\n);\n'
     )
     env = {"FOAM_USER_LIBBIN": str(lib_dir), "PATH": ""}
     deps = {d.name: d for d in resolve_runtime_dependencies(case_root, env=env)}
@@ -138,7 +102,7 @@ def test_a_bare_library_named_in_controldict_libs_becomes_required(tmp_path: Pat
 
 
 def test_a_case_local_library_path_expands_foam_case_and_wm_options(tmp_path: Path) -> None:
-    """monodomainTotalLagrangianEM loads a case-local library; $WM_OPTIONS comes from the executor's environment."""
+    """A case-local library, as cardiacFOAM's monodomainTotalLagrangianEM loads; $WM_OPTIONS comes from the executor's environment."""
     case_root = tmp_path / "case"
     built_lib_dir = case_root / "platforms" / "myOptions" / "lib"
     built_lib_dir.mkdir(parents=True)
@@ -172,10 +136,8 @@ def test_a_case_local_library_path_with_unset_wm_options_is_unavailable_not_gues
     assert deps["manufacturedMonodomainTotalLagrangianEM"].required is True
 
 
-def test_a_case_with_no_controldict_still_resolves_the_fixed_catalog(tmp_path: Path) -> None:
-    env = {"PATH": ""}
-    deps = resolve_runtime_dependencies(tmp_path / "case_without_controldict", env=env)
-    assert {d.name for d in deps} >= set(_LIBRARY_CATALOG)
+def test_a_case_with_no_controldict_loads_nothing(tmp_path: Path) -> None:
+    assert resolve_runtime_dependencies(tmp_path / "case_without_controldict", env={"PATH": ""}) == ()
 
 
 def test_a_case_with_a_gmsh_geometry_declares_gmsh(tmp_path, monkeypatch):

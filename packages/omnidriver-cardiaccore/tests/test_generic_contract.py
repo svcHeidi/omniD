@@ -17,7 +17,10 @@ def test_plugin_has_a_valid_context() -> None:
     # the ordered stack) is this plugin, per
     # `identity.to_json()["providers"][-1]["id"]`.
     assert context.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
-    assert len(context.stack.call("get_dict_entries")) == 52
+    assert set(context.stack.call("get_dictionary_catalog").documents) - set(CardiacCorePlugin().get_dictionary_catalog().documents) == {
+        "controlDict", "fvSchemes",
+    }
+    assert len(CardiacCorePlugin().get_dictionary_catalog().entries) == 52
     assert set(context.stack.call("get_tutorial_records")) == {
         "idealizedHeart", "idealizedHeartEndocardial", "idealizedHeartPigTransmural",
     }
@@ -34,10 +37,8 @@ def test_a_case_gets_the_openfoam_layers_documentation_and_regression_rules() ->
 
 def test_plugin_exposes_named_catalogs() -> None:
     catalogs = CardiacCorePlugin().get_named_catalogs()
-    assert catalogs["cardiaccore_field_conventions"]["cobiveco_raw"]["tm"] == "0=epicardium, 1=endocardium"
-    conventions = catalogs["cardiaccore_field_conventions"]
-    assert "coordinatesConventionDict" in conventions["authority"]
-    assert set(conventions["coordinate_system_effects"]) == {"uvc", "cobiveco"}
+    assert set(catalogs) == {"cardiaccore_support_boundary"}
+    assert catalogs["cardiaccore_support_boundary"]["pending"]
 
 
 def test_controlled_allrun_executes_without_domain_claims(tmp_path: Path, capsys) -> None:
@@ -70,7 +71,6 @@ def test_declared_vocabulary_names_the_current_coordinates_dictionary() -> None:
     declared = json.dumps(catalogs)
 
     assert "uvcConventionDict" not in declared
-    assert "system/coordinatesConventionDict" in declared
 
     # Every record's own `consumes` is the source of truth here: tutorial
     # records are inert data, so no plugin code runs to inspect them.

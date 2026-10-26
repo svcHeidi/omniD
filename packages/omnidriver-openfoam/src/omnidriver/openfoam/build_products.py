@@ -1,13 +1,15 @@
-"""What a wmake repository builds and which of its files a build reads: the OpenFOAM layer's
-answer to ``get_solver_builds``, one for every OpenFOAM-based solver."""
+"""What a wmake repository builds, which of its files a build reads, and what a case loads at run time:
+the OpenFOAM layer's answers to ``get_solver_builds`` and ``get_extra_provenance_paths``, one for every
+OpenFOAM-based solver."""
 from __future__ import annotations
 
 import os
 import re
+import shutil
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping
 
-from omnidriver.core.plugin_interface import SolverEntry, SourceIdentity
+from omnidriver.core.plugin_interface import RuntimeDependency, SolverEntry, SourceIdentity
 from omnidriver.core.runtime.build_identity import git_identity, recorded_build, tree_digest
 
 _EXCLUDED = frozenset({"tutorials", "lnInclude", "platforms"})
@@ -16,8 +18,8 @@ _MAKE_FILES = frozenset({"files", "options"})
 _EXE_RULE = re.compile(r"^\s*EXE\s*=\s*\$\(FOAM_(?:USER|MODULE)_APPBIN\)/(\S+)", re.MULTILINE)
 _LIB_RULE = re.compile(r"^\s*LIB\s*=\s*\$\(FOAM_(?:USER|MODULE)_LIBBIN\)/(\S+)", re.MULTILINE)
 _LIBRARY_SUFFIXES = (".so", ".dylib")
-# wmake puts an unset FOAM_MODULE_* folder at the user one, and cardiacFOAM's libphysicsModel lands
-# in FOAM_USER_LIBBIN although its Make/files names FOAM_MODULE_LIBBIN: search every defined folder.
+# wmake puts an unset FOAM_MODULE_* folder at the user one, so a library whose Make/files names
+# FOAM_MODULE_LIBBIN can land in FOAM_USER_LIBBIN: search every defined folder.
 _APP_FOLDERS = ("FOAM_MODULE_APPBIN", "FOAM_USER_APPBIN")
 _LIB_FOLDERS = ("FOAM_MODULE_LIBBIN", "FOAM_USER_LIBBIN")
 
@@ -89,3 +91,66 @@ def wmake_solver_builds(
         solver=repository.plugin, repository=source_identity(root),
         builds=tuple(recorded_build(name, path) for name, path in selected), recordable=True,
     ),)
+
+
+# FOAM_LIBBIN too: a controlDict may load one of OpenFOAM's own libraries.
+_LOADED_LIB_FOLDERS = (*_LIB_FOLDERS, "FOAM_LIBBIN")
+_BARE_LIB = re.compile(r"^lib(.+)\.(?:so|dylib)$")
+_VARIABLE = re.compile(r"\$\{(\w+)\}|\$(\w+)")
+
+
+def _control_dict_libs(control_dict: Path) -> tuple[str, ...]:
+    """The entries of a controlDict's ``libs ( ... )``; an absent or unparseable list gives ``()``."""
+    from foamlib import FoamFile
+
+    try:
+        libs = FoamFile(control_dict).get("libs")
+    except (OSError, ValueError):
+        return ()
+    return tuple(str(entry).strip('"') for entry in libs or ())
+
+
+def _expanded(raw: str, *, case_root: Path, env: Mapping[str, str]) -> str | None:
+    """``raw`` with each ``$VAR`` from ``env``, ``$FOAM_CASE`` being ``case_root``; ``None`` when one is undefined."""
+    # etc/bashrc does not set $FOAM_CASE: OpenFOAM substitutes it at solver startup.
+    missing: list[str] = []
+
+    def substitute(match: "re.Match[str]") -> str:
+        name = match.group(1) or match.group(2)
+        value = str(case_root) if name == "FOAM_CASE" else env.get(name)
+        if value is None:
+            missing.append(name)
+            return ""
+        return value
+
+    expanded = _VARIABLE.sub(substitute, raw)
+    return None if missing else expanded
+
+
+def _loaded_library(entry: str, *, case_root: Path, env: Mapping[str, str]) -> RuntimeDependency:
+    basename = entry.rsplit("/", 1)[-1]
+    match = _BARE_LIB.match(basename)
+    name = match.group(1) if match else basename
+    if "/" not in entry:
+        folders = [Path(env[folder]) for folder in _LOADED_LIB_FOLDERS if env.get(folder)]
+        path = _first_file(folder / f"lib{name}{suffix}" for folder in folders for suffix in _LIBRARY_SUFFIXES)
+    else:
+        expanded = _expanded(entry, case_root=case_root, env=env)
+        path = Path(expanded) if expanded is not None and Path(expanded).is_file() else None
+    return RuntimeDependency(name=name, path=path, required=True)
+
+
+def case_runtime_dependencies(case_root: Path, *, env: Mapping[str, str]) -> tuple[RuntimeDependency, ...]:
+    """What the case itself says it loads: each library its ``system/controlDict`` ``libs`` names, and gmsh when it
+    carries a ``.geo``. Each is required, since the case cannot run without it; one not found is reported unavailable,
+    never omitted."""
+    case_root = Path(case_root)
+    control_dict = case_root / "system" / "controlDict"
+    found = [
+        _loaded_library(entry, case_root=case_root, env=env)
+        for entry in (_control_dict_libs(control_dict) if control_dict.is_file() else ())
+    ]
+    if any(case_root.rglob("*.geo")):
+        gmsh = shutil.which("gmsh", path=env.get("PATH"))
+        found.append(RuntimeDependency(name="gmsh", path=Path(gmsh) if gmsh else None, required=True))
+    return tuple(found)

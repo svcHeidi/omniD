@@ -28,7 +28,7 @@ def test_unsupported_version_is_rejected_before_any_catalog_runs(version) -> Non
         def plugin_api_version(self) -> str:
             return version
 
-        def get_dict_entries(self):
+        def get_dictionary_catalog(self):
             raise AssertionError("must be rejected before catalogs are read")
 
         def get_profile(self):

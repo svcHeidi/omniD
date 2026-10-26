@@ -52,6 +52,6 @@ def test_the_eikonal_ecg_wave_vector_sits_under_the_ecg_domain():
 
 def test_the_purkinje_fibre_radius_is_catalogued_in_metres_for_the_cardiacfoam_59_head_that_reads_it():
     """#59's head (with #53's PVJ fixes) reads it in conductionSystemDomain and sets it in monodomain1D3D."""
-    (entry,) = [entry for entry in CardiacFoamPlugin().get_dict_entries() if entry.driver_path.endswith("purkinjeFibreRadius")]
+    (entry,) = [entry for entry in CardiacFoamPlugin.get_dictionary_catalog().entries if entry.driver_path.endswith("purkinjeFibreRadius")]
     assert (entry.unit, entry.exclusive_minimum) == ("m", 0)
     assert entry.required_when == {"$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.couplingMode": "bidirectional"}

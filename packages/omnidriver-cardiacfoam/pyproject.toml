@@ -50,6 +50,5 @@ include = ["omnidriver*"]
     "dict_key_allowlist.json",
     "physics_layout.json",
     "guidance.md",
-    "fixtures/template/constant/*",
     "utilities/*/utility.manifest.toml",
 ]

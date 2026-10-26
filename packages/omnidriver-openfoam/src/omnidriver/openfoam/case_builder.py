@@ -1,6 +1,6 @@
 """Solver-neutral primitives for building an OpenFOAM case from a catalogue, outside the record path.
 
-Value resolution, block serialisation, a generic ``blockMeshDict`` and the committed write; a solver's builder composes them.
+Value resolution, block serialisation and the committed write; a solver's builder composes them.
 """
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ from omnidriver.core.case_write import (
 )
 from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
 
-from .case_planning import cell_counts_from_dx
 from .case_rendering import FORMAT
 
 if TYPE_CHECKING:
@@ -134,104 +133,6 @@ def serialize_block(tree: dict, indent: int) -> str:
         else:
             lines.append(f"{pad}{key} {value_token(value)};")
     return "\n".join(lines)
-
-
-_DEFAULT_BLOCK_MESH_DICT = """/*--------------------------------*- C++ -*----------------------------------*\\
-| =========                 |                                                 |
-| \\\\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\\\    /   O peration     | Version:  v1912                                 |
-|   \\\\  /    A nd           | Website:  www.openfoam.com                      |
-|    \\\\/     M anipulation  |                                                 |
-\\*---------------------------------------------------------------------------*/
-FoamFile
-{
-    version     2.0;
-    format      ascii;
-    class       dictionary;
-    object      blockMeshDict;
-}
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-// Generic default geometry for a from-scratch case_folder with no
-// author-supplied blockMeshDict. Not tuned to any specific tutorial's
-// science -- author your own blockMeshDict if geometry matters.
-
-scale   0.001;
-
-vertices
-(
-    (0 0 0)
-    (2 0 0)
-    (2 2 0)
-    (0 2 0)
-    (0 0 2)
-    (2 0 2)
-    (2 2 2)
-    (0 2 2)
-);
-
-blocks
-(
-    hex (0 1 2 3 4 5 6 7) (__CELLS__ __CELLS__ __CELLS__) simpleGrading (1 1 1)
-);
-
-edges
-(
-);
-
-boundary
-(
-    walls
-    {
-        type patch;
-        faces
-        (
-            (3 7 6 2)
-            (0 4 7 3)
-            (2 6 5 1)
-            (1 5 4 0)
-            (0 3 2 1)
-            (4 5 6 7)
-        );
-    }
-);
-
-mergePatchPairs
-(
-);
-
-// ************************************************************************* //
-"""
-
-
-# Matches `scale 0.001` and the 0..2 vertex extent in
-# _DEFAULT_BLOCK_MESH_DICT above (2 * 0.001 = 0.002 m).
-_DEFAULT_SLAB_SIZE_M: tuple[float, float, float] = (0.002, 0.002, 0.002)
-_DEFAULT_CELLS = 4
-
-
-def default_block_mesh_dict_text(*, dx_m: float | None = None) -> str:
-    """Generic default `system/blockMeshDict` text (a small slab, "walls" patch).
-
-    `dx_m` derives the cell count via `cell_counts_from_dx`; omit for the
-    fixed default cell count.
-    """
-    if dx_m is None:
-        cells = _DEFAULT_CELLS
-    else:
-        counts = cell_counts_from_dx(dx_m, _DEFAULT_SLAB_SIZE_M)
-        cells = counts[0]
-    return _DEFAULT_BLOCK_MESH_DICT.replace("__CELLS__", str(cells))
-
-
-def single_cell_block_mesh_dict_text() -> str:
-    """`system/blockMeshDict` for a solver with no real spatial geometry: the
-    generic slab resolved to exactly one hex cell, matching the native
-    `singleCell` tutorial.
-
-    electroModel.C requires a real `fvMesh` regardless of solver, so even a
-    single-cell solver goes through the same blockMeshDict/blockMesh path.
-    """
-    return default_block_mesh_dict_text(dx_m=_DEFAULT_SLAB_SIZE_M[0])
 
 
 def write_documents(

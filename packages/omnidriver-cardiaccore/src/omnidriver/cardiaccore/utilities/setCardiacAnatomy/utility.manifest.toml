@@ -5,8 +5,9 @@ category = "field-setup"
 purpose = "Declared from cardiacCore's native tutorial wrappers and utility documentation."
 inputs = [
   "system/setCardiacAnatomyDict",
-  "0/apicobasal",
-  "0/intraventricular",
+  "system/coordinatesConventionDict",
+  "0/<longitudinalField>",
+  "0/<intraventricularField>",
 ]
 requires_mesh = true
 example = "setCardiacAnatomy -case <case>"
@@ -37,7 +38,7 @@ produced_by = "setCardiacAnatomy"
 artifact_id = "phi_rv"
 path_pattern = "0/phiRV"
 format = "openfoam_field"
-description = "RV-relative circumferential angle"
+description = "aha_angle on RV cells only, 0 elsewhere"
 produced_by = "setCardiacAnatomy"
 optional = true
 

@@ -57,14 +57,14 @@ class IonicModelEntry:
     """Default pulse duration for **volumetric (PDE) external stimulus**
     (electroProperties.<solver>Coeffs.externalStimulus.stimulusDuration).
     NOT a single-cell default — single-cell stim_duration is protocol-
-    specific and lives in dict_entries.py with its own typical_value."""
+    specific and lives in dict_entries_catalog.py with its own typical_value."""
 
     recommended_stimulus_intensity: float | None = 80000.0
     """Default current density for **volumetric (PDE) external stimulus**
     (externalStimulus.stimulusIntensity) in A/m³. NOT a single-cell default
     — single-cell stim_amplitude varies sharply by model class (~60 pA for
     full ionic models, ~0.4 for phenomenological) and lives in
-    dict_entries.py with model-class guidance in its notes field."""
+    dict_entries_catalog.py with model-class guidance in its notes field."""
 
     single_cell_stimulus_amplitude: float | None = None
     """This model's default single-cell stimulus amplitude
@@ -93,12 +93,9 @@ class IonicModelEntry:
 
     supports_gradient_axis_heterogeneity: bool = False
     """Whether the model implements gradientAxes overlay heterogeneity (a
-    named-axis exponential scale, of which apex-to-base was the original and
-    still most common case) via configureGradientAxisHeterogeneity
-    (ionicModel.C). Batched variants inherit this flag through
-    dataclasses.replace(). The field name is kept for API stability -- every
-    model wired for apex-to-base heterogeneity is wired for gradientAxes
-    generally."""
+    named-axis exponential scale, apex-to-base the most common) via
+    configureGradientAxisHeterogeneity (ionicModel.C). Batched variants
+    inherit this flag through dataclasses.replace()."""
 
     native_tissue_labels: tuple[str, ...] = ()
     """Tissue labels represented by distinct baseline physiology in the model equations."""

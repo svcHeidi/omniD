@@ -18,7 +18,8 @@ records what they read and wrote.
   `0/apicobasal`). The endocardial and pig-transmural variants end in
   `generatePurkinjeTree`.
 - No record runs `refine1Dgraph` or the Purkinje graph hand-off to
-  cardiacFOAM; the graph conversion utilities are declared, not sequenced.
+  cardiacFOAM, and no manifest declares cardiacCore's graph conversion
+  utilities (`ccore1DgraphToFoam`, `ccoreVtkUnstructuredToFoam`).
 
 ## Study keys
 
@@ -38,13 +39,12 @@ A study addresses a utility's dictionary directly, as
   `uncatalogued` and checked against the type the C++ reads it as
   (`omnidriver catalog --uncatalogued` lists them). Any other key of a
   catalogued dictionary is refused by name.
-- **`system/controlDict`** is partly catalogued, as for every OpenFOAM-based
-  solver: the keys `Foam::Time` reads that the catalogue lists are checked by
-  shape and bounds when written, and their menus and relations before the run
-  (`omnidriver catalog` lists them). Any other key is written as asked and
-  flagged `validated: false`.
-- **Any other `system/` document** (`fvSchemes`, ...) is written as asked and
-  flagged `validated: false`: omniD has no catalogue of OpenFOAM's keys.
+- **`system/controlDict` and `system/fvSchemes`** are catalogued in part by
+  the OpenFOAM layer, as for every OpenFOAM-based solver: a catalogued key is
+  checked by shape, bounds and menu (`omnidriver catalog` lists them), and any
+  other key is written as asked and flagged `validated: false`.
+- **Any other `system/` document** is written as asked and flagged
+  `validated: false`.
 - **Any other document** (anything outside `system/`) is refused by name.
 
 ## Coordinates are case inputs
@@ -56,20 +56,17 @@ block naming its fields, the transmural endocardium/epicardium values and the
 infer one from field names, and never convert one into the other's spelling.
 
 - Read the declaration with the repository's `coordinates_convention.py`
-  script and take field paths and values from it. Orientation is case-declared:
-  endocardium may be the larger transmural value, and LV/RV values are not
-  always -1/+1.
-- `generatePurkinjeTree` recovers the RV-facing septum and applies a
-  per-vertex transmural flip only under `uvc`; under `cobiveco` neither runs.
-  Hence `RVSeptalEndoFaces` is produced under `uvc` only.
-- `setCardiacAnatomy` writes `AHA_Segment`, `aha_angle` and `aha_z` (the
-  position along each ventricle's own cavity; the rings are thresholds on it,
-  and no cutoff is entered; the utility's `README.md` defines it). `aha_angle`
-  comes from one shared, LV-centred frame (the RV gets no origin or basis of
-  its own), so a raw `aha_angle` is not an RV-local angle. `AHA_Segment` is
-  1-17 on LV cells (AHA, Cerqueira 2002), 18-26 on RV free-wall cells (cardiacCore's own convention)
-  and 0 outside `ventricularCellZone`; the names are in cardiacCore's
-  `applications/utilities/setCardiacAnatomy/aha_segment_names.json`.
+  script and take field paths and values from it, including the default field
+  names a `coordinates` block may omit. Orientation is case-declared, and named
+  by anatomy, not by numeric order: endocardium may be the larger transmural
+  value, LV/RV values are not always -1/+1 (classify a chamber by the nearest
+  declared value), and apex-to-base direction is not guaranteed.
+- What a utility does under each coordinate system, and what it writes, is
+  its own `README.md` in `applications/utilities/<utility>/`: for
+  `generatePurkinjeTree`, the endocardial face sets it builds and from what;
+  for `setCardiacAnatomy`, `AHA_Segment`, `aha_angle`, `aha_z` and its
+  auxiliary fields, with the segment names in `aha_segment_names.json`. A
+  record step's outputs are the utility manifest's, so they follow it.
 
 ## Helper scripts
 
@@ -82,10 +79,9 @@ declares, the Purkinje seeds, a tree's AHA coverage, an electrode transfer, a
 VTU selection as a `cellSet`). A record may also name one as a step, and then
 it runs like any other.
 
-Read the plugin's named catalogs for the rest: `cardiaccore_field_conventions`,
-`cardiaccore_support_boundary` and `cardiaccore_conditional_inputs`. A helper's
-output is an observation or a proposal, never a scientific acceptance, and not
-permission to change a case.
+What the adapter does not support yet is the named catalog
+`cardiaccore_support_boundary`. A helper's output is an observation or a
+proposal, never a scientific acceptance, and not permission to change a case.
 
 ## Extending the adapter
 

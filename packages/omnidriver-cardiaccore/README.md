@@ -13,7 +13,7 @@ from omnidriver.cardiaccore import CardiacCorePlugin
 
 print(CardiacCorePlugin().get_agent_guidance()[0]["text"])
 catalogs = CardiacCorePlugin().get_named_catalogs()
-print(catalogs["cardiaccore_field_conventions"]["authority"])
+print(catalogs["cardiaccore_support_boundary"]["pending"])
 ```
 
 `guidance.md` is a package resource: this works without a source checkout.
@@ -65,15 +65,10 @@ The tree workflows retain fixed native seed/growth dictionaries; seeds are
 placed by hand with `place_purkinje_seeds.py`. Coverage reports retain the
 named baseline's categories, but do not return scientific acceptance.
 
-The native generator owns endocardial-surface definition. It uses named LV/RV
-endocardial patches when those are available; otherwise it uses the selected
-UVC convention and natively recovers the RV-facing septum. The helper scripts
-do not re-create that UVC/endoseptal logic. After `setCardiacAnatomy`, each
-cell carries `aha_angle` from one shared LV-centred frame (the RV has no
-frame of its own) and `aha_z`, its position along its own ventricle's cavity.
-`AHA_Segment` is 1-17 on the LV and 18-26 on the RV free wall, its rings
-thresholds on `aha_z`; cardiacCore's `aha_segment_names.json` names every ID
-and the utility's `README.md` defines `aha_z`.
+The native generator owns endocardial-surface definition, and the helper
+scripts do not re-create it. What `generatePurkinjeTree` and
+`setCardiacAnatomy` write, under each coordinate system, is in each utility's
+own `README.md` in cardiacCore's `applications/utilities/`.
 
 For a selected tree study, keep this audit chain explicit: native face-set
 construction → `setCardiacAnatomy` AHA fields → seed placement

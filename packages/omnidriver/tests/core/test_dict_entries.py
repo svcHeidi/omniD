@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from omnidriver.dict_entries import DictEntry
+from omnidriver.core.contracts.dictionary import DictEntry
 
 
 class TestDictEntryStructuredConstraints(unittest.TestCase):
@@ -155,10 +155,10 @@ def test_dict_entry_phases_default_is_empty_frozenset():
 
 
 def test_core_exports_no_phase_vocabulary():
-    """``omnidriver.dict_entries`` exports no ``Phase`` literal spelling cardiacFoam's four editing phases."""
-    import omnidriver.dict_entries as dict_entries
+    """Core's dictionary contract exports no ``Phase`` literal spelling cardiacFoam's four editing phases."""
+    import omnidriver.core.contracts.dictionary as dictionary
 
-    assert not hasattr(dict_entries, "Phase")
+    assert not hasattr(dictionary, "Phase")
 
 
 def test_entries_and_catalog_agree(driver_context_for_installed_plugins):

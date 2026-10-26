@@ -17,7 +17,7 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
         hex_cell_counts_expected_blocks,
         read_hex_cell_counts,
     )
-    from .mutators import read_foam_entry
+    from .dictionary_reader import read_foam_entry
 
     if isinstance(key_path, str):
         raise TypeError(
@@ -124,7 +124,7 @@ class OpenFOAMEnvironmentPlugin:
         del resolved_case
         from omnidriver.core.plugin_profile import is_replica_directory_name
 
-        from .mutators import read_foam_entry
+        from .dictionary_reader import read_foam_entry
         from .time_selection import selected_start_time
 
         control_dict = next(
@@ -151,6 +151,14 @@ class OpenFOAMEnvironmentPlugin:
         from .build_products import wmake_solver_builds
 
         return wmake_solver_builds(env, repository=repository, used_paths=used_paths)
+
+    def get_extra_provenance_paths(self, case_root) -> tuple:
+        """The libraries the case's ``controlDict`` loads, and gmsh for a case with a ``.geo``."""
+        import os
+
+        from .build_products import case_runtime_dependencies
+
+        return case_runtime_dependencies(case_root, env=os.environ)
 
     def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
         from .plan_diagnostics import plan_diagnostics
@@ -198,6 +206,36 @@ class OpenFOAMEnvironmentPlugin:
         return parallel_steps_for_record(
             step, request=request, read_value=read_value, allocation=allocation, launcher=launcher,
         )
+
+    @staticmethod
+    def get_dictionary_catalog():
+        """``controlDict`` and ``fvSchemes``, which OpenFOAM's own source reads for every solver."""
+        from .layer_documents import layer_catalogue
+
+        return layer_catalogue()
+
+    def get_record_key_catalog(self, case_root, *, driver_context) -> tuple:
+        """The ``controlDict`` and ``fvSchemes`` keys a study may set, and every other ``system/`` file as open."""
+        from .layer_documents import layer_record_key_catalog
+
+        return layer_record_key_catalog(case_root, catalogue=driver_context.stack.call("get_dictionary_catalog"))
+
+    def validate_run_semantics(self, case_root, *, driver_context):
+        """The catalogue's rules over the resolved case's ``controlDict``."""
+        del driver_context
+        from .layer_documents import layer_run_semantics
+
+        return layer_run_semantics(case_root)
+
+    def get_supported_mutation_modes(self) -> "frozenset[str]":
+        return frozenset({"clone_and_patch"})
+
+    def resolve_case_mutation(self, request, *, driver_context):
+        """An edit to an existing case, which this layer renders for every OpenFOAM-based solver."""
+        del driver_context
+        from .case_rendering import patch_mutation
+
+        return patch_mutation(request, owner_id=self.plugin_id)
 
     def get_dict_key_scanner(self):
         from .dict_keys_scanner import catalog_report

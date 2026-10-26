@@ -8,8 +8,8 @@ import pytest
 from omnidriver.cli import build_parser
 
 _MOVED_OUT = (
-    ("omnidriver.dict_entries", "get_heterogeneity_models"),
-    ("omnidriver.dict_entries", "get_electro_property_entry_groups"),
+    ("omnidriver.core.contracts.dictionary", "get_heterogeneity_models"),
+    ("omnidriver.core.contracts.dictionary", "get_electro_property_entry_groups"),
     ("omnidriver.core.specs.paths", "cardiacfoam_monorepo_root"),
 )
 
@@ -19,12 +19,6 @@ def test_a_cardiac_symbol_is_not_defined_in_core(module, name):
     assert not hasattr(importlib.import_module(module), name), (
         f"{module}.{name} is cardiac vocabulary; it lives in omnidriver-cardiacfoam"
     )
-
-
-def test_the_neutral_dictionary_view_stays_in_core():
-    from omnidriver.dict_entries import all_documented_driver_paths
-
-    assert callable(all_documented_driver_paths)
 
 
 #: Solver and tutorial names the CLI help must not carry.

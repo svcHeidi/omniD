@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.dict_entries import DictEntry
+from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from omnidriver.cardiacfoam.common_dict_entries import (
     ELECTRO_MECHANICAL_PROPERTY_ENTRIES, PHYSICS_PROPERTY_ENTRIES, PURKINJE_GRAPH_ENTRIES,
@@ -1566,7 +1566,7 @@ def test_an_external_stimulus_with_both_corners_breaks_no_rule(tmp_path):
 
 
 def test_the_resolved_control_dict_is_judged_beside_electro_properties(tmp_path):
-    from omnidriver.cardiacfoam.validation import case_diagnostics
+    from omnidriver.core.plugin_interface import load_plugin_context
 
     constant, system = tmp_path / "constant", tmp_path / "system"
     constant.mkdir()
@@ -1576,7 +1576,9 @@ def test_the_resolved_control_dict_is_judged_beside_electro_properties(tmp_path)
         header + "myocardiumSolver singleCellSolver;\nsingleCellSolverCoeffs { ionicModel TNNP; }\n"
     )
     (system / "controlDict").write_text(header + "deltaT 0; startFrom startTime; stopAt endTime;\n")
-    messages = {item.message for item in case_diagnostics(tmp_path) if item.source == "system/controlDict"}
+    context = load_plugin_context("cardiacfoam")
+    judged = context.stack.call("validate_run_semantics", tmp_path, driver_context=context)
+    messages = {item.message for item in judged if item.source == "system/controlDict"}
     assert messages == {
         "deltaT is 0, outside the catalogue's bounds: must be more than 0.",
         "startTime is required when startFrom=startTime.", "endTime is required when stopAt=endTime.",

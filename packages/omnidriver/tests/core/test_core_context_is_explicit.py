@@ -91,7 +91,7 @@ def test_openfoam_never_resolves_an_implicit_driver_context() -> None:
 # greppable, and _test_the_guarded_names_still_exist below fails loudly if one
 # of these stops existing rather than letting the guard quietly shrink.
 _CONTEXT_TAKING_PUBLIC_EDGE = {
-    "all_documented_driver_paths": "omnidriver.dict_entries",
+    "lookup_record": "omnidriver.core.tutorial_records",
 }
 
 

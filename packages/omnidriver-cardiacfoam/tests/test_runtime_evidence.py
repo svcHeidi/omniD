@@ -35,3 +35,16 @@ def test_cardiac_extra_provenance_paths_declares_the_solver_as_a_dependency(
     by_name = {dependency.name: dependency for dependency in dependencies}
     assert "cardiacFoam" in by_name
     assert by_name["cardiacFoam"].required is True
+
+
+def test_the_solver_binary_resolves_on_path(tmp_path: Path) -> None:
+    from omnidriver.cardiacfoam.runtime_evidence import solver_dependencies
+
+    solver = tmp_path / "bin" / "cardiacFoam"
+    solver.parent.mkdir()
+    solver.write_text("#!/bin/sh\n")
+    solver.chmod(0o755)
+    (dependency,) = solver_dependencies({"PATH": str(solver.parent)})
+    assert (dependency.name, dependency.path, dependency.required) == ("cardiacFoam", solver, True)
+    (dependency,) = solver_dependencies({"PATH": ""})
+    assert dependency.path is None and dependency.required is True

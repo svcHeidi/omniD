@@ -10,7 +10,7 @@ from omnidriver.cardiaccore.record_key_validation import record_key_catalog, rec
 DOCUMENT = "system/setCardiacConductivityDict"
 ANATOMY_DOCUMENT = "system/setCardiacAnatomyDict"
 
-# cardiacCore applications/utilities/setCardiacAnatomy/setCardiacAnatomy.C at chore/repo-layout (0c1bf46):
+# cardiacCore applications/utilities/setCardiacAnatomy/setCardiacAnatomy.C at chore/repo-layout:
 # main from its head to the read of valveAreaMaskField, closed with a brace.
 SET_CARDIAC_ANATOMY_MAIN = r'''int main(int argc, char *argv[])
 {
@@ -115,6 +115,13 @@ def test_a_key_the_catalogue_lacks_is_refused_naming_the_catalogue_and_how_to_li
     assert refused.value.code == "unknown_key"
 
 
+def test_a_ventricle_block_key_binds_its_placeholder_to_the_ventricles_the_cxx_reads():
+    tree = "system/generatePurkinjeTreeDict"
+    assert record_key_validator(tree, ("lv", "seed"), [0, 0, 0]) == ("vector3", True)
+    with pytest.raises(ValueError, match="not one of \\['lv', 'rv'\\]"):
+        record_key_validator(tree, ("banana", "seed"), [0, 0, 0])
+
+
 def test_an_anatomy_key_is_checked_at_the_type_the_catalogue_gives_it():
     assert record_key_validator(ANATOMY_DOCUMENT, ("ventricularCellZone",), "myocardium") == ("word", True)
     assert record_key_validator(ANATOMY_DOCUMENT, ("auxiliaryFields",), False) == ("boolean", True)
@@ -145,8 +152,16 @@ def test_fv_schemes_is_validated_as_for_every_openfoam_solver_and_otherwise_open
 def test_the_catalogue_lists_the_control_dict_keys_beside_the_open_row_when_the_case_holds_one(tmp_path):
     (tmp_path / "system").mkdir()
     (tmp_path / "system" / "controlDict").write_text("")
-    listed = {(item["document"], item["key"]) for item in record_key_catalog(tmp_path)}
+    (tmp_path / "system" / "setCardiacConductivityDict").write_text("")
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    context = load_plugin_context("cardiaccore")
+    listed = {
+        (item["document"], item["key"])
+        for item in context.stack.call("get_record_key_catalog", tmp_path, driver_context=context)
+    }
     assert {("system/controlDict", "deltaT"), ("system/controlDict", "<any>")} <= listed
+    assert ("system/setCardiacConductivityDict", "<any>") not in listed
 
 
 def test_the_catalogue_lists_every_key_the_validator_accepts(tmp_path):

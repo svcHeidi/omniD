@@ -14,10 +14,10 @@ def test_cardiacfoam_plugin_satisfies_runtime_contract() -> None:
 
     assert ctx.identity.to_json()["providers"][-1]["id"] == "org.cardiacfoam"
     assert plugin.plugin_name == "cardiacFoam"
-    assert plugin.get_dict_entries()
+    assert plugin.get_dictionary_catalog().entries
     assert {"deltaT", "endTime"} <= {
         entry.driver_path
-        for entry in plugin.get_dictionary_catalog().documents["controlDict"]
+        for entry in ctx.stack.call("get_dictionary_catalog").documents["controlDict"]
     }
 
 
@@ -26,5 +26,5 @@ def test_generic_openfoam_plugin_satisfies_runtime_contract() -> None:
     ctx = driver_context(plugin, source="test")
 
     assert ctx.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.openfoam.environment"
-    assert ctx.stack.call("get_dict_entries") == ()
+    assert {entry.driver_path for entry in ctx.stack.call("get_dict_entries")} >= {"deltaT", "ddtSchemes.default"}
 

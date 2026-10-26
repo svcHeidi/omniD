@@ -8,12 +8,8 @@ from pathlib import Path
 import pytest
 
 from omnidriver.core.tutorial_records import TutorialRecordError
-from omnidriver.openfoam.mutators import (
-    read_foam_entries,
-    read_foam_entry,
-    remove_foam_dict,
-    update_foam_entry,
-)
+from omnidriver.openfoam.dictionary_reader import read_foam_entries, read_foam_entry
+from omnidriver.openfoam.mutators import remove_foam_dict, update_foam_entry
 from openfoam_assertions import assert_foam_entry
 
 

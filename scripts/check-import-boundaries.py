@@ -107,7 +107,7 @@ def main() -> int:
     # one that does not is refused below rather than silently exempted.
     adapter_rules: dict[Path, tuple[str, ...]] = {
         OPENFOAM_SRC: ("omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.opencarp", "omnidriver.torchcor"),
-        CARDIACFOAM_SRC: ("omnidriver.opencarp", "omnidriver.torchcor"),
+        CARDIACFOAM_SRC: ("omnidriver.cardiaccore", "omnidriver.opencarp", "omnidriver.torchcor"),
         CARDIACCORE_SRC: ("omnidriver.cardiacfoam", "omnidriver.opencarp", "omnidriver.torchcor"),
         OPENCARP_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.torchcor"),
         TORCHCOR_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.opencarp"),
@@ -171,9 +171,8 @@ def main() -> int:
             "package, omnidriver.opencarp or omnidriver.torchcor; no adapter "
             "imports omnidriver.opencarp or omnidriver.torchcor, and neither "
             "imports another adapter. "
-            "omnidriver.cardiaccore must not "
-            "import omnidriver.cardiacfoam: the two cardiac adapters are "
-            "siblings, and what passes between them is declared, not imported. "
+            "Neither cardiac adapter imports the other: they are siblings, and "
+            "what passes between them is declared, not imported. "
             "A cardiac adapter importing omnidriver.openfoam is allowed -- that "
             "is the direction the layering permits. "
             "omnidriver_agents imports no omnidriver package and none imports it. "

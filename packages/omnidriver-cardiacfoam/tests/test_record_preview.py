@@ -122,7 +122,7 @@ def test_describe_and_a_strict_plan_carry_the_capability_manifest(tmp_path):
     overrides = {"cases_root": str(TUTORIALS)}
     manifest = describe_entry("singleCell", overrides=overrides, driver_context=context)["capability_manifest"]
     assert "cardiacFoam" in manifest["allowed_commands"]["plugin"]
-    assert "electro" in manifest["samplable_fields"]
+    assert "region0" in manifest["samplable_fields"]
     report = strict_plan("singleCell", overrides=overrides, driver_context=context, scratch_root=str(tmp_path / "scratch")).to_json()
     assert "cardiacFoam" in report["capability_manifest"]["allowed_commands"]["plugin"]
 
@@ -131,7 +131,7 @@ def test_apply_edits_the_staged_cases_own_dictionaries_through_the_real_renderer
     from omnidriver.core.plugin_discovery import load_discovered_plugin as _load
     from omnidriver.core.runtime.attempt_lease import acquire_case_lease
     from omnidriver.core.strict_planning import strict_plan
-    from omnidriver.openfoam.mutators import read_foam_entry
+    from omnidriver.openfoam.dictionary_reader import read_foam_entry
 
     context = _load("cardiacfoam")
     report = strict_plan(

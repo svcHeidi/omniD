@@ -15,7 +15,6 @@ from omnidriver.cardiacfoam.common_dict_entries import (
     PURKINJE_GRAPH_ENTRIES,
 )
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
-from omnidriver.openfoam.control_dict import CONTROL_DICT_ENTRIES
 
 if TYPE_CHECKING:
     from omnidriver.core.contracts.dictionary import DictEntry
@@ -52,34 +51,6 @@ class CardiacFoamPlugin:
 
         return load_plugin_profile(Path(__file__).parent / "plugin.yaml")
 
-    def get_configured_environment(self, env, driver_context):
-        """Apply this plugin's declared backend and build-manifest contract.
-
-        `provider_stack.py` classifies ``get_configured_environment`` as
-        ``chain``, so when this provider is composed with
-        openfoam-environment's, that provider's (generic, no-op)
-        contribution runs first and this one runs on its result -- no
-        back-channel required.
-        """
-        del driver_context
-        from omnidriver.cardiacfoam.runtime_profile import (
-            configure_runtime_environment,
-        )
-
-        configured_env, _error = configure_runtime_environment(env)
-        return configured_env
-
-    def get_dict_entries(self) -> tuple[DictEntry, ...]:
-        """The same entries :meth:`get_dictionary_catalog` holds, flat."""
-        entries: list[DictEntry] = list(PHYSICS_PROPERTY_ENTRIES)
-        entries.extend(CONTROL_DICT_ENTRIES)
-        entries.extend(PRE_PACING_PROPERTY_ENTRIES)
-        entries.extend(PURKINJE_GRAPH_ENTRIES)
-        entries.extend(ELECTRO_MECHANICAL_PROPERTY_ENTRIES)
-        for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
-            entries.extend(group)
-        return tuple(entries)
-
     @staticmethod
     @lru_cache(maxsize=1)
     def get_dictionary_catalog() -> DictionaryCatalog:
@@ -89,7 +60,6 @@ class CardiacFoamPlugin:
         return DictionaryCatalog({
             "electroProperties": tuple(electro_entries),
             "physicsProperties": PHYSICS_PROPERTY_ENTRIES,
-            "controlDict": CONTROL_DICT_ENTRIES,
             "prePacingProperties": PRE_PACING_PROPERTY_ENTRIES,
             PURKINJE_GRAPH_DOCUMENT: PURKINJE_GRAPH_ENTRIES,
             "electroMechanicalProperties": ELECTRO_MECHANICAL_PROPERTY_ENTRIES,
@@ -113,20 +83,17 @@ class CardiacFoamPlugin:
         return samplable_fields(resolved)
 
     def get_solve_step_commands(self) -> frozenset:
-        """Commands that actually run the solver, for telemetry collection."""
-        from omnidriver.cardiacfoam.runtime_evidence import (
-            solve_step_commands,
-        )
+        """The solver commands: every command that runs the solver is one."""
+        from omnidriver.cardiacfoam.command_authorization import solver_commands
 
-        return solve_step_commands()
+        return solver_commands()
 
     def get_extra_provenance_paths(self, case_root) -> tuple:
-        """Extra inputs the provenance snapshot must digest beyond system/ and constant/."""
-        from omnidriver.cardiacfoam.runtime_evidence import (
-            extra_provenance_paths,
-        )
+        """The solver binary; what the case loads is the OpenFOAM layer's."""
+        del case_root
+        from omnidriver.cardiacfoam.runtime_evidence import solver_dependencies
 
-        return extra_provenance_paths(case_root)
+        return solver_dependencies()
 
     def get_artifact_value_reader(self, artifact_format: str):
         """Reader for a cardiac artifact format, or None if unsupported."""
@@ -135,16 +102,6 @@ class CardiacFoamPlugin:
         )
 
         return artifact_value_reader(artifact_format)
-
-    def get_supported_mutation_modes(self) -> "frozenset[str]":
-        return frozenset({"clone_and_patch"})
-
-    def resolve_case_mutation(self, request, *, driver_context):
-        """The shared OpenFOAM layer resolves an edit to an existing case."""
-        del driver_context
-        from omnidriver.openfoam.case_rendering import patch_mutation
-
-        return patch_mutation(request, owner_id=self.plugin_id)
 
     def get_case_runtime_conventions(self):
         """OpenFOAM's generated paths, and the ``local/`` folder a tutorial's ``Allrun`` writes."""
@@ -239,10 +196,6 @@ class CardiacFoamPlugin:
 
     def get_utility_manifests(self) -> dict:
         """This plugin's ``utility.manifest.toml`` sidecars, by command name."""
-        from omnidriver.cardiacfoam.command_authorization import (
-            utility_manifests,
-        )
+        from omnidriver.core.utility_catalog import load_utility_manifests
 
-        # utility_manifests() is cached and returns a read-only view; copy so a
-        # caller mutating what it gets back cannot reach the shared cache.
-        return dict(utility_manifests())
+        return dict(load_utility_manifests(Path(__file__).parent / "utilities"))

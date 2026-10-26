@@ -111,8 +111,7 @@ def _environment_diagnostics(
                 "error",
                 "missing_openfoam_env",
                 "WM_PROJECT_DIR is not set and no OpenFOAM bashrc was supplied: pass "
-                "--environment-source, set OPENFOAM_BASHRC, or name openfoam.bashrc in "
-                "the file OMNIDRIVER_RUNTIME_CONFIG points to. OpenFOAM environment not sourced.",
+                "--environment-source or set OPENFOAM_BASHRC. OpenFOAM environment not sourced.",
                 source="environment",
             ))
         else:

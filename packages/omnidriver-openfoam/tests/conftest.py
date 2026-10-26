@@ -40,7 +40,7 @@ def foam_values_equal(actual: str, expected: str) -> bool:
 
 def assert_foam_entry(path, key, expected, *, scope=None) -> None:
     """Assert that ``key`` resolves to ``expected``, whatever its spelling."""
-    from omnidriver.openfoam.mutators import read_foam_entry
+    from omnidriver.openfoam.dictionary_reader import read_foam_entry
 
     actual = read_foam_entry(Path(path), key, scope=scope)
     assert actual is not None, f"{key!r} not found (scope={scope!r}) in {path}"

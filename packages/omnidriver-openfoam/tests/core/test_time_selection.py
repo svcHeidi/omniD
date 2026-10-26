@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
-from omnidriver.openfoam.mutators import read_foam_entry
+from omnidriver.openfoam.dictionary_reader import read_foam_entry
 from omnidriver.openfoam.time_selection import TimeSelectionError, selected_start_time
 
 _PATTERN = openfoam_case_runtime_conventions().instance_directory_pattern

@@ -11,10 +11,8 @@ _HEADER = (
 )
 
 
-def _write_controldict(
-    tmp_path: Path, functions_body: str, *, subdir: str = "system"
-) -> Path:
-    system = tmp_path / subdir
+def _write_controldict(tmp_path: Path, functions_body: str) -> Path:
+    system = tmp_path / "system"
     system.mkdir(parents=True, exist_ok=True)
     (system / "controlDict").write_text(
         _HEADER + "functions\n{\n" + functions_body + "\n}\n"
@@ -25,7 +23,7 @@ def _write_controldict(
 def test_known_field_no_diagnostic(tmp_path):
     root = _write_controldict(tmp_path, "probe1{ type probes; fields (Vm); }")
     diags = function_object_field_diagnostics(
-        root, samplable={"electro": {"Vm"}, "solid": set()}
+        root, samplable={"region0": {"Vm"}, "solid": set()}
     )
     assert [d for d in diags if d.level == "error"] == []
     assert [d for d in diags if d.code == "unknown_sampled_field"] == []
@@ -34,7 +32,7 @@ def test_known_field_no_diagnostic(tmp_path):
 def test_unknown_field_warns(tmp_path):
     root = _write_controldict(tmp_path, "probe1{ type probes; fields (bananas); }")
     diags = function_object_field_diagnostics(
-        root, samplable={"electro": {"Vm"}, "solid": set()}
+        root, samplable={"region0": {"Vm"}, "solid": set()}
     )
     warns = [d for d in diags if d.code == "unknown_sampled_field"]
     assert len(warns) == 1
@@ -47,7 +45,7 @@ def test_multiple_fields_mixed(tmp_path):
         tmp_path, "probe1{ type probes; fields (Vm Iion bananas); }"
     )
     diags = function_object_field_diagnostics(
-        root, samplable={"electro": {"Vm", "Iion"}, "solid": set()}
+        root, samplable={"region0": {"Vm", "Iion"}, "solid": set()}
     )
     warns = [d for d in diags if d.code == "unknown_sampled_field"]
     assert [w.field for w in warns] == ["bananas"]
@@ -58,17 +56,17 @@ def test_solid_region_checked_against_solid_set(tmp_path):
         tmp_path, "ta{ type volFieldValue; region solid; fields (Ta); }"
     )
     diags = function_object_field_diagnostics(
-        root, samplable={"electro": {"Vm"}, "solid": {"Ta"}}
+        root, samplable={"region0": {"Vm"}, "solid": {"Ta"}}
     )
     assert [d for d in diags if d.code == "unknown_sampled_field"] == []
 
 
-def test_solid_field_in_electro_region_warns(tmp_path):
+def test_solid_field_in_the_default_region_warns(tmp_path):
     root = _write_controldict(
-        tmp_path, "ta{ type volFieldValue; region electro; fields (Ta); }"
+        tmp_path, "ta{ type volFieldValue; region region0; fields (Ta); }"
     )
     diags = function_object_field_diagnostics(
-        root, samplable={"electro": {"Vm"}, "solid": {"Ta"}}
+        root, samplable={"region0": {"Vm"}, "solid": {"Ta"}}
     )
     warns = [d for d in diags if d.code == "unknown_sampled_field"]
     assert len(warns) == 1 and warns[0].field == "Ta"
@@ -77,49 +75,32 @@ def test_solid_field_in_electro_region_warns(tmp_path):
 def test_includefunc_not_flagged(tmp_path):
     root = _write_controldict(tmp_path, "#includeFunc probes")
     diags = function_object_field_diagnostics(
-        root, samplable={"electro": {"Vm"}, "solid": set()}
+        root, samplable={"region0": {"Vm"}, "solid": set()}
     )
     assert diags == ()
 
 
 def test_missing_controldict_is_silent(tmp_path):
     diags = function_object_field_diagnostics(
-        tmp_path, samplable={"electro": set(), "solid": set()}
+        tmp_path, samplable={"region0": set(), "solid": set()}
     )
     assert diags == ()
 
 
-def test_electro_controldict_subdir_scanned(tmp_path):
-    root = _write_controldict(
-        tmp_path, "p{ type probes; fields (bananas); }", subdir="system/electro"
-    )
-    diags = function_object_field_diagnostics(
-        root, samplable={"electro": {"Vm"}, "solid": set()}
-    )
-    warns = [d for d in diags if d.code == "unknown_sampled_field"]
-    assert len(warns) == 1 and warns[0].field == "bananas"
-
-
-# An unrecognized region is skipped, never forced into "electro": a region
-# samplable() doesn't know about (e.g. a bath/torso domain) is treated as a
-# parser limitation, not a source of spurious warnings.
-
-def test_unrecognized_region_is_skipped_not_forced_into_electro(tmp_path):
+def test_unrecognized_region_is_skipped_not_forced_into_the_default_region(tmp_path):
     root = _write_controldict(
         tmp_path, "p{ type probes; region torso; fields (bananas); }"
     )
     diags = function_object_field_diagnostics(
-        root, samplable={"electro": {"Vm"}, "solid": {"Ta"}}
+        root, samplable={"region0": {"Vm"}, "solid": {"Ta"}}
     )
     assert diags == ()
 
 
-def test_no_declared_region_still_checked_against_electro(tmp_path):
-    """No declared region defaults to "electro" and is still checked, unlike
-    a genuinely unknown region name."""
+def test_no_declared_region_is_checked_against_region0(tmp_path):
     root = _write_controldict(tmp_path, "p{ type probes; fields (bananas); }")
     diags = function_object_field_diagnostics(
-        root, samplable={"electro": {"Vm"}, "solid": {"Ta"}}
+        root, samplable={"region0": {"Vm"}, "solid": {"Ta"}}
     )
     warns = [d for d in diags if d.code == "unknown_sampled_field"]
     assert len(warns) == 1 and warns[0].field == "bananas"
@@ -130,7 +111,7 @@ def test_solid_region_still_checked_against_solid_after_the_lookup_change(tmp_pa
         tmp_path, "ta{ type volFieldValue; region solid; fields (bananas); }"
     )
     diags = function_object_field_diagnostics(
-        root, samplable={"electro": {"Vm"}, "solid": {"Ta"}}
+        root, samplable={"region0": {"Vm"}, "solid": {"Ta"}}
     )
     warns = [d for d in diags if d.code == "unknown_sampled_field"]
     assert len(warns) == 1 and warns[0].field == "bananas"
@@ -147,7 +128,7 @@ def test_unknown_field_still_warns_with_a_lookalike_string_earlier_in_the_file(t
         + "functions\n{\nprobe1{ type probes; fields (Vm bogusField); }\n}\n"
     )
     diags = function_object_field_diagnostics(
-        tmp_path, samplable={"electro": {"Vm"}, "solid": set()}
+        tmp_path, samplable={"region0": {"Vm"}, "solid": set()}
     )
     warns = [d for d in diags if d.code == "unknown_sampled_field"]
     assert len(warns) == 1
@@ -161,6 +142,6 @@ def test_includeFunc_alongside_a_real_function_object_is_skipped_not_crashed_on(
         tmp_path, "#includeFunc residuals\nprobe1{ type probes; fields (Vm); }"
     )
     diags = function_object_field_diagnostics(
-        root, samplable={"electro": {"Vm"}, "solid": set()}
+        root, samplable={"region0": {"Vm"}, "solid": set()}
     )
     assert [d for d in diags if d.level == "error"] == []

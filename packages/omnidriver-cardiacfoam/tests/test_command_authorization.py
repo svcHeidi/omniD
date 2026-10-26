@@ -4,6 +4,8 @@ unmanifested utilities and its bundled utility manifests.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
@@ -41,16 +43,15 @@ def test_cardiac_utilities_come_from_the_plugin() -> None:
 def test_the_solver_is_the_only_command_credited_with_a_runs_artifacts() -> None:
     """Only solver_commands() may be credited with a run's artifacts (normalize_workflow_dag)."""
     assert _CTX.stack.call("get_solver_commands") == frozenset({"cardiacFoam"})
-    assert _CTX.stack.call("get_auxiliary_commands") == frozenset()
+    manifests = _CTX.stack.call("get_utility_manifests")
+    assert _CTX.stack.call("get_auxiliary_commands") == frozenset(name for name, manifest in manifests.items() if manifest.produces)
 
 
 def test_utility_manifests_are_not_a_shared_mutable_dict() -> None:
     """The cache hands every caller the same object, so none may corrupt it for the others."""
-    from omnidriver.cardiacfoam.command_authorization import (
-        utility_manifests,
-    )
+    from omnidriver.core.utility_catalog import load_utility_manifests
 
-    cached = utility_manifests()
+    cached = load_utility_manifests(_CTX.providers[-1].get_utility_manifests()["listCellModelsVariables"].source_path.parents[1])
     with pytest.raises(TypeError):
         cached["injected"] = object()  # type: ignore[index]
 
@@ -63,9 +64,9 @@ def test_utility_manifests_are_not_a_shared_mutable_dict() -> None:
 
 def test_plugin_utility_root_is_its_own_bundled_data() -> None:
     """Core has no knowledge of where any plugin's utility manifests live."""
-    from omnidriver.cardiacfoam.command_authorization import utility_roots
+    from omnidriver.cardiacfoam import cardiacfoam_plugin
 
-    (root,) = utility_roots()
-    assert root.is_dir()
-    assert root.name == "utilities"
-    assert (root / "listCellModelsVariables" / "utility.manifest.toml").is_file()
+    root = Path(cardiacfoam_plugin.__file__).parent / "utilities"
+    manifests = _CTX.providers[-1].get_utility_manifests()
+    assert all(manifest.source_path.is_relative_to(root) for manifest in manifests.values())
+    assert "listCellModelsVariables" in manifests

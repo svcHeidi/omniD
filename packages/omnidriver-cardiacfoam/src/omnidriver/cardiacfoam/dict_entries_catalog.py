@@ -348,10 +348,10 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicConstantOverrides.<scope>.scale.<constant_name>',
             description="Scale an ionic model constant by a multiplicative factor.",
-            notes="<constant_name> must be EXACTLY a name from this model's 'constants' list in ionic_model_catalog.py -- an unknown name is a solver FatalError (ionicModelIO.C:245-255). Do NOT assume a prefix: naming differs per model. AC_-prefixed for AlievPanfilov, Courtemanche, Fabbri, Gaur, Grandi, PerisYague, Stewart, ToRORd_dynCl, Trovato; unprefixed for BuenoOrovio, TNNP and the FDA manufactured models; and TWorld is mixed (273 AC_* plus a bare gnalTissueScale). The split is by provenance -- CellML-generated constants carry AC_, hand-added ones do not -- so it grows over time. `omnidriver check --record singleCell` verifies the catalog against the built solver.",
+            notes="<constant_name> must be EXACTLY a name from this model's 'constants' list in ionic_model_catalog.py -- an unknown name is a solver FatalError (ionicModelIO.C). Do NOT assume a prefix: naming differs per model. AC_-prefixed for AlievPanfilov, Courtemanche, Fabbri, Gaur, Grandi, PerisYague, Stewart, ToRORd_dynCl, Trovato; unprefixed for BuenoOrovio, TNNP and the FDA manufactured models; and TWorld is mixed (273 AC_* plus a bare gnalTissueScale). The split is by provenance -- CellML-generated constants carry AC_, hand-added ones do not -- so it grows over time. `omnidriver check --record singleCell` verifies the catalog against the built solver.",
             value_kind='scalar',
             allowed_bindings={"<scope>": ("global", "epicardialCells", "mCells", "endocardialCells", "myocyte"), "<constant_name>": None},
-            constraints=("<scope> must be one of: global, epicardialCells, mCells, endocardialCells, myocyte (ionicModelIO.C:182-189). A tissue scope applies only to cells carrying that tissue flag; global applies to all.",),
+            constraints=("<scope> must be one of: global, epicardialCells, mCells, endocardialCells, myocyte (ionicModelIO.C). A tissue scope applies only to cells carrying that tissue flag; global applies to all.",),
         ),
         DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.ionicConstantOverrides.<scope>.set.<constant_name>',
@@ -359,7 +359,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             notes="Same <constant_name> rule as the scale entry: use exactly a name from this model's 'constants' list; the prefix convention differs per model and cannot be inferred.",
             value_kind='scalar',
             allowed_bindings={"<scope>": ("global", "epicardialCells", "mCells", "endocardialCells", "myocyte"), "<constant_name>": None},
-            constraints=("<scope> must be one of: global, epicardialCells, mCells, endocardialCells, myocyte (ionicModelIO.C:182-189).",),
+            constraints=("<scope> must be one of: global, epicardialCells, mCells, endocardialCells, myocyte (ionicModelIO.C).",),
         ),
         ),
     ),
@@ -370,7 +370,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             driver_path='$ELECTRO_MODEL_COEFFS.batchedIntegrator',
             description='Integration scheme for batched ionic models. Optional: defaults to euler when omitted.',
             source_refs=('src/ionicModels/ionicModel/batchedIonicModel.H',),
-            notes='Read only via lookupOrDefault (batchedIonicModel.H:200) -- never required. Ionic models only: batched active-tension models always integrate with explicit Euler and do not read this key, so it places no constraint on activeTensionModel.',
+            notes='Read only via lookupOrDefault (batchedIonicModel.H) -- never required. Ionic models only: batched active-tension models always integrate with explicit Euler and do not read this key, so it places no constraint on activeTensionModel.',
             value_kind='enum',
             enum_values=('euler', 'rushLarsen'),
             menu_attributes=BATCHED_INTEGRATOR,
@@ -380,7 +380,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             driver_path='$ELECTRO_MODEL_COEFFS.batchedSubsteps',
             description='Number of substeps for batched ODE integration. Optional: defaults to 1 when omitted.',
             source_refs=('src/ionicModels/ionicModel/batchedIonicModel.H',),
-            notes='Read only via lookupOrDefault (batchedIonicModel.H:197, batchedActiveTensionModel.C:46) -- never required, despite applying only to batched models.',
+            notes='Read only via lookupOrDefault (batchedIonicModel.H, batchedActiveTensionModel.C) -- never required, despite applying only to batched models.',
             value_kind='integer',
             typical_value='50',
         ),
@@ -484,7 +484,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
     ),
     "single_cell_stimulus": build_group(
         # Gated on the block being configured, not on the solver. A single-cell
-        # run with no singleCellStimulus block is legal -- stimulusIO.C:149-155
+        # run with no singleCellStimulus block is legal -- stimulusIO.C
         # returns a no-op protocol when the sub-dict is absent -- and gating on
         # the solver made every entry applicable, so the builder filled them
         # from typical_value and quietly paced a case that asked for nothing.
@@ -798,7 +798,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
                 'src/verificationModels/bathBidomainVerification/manufacturedFDABathBidomainVerifier.C',
                 'src/verificationModels/bidomainVerification/manufacturedFDABidomainVerifier.C',
             ),
-            notes='manufacturedFDABidomainVerifier::verificationDict() returns dict().subDict("verificationModel"), the same place the bath-bidomain verifier reads it (manufacturedFDABidomainVerifier.C:56: `k_ = cfg.lookupOrDefault<scalar>("k", 1.0/Foam::sqrt(2.0))`, matching the bidomain case\'s own committed `k 0.707107`). manufacturedFDAMonodomainVerifier reads no k at all.',
+            notes='manufacturedFDABidomainVerifier::verificationDict() returns dict().subDict("verificationModel"), the same place the bath-bidomain verifier reads it (manufacturedFDABidomainVerifier.C: `k_ = cfg.lookupOrDefault<scalar>("k", 1.0/Foam::sqrt(2.0))`, matching the bidomain case\'s own committed `k 0.707107`). manufacturedFDAMonodomainVerifier reads no k at all.',
             value_kind='scalar',
             applicable_when={"$ELECTRO_MODEL_COEFFS.verificationModel.type": (
                 "manufacturedFDABathBidomainVerifier",
@@ -859,7 +859,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             phases=frozenset({'solver'}),
             description='Scheme coupling the ionic ODEs to the diffusion solve: godunov splits them, sbdf2 couples them semi-implicitly by extrapolating the ionic current.',
             source_refs=('src/electroModels/electroDomains/myocardiumDomain/myocardiumDomain.C',),
-            notes='Read at myocardiumDomain.C:351, lookupOrDefault default "godunov"; anything other than godunov/sbdf2 is a FatalError (:359-365). sbdf2 additionally requires the ionic model to support BOTH supportsVmRateCoupling and supportsIonicCurrentEvaluation, else fatal (:366-385). Only myocardiumDomain reads it, so eikonalSolver and singleCellSolver ignore it.',
+            notes='Read at myocardiumDomain.C, lookupOrDefault default "godunov"; anything other than godunov/sbdf2 is a FatalError. sbdf2 additionally requires the ionic model to support BOTH supportsVmRateCoupling and supportsIonicCurrentEvaluation, else fatal. Only myocardiumDomain reads it, so eikonalSolver and singleCellSolver ignore it.',
             value_kind='enum',
             enum_values=('godunov', 'sbdf2'),
             menu_attributes=TIME_COUPLING_SCHEME,
@@ -1238,7 +1238,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             phases=frozenset({'physics'}),
             description='Explicit choice of ECG verification model when no nested verificationModel block is present.',
             source_refs=('src/electroModels/core/verificationModels/ecgVerificationModel.C', 'src/electroModels/ecgModels/eikonalECG/eikonalECG.C'),
-            notes='ecgVerificationModel.C:49 and eikonalECG.C:56, lookupOrDefault default word::null.',
+            notes='ecgVerificationModel.C and eikonalECG.C, lookupOrDefault default word::null.',
             value_kind='enum',
             enum_values=('manufacturedPseudoECGVerifier', 'manufacturedEikonalECGVerifier'),
             allowed_bindings={"<name>": None},
@@ -1270,7 +1270,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             value_kind='enum', enum_values=('1D', '2D', '3D'), allowed_bindings={"<name>": None},
             applicable_when={"$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.type": ('manufacturedPseudoECGVerifier', 'manufacturedEikonalECGVerifier')},
         ),
-        # Real, native-read key: manufacturedPseudoECGVerifier.C:420
+        # Real, native-read key: manufacturedPseudoECGVerifier.C
         # `anisotropic_ = cfg.lookupOrDefault<Switch>("anisotropic", false)`.
         # Only manufacturedPseudoECGVerifier reads it
         # (manufacturedEikonalECGVerifier.C and
@@ -1537,7 +1537,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             phases=frozenset({'solver'}),
             description='Manufactured-solution verifier for the 1D Purkinje graph. Selects from the graphVerificationModel table, which is separate from the myocardium-side electroVerificationModel table -- hence a second type key at this scope.',
             source_refs=('src/electroModels/core/verificationModels/graphVerificationModel.C', 'src/verificationModels/monodomainVerification/manufacturedGraphVerifier.C'),
-            notes='conductionSystemDomain.C:574 builds it only when a verificationModel sub-dict exists, but graphVerificationModel.C:50 then reads type with get<word> -- so an existing block WITHOUT type is fatal. Unlike the eikonal table there is no "none" escape and no enabled switch: to turn it off, delete the block.',
+            notes='conductionSystemDomain.C builds it only when a verificationModel sub-dict exists, but graphVerificationModel.C then reads type with get<word> -- so an existing block WITHOUT type is fatal. Unlike the eikonal table there is no "none" escape and no enabled switch: to turn it off, delete the block.',
             value_kind='enum',
             enum_values=('manufacturedGraphVerifier',),
             allowed_bindings={"<name>": None},
@@ -1743,7 +1743,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             phases=frozenset({'physics'}),
             description='Membrane voltage above which a Purkinje node counts as activated, for activation-time recording.',
             source_refs=('src/electroModels/conductionSystemModels/monodomain1DSolver/monodomain1DSolver.H',),
-            notes='monodomain1DSolver.H:59, lookupOrDefault default 0.0. Rest is about -0.084 V and peak about +0.05 V, so 0.0 sits mid-upstroke.',
+            notes='monodomain1DSolver.H, lookupOrDefault default 0.0. Rest is about -0.084 V and peak about +0.05 V, so 0.0 sits mid-upstroke.',
             value_kind='scalar',
             unit='V',
             typical_value='0.0',
@@ -1871,7 +1871,7 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             driver_path='$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.verificationModel.type',
             description='Manufactured-solution verifier for the Purkinje-ventricular junction coupling, so the coupled 1D-3D case is verified as a coupled system rather than as two independent domains. Selects from the couplingVerificationModel table -- a third, separate table.',
             source_refs=('src/electroModels/core/verificationModels/couplingVerificationModel.C', 'src/verificationModels/coupledVerification/coupled1D3DMonodomainVerifier.C'),
-            notes='Not diagnostics-only: reactionDiffusionPvjCoupler.C:157 calls updateManufacturedSource on every exchange, so it modifies the transferred current. electroDomainCoupler.C:69 builds it only when the sub-dict exists, but type is then a fatal get<word>; no "none" value and no enabled switch.',
+            notes='Not diagnostics-only: reactionDiffusionPvjCoupler.C calls updateManufacturedSource on every exchange, so it modifies the transferred current. electroDomainCoupler.C builds it only when the sub-dict exists, but type is then a fatal get<word>; no "none" value and no enabled switch.',
             value_kind='enum',
             enum_values=('coupled1D3DMonodomainVerifier',),
             allowed_bindings={"<name>": None},

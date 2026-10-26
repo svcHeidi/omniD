@@ -1,44 +1,24 @@
-"""cardiacCore's shared anatomy input and workflow steps.
-``step()`` mirrors native ``Allrun``'s ``<utility> -case .``; ``ANATOMY`` has no native case location, so a study supplies ``--input anatomy=<bundle dir>``; no record declares it today.
-"""
+"""cardiacCore's workflow steps: ``step()`` mirrors native ``Allrun``'s ``<utility> -case .``."""
 
 from __future__ import annotations
 
-from omnidriver.core.tutorial_records import RecordInput, WorkflowStep
+from pathlib import Path
 
-#: constant/polyMesh's five files, restated here rather than imported from
-#: cardiacFOAM, which cardiacCore must not know about (package boundary).
-MESH = tuple(f"constant/polyMesh/{name}" for name in ("boundary", "faces", "neighbour", "owner", "points"))
-
-#: The three convention-named fields every utility reads via
-#: ``coordinatesConventionDict``'s ``uvc_*`` names.
-UVC = ("0/uvc_transmural", "0/uvc_intraventricular", "0/uvc_longitudinal")
-
-#: A bring-your-own anatomy input: no native location, so
-#: ``--input anatomy=<bundle dir>`` is always required of a record that declares it.
-ANATOMY = RecordInput(
-    name="anatomy",
-    files=tuple((path, path) for path in (*MESH, "0/fiber", "0/sheet", *UVC)),
-)
+from omnidriver.core.tutorial_records import WorkflowStep
+from omnidriver.core.utility_catalog import load_utility_manifests
 
 #: Every utility reads this convention dictionary, though native ``Allrun``
 #: never declares it as a dependency.
 CONV = "system/coordinatesConventionDict"
 
 
-def step(step_id: str, utility: str, *, consumes: tuple[str, ...], produces: tuple[str, ...]) -> WorkflowStep:
+def step(step_id: str, utility: str, *, consumes: tuple[str, ...]) -> WorkflowStep:
+    """The step running ``utility``, producing what its manifest says it always writes; an output the manifest marks
+    optional is written only under some settings, so a step does not require it."""
+    manifest = load_utility_manifests(Path(__file__).parents[1] / "utilities")[utility]
     return WorkflowStep(
         step_id=step_id,
         command=(utility, "-case", "."),
         consumes=(f"system/{utility}Dict", *consumes),
-        produces=produces,
+        produces=tuple(produced.path_pattern for produced in manifest.produces if not produced.optional),
     )
-
-
-#: ``generatePurkinjeTree``'s outputs, shared by the endocardial and pig-transmural records.
-TREE_OUT = (
-    *(f"constant/polyMesh/sets/{name}" for name in ("LVEndoFaces", "RVEndoFaces", "EpiFaces", "RVSeptalEndoFaces")),
-    *(f"postProcessing/generatePurkinjeTree/{name}" for name in (
-        "purkinje.vtk", "lv-purkinje.vtk", "rv-purkinje.vtk", "generation_params.txt",
-    )),
-)

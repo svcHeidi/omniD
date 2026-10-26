@@ -33,9 +33,9 @@ def selected_start_time(
     ``src/OpenFOAM/db/Time/Time.C``).
 
     Returns ``None`` when ``control_dict_relpath`` names no file: a case with
-    no ``controlDict`` may not be OpenFOAM-shaped at all (e.g. cardiacCore's
-    ``Allrun``-only cases, which always write to ``0/`` and have no time
-    concept of their own), so this answers "contribute nothing" rather than
+    no ``controlDict`` may not be OpenFOAM-shaped at all (a case run only by
+    utilities that always write to ``0/`` has no time concept of its own), so
+    this answers "contribute nothing" rather than
     inventing ``"0"``.
 
     ``startFrom`` absent defaults to ``"latestTime"`` (mirrors

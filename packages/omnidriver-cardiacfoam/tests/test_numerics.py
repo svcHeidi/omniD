@@ -14,7 +14,7 @@ _KEYS = {
     "timeCouplingScheme": TIME_COUPLING_SCHEME, "solutionAlgorithm": SOLUTION_ALGORITHM, "batchedIntegrator": BATCHED_INTEGRATOR,
 }
 _ENTRIES = [
-    (entry, key) for entry in CardiacFoamPlugin().get_dict_entries() for key in _KEYS if entry.driver_path.endswith("." + key)
+    (entry, key) for entry in CardiacFoamPlugin.get_dictionary_catalog().entries for key in _KEYS if entry.driver_path.endswith("." + key)
 ]
 
 

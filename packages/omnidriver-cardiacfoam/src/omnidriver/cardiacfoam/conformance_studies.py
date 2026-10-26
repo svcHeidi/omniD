@@ -244,7 +244,7 @@ STUDIES: dict[str, ConformanceStudy] = {
             at={probe: at for probe, (at, _, _) in PROBES.items()},
             at_unit="m", max_sampling_offset=0.0,
             study={"dx": 0.0005, "system/controlDict:endTime": 0.15},
-            sweep_values=(0.0005, 0.001), tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9,
+            sweep_values=(0.0005, 0.001), tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9, parallel_tolerance_unit="s",
             parallel_study={"system/decomposeParDict:numberOfSubdomains": 2},
             # The solver's banner names its rank count, and decomposePar leaves one directory per rank.
             rank_evidence=RankEvidence(log_pattern=r"nProcs\s*:\s*(\d+)", paths="processor*"),

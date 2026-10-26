@@ -28,7 +28,6 @@ def plan_diagnostics(
     scratch_root: Path | None,
     driver_context: Any,
 ) -> tuple[StrictDiagnostic, ...]:
-    del workflow_dag
     mapping = driver_context.stack.call("get_profile").cxx_mapping
     source_root = mapping.source_root(env) if mapping is not None else None
     report = _report(driver_context, mapping, source_root, scratch_root)
@@ -63,7 +62,40 @@ def plan_diagnostics(
         ),
         solver_root=source_root,
     )
-    return catalog + function_objects + keys + schemes + snapshot_diagnostics(env) + rules
+    utilities = _utility_manifest_diagnostics(driver_context, workflow_dag)
+    return catalog + function_objects + keys + schemes + snapshot_diagnostics(env) + rules + utilities
+
+
+def _step_programs(workflow_dag: dict[str, Any] | None) -> set[str]:
+    programs: set[str] = set()
+    for step in (workflow_dag or {}).get("steps", ()):
+        command = step.get("command")
+        words = command.split() if isinstance(command, str) else list(command or ())
+        if words:
+            programs.add(PurePosixPath(str(words[0])).name)
+    return programs
+
+
+def _utility_manifest_diagnostics(driver_context: Any, workflow_dag: dict[str, Any] | None) -> tuple[StrictDiagnostic, ...]:
+    """Each manifest of a utility the plan runs compared with the C++ its supplied repository builds it from."""
+    from .utility_scanner import utility_manifest_report
+
+    repository = getattr(driver_context, "repository", None)
+    manifests = driver_context.stack.call("get_utility_manifests")
+    run = _step_programs(workflow_dag) & set(manifests)
+    if repository is None or not run:
+        return ()
+    levels = {"disagreement": "warning", "uncatalogued": "info", "unread": "info"}
+    return tuple(
+        diagnostic(
+            levels[item["kind"]], f"utility_manifest_{item['kind']}",
+            f"{item['utility']} {item['flag'] or ''}: "
+            + (item.get("note") or f"the C++ declares it ({item['source']}), and the manifest lacks it"),
+            source=item.get("source") or str(manifests[item["utility"]].source_path), field=item["flag"] or "",
+            detail=item,
+        )
+        for item in utility_manifest_report(repository.root, manifests, utilities=run)["findings"]
+    )
 
 
 def _scanned_reader(driver_context: Any, source_root: Path, scratch_root: Path | None):
@@ -126,11 +158,15 @@ def _report(driver_context: Any, mapping: Any, source_root: Path | None, scratch
     scanner = driver_context.stack.call("get_dict_key_scanner")
     if scanner is None or mapping is None or source_root is None or not source_root.is_dir():
         return None
+    repository = getattr(driver_context, "repository", None)
+    placed = repository is not None and Path(repository.source).resolve() == Path(source_root).resolve()
+    prefix = {"source_prefix": PurePosixPath(Path(repository.source).relative_to(repository.root).as_posix())} if placed else {}
     return scanner(
         source_root,
         allowlist_path=mapping.allowlist_path,
         catalogue=driver_context.stack.call("get_dictionary_catalog"),
         cache_root=scratch_root,
+        **prefix,
     ).to_json()
 
 

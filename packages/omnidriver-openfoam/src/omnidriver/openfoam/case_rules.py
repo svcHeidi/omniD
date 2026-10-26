@@ -492,3 +492,22 @@ def rule_diagnostics(
     for path, reads in requirements.items():
         found += _scan_requirement(path, reads, context, document, built)
     return found
+
+
+def document_rule_diagnostics(
+    case_root: Path, documents: Mapping[str, Iterable[Any]], *, mapping: Any = None, catalogue: Any = None,
+) -> tuple[StrictDiagnostic, ...]:
+    """:func:`rule_diagnostics` over each document the case holds, ``documents`` mapping a case-relative path to the
+    entries that catalogue it; a document the case does not hold is skipped, and one that cannot be read is an error."""
+    found: list[StrictDiagnostic] = []
+    for relpath, entries in documents.items():
+        path = Path(case_root) / relpath
+        if not path.is_file():
+            continue
+        try:
+            leaves = read_leaves(path)
+        except (OSError, ValueError, KeyError) as exc:
+            found.append(diagnostic("error", "case_unreadable", f"{path} cannot be read: {exc}", source=relpath))
+            continue
+        found += rule_diagnostics(entries, leaves, document=relpath, mapping=mapping, catalogue=catalogue)
+    return tuple(found)

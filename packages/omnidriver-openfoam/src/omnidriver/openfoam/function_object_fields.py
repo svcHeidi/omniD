@@ -7,9 +7,9 @@ from foamlib import FoamFile
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic as _diagnostic
 
-# controlDict locations to scan: top-level and the electro sub-region used by
-# multi-region electromechanical cases.
-_CONTROLDICT_RELPATHS = ("system/controlDict", "system/electro/controlDict")
+# OpenFOAM's name for a case's single mesh (polyMesh::defaultRegion), the
+# region a function object samples when it declares none.
+DEFAULT_REGION = "region0"
 
 
 def _diagnostics_for_path(
@@ -26,11 +26,10 @@ def _diagnostics_for_path(
             # A non-dict entry (e.g. #includeFunc) carries no braces and
             # samples nothing of its own.
             continue
-        region = subdict.get("region", "electro")
+        region = subdict.get("region", DEFAULT_REGION)
         if region not in samplable:
-            # Skip rather than guess: a region absent from samplable (e.g. an
-            # uncatalogued bath/torso domain) would otherwise fabricate a
-            # warning under "electro".
+            # A region the stack does not describe is skipped, never checked
+            # against another region's fields.
             continue
         allowed = samplable[region]
         for field_name in subdict.get("fields", []):
@@ -56,27 +55,18 @@ def function_object_field_diagnostics(
     *,
     samplable: Mapping[str, Sequence[str] | set[str]],
 ) -> tuple[StrictDiagnostic, ...]:
-    """Warn (never error) about controlDict function objects sampling fields
-    absent from ``samplable`` (an open ``{region_name: {field, ...}}`` map,
-    typically from :func:`capability_manifest.build_capability_manifest`;
-    core imposes no fixed key set). A function object whose ``region`` isn't
-    a key in ``samplable`` is skipped rather than checked against a guessed
-    bucket.
-
-    Degrades to silence on any parse or IO failure.
+    """Warn (never error) about ``system/controlDict`` function objects that
+    sample a field absent from ``samplable``, a ``{region: fields}`` map keyed
+    by mesh region (``region0`` for a single-region case). A function object
+    whose region is not a key is skipped. Silent on any parse or IO failure.
     """
     normalized = {region: set(fields) for region, fields in samplable.items()}
-    root = Path(case_root)
-    diagnostics: list[StrictDiagnostic] = []
-    for relpath in _CONTROLDICT_RELPATHS:
-        path = root / relpath
-        if not path.is_file():
-            continue
-        try:
-            diagnostics.extend(_diagnostics_for_path(path, normalized, str(path)))
-        except Exception:
-            # Degrade to silence on any parse/IO failure (OSError, or
-            # foamlib.FoamFileDecodeError, a ValueError subclass) rather
-            # than crash or fabricate a warning.
-            continue
-    return tuple(diagnostics)
+    path = Path(case_root) / "system" / "controlDict"
+    if not path.is_file():
+        return ()
+    try:
+        return tuple(_diagnostics_for_path(path, normalized, str(path)))
+    except Exception:
+        # OSError, or foamlib.FoamFileDecodeError (a ValueError subclass):
+        # silence rather than a crash or a fabricated warning.
+        return ()

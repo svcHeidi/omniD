@@ -11,9 +11,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from omnidriver.cardiacfoam.command_authorization import utility_manifests
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
-UTILITY_CATALOG = utility_manifests()
+UTILITY_CATALOG = CardiacFoamPlugin().get_utility_manifests()
 
 REPO = Path(__file__).resolve().parents[3]
 SCRIPT = REPO / "scripts" / "export-utility-catalog.py"

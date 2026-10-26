@@ -303,13 +303,8 @@ def test_an_mpirun_from_another_mpi_family_is_refused(tmp_path, version, mismatc
 def test_the_bashrc_is_never_searched_for(tmp_path):
     from omnidriver.openfoam.openfoam_environment import openfoam_bashrc
 
-    runtime_file = tmp_path / "runtime.yaml"
-    runtime_file.write_text("openfoam:\n  bashrc: /from/runtime/file\n")
-    named = {"OMNIDRIVER_RUNTIME_CONFIG": str(runtime_file)}
-
-    assert openfoam_bashrc(bashrc_path="/explicit", base_env={**named, "OPENFOAM_BASHRC": "/env"}).as_posix() == "/explicit"
-    assert openfoam_bashrc(base_env={**named, "OPENFOAM_BASHRC": "/env"}).as_posix() == "/env"
-    assert openfoam_bashrc(base_env=named).as_posix() == "/from/runtime/file"
+    assert openfoam_bashrc(bashrc_path="/explicit", base_env={"OPENFOAM_BASHRC": "/env"}).as_posix() == "/explicit"
+    assert openfoam_bashrc(base_env={"OPENFOAM_BASHRC": "/env"}).as_posix() == "/env"
     install = tmp_path / "install"
     (install / "etc").mkdir(parents=True)
     (install / "etc" / "bashrc").write_text("")
@@ -330,8 +325,6 @@ def test_env_reports_the_bashrc_a_run_would_source_and_where_it_found_it(tmp_pat
     install = tmp_path / "install"
     (install / "etc").mkdir(parents=True)
     (install / "etc" / "bashrc").write_text("")
-    runtime_file = tmp_path / "runtime.yaml"
-    runtime_file.write_text("openfoam:\n  bashrc: /from/runtime/file\n")
     plugin = OpenFOAMEnvironmentPlugin()
     sourced_shell = {"WM_PROJECT_DIR": str(install)}
 
@@ -341,10 +334,6 @@ def test_env_reports_the_bashrc_a_run_would_source_and_where_it_found_it(tmp_pat
     assert plugin.resolve_supplied_variables(sourced_shell)["OPENFOAM_BASHRC"]["value"] == str(
         openfoam_bashrc(base_env=sourced_shell),
     )
-    configured = plugin.resolve_supplied_variables({**sourced_shell, "OMNIDRIVER_RUNTIME_CONFIG": str(runtime_file)})
-    assert configured["OPENFOAM_BASHRC"] == {
-        "value": "/from/runtime/file", "resolved_from": "OMNIDRIVER_RUNTIME_CONFIG",
-    }
     assert plugin.resolve_supplied_variables({"OPENFOAM_BASHRC": "/named", **sourced_shell}) == {}
     assert plugin.resolve_supplied_variables({}) == {}
 
