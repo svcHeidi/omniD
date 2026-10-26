@@ -5,7 +5,7 @@ import os
 from importlib import resources
 from pathlib import Path
 
-from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
+from omnidriver.core.case_write import patch_resolution, render_by_document
 from omnidriver.core.plugin_profile import load_plugin_profile
 
 from .case_rules import case_diagnostics
@@ -81,35 +81,16 @@ class OpenCARPPlugin:
         return frozenset({_FORMAT})
 
     def resolve_case_mutation(self, request, *, driver_context):
-        targets = tuple(
-            {"qualified_id": p.qualified_id, "document": p.document,
-             "key": ".".join(p.expanded_key_path()), "value": p.value,
-             "value_kind": p.value_kind, "format": _FORMAT}
-            for p in request.parameters
-        )
-        return ResolvedMutation(
-            request=request, targets=targets,
-            expected_effects=tuple(f"set {t['key']} in {t['document']}" for t in targets),
-            semantic_owner_id=self.plugin_id,
-        )
+        return patch_resolution(request, owner_id=self.plugin_id)
 
     def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env=None):
-        by_document: dict[str, dict[str, str]] = {}
-        for target in resolved.targets:
-            by_document.setdefault(target["document"], {})[target["key"]] = format_value(target["value"], target["value_kind"])
-        rendered = []
-        for document, values in by_document.items():
-            path = Path(snapshot_root) / document      # seeded from the case by core
-            exists_before = path.is_file()
-            before = path.read_bytes() if exists_before else b""
-            text = patch_par(before.decode(), values)
-            check_indices(text)                        # refused by name before any run
-            rendered.append(RenderedFile(
-                path=document, content=text.encode(), mode=None, exists_before=exists_before,
-                before_digest=_digest_bytes(before) if exists_before else None,
-                renderer_id=self.plugin_id, format=_FORMAT,
-            ))
-        return tuple(rendered)
+        def _patch(path, targets):
+            values = {".".join(t["key_path"]): format_value(t["value"], t["value_kind"]) for t in targets}
+            text = patch_par(path.read_text() if path.is_file() else "", values)
+            check_indices(text)
+            return text.encode()
+
+        return render_by_document(resolved, snapshot_root=snapshot_root, renderer_id=self.plugin_id, format=_FORMAT, patch=_patch)
 
     # -- rules
     def validate_run_semantics(self, case_root, *, driver_context):

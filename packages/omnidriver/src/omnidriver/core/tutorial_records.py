@@ -1014,14 +1014,14 @@ def _case_root_digest(case_root: Path) -> str:
     """A digest over every file's path and bytes under ``case_root``."""
     import hashlib
 
-    from .case_write import _digest_bytes
+    from .case_write import digest_bytes
 
     entries = []
     if case_root.is_dir():
         for path in sorted(case_root.rglob("*")):
             if path.is_file():
                 relpath = path.relative_to(case_root).as_posix()
-                entries.append(f"{relpath}:{_digest_bytes(path.read_bytes())}")
+                entries.append(f"{relpath}:{digest_bytes(path.read_bytes())}")
     encoded = "\n".join(entries).encode()
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Mapping
 
 from omnidriver.conformance import ConformanceTarget, QuantityTarget, RankEvidence
-from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
+from omnidriver.core.case_write import RenderedFile, ResolvedMutation, digest_bytes
 from omnidriver.core.conformance_study import ConformanceStudy
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from omnidriver.core.plugin_interface import CaseRuntimeConventions
@@ -235,7 +235,7 @@ class ToyStack(ToyProvider):
                 _deep_set(content_obj, target["expanded_key_path"], str(target["value"]))
             rendered.append(RenderedFile(
                 path=document, content=(json.dumps(content_obj, sort_keys=True) + "\n").encode(), mode=None,
-                exists_before=exists_before, before_digest=_digest_bytes(path.read_bytes()) if exists_before else None,
+                exists_before=exists_before, before_digest=digest_bytes(path.read_bytes()) if exists_before else None,
                 renderer_id=self.plugin_id, format=_FORMAT,
             ))
         return tuple(rendered)
@@ -562,7 +562,7 @@ class ReplacingRendererPlugin(ToyStack):
             rendered.append(RenderedFile(
                 path=target["document"], content=(json.dumps(content_obj) + "\n").encode(),
                 mode=None, exists_before=exists_before,
-                before_digest=_digest_bytes(path.read_bytes()) if exists_before else None,
+                before_digest=digest_bytes(path.read_bytes()) if exists_before else None,
                 renderer_id=self.plugin_id, format=_FORMAT,
             ))
         return tuple(rendered)
