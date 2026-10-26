@@ -76,9 +76,6 @@ def _why_a_run_stopped(ctx, proc: subprocess.CompletedProcess, state_path: Path)
     return "; ".join(_with_recorded_failure([said], state_path, "the workflow state"))
 
 
-
-
-
 def _failed_cases(ctx, payload: Mapping[str, Any], out: Path) -> list[str]:
     """One problem for each case of a sweep report that did not complete: its reason (redacted) and its workflow state's."""
     patterns = ctx.stack.call("get_log_redaction_patterns")
