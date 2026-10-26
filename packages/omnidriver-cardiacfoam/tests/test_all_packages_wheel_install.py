@@ -105,7 +105,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         assert load_plugin_context("cardiacfoam").stack.call("get_case_runtime_conventions").instance_directory_pattern
         assert "blockMesh" in load_plugin_context("cardiacfoam").stack.call("get_environment_commands")
         assert files("omnidriver.cardiacfoam").joinpath(
-            "fixtures/template/constant/electroProperties"
+            "utilities/setManufacturedFields/utility.manifest.toml"
         ).is_file()
 
         assert files("omnidriver.opencarp").joinpath("opencarp_parameters.json").is_file()
