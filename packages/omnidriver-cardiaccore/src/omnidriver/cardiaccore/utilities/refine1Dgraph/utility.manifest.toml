@@ -29,9 +29,10 @@ default = "3e-4"
 
 [[flags]]
 name = "-internalRole"
-description = "Node-role value written on inserted nodes (default: 1 for NodeType, 0 for nodeRole/node_role/role)."
+description = "Node-role value written on inserted nodes; a negative value writes 1 for NodeType, 0 for nodeRole/node_role/role."
 takes_value = true
 argument_kind = "label"
+default = "-1"
 
 [[produces]]
 artifact_id = "refined_purkinje_vtk"

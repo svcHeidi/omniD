@@ -32,9 +32,10 @@ argument_kind = "path"
 
 [[flags]]
 name = "-vmField"
-description = "Name of the membrane potential field to read from each time directory (default: Vm)."
+description = "Name of the membrane potential field to read from each time directory."
 takes_value = true
 argument_kind = "word"
+default = "Vm"
 
 [[flags]]
 name = "-sigmaField"
