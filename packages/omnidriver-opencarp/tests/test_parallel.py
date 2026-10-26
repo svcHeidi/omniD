@@ -116,3 +116,17 @@ def test_an_unresolvable_host_name_is_its_own_diagnostic_naming_hydra_iface(tmp_
     (diagnostic,) = launcher_diagnostics(PARALLEL_DAG, {"PATH": str(tmp_path)})
     assert diagnostic.code == "opencarp_mpi_host_unresolvable"
     assert "HYDRA_IFACE" in diagnostic.message
+
+
+def test_a_launcher_that_cannot_be_probed_is_a_diagnostic_not_a_crash(tmp_path, monkeypatch):
+    import omnidriver.opencarp.parallel as parallel
+
+    _script(tmp_path, "openCARP", "exit 0\n")
+    _script(tmp_path, "mpirun", "sleep 5\n")
+    monkeypatch.setattr(parallel, "_PROBE_TIMEOUT_S", 0.2)
+    (diagnostic,) = launcher_diagnostics(PARALLEL_DAG, {"PATH": f"{tmp_path}:/bin:/usr/bin"})
+    assert diagnostic.code == "opencarp_mpi_launcher_probe_failed" and "timed out" in diagnostic.message
+
+    (tmp_path / "mpirun").write_bytes(b"\x00not an executable format")
+    (diagnostic,) = launcher_diagnostics(PARALLEL_DAG, {"PATH": str(tmp_path)})
+    assert diagnostic.code == "opencarp_mpi_launcher_probe_failed"
