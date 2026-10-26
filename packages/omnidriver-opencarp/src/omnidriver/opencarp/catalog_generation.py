@@ -13,6 +13,11 @@ _FIELD = re.compile(r"^\t(type|default|min|max|units):\s*(.*)$")
 _TYPED = re.compile(r"^\((\w+)\)\((.*)\)$")
 _BLOCK = re.compile(r"^\t(menu|Depends on|Changes the allocation of|Changes the default value of): \{$")
 _MENU_ITEM = re.compile(r"^\t\t\((\w+)\)\((.*?)\)\t(.*)$")
+_FLAG_LITERALS = {"PrMTRUE": "1", "PrMFALSE": "0"}
+_TO_STRING = re.compile(r"TO_STRING\((\w*)\)")
+_LITERAL = re.compile(r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?|"[^"]*"')
+#: +Help's spellings of a unit core's unit table names otherwise; every other unit is kept as printed.
+_UNIT_SPELLINGS = {"micrometers": "um", "microseconds": "us"}
 
 
 class CatalogError(RuntimeError):
@@ -46,10 +51,22 @@ def _typed(value: str | None) -> str | None:
 
 
 def _menu_value(item_type: str, spelled: str) -> str:
-    """The value a .par assigns for a menu item: +Help prints each item as a typed C literal (``(Short)(1)``, ``(String)("ref")``), so a String menu drops the literal's quotes rather than keeping them as part of the value."""
+    # +Help prints a String item as a C literal, (String)("ref"); a .par assigns ref.
     if item_type == "String" and len(spelled) >= 2 and spelled[0] == spelled[-1] == '"':
         return spelled[1:-1]
     return spelled
+
+
+def _default(spelled: str | None) -> tuple[str | None, str | None]:
+    """``(default, default_expression)``: a literal default as a .par spells it, else the C expression +Help printed.
+
+    ``PrMTRUE``/``PrMFALSE`` are openCARP's Flag literals and ``TO_STRING(x)`` its string literal ``"x"``."""
+    if spelled is None:
+        return None, None
+    spelled = _FLAG_LITERALS.get(spelled, spelled)
+    if (match := _TO_STRING.fullmatch(spelled)):
+        spelled = f'"{match[1]}"'
+    return (spelled, None) if _LITERAL.fullmatch(spelled) else (None, spelled)
 
 
 def parse_help_detail(concrete: str, text: str) -> dict[str, Any]:
@@ -76,11 +93,14 @@ def parse_help_detail(concrete: str, text: str) -> dict[str, Any]:
             fields[m[1]] = m[2].strip()
         elif not fields and line.strip():
             description.append(line.strip())
-    menu = tuple(_menu_value(m[1], m[2]) for item in blocks.get("menu", []) if (m := _MENU_ITEM.match(item)))
+    items = [(_menu_value(m[1], m[2]), m[3].strip()) for item in blocks.get("menu", []) if (m := _MENU_ITEM.match(item))]
     allocates = tuple(i.strip() for i in blocks.get("Changes the allocation of", []) if i.strip() and "[" not in i)
+    default, default_expression = _default(_typed(fields.get("default")))
+    units = fields.get("units")
     return {
-        "default": _typed(fields.get("default")), "minimum": _typed(fields.get("min")),
-        "maximum": _typed(fields.get("max")), "units": fields.get("units"), "menu": list(menu),
+        "default": default, "default_expression": default_expression, "minimum": _typed(fields.get("min")),
+        "maximum": _typed(fields.get("max")), "units": _UNIT_SPELLINGS.get(units, units), "units_as_printed": units,
+        "menu": [value for value, _ in items], "menu_labels": {value: label for value, label in items},
         "allocates": list(allocates), "description": " ".join(description),
     }
 
@@ -90,7 +110,7 @@ def build_identity(binary: str, env: Mapping[str, str] | None) -> dict[str, str]
 
     identity = buildinfo_identity(_run(binary, ["-buildinfo"], env))
     if identity is None or None in identity.values():
-        raise CatalogError("-buildinfo printed no tag/hash; is DYLD_LIBRARY_PATH set? (A4-A6)")
+        raise CatalogError("-buildinfo printed no tag/hash; is DYLD_LIBRARY_PATH set?")
     return {"tag": identity["tag"], "hash": identity["commit"]}
 
 
@@ -104,8 +124,9 @@ def build_catalog(binary: str = "openCARP", env: Mapping[str, str] | None = None
             # A whole-array shorthand has no detail block under any spelling;
             # only its elements do. It is kept so the validator can name it
             # and ask for elements.
-            detail = {"default": None, "minimum": None, "maximum": None, "units": None,
-                      "menu": [], "allocates": [], "description": ""}
+            detail = {"default": None, "default_expression": None, "minimum": None, "maximum": None,
+                      "units": None, "units_as_printed": None, "menu": [], "menu_labels": {}, "allocates": [],
+                      "description": ""}
         else:
             concrete = name.replace("[Int]", "[0]")
             detail = parse_help_detail(concrete, _run(resolved, ["+Help", concrete], env))

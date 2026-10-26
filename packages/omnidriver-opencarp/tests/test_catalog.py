@@ -64,13 +64,28 @@ def test_a_parameters_units_are_read_from_its_help():
     from omnidriver.opencarp.catalog_generation import parse_help_detail
 
     detail = parse_help_detail("dt", HELP_DT)
-    assert (detail["units"], detail["default"], detail["minimum"], detail["maximum"]) == ("microseconds", "5.", "0.", None)
+    assert (detail["units"], detail["units_as_printed"]) == ("us", "microseconds")
+    assert (detail["default"], detail["minimum"], detail["maximum"]) == ("5.", "0.", None)
 
 
-def test_the_committed_catalog_carries_the_binarys_units():
+def test_the_committed_catalog_carries_the_binarys_units_in_cores_spelling():
     p = load_catalog().parameters
-    assert (p["dt"].units, p["tend"].units, p["spacedt"].units) == ("microseconds", "ms", "ms")
+    assert (p["dt"].units, p["tend"].units, p["spacedt"].units) == ("us", "ms", "ms")
+    assert (p["dt"].units_as_printed, p["stim[Int].elec.radius"].units) == ("microseconds", "um")
     assert p["num_stim"].units is None
+
+
+def test_a_menu_keeps_what_each_value_means():
+    assert load_catalog().parameters["parab_solve"].menu_labels == {
+        "0": "Explicit", "1": "Crank-Nicolson", "2": "2nd order dt",
+    }
+
+
+def test_a_literal_default_is_a_value_and_a_c_expression_is_kept_apart():
+    p = load_catalog().parameters
+    assert (p["compute_APD"].default, p["imp_region[Int].im"].default) == ("0", '"LuoRudy91"')
+    assert (p["dump_ecg_leads"].default, p["dump_ecg_leads"].default_expression) == (None, "strlen(phie_rec_ptf)>0?0:1")
+    assert p["dt"].default_expression is None
 
 
 def test_the_record_key_catalog_lists_each_parameters_unit(tmp_path):
@@ -78,4 +93,6 @@ def test_the_record_key_catalog_lists_each_parameters_unit(tmp_path):
 
     (tmp_path / "nversion.par").write_text("")
     listed = {entry["key"]: entry for entry in OpenCARPPlugin().get_record_key_catalog(tmp_path, driver_context=None)}
-    assert (listed["dt"]["unit"], listed["tend"]["unit"], listed["num_stim"]["unit"]) == ("microseconds", "ms", None)
+    assert (listed["dt"]["unit"], listed["tend"]["unit"], listed["num_stim"]["unit"]) == ("us", "ms", None)
+    assert listed["parab_solve"]["menu_labels"]["1"] == "Crank-Nicolson"
+    assert listed["tracedt"]["default_expression"] == "timedt" and listed["tracedt"]["default"] is None

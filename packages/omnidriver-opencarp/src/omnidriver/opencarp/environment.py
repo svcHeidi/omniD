@@ -78,16 +78,16 @@ def opencarp_environment_diagnostics(
 
 
 def _version_diagnostics(buildinfo: str) -> tuple[StrictDiagnostic, ...]:
-    """A warning, not an error, when the binary's ``GIT tag`` differs from the tag the committed parameter catalogue was generated from: the validator certifies keys, menus and bounds against that catalogue, so a different build may accept or mean something else. Only the tags are quoted; ``-buildinfo``'s other lines are never echoed."""
-    match = _GIT_TAG.search(buildinfo)
-    expected = load_catalog().identity.get("tag")
-    found = match.group(1) if match else None
-    if found == expected:
+    """A warning when the binary's tag or hash is not the build the committed catalogue was generated from."""
+    found = buildinfo_identity(buildinfo) or {}
+    expected = load_catalog().identity
+    if (found.get("tag"), found.get("commit")) == (expected.get("tag"), expected.get("hash")):
         return ()
+    # Only the tag and hash are quoted: -buildinfo's repository line embeds a CI token.
     return (StrictDiagnostic(
         level="warning", code="opencarp_version_mismatch",
-        message=f"openCARP on PATH reports GIT tag {found!r}, but the committed parameter catalogue "
-                f"was generated from {expected!r}; keys, menus and bounds are validated against "
-                f"{expected!r}, so regenerate the catalogue (scripts/generate-opencarp-catalog.py) "
-                "for this build",
+        message=f"openCARP on PATH reports GIT tag {found.get('tag')!r} hash {found.get('commit')!r}, but the "
+                f"committed parameter catalogue was generated from {expected.get('tag')!r} hash "
+                f"{expected.get('hash')!r}; keys, menus and bounds are validated against that build, so "
+                "regenerate the catalogue (scripts/generate-opencarp-catalog.py) for this one",
     ),)

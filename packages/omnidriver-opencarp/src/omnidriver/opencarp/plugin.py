@@ -152,6 +152,8 @@ class OpenCARPPlugin:
                     "document": document, "key": spec.name, "value_kind": spec.value_kind,
                     "default": spec.default, "description": spec.description, "unit": spec.units,
                     "minimum": spec.minimum, "maximum": spec.maximum, "menu": list(spec.menu),
+                    **({"menu_labels": dict(spec.menu_labels)} if spec.menu_labels else {}),
+                    **({"default_expression": spec.default_expression} if spec.default_expression else {}),
                     "source_refs": [source_ref],
                 })
         return tuple(entries)

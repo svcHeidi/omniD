@@ -35,12 +35,16 @@ class ParameterSpec:
     name: str
     opencarp_type: str
     value_kind: str | None
+    #: A literal as a .par spells it; ``None`` when +Help's default is a C expression, kept in ``default_expression``.
     default: str | None
+    default_expression: str | None
     minimum: str | None
     maximum: str | None
-    #: As +Help prints it ("ms", "microseconds"); none for a parameter with no units.
+    #: In core's unit spelling where it has one ("us" for +Help's "microseconds"); ``units_as_printed`` is +Help's.
     units: str | None
+    units_as_printed: str | None
     menu: tuple[str, ...]
+    menu_labels: dict[str, str]
     allocates: tuple[str, ...]
     description: str
 
@@ -62,8 +66,10 @@ def load_catalog() -> Catalog:
         entry["name"]: ParameterSpec(
             name=entry["name"], opencarp_type=entry["type"],
             value_kind=VALUE_KIND_BY_TYPE.get(entry["type"]),
-            default=entry["default"], minimum=entry["minimum"], maximum=entry["maximum"], units=entry["units"],
-            menu=tuple(entry["menu"]), allocates=tuple(entry["allocates"]),
+            default=entry["default"], default_expression=entry["default_expression"],
+            minimum=entry["minimum"], maximum=entry["maximum"],
+            units=entry["units"], units_as_printed=entry["units_as_printed"],
+            menu=tuple(entry["menu"]), menu_labels=dict(entry["menu_labels"]), allocates=tuple(entry["allocates"]),
             description=entry["description"],
         )
         for entry in payload["parameters"]
