@@ -145,3 +145,13 @@ def test_describe_lists_each_allowed_utilitys_flags_arguments_and_outputs():
         "0/Conductivity", "0/ConductivityIntracellular", "0/ConductivityExtracellular",
     }
     assert "heartBoundaryLeakage" not in manifest, "it writes nothing to the case, so no step may be credited with it"
+
+
+def test_describe_with_no_entry_lists_the_utility_manifests_describe_entry_does():
+    from omnidriver.core.capability_manifest import capability_manifest
+    from omnidriver.core.introspection import _serialize, describe_stack
+
+    context = _driver_context(OpenFOAMEnvironmentPlugin(), CardiacFoamPlugin(), source="test")
+    listed = describe_stack(context)["utility_manifests"]
+    assert listed == _serialize(capability_manifest(context)["utility_manifests"])
+    assert listed["setIonicRestartState"]["flags"][0]["name"] == "-dict"
