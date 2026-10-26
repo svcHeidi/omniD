@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any, Mapping, Protocol, Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from omnidriver.core.contracts.dictionary import DictEntry
     from omnidriver.core.planning_types import StrictDiagnostic
     from omnidriver.core.provider_identity import ProviderIdentity, StackIdentity
     from omnidriver.core.provider_stack import ProviderStack
@@ -153,11 +152,10 @@ class SolverPlugin(Protocol):
         """Catalogs ``describe`` namespaces under ``plugin_catalogs``."""
 
     # -- dictionary vocabulary --------------------------------------------------
-    def get_dict_entries(self) -> tuple["DictEntry", ...]:
-        """Every dictionary entry this provider catalogues."""
-
     def get_dictionary_catalog(self):
-        """The same entries as a ``DictionaryCatalog``, by document name."""
+        """Every dictionary entry this provider catalogues, as a
+        ``DictionaryCatalog`` by document name. The stack derives
+        ``get_dict_entries`` from it; a provider implementing that is refused."""
 
     def get_owned_documents(self) -> frozenset[str]:
         """The documents whose every key the catalogue lists, so a case key
@@ -391,13 +389,12 @@ def validate_plugin(plugin: Any) -> SolverPlugin:
     return plugin
 
 
-def _declared_dict_entries(provider: Any) -> tuple[Any, ...]:
-    hook = getattr(provider, "get_dict_entries", None)
-    return tuple(hook()) if callable(hook) else ()
+def _declared_catalogue(provider: Any) -> dict[str, Any]:
+    hook = getattr(provider, "get_dictionary_catalog", None)
+    return dict(hook().documents) if callable(hook) else {}
 
 
 def _validate_one_provider(provider: Any) -> SolverPlugin:
-    from .contracts.dictionary import DictEntry
     from .provider_stack import provider_profile
 
     checked = validate_plugin(provider)
@@ -406,13 +403,6 @@ def _validate_one_provider(provider: Any) -> SolverPlugin:
         raise TypeError("SolverPlugin profile id does not match plugin_id")
     if profile.api_version != checked.plugin_api_version:
         raise TypeError("SolverPlugin profile API version does not match plugin_api_version")
-    entries = _declared_dict_entries(checked)
-    if any(not isinstance(entry, DictEntry) or not entry.driver_path.strip() for entry in entries):
-        raise TypeError("SolverPlugin.get_dict_entries() must return DictEntry values with paths")
-    paths = [entry.driver_path for entry in entries]
-    duplicates = sorted({path for path in paths if paths.count(path) > 1})
-    if duplicates:
-        raise TypeError("SolverPlugin dictionary catalog has duplicate paths: " + ", ".join(duplicates))
     return checked
 
 
@@ -422,7 +412,7 @@ def _provider_identity(provider: SolverPlugin, *, source: str) -> "ProviderIdent
 
     payload = identity_jsonable({
         "profile_digest": provider_profile(provider).digest,
-        "dictionary_entries": _declared_dict_entries(provider),
+        "dictionary_catalogue": _declared_catalogue(provider),
     })
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return ProviderIdentity(

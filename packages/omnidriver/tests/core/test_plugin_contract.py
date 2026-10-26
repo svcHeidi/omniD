@@ -28,8 +28,8 @@ def _protocol_members() -> set[str]:
     }
 
 
-def test_the_protocol_and_the_member_table_name_the_same_members():
-    assert _protocol_members() == set(MEMBERS)
+def test_the_protocol_names_every_member_a_provider_may_implement():
+    assert _protocol_members() == set(MEMBERS) - set(provider_stack._DERIVED_ANSWERS)
     assert set(SolverPlugin.__annotations__) == set(plugin_interface.IDENTITY_MEMBERS)
 
 

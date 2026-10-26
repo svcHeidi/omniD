@@ -68,3 +68,17 @@ def test_the_flat_entries_are_the_stacks_derived_from_its_catalogue_and_no_provi
 def test_a_stack_with_no_dictionary_implementer_records_the_member_unclaimed():
     assert driver_context(ToyProvider(), source="test").identity.resolutions["get_dict_entries"] == provider_stack.UNCLAIMED
     assert driver_context(_EmptyStubs(), source="test").identity.resolutions["get_dict_entries"] == "org.omnidriver.test-minimal"
+
+
+def test_a_providers_digest_follows_its_catalogue():
+    from omnidriver.core.contracts.dictionary import DictEntry
+
+    entry = DictEntry(driver_path="endTime", description="end time", value_kind="scalar")
+
+    class WithCatalogue(ToyProvider):
+        def get_dictionary_catalog(self):
+            return DictionaryCatalog({"controlDict": (entry,)})
+
+    empty = driver_context(_EmptyStubs(), source="test").identity.providers[0].provider_digest
+    catalogued = driver_context(WithCatalogue(), source="test").identity.providers[0].provider_digest
+    assert catalogued != empty
