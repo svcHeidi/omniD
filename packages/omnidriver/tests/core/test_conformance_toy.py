@@ -736,9 +736,23 @@ def test_describe_lists_the_conformance_quantity_and_the_readers_of_what_it_prod
         "pairs": {"A": "A", "B": "B"}, "at_unit": "m", "max_sampling_offset_unit": "m",
     }
     assert surface["readers"] == [{
-        "format": VALUES_FORMAT, "steps": ["solve"], "value_unit": "s", "sampling_rule": "toy-row",
-        "coordinate_unit": "m", "takes_points": False, "sentinels": [-1.0],
+        "format": VALUES_FORMAT, "steps": ["solve"], "reader": {
+            "value_unit": "s", "sampling_rule": "toy-row", "coordinate_unit": "m", "takes_points": False,
+            "sentinels": [-1.0],
+        },
     }]
+
+
+def test_describe_lists_a_declared_format_no_reader_takes_with_a_null_reader(tmp_path):
+    from omnidriver.core.introspection import describe_entry
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    target = toy_conformance_target(tmp_path, plugin=UNREADABLE_PLUGIN)
+    surface = describe_entry(
+        target.record, overrides={"cases_root": str(target.cases_root)},
+        driver_context=load_plugin_context(target.plugin),
+    )["record_surface"]
+    assert surface["readers"] == [{"format": "toy_unreadable", "steps": ["solve"], "reader": None}]
 
 
 def test_a_record_with_no_quantity_or_reader_lists_none(tmp_path):

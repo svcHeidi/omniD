@@ -140,6 +140,7 @@ def check_report(
                 "check": check_id, "status": status, "detail": detail, "seconds": round(time.monotonic() - started, 1),
             })
         entry["checks"] = verdicts
+        entry["verified"] = [verdict["check"] for verdict in verdicts if verdict["status"] == "passed"]
         passed = all(v["status"] != "failed" for v in verdicts)
         if not check_ids and record.conformance.probes:
             env = load_environment(driver_context, None)
