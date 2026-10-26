@@ -12,6 +12,7 @@ from typing import Any, Mapping
 from omnidriver.core.planning_types import StrictDiagnostic
 from omnidriver.core.plugin_interface import SolverBuild, SolverEntry, SourceIdentity
 from omnidriver.core.runtime.build_identity import file_digest
+from omnidriver.core.runtime.planned_programs import planned_programs, program_diagnostics
 
 from .catalog import load_catalog
 
@@ -55,25 +56,14 @@ def opencarp_solver_builds(
     return (SolverEntry(solver=solver, repository=None, builds=(build,)),)
 
 
-def opencarp_environment_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:
+def opencarp_environment_diagnostics(
+    workflow_dag: Mapping[str, Any], env: Mapping[str, str], driver_context: Any | None = None,
+) -> tuple[StrictDiagnostic, ...]:
     from .parallel import SOLVER, launcher_diagnostics
 
-    path = env.get("PATH", "")
-    steps = (workflow_dag or {}).get("steps", ())
-    # A parallel solve step's command is its launcher; the solver it
-    # launches is checked as if it were the command.
-    commands = sorted({step.get("command") for step in steps if step.get("command")}
-                      | {SOLVER for step in steps if SOLVER in (step.get("args") or ())})
-    # The command is quoted (``!r``): conformance C9 looks for the solver as
-    # a quoted token once the PATH echoed here is removed, so an unquoted
-    # name, or the name inside a scratch path, never counts.
-    diagnostics = [
-        StrictDiagnostic(level="error", code="opencarp_command_not_found",
-                         message=f"{command!r} is not on PATH={path!r}")
-        for command in commands if shutil.which(command, path=path) is None
-    ]
-    solver = shutil.which("openCARP", path=path)
-    if solver is not None and "openCARP" in commands:
+    diagnostics = list(program_diagnostics(workflow_dag, env, driver_context))
+    solver = shutil.which(SOLVER, path=env.get("PATH", ""))
+    if solver is not None and SOLVER in planned_programs(workflow_dag, driver_context):
         proc = subprocess.run([solver, "-buildinfo"], capture_output=True, text=True, env=dict(env), timeout=60)
         if "GIT tag" not in proc.stdout:
             diagnostics.append(StrictDiagnostic(

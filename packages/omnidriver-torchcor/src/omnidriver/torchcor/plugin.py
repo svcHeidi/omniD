@@ -95,8 +95,8 @@ class TorchCorPlugin:
         return SOLVER_COMMANDS
 
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
-        del environment_source, driver_context
-        return torchcor_environment_diagnostics(workflow_dag, env if env is not None else os.environ)
+        del environment_source
+        return torchcor_environment_diagnostics(workflow_dag, env if env is not None else os.environ, driver_context)
 
     def get_agent_guidance(self):
         text = resources.files(__package__).joinpath("guidance.md").read_text()

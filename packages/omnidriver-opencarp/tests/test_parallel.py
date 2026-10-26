@@ -99,11 +99,10 @@ def test_a_serial_dag_probes_no_launcher(tmp_path):
 
 
 def test_preflight_checks_the_launched_solver_as_a_command(tmp_path):
-    """A parallel DAG's solve command is mpirun; openCARP missing from PATH
-    is still reported by name (C9)."""
+    """A parallel DAG's solve command is mpirun; openCARP missing from PATH is still reported by name."""
     _script(tmp_path, "mpirun", "exit 0\n")
-    messages = [d.message for d in opencarp_environment_diagnostics(PARALLEL_DAG, {"PATH": str(tmp_path)})]
-    assert any("'openCARP' is not on PATH" in m for m in messages), messages
+    found = opencarp_environment_diagnostics(PARALLEL_DAG, {"PATH": str(tmp_path)})
+    assert [(d.code, d.field) for d in found] == [("program_not_on_path", "openCARP")]
 
 
 def test_an_unresolvable_host_name_is_its_own_diagnostic_naming_hydra_iface(tmp_path):

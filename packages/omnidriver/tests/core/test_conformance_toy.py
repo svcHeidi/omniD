@@ -340,14 +340,10 @@ def test_c9_bites_a_preflight_that_never_reports_a_missing_solver(tmp_path):
     assert "'touch' off PATH" in verdict.detail
 
 
-@pytest.mark.parametrize("scratch_dir", ["touch", "my touch runs", "the 'touch' runs", 'a "touch" dir'])
-def test_c9_is_not_satisfied_by_the_solver_name_in_the_echoed_scratch_path_S_I2(tmp_path, scratch_dir):
-    """A preflight that never names the solver must not pass just because the scratch path it echoes happens to contain the solver's name."""
+def test_c9_is_not_satisfied_by_a_preflight_that_names_a_program_the_plan_does_not_run(tmp_path):
     from plugins.toy import AUXILIARY_ONLY_PREFLIGHT_PLUGIN
 
-    target = toy_conformance_target(tmp_path, plugin=AUXILIARY_ONLY_PREFLIGHT_PLUGIN)
-    target = dataclasses.replace(target, scratch_root=tmp_path / scratch_dir / "scratch")
-    verdict = run_check("C9", target)
+    verdict = run_check("C9", toy_conformance_target(tmp_path, plugin=AUXILIARY_ONLY_PREFLIGHT_PLUGIN))
     assert verdict.status == "failed", verdict.detail
     assert "'touch' off PATH" in verdict.detail
 

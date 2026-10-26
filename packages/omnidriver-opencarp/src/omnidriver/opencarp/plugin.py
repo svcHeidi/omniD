@@ -115,8 +115,8 @@ class OpenCARPPlugin:
         return AUXILIARY_COMMANDS
 
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
-        del environment_source, driver_context      # openCARP needs no environment source
-        return opencarp_environment_diagnostics(workflow_dag, env if env is not None else os.environ)
+        del environment_source      # openCARP needs no environment source
+        return opencarp_environment_diagnostics(workflow_dag, env if env is not None else os.environ, driver_context)
 
     # -- parallel
     def get_solve_step_commands(self):
