@@ -751,7 +751,7 @@ def _completing_child(cmd, **kwargs):
     return mock.Mock(returncode=0, stdout="", stderr="")
 
 
-def _run_toy_sweep(tmp_path, child, *, values=(2, 3)):
+def _run_toy_sweep(tmp_path, child, *, values=(2, 3), environment_source=None):
     cases_root = _native_toy_case(tmp_path)
     spec = _record_sweep_spec(cases_root=cases_root, values=values)
     spec["base"]["constant/mesh.json:label"] = "base"
@@ -759,7 +759,8 @@ def _run_toy_sweep(tmp_path, child, *, values=(2, 3)):
     spec_path.write_text(json.dumps(spec))
     with mock.patch("omnidriver.core.runtime.sweep_runner.run_child", side_effect=child):
         return sweep_run(
-            spec_path, output_dir=tmp_path / "out", driver_context=_record_driver_context(),
+            spec_path, output_dir=tmp_path / "out", environment_source=environment_source,
+            driver_context=_record_driver_context(),
         )
 
 
@@ -891,6 +892,18 @@ def test_the_childs_own_record_write_finds_the_sweeps_record_already_in_the_case
     assert seen == [("2", 2), ("3", 3)]
 
 
+def test_each_case_runs_with_the_sweeps_environment_source(tmp_path):
+    seen = []
+
+    def child(cmd, **kwargs):
+        seen.append(cmd[cmd.index("--environment-source") + 1])
+        return _completing_child(cmd, **kwargs)
+
+    _run_toy_sweep(tmp_path, child, environment_source="site.rc")
+
+    assert seen == ["site.rc", "site.rc"]
+
+
 def _stopped_by_sigterm(cmd, **kwargs):
     run_doc = json.loads(Path(cmd[cmd.index("--run-document") + 1]).read_text())
     Path(run_doc["launch"]["outputDir"], "workflow_state.json").write_text(json.dumps({"status": "failed"}))
@@ -947,3 +960,33 @@ def test_sweep_plan_gives_a_blocked_case_its_code(tmp_path):
         result = sweep_plan(spec_path, output_dir=tmp_path / "out", driver_context=_record_driver_context())
 
     assert [(case["status"], case["code"]) for case in result["cases"]] == [("blocked", "plan_blocked")]
+
+
+def test_sweep_plan_writes_each_cases_run_document_where_its_launch_command_reads_it(tmp_path):
+    cases_root = _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
+
+    result = sweep_plan(
+        spec_path, output_dir=tmp_path / "out", environment_source="site.rc", driver_context=_record_driver_context(),
+    )
+
+    for case in result["cases"]:
+        command = case["plan"]["launch"]["command"]
+        written = Path(command[command.index("--run-document") + 1])
+        assert Path(case["run_document_path"]) == written
+        assert json.loads(written.read_text()) == case["plan"]["run_document"]
+        assert command[command.index("--environment-source") + 1] == "site.rc"
+
+
+@pytest.mark.parametrize("sweep", [sweep_plan, sweep_run])
+def test_a_sweep_output_dir_inside_the_cases_root_is_refused_before_anything_is_written(tmp_path, sweep):
+    from omnidriver.core.specs.paths import ScratchRootInsideCasesRoot
+
+    cases_root = _native_toy_case(tmp_path)
+    spec_path = tmp_path / "sweep.json"
+    spec_path.write_text(json.dumps(_record_sweep_spec(cases_root=cases_root)))
+    inside = cases_root / "out"
+    with pytest.raises(ScratchRootInsideCasesRoot, match="--output-dir"):
+        sweep(spec_path, output_dir=inside, driver_context=_record_driver_context())
+    assert not inside.exists()

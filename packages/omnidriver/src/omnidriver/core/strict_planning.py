@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shlex
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
@@ -79,9 +78,15 @@ class StrictPlanReport:
         """``code: message`` of every error-level diagnostic the plan carries."""
         return [f"{d.code}: {d.message}" for d in self.errors()]
 
+    @property
+    def code(self) -> str | None:
+        """The refusal code of a plan that is not ok: ``plan_failed`` or ``plan_blocked``."""
+        return None if self.status == "ok" else "plan_blocked" if self.status == "blocked" else "plan_failed"
+
     def to_json(self) -> dict[str, Any]:
         return {
             "status": self.status,
+            **({"code": self.code} if self.code is not None else {}),
             "entry": self.entry,
             "resolved_entry": self.resolved_entry,
             "readiness_score": self.readiness_score,
@@ -143,11 +148,12 @@ def _utility_produces_by_command(
 def _workflow_command_diagnostics(
     workflow_dag: dict[str, Any] | None,
     driver_context: "DriverContext",
+    env: Mapping[str, str],
 ) -> tuple[StrictDiagnostic, ...]:
     diagnostics: list[StrictDiagnostic] = []
 
     for diagnostic in validate_workflow_commands(
-        workflow_dag, driver_context=driver_context,
+        workflow_dag, driver_context=driver_context, env=env,
     ):
         diagnostics.append(_diagnostic(
             diagnostic.level,
@@ -197,10 +203,16 @@ def _configuration_evidence_diagnostics(
     return tuple(diagnostics)
 
 
-def _run_launch_description(context, *, driver_context: "DriverContext") -> dict[str, Any]:
-    """The ``run --run-document`` invocation; paths are absolute because a relative ``outputDir`` is read as under ``caseRoot``."""
+def _run_launch_description(
+    context, *, driver_context: "DriverContext", environment_source: str | None,
+) -> dict[str, Any]:
+    """The ``run --run-document`` invocation, in the environment the plan was made in; paths are absolute
+    because a relative ``outputDir`` is read as under ``caseRoot``."""
     run_document_path = str(Path(context.output_dir).absolute() / RUN_DOCUMENT_FILENAME)
-    command = omnidriver_run_command(driver_context, "--run-document", run_document_path)
+    command = omnidriver_run_command(
+        driver_context, "--run-document", run_document_path,
+        *(("--environment-source", environment_source) if environment_source is not None else ()),
+    )
     return {
         "action": "run",
         "command": command,
@@ -297,10 +309,16 @@ def strict_plan(
         driver_context=driver_context,
         scratch_root=resolved_scratch_root,
     )
+    write_run_document(report)
+    return report
+
+
+def write_run_document(report: StrictPlanReport) -> Path:
+    """Persist the plan's ``RunDocument`` where its ``launch`` command reads it, so that command is runnable."""
     run_document_path = Path(report.launch["output_dir"]) / RUN_DOCUMENT_FILENAME
     run_document_path.parent.mkdir(parents=True, exist_ok=True)
     run_document_path.write_text(json.dumps(report.run_document.to_json(), indent=2))
-    return report
+    return run_document_path
 
 
 def _strict_plan_for_spec(
@@ -314,7 +332,10 @@ def _strict_plan_for_spec(
 ) -> StrictPlanReport:
     """Diagnostics and run-document assembly for one committed case, shared by ``strict_plan`` and the sweep runner."""
     execution_context = resolve_execution_context(spec)
-    launch = _run_launch_description(execution_context, driver_context=driver_context)
+    launch = _run_launch_description(
+        execution_context, driver_context=driver_context, environment_source=environment_source,
+    )
+    env = load_environment(driver_context, environment_source)
     artifacts = tuple(
         predict_data_artifacts(
             Path(spec.case_root), spec, driver_context=driver_context,
@@ -340,7 +361,7 @@ def _strict_plan_for_spec(
         expected_artifacts=artifacts,
         driver_context=driver_context,
     )
-    command_diagnostics = _workflow_command_diagnostics(workflow_dag, driver_context)
+    command_diagnostics = _workflow_command_diagnostics(workflow_dag, driver_context, env)
     env_diagnostics = driver_context.stack.call(
         "get_environment_diagnostics",
         workflow_dag,
@@ -349,7 +370,7 @@ def _strict_plan_for_spec(
     )
     solvers = solver_provenance.solver_entries(
         Path(spec.case_root), workflow_dag=workflow_dag, driver_context=driver_context,
-        env=os.environ if environment_source is None else load_environment(driver_context, environment_source),
+        env=env,
     )
     env_diagnostics = tuple(env_diagnostics) + solver_provenance.provenance_diagnostics(solvers)
     if solvers:
@@ -358,12 +379,13 @@ def _strict_plan_for_spec(
         "get_plan_diagnostics",
         Path(spec.case_root),
         workflow_dag=workflow_dag,
-        env=os.environ,
+        env=env,
         scratch_root=scratch_root,
         driver_context=driver_context,
     )
     configuration_evidence = driver_context.stack.call(
-        "inspect_effective_configuration", case_root=Path(spec.case_root), execution_env=dict(os.environ),
+        "inspect_effective_configuration", case_root=Path(spec.case_root), execution_env=env,
+        driver_context=driver_context,
     )
     configuration_diagnostics = _configuration_evidence_diagnostics(
         configuration_evidence,

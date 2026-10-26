@@ -180,8 +180,9 @@ class SolverPlugin(Protocol):
     def get_environment_commands(self) -> frozenset[str]:
         """Static commands the execution environment supplies."""
 
-    def is_installed_environment_command(self, command: str) -> bool:
-        """Whether ``command`` is an application the environment has installed."""
+    def is_installed_environment_command(self, command: str, *, env: Mapping[str, str]) -> bool:
+        """Whether ``command`` is an application the execution environment
+        ``env`` (the plan's loaded environment) has installed."""
 
     def get_utility_manifests(self) -> dict[str, Any]:
         """``UtilityManifest`` per utility command: what it consumes and produces."""
@@ -214,9 +215,10 @@ class SolverPlugin(Protocol):
         written, whatever the step's exit code."""
 
     def inspect_effective_configuration(
-        self, *, case_root: Path, execution_env: dict[str, str] | None = None,
+        self, *, case_root: Path, execution_env: Mapping[str, str], driver_context: Any,
     ) -> tuple[dict[str, Any], ...]:
-        """The files the case's configuration resolves to, read without running."""
+        """The files the case's configuration resolves to, read without
+        running, in the execution environment ``execution_env``."""
 
     # -- environment ----------------------------------------------------------
     def get_environment_diagnostics(

@@ -147,7 +147,7 @@ def build_execution_inputs(
         diagnostics.append(diagnostic(d.level, d.code, d.message, field=d.field))
 
     # 3) Command allowlist — same gate as the --entry path.
-    for d in validate_workflow_commands(dag, driver_context=driver_context):
+    for d in validate_workflow_commands(dag, driver_context=driver_context, env=execution_env):
         diagnostics.append(diagnostic(d.level, d.code, d.message, field=d.field))
 
     # 4) Launch paths are mandatory for execution.

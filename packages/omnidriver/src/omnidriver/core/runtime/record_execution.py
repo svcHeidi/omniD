@@ -288,19 +288,24 @@ def preview_record_case(
     study_by_source: Mapping[str, Mapping[str, Any]],
     driver_context: "DriverContext",
     inputs: Mapping[str, str | Path] | None = None,
+    scratch_root: Path | None = None,
 ) -> dict[str, Any]:
     """Stage and resolve a record case without committing -- ``describe``'s
     preview.
 
-    Stages the native case into a scratch directory that is discarded when
-    this function returns; the real case (if one already exists at this
-    entry's staged location) is never touched. Returns a JSON-shaped
-    preview: every patch, its status (``"changed"``/``"unchanged"``), its
-    document, key, value, and ``validated`` flag.
+    Stages the native case into a directory that is discarded when this
+    function returns, under the supplied ``scratch_root`` when there is one
+    (the system's temporary directory otherwise); the real case (if one
+    already exists at this entry's staged location) is never touched.
+    Returns a JSON-shaped preview: every patch, its status
+    (``"changed"``/``"unchanged"``), its document, key, value, and
+    ``validated`` flag.
     """
     import tempfile
 
-    with tempfile.TemporaryDirectory(prefix="omnidriver-record-preview-") as scratch:
+    if scratch_root is not None:
+        Path(scratch_root).mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="omnidriver-record-preview-", dir=scratch_root) as scratch:
         staged_case_root = Path(scratch) / "case"
         _stage(
             record, cases_root=cases_root, staged_case_root=staged_case_root,

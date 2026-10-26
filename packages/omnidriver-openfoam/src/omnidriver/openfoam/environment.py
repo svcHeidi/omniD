@@ -169,12 +169,12 @@ class OpenFOAMEnvironmentPlugin:
         """The ``log.<application>`` files ``runApplication`` and ``runParallel`` write in the case."""
         return tuple(Path(cwd).glob("log.*"))
 
-    def inspect_effective_configuration(self, *, case_root, execution_env=None):
+    def inspect_effective_configuration(self, *, case_root, execution_env, driver_context):
         from .effective_dictionary import inspect_effective_foam_configuration
 
         relpaths = tuple(
             rule.path
-            for rule in self.get_profile().case_files
+            for rule in driver_context.stack.call("get_profile").case_files
             if rule.kind == "openfoam_dictionary"
         )
         return inspect_effective_foam_configuration(
@@ -186,8 +186,8 @@ class OpenFOAMEnvironmentPlugin:
     def get_environment_commands(self) -> frozenset[str]:
         return openfoam_runtime_commands()
 
-    def is_installed_environment_command(self, command: str) -> bool:
-        return is_installed_openfoam_application(command)
+    def is_installed_environment_command(self, command: str, *, env) -> bool:
+        return is_installed_openfoam_application(command, env)
 
     def get_parallel_steps(self, step, *, request, read_value, allocation, launcher):
         """A record's solve step in OpenFOAM's parallel form. The solve
