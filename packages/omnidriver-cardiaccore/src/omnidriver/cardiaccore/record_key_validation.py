@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from omnidriver.core.runtime.record_surface import key_pattern
+from omnidriver.openfoam.case_rules import match_dynamic_entry
 from omnidriver.openfoam.control_dict import CONTROL_DICT_DOCUMENT, control_dict_document, control_dict_listing
 from omnidriver.openfoam.fv_schemes import FV_SCHEMES_DOCUMENT, fv_schemes_document, fv_schemes_listing
 from omnidriver.openfoam.record_key_validation import (
@@ -35,10 +35,8 @@ def _document(by_key: dict[str, Any]) -> CataloguedDocument:
 
     def match(key_path: "tuple[str, ...]"):
         dotted = ".".join(key_path)
-        for key, entry in by_key.items():
-            if key_pattern(key).fullmatch(dotted):
-                return entry, {}
-        return None
+        entry = by_key.get(dotted)
+        return (entry, {}) if entry is not None else match_dynamic_entry(dotted, by_key.values())
 
     return CataloguedDocument(
         label="cardiacCore", entries=by_key.values, match=match, scan=lambda key_path: (token, *key_path),

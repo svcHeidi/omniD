@@ -115,6 +115,13 @@ def test_a_key_the_catalogue_lacks_is_refused_naming_the_catalogue_and_how_to_li
     assert refused.value.code == "unknown_key"
 
 
+def test_a_ventricle_block_key_binds_its_placeholder_to_the_ventricles_the_cxx_reads():
+    tree = "system/generatePurkinjeTreeDict"
+    assert record_key_validator(tree, ("lv", "seed"), [0, 0, 0]) == ("vector3", True)
+    with pytest.raises(ValueError, match="not one of \\['lv', 'rv'\\]"):
+        record_key_validator(tree, ("banana", "seed"), [0, 0, 0])
+
+
 def test_an_anatomy_key_is_checked_at_the_type_the_catalogue_gives_it():
     assert record_key_validator(ANATOMY_DOCUMENT, ("ventricularCellZone",), "myocardium") == ("word", True)
     assert record_key_validator(ANATOMY_DOCUMENT, ("auxiliaryFields",), False) == ("boolean", True)
