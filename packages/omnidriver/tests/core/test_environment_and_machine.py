@@ -146,6 +146,17 @@ def test_an_unset_required_variable_is_refused_by_name_and_nothing_runs():
     assert report["shell_prefix"] is None and calls == []
 
 
+def test_env_reports_the_machine_as_a_step_records_it_even_when_it_refuses():
+    import socket
+
+    context, _calls = _context(_connection())
+    report = environment_report(context, {"PATH": os.environ["PATH"], "SLURM_NTASKS": "4"})
+    assert report["status"] == "failed"
+    assert report["host"]["hostname"] == socket.gethostname()
+    assert report["host"]["ambient"] == {"SLURM_NTASKS": "4"}
+    assert {"os", "machine", "cpu_model", "cpu_count"} <= set(report["host"])
+
+
 def test_the_preflight_runs_on_the_environment_the_prefix_produces(tmp_path):
     rc = tmp_path / "rc.sh"
     rc.write_text("export TOY_SOURCED=yes\n")
