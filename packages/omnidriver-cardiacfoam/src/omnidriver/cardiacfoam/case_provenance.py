@@ -35,13 +35,14 @@ _CASE_SCRIPTS: tuple[str, ...] = ("setup/extract_cv.py",)
 
 
 def case_runtime_conventions() -> CaseRuntimeConventions:
-    """OpenFOAM's generated paths and ``local/``, and the case-local scripts a record runs.
+    """OpenFOAM's generated paths, cardiacFOAM's own run-output folders, and the case-local scripts a record runs.
 
     A tutorial's ``Allrun`` writes its options into ``local/``, which the case's dictionaries ``#includeIfPresent``; one
-    left by a native run would override what omniD writes, so staging drops it."""
+    left by a native run would override what omniD writes, so staging drops it. ``logs/`` and ``results/`` hold the
+    output of cardiacFOAM's study and regression scripts."""
     conventions = openfoam_case_runtime_conventions()
     return replace(
         conventions,
-        generated_directory_names=(*conventions.generated_directory_names, "local"),
+        generated_directory_names=(*conventions.generated_directory_names, "logs", "results", "local"),
         case_script_commands=(*conventions.case_script_commands, *_CASE_SCRIPTS),
     )

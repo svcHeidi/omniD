@@ -122,7 +122,7 @@ def test_describe_and_a_strict_plan_carry_the_capability_manifest(tmp_path):
     overrides = {"cases_root": str(TUTORIALS)}
     manifest = describe_entry("singleCell", overrides=overrides, driver_context=context)["capability_manifest"]
     assert "cardiacFoam" in manifest["allowed_commands"]["plugin"]
-    assert "electro" in manifest["samplable_fields"]
+    assert "region0" in manifest["samplable_fields"]
     report = strict_plan("singleCell", overrides=overrides, driver_context=context, scratch_root=str(tmp_path / "scratch")).to_json()
     assert "cardiacFoam" in report["capability_manifest"]["allowed_commands"]["plugin"]
 

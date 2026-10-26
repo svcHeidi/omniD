@@ -24,7 +24,7 @@ def _cardiac_case(root: Path) -> Path:
 def test_cardiac_plugin_exposes_its_fixed_fields(tmp_path: Path) -> None:
     resolved = _CTX.stack.call("resolve_case_models", _cardiac_case(tmp_path))
     assert resolved["solver"] == "monodomainSolver"
-    electro = _CTX.stack.call("get_samplable_fields", resolved)["electro"]
+    electro = _CTX.stack.call("get_samplable_fields", resolved)["region0"]
     assert "Vm" in electro
     assert "activationTime" in electro
 

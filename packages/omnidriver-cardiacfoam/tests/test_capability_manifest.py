@@ -85,7 +85,7 @@ def test_samplable_fields_for_tnnp_single_cell():
     manifest = build_capability_manifest(
         samplable_fields=_resolved(solver="singleCellSolver", ionic_model="TNNP")
     )
-    electro = manifest["samplable_fields"]["electro"]
+    electro = manifest["samplable_fields"]["region0"]
     assert "membrane_V" in electro
     assert "Vm" in electro
     assert "bananas" not in electro
@@ -96,7 +96,7 @@ def test_species_labels_are_not_samplable_fields():
     manifest = build_capability_manifest(
         samplable_fields=_resolved(solver="monodomainSolver", ionic_model="TNNP")
     )
-    electro = manifest["samplable_fields"]["electro"]
+    electro = manifest["samplable_fields"]["region0"]
     assert "human" not in electro
     assert "pig" not in electro
     assert "generic" not in electro
@@ -135,4 +135,4 @@ def test_unknown_model_is_not_an_error():
     manifest = build_capability_manifest(
         samplable_fields=_resolved(ionic_model="NotARealModel")
     )
-    assert "Vm" in manifest["samplable_fields"]["electro"]
+    assert "Vm" in manifest["samplable_fields"]["region0"]

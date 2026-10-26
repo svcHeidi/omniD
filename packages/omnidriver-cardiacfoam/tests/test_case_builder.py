@@ -493,7 +493,7 @@ class TestBuildCase(unittest.TestCase):
             self._build(_SINGLE_CELL, dx=0.0004)
 
     def test_dx_sizes_the_spatial_mesh(self) -> None:
-        from omnidriver.openfoam.case_builder import default_block_mesh_dict_text
+        from omnidriver.cardiacfoam.case_builder import default_block_mesh_dict_text
 
         case_dir, _ = self._build(_MONODOMAIN, dx=0.0004)
         self.assertEqual((case_dir / "system" / "blockMeshDict").read_text(), default_block_mesh_dict_text(dx_m=0.0004))

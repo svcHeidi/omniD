@@ -24,12 +24,12 @@ TERM: Final = "<term>"
 
 #: Each table of ``fvSchemes`` that names schemes, with the form of the term a per-term key spells and what the table does.
 _TABLES: Final = {
-    "ddtSchemes": ("ddt(Vm)", "time derivatives"),
-    "gradSchemes": ("grad(Vm)", "gradients"),
+    "ddtSchemes": ("ddt(U)", "time derivatives"),
+    "gradSchemes": ("grad(p)", "gradients"),
     "divSchemes": ("div(phi,U)", "divergences and convection"),
-    "laplacianSchemes": ("laplacian(D,Vm)", "laplacians"),
-    "snGradSchemes": ("snGrad(Vm)", "face-normal gradients"),
-    "interpolationSchemes": ("interpolate(Vm)", "interpolations of a field onto the faces"),
+    "laplacianSchemes": ("laplacian(nu,U)", "laplacians"),
+    "snGradSchemes": ("snGrad(p)", "face-normal gradients"),
+    "interpolationSchemes": ("interpolate(U)", "interpolations of a field onto the faces"),
 }
 TABLES: Final = tuple(_TABLES)
 

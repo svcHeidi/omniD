@@ -1,6 +1,5 @@
-"""OpenFOAM's generated-case path declarations: a runtime convention, not
-core policy or cardiacFOAM science, shared by the OpenFOAM plugin and
-cardiacFOAM alike."""
+"""OpenFOAM's generated-case path declarations: a runtime convention every
+OpenFOAM-based stack shares, not core policy."""
 
 from __future__ import annotations
 
@@ -16,11 +15,7 @@ def openfoam_case_runtime_conventions() -> CaseRuntimeConventions:
     """
 
     return CaseRuntimeConventions(
-        generated_directory_names=(
-            "postProcessing",
-            "logs",
-            "results",
-        ),
+        generated_directory_names=("postProcessing",),
         generated_file_prefixes=("log.",),
         generated_file_suffixes=(".foam",),
         case_entrypoints=("Allrun",),

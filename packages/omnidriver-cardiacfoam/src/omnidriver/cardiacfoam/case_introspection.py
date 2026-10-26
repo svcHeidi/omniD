@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from omnidriver.openfoam.function_object_fields import DEFAULT_REGION
+
 # Fixed fields the cardiac solvers expose regardless of the ionic /
 # active-tension model. Model-specific names come from the catalogs.
 _ELECTRO_SOLVER_FIELDS = ("Vm", "activationTime", "Iion", "phiE", "phiI")
@@ -39,7 +41,8 @@ def resolve_case_models(case_root: str | Path) -> dict[str, str | None]:
 
 
 def samplable_fields(resolved: dict[str, str | None]) -> dict[str, tuple[str, ...]]:
-    """Field names the resolved cardiac model exposes, by region."""
+    """Field names the resolved cardiac model exposes, by mesh region: the
+    single-region case's under OpenFOAM's ``region0``."""
     from omnidriver.cardiacfoam.active_tension_catalog import (
         ACTIVE_TENSION_MODEL_CATALOG,
     )
@@ -72,4 +75,4 @@ def samplable_fields(resolved: dict[str, str | None]) -> dict[str, tuple[str, ..
             solid.update(at_entry.states)
             solid.update(at_entry.algebraic)
 
-    return {"electro": tuple(sorted(electro)), "solid": tuple(sorted(solid))}
+    return {DEFAULT_REGION: tuple(sorted(electro)), "solid": tuple(sorted(solid))}

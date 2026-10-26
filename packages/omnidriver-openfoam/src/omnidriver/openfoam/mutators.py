@@ -139,7 +139,7 @@ def _iter_direct_child_lines(lines: list[str], start: int, end: int):
 def _quoted_pattern_headers(
     lines: list[str], start: int, end: int
 ) -> list[tuple[str, str]]:
-    """``(regex_source, on_disk_name)`` for quoted regex block headers such as ``"Vm|u"``, which the line scanner and foamlib otherwise match literally."""
+    """``(regex_source, on_disk_name)`` for quoted regex block headers such as ``"p|U"``, which the line scanner and foamlib otherwise match literally."""
     headers: list[tuple[str, str]] = []
     for index in _iter_direct_child_lines(lines, start, end):
         candidate = _strip_inline_comment(lines[index]).strip()
@@ -303,7 +303,7 @@ def _blank(match: re.Match[str]) -> str:
 def read_foam_entries(file_path: Path, keys: "tuple[str, ...] | list[str]") -> dict[str, str]:
     """The raw value text of each of ``keys`` that ``file_path`` sets at its top level, from one pass over the file.
 
-    For a large data dictionary, such as a Purkinje graph of tens of thousands of edges, which
+    For a large data dictionary, such as a graph of tens of thousands of edges, which
     :func:`read_foam_entry` scans line by line for each key. A value keeps its spelling without the
     trailing semicolon; a sub-dictionary is no value, and an ``#include`` is not followed."""
     if not file_path.exists():
@@ -388,8 +388,8 @@ _PATTERN_SYNTAX = re.compile(r"[.^$*+?{}\[\]|()\\]")
 
 
 def _shadowing_words(name: str) -> tuple[str, ...]:
-    """The words whose literal entry shadows a quoted ``name``: its text as written (``"ddt(Vm)"`` meant as the term
-    ``ddt(Vm)``), and the one word a pattern of escaped characters only can match (``"div\\(phi\\)"``)."""
+    """The words whose literal entry shadows a quoted ``name``: its text as written (``"ddt(U)"`` meant as the term
+    ``ddt(U)``), and the one word a pattern of escaped characters only can match (``"div\\(phi\\)"``)."""
     body = name[1:-1]
     words = [body]
     if not _PATTERN_SYNTAX.search(re.sub(r"\\.", "", body)):

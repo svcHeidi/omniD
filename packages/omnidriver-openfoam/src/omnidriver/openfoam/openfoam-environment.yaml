@@ -44,7 +44,7 @@ case_profile:
       kind: case_script
       role: case.regression_test
       required: conditional
-# The shell every OpenFOAM-based stack (cardiacFOAM, cardiacCore) runs in,
+# The shell every OpenFOAM-based stack runs in,
 # declared once here (one reality). `omnidriver env --plugin P` renders and
 # checks it; nothing is searched for.
 environment:

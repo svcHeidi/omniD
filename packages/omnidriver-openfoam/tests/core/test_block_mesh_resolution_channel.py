@@ -111,20 +111,6 @@ def test_the_embedded_fixture_matches_its_cited_digest():
 
 
 # --------------------------------------------------------------------------
-# Real content, not `default_block_mesh_dict_text`-shaped.
-# --------------------------------------------------------------------------
-
-
-def test_real_content_is_not_reproducible_by_the_generic_synthesis_template():
-    from omnidriver.openfoam.case_builder import default_block_mesh_dict_text
-
-    generic = default_block_mesh_dict_text()
-    assert generic.count("hex (") == 1  # the real fixture has three
-    assert "xMin" not in generic  # the real fixture's boundary; generic has "walls" only
-    assert "walls" not in REAL_BATH_BIDOMAIN_BLOCK_MESH_DICT_3D
-
-
-# --------------------------------------------------------------------------
 # Characterization: `_rewrite_hex_block_lines` against the real fixture --
 # the shared pure grammar `render_patch_case_files` also calls.
 # --------------------------------------------------------------------------

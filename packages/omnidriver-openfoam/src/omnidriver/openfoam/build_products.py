@@ -16,8 +16,8 @@ _MAKE_FILES = frozenset({"files", "options"})
 _EXE_RULE = re.compile(r"^\s*EXE\s*=\s*\$\(FOAM_(?:USER|MODULE)_APPBIN\)/(\S+)", re.MULTILINE)
 _LIB_RULE = re.compile(r"^\s*LIB\s*=\s*\$\(FOAM_(?:USER|MODULE)_LIBBIN\)/(\S+)", re.MULTILINE)
 _LIBRARY_SUFFIXES = (".so", ".dylib")
-# wmake puts an unset FOAM_MODULE_* folder at the user one, and cardiacFOAM's libphysicsModel lands
-# in FOAM_USER_LIBBIN although its Make/files names FOAM_MODULE_LIBBIN: search every defined folder.
+# wmake puts an unset FOAM_MODULE_* folder at the user one, so a library whose Make/files names
+# FOAM_MODULE_LIBBIN can land in FOAM_USER_LIBBIN: search every defined folder.
 _APP_FOLDERS = ("FOAM_MODULE_APPBIN", "FOAM_USER_APPBIN")
 _LIB_FOLDERS = ("FOAM_MODULE_LIBBIN", "FOAM_USER_LIBBIN")
 

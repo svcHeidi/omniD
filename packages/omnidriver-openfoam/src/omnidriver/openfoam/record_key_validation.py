@@ -304,7 +304,7 @@ def narrow_to_selectors(
 ) -> "tuple[dict[str, Any], ...]":
     """``keys`` less the entries of a catalogued document that the case's own selector settings rule out.
 
-    ``selectors`` names, per document, the keys a record fixes (cardiacFOAM's ``myocardiumSolver``); ``entries``
+    ``selectors`` names, per document, the keys a record fixes (a solver's model selector); ``entries``
     gives each document's ``DictEntry`` by ``driver_path``. Only a relation on a selector key is judged
     (:func:`case_rules.applicable_given`): a key a study can make apply, by setting any other key, stays listed."""
     from foamlib import FoamFile

@@ -15,14 +15,13 @@ from omnidriver.core.contracts.catalogue_paths import PLACEHOLDER, slot_key
 from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.openfoam.case_builder import (
-    default_block_mesh_dict_text,
     populate_values,
     serialize_block,
     set_nested,
-    single_cell_block_mesh_dict_text,
     value_token,
     write_documents,
 )
+from omnidriver.openfoam.case_planning import cell_counts_from_dx
 from omnidriver.openfoam.case_rules import applicable_entries, forbidden_in, match_dynamic_entry, rule_diagnostics
 from omnidriver.openfoam.control_dict import CONTROL_DICT_DOCUMENT, CONTROL_DICT_ENTRIES
 from omnidriver.openfoam.literals import BOOLEAN_WORDS, parse_vector3_literal
@@ -33,6 +32,102 @@ from .common_dict_entries import PHYSICS_PROPERTY_ENTRIES
 from .dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from .record_key_validation import cardiacfoam_mapping
 from .validation import cross_field_diagnostics, infer_virtual_presence
+
+_DEFAULT_BLOCK_MESH_DICT = """/*--------------------------------*- C++ -*----------------------------------*\\
+| =========                 |                                                 |
+| \\\\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\\\    /   O peration     | Version:  v1912                                 |
+|   \\\\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\\\/     M anipulation  |                                                 |
+\\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+// The default slab of a built case with no blockMeshDict of its own.
+
+scale   0.001;
+
+vertices
+(
+    (0 0 0)
+    (2 0 0)
+    (2 2 0)
+    (0 2 0)
+    (0 0 2)
+    (2 0 2)
+    (2 2 2)
+    (0 2 2)
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7) (__CELLS__ __CELLS__ __CELLS__) simpleGrading (1 1 1)
+);
+
+edges
+(
+);
+
+boundary
+(
+    walls
+    {
+        type patch;
+        faces
+        (
+            (3 7 6 2)
+            (0 4 7 3)
+            (2 6 5 1)
+            (1 5 4 0)
+            (0 3 2 1)
+            (4 5 6 7)
+        );
+    }
+);
+
+mergePatchPairs
+(
+);
+
+// ************************************************************************* //
+"""
+
+
+# Matches `scale 0.001` and the 0..2 vertex extent in
+# _DEFAULT_BLOCK_MESH_DICT above (2 * 0.001 = 0.002 m).
+_DEFAULT_SLAB_SIZE_M: tuple[float, float, float] = (0.002, 0.002, 0.002)
+_DEFAULT_CELLS = 4
+
+
+def default_block_mesh_dict_text(*, dx_m: float | None = None) -> str:
+    """The built case's default `system/blockMeshDict` text (a small slab, "walls" patch).
+
+    `dx_m` derives the cell count via `cell_counts_from_dx`; omit for the
+    fixed default cell count.
+    """
+    if dx_m is None:
+        cells = _DEFAULT_CELLS
+    else:
+        counts = cell_counts_from_dx(dx_m, _DEFAULT_SLAB_SIZE_M)
+        cells = counts[0]
+    return _DEFAULT_BLOCK_MESH_DICT.replace("__CELLS__", str(cells))
+
+
+def single_cell_block_mesh_dict_text() -> str:
+    """`system/blockMeshDict` for a solver with no real spatial geometry: the
+    generic slab resolved to exactly one hex cell, matching the native
+    `singleCell` tutorial.
+
+    electroModel.C requires a real `fvMesh` regardless of solver, so even a
+    single-cell solver goes through the same blockMeshDict/blockMesh path.
+    """
+    return default_block_mesh_dict_text(dx_m=_DEFAULT_SLAB_SIZE_M[0])
+
 
 PLUGIN_ID = "org.cardiacfoam"
 

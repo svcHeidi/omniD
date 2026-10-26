@@ -224,7 +224,7 @@ def remove_dict(
     """Delete a sub-dictionary block.
 
     foamlib's ``del`` leaves the emptied block as a whitespace-only line
-    between its braces (measured: ``solvers\\n{\\n    Vm {...}\\n}\\n`` becomes
+    between its braces (measured: ``solvers\\n{\\n    U {...}\\n}\\n`` becomes
     ``solvers\\n{\\n    \\n}\\n``), not a clean removal. Route through
     ``normalize_output`` so the stray line is dropped along with the same
     blank-line class ``update_entry`` already has to handle.
