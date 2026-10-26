@@ -1,6 +1,6 @@
 """Read-only inspection of the files an OpenFOAM dictionary depends on.
 
-Unlike :func:`mutators.read_foam_entry` (lexical only) it follows ``#include`` directives; it never runs ``foamDictionary``.
+Unlike :func:`dictionary_reader.read_foam_entry` (lexical only) it follows ``#include`` directives; it never runs ``foamDictionary``.
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 from typing import Mapping
 
-from .mutators import _mask_comments
+from .dictionary_reader import _mask_comments
 
 _EXECUTABLE_DIRECTIVE = re.compile(r"#(?:calc|codeStream|eval)\b")
 _QUOTED_INCLUDE = re.compile(r'^\s*#include(?P<optional>IfPresent)?\s+"(?P<path>[^"]+)"', re.MULTILINE)

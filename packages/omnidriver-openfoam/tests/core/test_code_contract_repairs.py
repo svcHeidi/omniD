@@ -1,7 +1,8 @@
 """Reproductions that need neither a solver nor a source checkout."""
 import pytest
 
-from omnidriver.openfoam.mutators import read_foam_entry, update_foam_entry
+from omnidriver.openfoam.dictionary_reader import read_foam_entry
+from omnidriver.openfoam.mutators import update_foam_entry
 from omnidriver.openfoam.openfoam_environment import load_openfoam_environment
 
 

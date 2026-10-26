@@ -583,7 +583,7 @@ class _Graph(NamedTuple):
 @lru_cache(maxsize=8)
 def _read_graph(path: str, stamp: tuple[int, int]) -> _Graph:
     """A graph file once per file version: a plan judges the case twice."""
-    from omnidriver.openfoam.mutators import read_foam_entries
+    from omnidriver.openfoam.dictionary_reader import read_foam_entries
 
     from .common_dict_entries import PURKINJE_GRAPH_ENTRIES
 

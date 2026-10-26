@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from omnidriver.openfoam.mutators import read_foam_entry
+from omnidriver.openfoam.dictionary_reader import read_foam_entry
 
 
 def _foam_tokens(value: str) -> list[str]:

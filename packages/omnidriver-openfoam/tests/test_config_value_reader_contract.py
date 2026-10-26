@@ -1,5 +1,5 @@
 """The ``ConfigValueCapability`` reader contract: callers pass a key-path tuple; the adapter splits it into
-``scope``/``key`` for ``mutators.read_foam_entry``. Proven on bathBidomain's ``constant/electroProperties``,
+``scope``/``key`` for ``dictionary_reader.read_foam_entry``. Proven on bathBidomain's ``constant/electroProperties``,
 committed verbatim as a fixture."""
 from __future__ import annotations
 

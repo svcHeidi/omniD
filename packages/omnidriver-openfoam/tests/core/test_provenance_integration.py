@@ -37,7 +37,7 @@ def test_latest_time_selection_is_an_openfoam_adapter_convention(tmp_path: Path)
     for name in ("0", "0.5"):
         (tmp_path / name).mkdir()
 
-    from omnidriver.openfoam.mutators import read_foam_entry
+    from omnidriver.openfoam.dictionary_reader import read_foam_entry
 
     assert selected_start_time(
         tmp_path,
@@ -52,7 +52,7 @@ def test_latest_time_selection_uses_the_conventions_regex_not_float(tmp_path: Pa
     for name in ("0", "0.5", "inf", "nan", "1_0", "+1"):
         (tmp_path / name).mkdir()
 
-    from omnidriver.openfoam.mutators import read_foam_entry
+    from omnidriver.openfoam.dictionary_reader import read_foam_entry
 
     assert selected_start_time(
         tmp_path,
@@ -65,7 +65,7 @@ def test_latest_time_selection_uses_the_conventions_regex_not_float(tmp_path: Pa
 def test_a_missing_control_dict_contributes_no_roots_at_all(tmp_path: Path) -> None:
     """A missing controlDict means the case may not be OpenFOAM-shaped at
     all, so it is neither refused nor defaulted to "0"."""
-    from omnidriver.openfoam.mutators import read_foam_entry
+    from omnidriver.openfoam.dictionary_reader import read_foam_entry
 
     assert selected_start_time(
         tmp_path,

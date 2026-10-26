@@ -10,25 +10,8 @@ from foamlib import Dimensioned, FoamFile
 
 from omnidriver.core.case_write import CaseKeyNotFound
 
+from .dictionary_reader import ScopeArg, normalize_scope
 from .literals import BOOLEAN_WORDS
-
-ScopeArg = str | list[str] | tuple[str, ...] | None
-
-
-
-def normalize_scope(scope: ScopeArg) -> tuple[str, ...]:
-    if scope is None:
-        return ()
-    if isinstance(scope, str):
-        stripped = scope.strip()
-        if not stripped:
-            raise ValueError("scope cannot be an empty string")
-        return (stripped,)
-    parts = tuple(str(item).strip() for item in scope)
-    if not parts or any(not part for part in parts):
-        raise ValueError("scope must contain one or more non-empty names")
-    return parts
-
 
 def coerce_value(value: Any) -> Any:
     """Convert an omnidriver override value into a type foamlib will store.

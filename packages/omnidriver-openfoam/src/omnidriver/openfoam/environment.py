@@ -17,7 +17,7 @@ def _read_config_value_by_key_path(file_path: Path, key_path):
         hex_cell_counts_expected_blocks,
         read_hex_cell_counts,
     )
-    from .mutators import read_foam_entry
+    from .dictionary_reader import read_foam_entry
 
     if isinstance(key_path, str):
         raise TypeError(
@@ -124,7 +124,7 @@ class OpenFOAMEnvironmentPlugin:
         del resolved_case
         from omnidriver.core.plugin_profile import is_replica_directory_name
 
-        from .mutators import read_foam_entry
+        from .dictionary_reader import read_foam_entry
         from .time_selection import selected_start_time
 
         control_dict = next(

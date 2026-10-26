@@ -13,7 +13,7 @@ from omnidriver.cardiacfoam.spatial_pacing import (
 from omnidriver.core.tutorial_records import (
     AxisContract, AxisPatch, AxisResult, DefaultArgument, TutorialRecord, TutorialRecordError, WorkflowStep,
 )
-from omnidriver.openfoam.case_planning import read_nested_entry
+from omnidriver.openfoam.dictionary_reader import read_foam_entry
 from omnidriver.openfoam.literals import parse_scalar_list_literal, parse_vector3_list_literal
 
 from .cable_axes import cable_dx_axis
@@ -49,7 +49,7 @@ def _read_uniform_entry(
     file_path: Path, key: str, *, scope: list[str], parse,
 ) -> Any:
     """The one value ``key``'s list holds, refused by name unless every entry agrees."""
-    raw = read_nested_entry(file_path, key, scope=scope)
+    raw = read_foam_entry(file_path, key, scope=scope)
     if raw is None:
         raise ValueError(
             f"{file_path}: no {'.'.join(scope)}.{key} entry to read the native default from"
@@ -83,7 +83,7 @@ def _read_native_stimulus_defaults(
     intensity = _read_uniform_entry(
         file_path, "stimulusIntensityList", scope=stimulus_scope, parse=parse_scalar_list_literal,
     )
-    start_raw = read_nested_entry(file_path, "stimulusStartTimeList", scope=stimulus_scope)
+    start_raw = read_foam_entry(file_path, "stimulusStartTimeList", scope=stimulus_scope)
     if start_raw is None:
         raise ValueError(f"{file_path}: no {'.'.join(stimulus_scope)}.stimulusStartTimeList entry")
     start_times = parse_scalar_list_literal(start_raw)

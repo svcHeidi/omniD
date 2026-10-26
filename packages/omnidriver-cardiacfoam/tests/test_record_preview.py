@@ -131,7 +131,7 @@ def test_apply_edits_the_staged_cases_own_dictionaries_through_the_real_renderer
     from omnidriver.core.plugin_discovery import load_discovered_plugin as _load
     from omnidriver.core.runtime.attempt_lease import acquire_case_lease
     from omnidriver.core.strict_planning import strict_plan
-    from omnidriver.openfoam.mutators import read_foam_entry
+    from omnidriver.openfoam.dictionary_reader import read_foam_entry
 
     context = _load("cardiacfoam")
     report = strict_plan(

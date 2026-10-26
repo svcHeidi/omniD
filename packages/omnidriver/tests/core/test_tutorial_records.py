@@ -72,7 +72,7 @@ def _typed_agree(value_kind: str, requested, current) -> bool:
 
 
 def _read_test_value(document_path: Path, key: str, *, scope: list[str] | None = None):
-    """Mirrors the real reader's contract exactly: a plain leaf `key` plus a separate `scope`, matching `omnidriver.openfoam.mutators.read_foam_entry`'s own signature."""
+    """Mirrors the real reader's contract exactly: a plain leaf `key` plus a separate `scope`, matching `omnidriver.openfoam.dictionary_reader.read_foam_entry`'s own signature."""
     if not document_path.exists():
         return None
     node = json.loads(document_path.read_text())
