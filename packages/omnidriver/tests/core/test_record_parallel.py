@@ -148,6 +148,20 @@ def test_a_form_that_breaks_the_rewrite_rules_is_refused(monkeypatch, form, frag
                                read_value=_reader({}), allocation=None)
 
 
+def test_the_form_runs_under_the_launcher_the_stack_declares(monkeypatch):
+    from omnidriver.core.plugin_profile import EnvironmentConnection
+
+    context = _toy_context()
+    provider = type(context.providers[-1])
+    declared = dataclasses.replace(provider().get_profile(), environment=EnvironmentConnection(mpi_launcher="mpiexec"))
+    handed: list = []
+    monkeypatch.setattr(provider, "get_profile", lambda self: declared)
+    monkeypatch.setattr(provider, "get_parallel_steps", lambda self, step, **kw: handed.append(kw["launcher"]) or (step,))
+    _parallel_workflow_dag(THREE_STEPS, _serial(), request=True, driver_context=context,
+                           read_value=_reader({}), allocation=None)
+    assert handed == ["mpiexec"]
+
+
 # -- the scheduler's allocation: discovered, from one declared place ------------
 
 

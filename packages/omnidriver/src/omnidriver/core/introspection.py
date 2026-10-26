@@ -97,9 +97,11 @@ def describe_entry(
     cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, Any] | None = None,
     benchmarks: Path | None = None,
+    scratch_root: Path | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
-    """Preview one tutorial record without committing anything.
+    """Preview one tutorial record without committing anything, in the
+    supplied ``scratch_root`` when there is one.
 
     ``overrides`` supplies ``cases_root`` (where the record's native case
     lives; no ambient default) and the study values to preview. ``cli_study``
@@ -139,6 +141,7 @@ def describe_entry(
         study_by_source={"base": incoming_overrides, "cli": dict(cli_study or {})},
         driver_context=driver_context,
         inputs=inputs,
+        scratch_root=scratch_root,
     )
     surface = record_surface(
         record, native_case_root=cases_root / record.native_case_relpath, driver_context=driver_context,

@@ -15,3 +15,11 @@ def test_report_carries_one_plugin_diagnostics_family() -> None:
         "case_dict_key_diagnostics", "catalog_coverage_errors", "validation_diagnostics",
     ):
         assert retired not in payload
+
+
+def test_a_plan_that_is_not_ok_carries_its_refusal_code():
+    codes = {
+        status: StrictPlanReport(status=status, entry="e", resolved_entry={}).to_json().get("code")
+        for status in ("ok", "failed", "blocked")
+    }
+    assert codes == {"ok": None, "failed": "plan_failed", "blocked": "plan_blocked"}

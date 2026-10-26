@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Mapping
 
 from .plugin_profile import EnvironmentConnection, SuppliedVariable
 from .runtime import mpi
+from .runtime.host_facts import host_facts
 
 if TYPE_CHECKING:
     from .plugin_interface import DriverContext
@@ -171,6 +172,8 @@ def environment_report(driver_context: "DriverContext", environ: Mapping[str, st
             ))
     report: dict[str, Any] = {
         "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
+        # The machine, as each step of a run records it; the supplied variables are listed apart.
+        "host": host_facts("", (), environ),
         "variables": variables,
         "shell_prefix": None,
         "launcher": None,

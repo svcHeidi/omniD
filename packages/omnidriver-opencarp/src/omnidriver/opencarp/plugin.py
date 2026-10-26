@@ -141,8 +141,8 @@ class OpenCARPPlugin:
     def get_solve_step_commands(self):
         return SOLVER_COMMANDS      # the step a parallel request runs under mpirun
 
-    def get_parallel_steps(self, step, *, request, read_value, allocation):
-        return parallel_steps(step, request=request, read_value=read_value, allocation=allocation)
+    def get_parallel_steps(self, step, *, request, read_value, allocation, launcher):
+        return parallel_steps(step, request=request, read_value=read_value, allocation=allocation, launcher=launcher)
 
     def get_log_redaction_patterns(self):
         return REDACTION_PATTERNS     # consumed by core's redact_step_logs

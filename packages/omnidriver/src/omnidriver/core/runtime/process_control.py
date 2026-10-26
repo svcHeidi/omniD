@@ -97,10 +97,6 @@ def terminate_recorded_steps(state_path: Path, *, grace: float = 1.0) -> None:
         terminate_group(group, grace=grace)
 
 
-def has_live_steps() -> bool:
-    return bool(_LIVE)
-
-
 @contextmanager
 def spawning() -> Iterator[None]:
     """Mark a process as being started and not yet registered, so a signal in that window still stops it."""
@@ -129,10 +125,6 @@ def request_stop(number: int) -> None:
 
 def stop_requested() -> bool:
     return _STOP.is_set()
-
-
-def stop_signal() -> int:
-    return _STOP_SIGNAL
 
 
 def clear_stop_request() -> None:

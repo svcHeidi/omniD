@@ -266,6 +266,7 @@ def enumerate_case_inputs(
     # witness so a later checkpoint cannot be silently reused as complete.
     inspection = stack.call(
         "inspect_effective_configuration", case_root=case_root, execution_env=environment,
+        driver_context=driver_context,
     )
     root_resolved = case_root.resolve()
     verified_optional_absences: set[str] = set()

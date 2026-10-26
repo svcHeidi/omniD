@@ -48,6 +48,35 @@ def test_strict_plan_threads_it_to_the_plugin_unchanged(tmp_path):
     assert ("diagnostics", _OPAQUE) in plugin.seen
 
 
+class _LoadedEnvironmentPlugin(_RecordingPlugin):
+    def get_loaded_environment(self, *, environment_source=None, driver_context=None):
+        self.seen.append(("load", environment_source))
+        return {**os.environ, "LOADED_FROM": str(environment_source)}
+
+    def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
+        self.seen.append(("plan_diagnostics", env.get("LOADED_FROM")))
+        return ()
+
+    def inspect_effective_configuration(self, *, case_root, execution_env, driver_context):
+        self.seen.append(("configuration", execution_env.get("LOADED_FROM")))
+        return ()
+
+
+def test_strict_plan_loads_the_environment_once_hands_it_to_every_member_and_records_it(tmp_path):
+    plugin = _LoadedEnvironmentPlugin()
+    ctx = driver_context(plugin, source="test")
+    cases_root = tmp_path / "native"
+    write_toy_native_case(cases_root)
+    report = strict_plan(
+        "toyTutorial", overrides={"cases_root": str(cases_root)}, environment_source=_OPAQUE,
+        scratch_root=tmp_path / "scratch", driver_context=ctx,
+    )
+    assert plugin.seen.count(("load", _OPAQUE)) == 1
+    assert ("plan_diagnostics", _OPAQUE) in plugin.seen and ("configuration", _OPAQUE) in plugin.seen
+    command = report.launch["command"]
+    assert command[command.index("--environment-source") + 1] == _OPAQUE
+
+
 @pytest.mark.parametrize("old", ["explicit_bashrc", "environment_bashrc"])
 def test_the_old_keyword_is_refused(old):
     ctx = driver_context(_RecordingPlugin(), source="test")
