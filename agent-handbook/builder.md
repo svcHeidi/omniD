@@ -1,25 +1,26 @@
 # Builder role
 
-Use this role to create or extend a solver adapter. The detailed evidence
-contract is authoritative; this page only selects actions.
+Use this role to create or extend a solver plugin. The evidence contract
+(`docs/BUILDER_AGENT_EVIDENCE_CONTRACT.md`) is authoritative; this page only
+selects actions.
 
-1. Identify the user-selected tool and workflow. Inventory native commands,
-   dictionaries, inputs, outputs, assets, and existing checks.
+1. Identify the user-selected solver and workflow. Inventory the native case:
+   its commands, dictionaries, inputs, outputs and existing checks.
 2. Classify each fact as mechanical, a domain decision, or an adapter
-   algorithm. Discover mechanical facts. Ask the user only for the latter two
+   algorithm. Discover mechanical facts; ask the user only for the other two,
    when evidence cannot decide them.
-3. Publish the smallest evidence-backed vertical slice: request → staged case
-   → native command(s) → named artifacts/checks. Mark the rest conditional,
-   candidate, unknown, or unsupported.
-4. Reuse OmniD/Core/OpenFOAM facilities before creating a solver parser or
-   Core abstraction. Add Core only for a reproduced generic orchestration
-   defect. For OpenFOAM dictionaries, start from the source scanner and keep
-   the catalog against the scanner's report (`omnidriver catalog --uncatalogued`, `--unread`); the evidence contract's "Existing OmniD
-   route for OpenFOAM dictionaries" names the functions. Do not hand-copy keys
-   the scanner can list.
-5. Validate a focused native run using explicitly named assets. Record
-   mutation, command status, artifacts, provenance, and unresolved gates.
+3. Publish the smallest evidence-backed slice as the objects core defines: a
+   record pointing at the native case, catalogue entries, utility manifests
+   with their `produces`, and a reader for each declared output format.
+4. Reuse omniD, core and the OpenFOAM layer before writing a parser or a core
+   abstraction; add to core only for a reproduced generic defect. For
+   OpenFOAM dictionaries and utilities, start from the scan
+   (`omnidriver catalog --uncatalogued`, `--unread`) and keep the catalogue
+   and manifests against it. Do not hand-copy keys the scan can list.
+5. Validate with `omnidriver plan --strict`, a focused native run with
+   explicitly named inputs, and `omnidriver check` on the record's
+   conformance study.
 
-For adapter-side Python, define inputs, outputs, error behavior, owner, and
-tests. Do not recreate a native scientific algorithm in Python merely because
-the agent can see its inputs or outputs.
+For adapter-side Python, define inputs, outputs, error behaviour, owner and
+tests. Do not recreate a native scientific algorithm in Python because its
+inputs or outputs are visible.
