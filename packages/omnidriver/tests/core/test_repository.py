@@ -14,6 +14,7 @@ from omnidriver.core.repository import (
     RepositoryError,
     read_repository,
     repository_of_cases_root,
+    source_prefix,
 )
 from plugins.toy import write_toy_native_case
 
@@ -35,6 +36,13 @@ def test_a_repository_file_names_its_plugin_and_three_places_inside_the_reposito
     assert (repository.tutorials, repository.source, repository.scripts) == (
         root / "tutorials", root / "src", root / "applications" / "scripts",
     )
+
+
+def test_a_scanned_root_is_placed_in_the_repository_only_when_it_is_the_declared_source(tmp_path):
+    repository = read_repository(_repo(tmp_path / "repo", source="applications/src"))
+    assert str(source_prefix(repository, tmp_path / "repo" / "applications" / "src")) == "applications/src"
+    assert source_prefix(repository, tmp_path / "elsewhere") is None
+    assert source_prefix(None, tmp_path / "repo" / "applications" / "src") is None
 
 
 def test_the_tutorials_folder_may_be_the_repository_itself(tmp_path):

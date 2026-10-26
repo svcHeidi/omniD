@@ -12,6 +12,7 @@ from typing import Any
 from omnidriver.core.contracts.catalogue_paths import catalogued_paths, slot_key
 from omnidriver.core.capability_manifest import capability_manifest
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
+from omnidriver.core.repository import source_prefix
 
 from .case_dict_keys import case_dict_key_diagnostics
 from .dict_keys_scanner import cached_scan, locate, reads_at
@@ -158,15 +159,12 @@ def _report(driver_context: Any, mapping: Any, source_root: Path | None, scratch
     scanner = driver_context.stack.call("get_dict_key_scanner")
     if scanner is None or mapping is None or source_root is None or not source_root.is_dir():
         return None
-    repository = getattr(driver_context, "repository", None)
-    placed = repository is not None and Path(repository.source).resolve() == Path(source_root).resolve()
-    prefix = {"source_prefix": PurePosixPath(Path(repository.source).relative_to(repository.root).as_posix())} if placed else {}
     return scanner(
         source_root,
         allowlist_path=mapping.allowlist_path,
         catalogue=driver_context.stack.call("get_dictionary_catalog"),
         cache_root=scratch_root,
-        **prefix,
+        source_prefix=source_prefix(getattr(driver_context, "repository", None), source_root),
     ).to_json()
 
 

@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
+from .repository import source_prefix
 from .runtime.record_surface import ANY_KEY, key_pattern, lists_key
 from .tutorial_records import TutorialRecordError, lookup_record
 
@@ -54,6 +55,7 @@ def cxx_evidence(
         root, allowlist_path=mapping.allowlist_path,
         catalogue=driver_context.stack.call("get_dictionary_catalog"),
         cache_root=cache_root, force=force,
+        source_prefix=source_prefix(driver_context.repository, root),
     ).to_json()
     evidence["scanned"] = True
     evidence.update(report)

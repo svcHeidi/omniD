@@ -102,3 +102,36 @@ def test_a_scan_that_was_not_run_is_refused_by_name_never_an_empty_list(monkeypa
     })
     with pytest.raises(TutorialRecordError, match="nothing was scanned.*source root not supplied.*TOY_NATIVE_TREE"):
         catalog_query.scan_query(load_plugin_context(_TOY), cache_root=None, unread=unread)
+
+
+def test_the_scanner_is_given_the_scanned_roots_place_in_the_supplied_repository(tmp_path):
+    from types import SimpleNamespace
+
+    from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
+    from omnidriver.core.plugin_profile import CxxMapping
+    from omnidriver.core.provider_stack import ProviderStack
+    from omnidriver.core.repository import Repository
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tutorials").mkdir()
+    given = {}
+
+    def scanner(root, **kwargs):
+        given.update(kwargs)
+        return SimpleNamespace(to_json=lambda: {})
+
+    mapping = CxxMapping(
+        source_root_variable="TOY_NATIVE_TREE", source_root_relative="../src", allowlist_path=tmp_path / "a.json",
+    )
+    provider = SimpleNamespace(
+        plugin_id="toy", plugin_api_version="3",
+        get_profile=lambda: SimpleNamespace(cxx_mapping=mapping, case_files=(), requires=()),
+        get_dict_key_scanner=lambda: scanner, get_dictionary_catalog=lambda: DictionaryCatalog({}),
+    )
+    repository = Repository(
+        root=tmp_path, plugin="toy", tutorials=tmp_path / "tutorials", source=tmp_path / "src",
+        scripts=tmp_path / "scripts",
+    )
+    context = SimpleNamespace(stack=ProviderStack((provider,)), repository=repository)
+    catalog_query.cxx_evidence(context, {"TOY_NATIVE_TREE": str(tmp_path / "tutorials")})
+    assert str(given["source_prefix"]) == "src"
