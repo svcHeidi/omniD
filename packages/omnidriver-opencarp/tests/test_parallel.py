@@ -1,6 +1,6 @@
 """openCARP's parallel form and its launcher check, without the binary. What
 the real binary does is settled in docs/solver-learning/opencarp.md, section
-I, and by test_parallel_native.py; these pin the rules that follow from it."""
+I; these pin the rules that follow from it."""
 from __future__ import annotations
 
 import stat

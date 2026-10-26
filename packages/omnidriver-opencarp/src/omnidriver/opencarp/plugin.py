@@ -56,17 +56,12 @@ class OpenCARPPlugin:
             if spec is not None and spec.value_kind == "boolean" and unquote(raw) not in ("0", "1"):
                 raise ParFormatError(
                     f"{document_path}: {key} = {raw!r}; openCARP reads every Flag spelling except 0/false "
-                    "as on (F1). The native file must say 0 or 1."
+                    "as on. The native file must say 0 or 1."
                 )
             if spec is not None and spec.value_kind == "string" and not _is_quoted(raw) and "=" in raw:
-                # Unquoted, openCARP silently drops everything from an '='
-                # on, so the raw text this reader parsed (everything up to
-                # the trailing whitespace/comment) is not what openCARP
-                # actually reads. Refuse rather than report a value openCARP
-                # would truncate.
                 raise ParFormatError(
                     f"{document_path}: {key} = {raw!r} is unquoted and contains '='; openCARP "
-                    "silently truncates everything from the '=' on (F10). The native file must "
+                    "silently truncates everything from the '=' on. The native file must "
                     "quote this value."
                 )
             return unquote(raw)
@@ -115,18 +110,18 @@ class OpenCARPPlugin:
         return AUXILIARY_COMMANDS
 
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
-        del environment_source      # openCARP needs no environment source
+        del environment_source
         return opencarp_environment_diagnostics(workflow_dag, env if env is not None else os.environ, driver_context)
 
     # -- parallel
     def get_solve_step_commands(self):
-        return SOLVER_COMMANDS      # the step a parallel request runs under mpirun
+        return SOLVER_COMMANDS
 
     def get_parallel_steps(self, step, *, request, read_value, allocation):
         return parallel_steps(step, request=request, read_value=read_value, allocation=allocation)
 
     def get_log_redaction_patterns(self):
-        return REDACTION_PATTERNS     # consumed by core's redact_step_logs
+        return REDACTION_PATTERNS
 
     # -- record surface
     def get_record_key_catalog(self, case_root, *, driver_context):

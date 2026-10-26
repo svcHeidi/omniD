@@ -13,6 +13,7 @@ _FIELD = re.compile(r"^\t(type|default|min|max|units):\s*(.*)$")
 _TYPED = re.compile(r"^\((\w+)\)\((.*)\)$")
 _BLOCK = re.compile(r"^\t(menu|Depends on|Changes the allocation of|Changes the default value of): \{$")
 _MENU_ITEM = re.compile(r"^\t\t\((\w+)\)\((.*?)\)\t(.*)$")
+#: openCARP's C spellings of a Flag literal; ``TO_STRING(x)`` is its string literal ``"x"``.
 _FLAG_LITERALS = {"PrMTRUE": "1", "PrMFALSE": "0"}
 _TO_STRING = re.compile(r"TO_STRING\((\w*)\)")
 _LITERAL = re.compile(r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?|"[^"]*"')
@@ -58,9 +59,7 @@ def _menu_value(item_type: str, spelled: str) -> str:
 
 
 def _default(spelled: str | None) -> tuple[str | None, str | None]:
-    """``(default, default_expression)``: a literal default as a .par spells it, else the C expression +Help printed.
-
-    ``PrMTRUE``/``PrMFALSE`` are openCARP's Flag literals and ``TO_STRING(x)`` its string literal ``"x"``."""
+    """``(default, default_expression)``: a literal as a .par spells it, else the C expression +Help printed."""
     if spelled is None:
         return None, None
     spelled = _FLAG_LITERALS.get(spelled, spelled)

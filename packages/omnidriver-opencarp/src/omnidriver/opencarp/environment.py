@@ -69,7 +69,7 @@ def opencarp_environment_diagnostics(
             diagnostics.append(StrictDiagnostic(
                 level="error", code="opencarp_binary_unloadable",
                 message="'openCARP' is on PATH but cannot start; on macOS set DYLD_LIBRARY_PATH to the "
-                        "directory holding libsundials_cvode (A4-A6): " + proc.stderr.strip()[-300:],
+                        "directory holding libsundials_cvode: " + proc.stderr.strip()[-300:],
             ))
         else:
             diagnostics.extend(_version_diagnostics(proc.stdout))
