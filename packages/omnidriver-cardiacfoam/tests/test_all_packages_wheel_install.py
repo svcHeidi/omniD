@@ -76,7 +76,8 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
     cases_root.mkdir(parents=True)
     # A record's describe needs its native case directory to exist; nothing in it is read.
     (cases_root / "NiedererEtAl2011verification").mkdir()
-    (cases_root / "cases" / "bivCase").mkdir(parents=True)
+    (cases_root / "idealizedHeart" / "humanSlab").mkdir(parents=True)
+    (cases_root / "idealizedHeart" / "mesh").mkdir()
     clean_environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
     probe = textwrap.dedent(
         f"""
@@ -164,7 +165,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
             "--plugin",
             "cardiaccore",
             "--entry",
-            "humanSlab",
+            "idealizedHeart",
             "--cases-root",
             str(cases_root),
         ],
@@ -172,7 +173,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         env=clean_environment,
     )
     cardiaccore_payload = json.loads(cardiaccore_describe)
-    assert cardiaccore_payload["entry"]["entry_name"] == "humanSlab"
+    assert cardiaccore_payload["entry"]["entry_name"] == "idealizedHeart"
     assert (
         cardiaccore_payload["capability_manifest"]["plugin_identity"]["providers"][-1]["id"]
         == "org.omnidriver.cardiaccore"

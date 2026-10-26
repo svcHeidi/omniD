@@ -8,31 +8,94 @@ from omnidriver.core.tutorial_records import TutorialRecordError
 from omnidriver.cardiaccore.record_key_validation import record_key_catalog, record_key_validator
 
 DOCUMENT = "system/setCardiacConductivityDict"
+ANATOMY_DOCUMENT = "system/setCardiacAnatomyDict"
 
-# cardiacCore src/setCardiacConductivity/setCardiacConductivity.C: main's head, to the first reads of the dictionary.
-SET_CARDIAC_CONDUCTIVITY_MAIN = '''int main(int argc, char *argv[])
+# cardiacCore applications/utilities/setCardiacAnatomy/setCardiacAnatomy.C at chore/repo-layout (0c1bf46):
+# main from its head to the read of valveAreaMaskField, closed with a brace.
+SET_CARDIAC_ANATOMY_MAIN = r'''int main(int argc, char *argv[])
 {
+    argList::addNote
+    (
+        "Tag cells with AHA segment IDs: LV 1-17 and RV free wall 18-26. The "
+        "rings are cut on aha_z, the position along each ventricle's cavity, "
+        "and the sectors on aha_angle, the short-axis angle in a geometric "
+        "{L,S,LxS} frame derived from the LV/RV centroids. Writes AHA_Segment, "
+        "aha_angle and aha_z, and, unless auxiliaryFields is false, phiRV, "
+        "groove_interface and AHA_ValveArea."
+    );
+
     #include "setRootCase.H"
     #include "createTime.H"
     #include "createMesh.H"
 
-    Info<< "Reading system/setCardiacConductivityDict\\n" << endl;
-
-    IOdictionary diffDict
+    Info<< "Reading system/setCardiacAnatomyDict\n" << endl;
+    IOdictionary anatDict
     (
         IOobject
         (
-            "setCardiacConductivityDict",
-            runTime.system(),
-            mesh,
-            IOobject::MUST_READ,
-            IOobject::NO_WRITE
+            "setCardiacAnatomyDict", runTime.system(), mesh,
+            IOobject::MUST_READ, IOobject::NO_WRITE
         )
     );
+    IOdictionary conventionDict
+    (
+        IOobject
+        (
+            "coordinatesConventionDict", runTime.system(), mesh,
+            IOobject::MUST_READ, IOobject::NO_WRITE
+        )
+    );
+    const IntraventricularConvention convention =
+        readIntraventricularConvention(conventionDict);
+    const CoordinatesConvention coordinatesConvention =
+        readCoordinatesConvention(conventionDict);
 
-    word fiberFieldName = diffDict.get<word>("fiberField");
-    word sheetFieldName = diffDict.get<word>("sheetField");
-    const scalar anisotropyRatio = diffDict.get<scalar>("anisotropyRatio");
+    const word& longFieldName = coordinatesConvention.longitudinalField;
+    const word& intravFieldName = coordinatesConvention.intraventricularField;
+
+    const label rvLocalBands = anatDict.getOrDefault<label>("rvLocalBands", 10);
+
+    // The auxiliary fields (phiRV, groove_interface, AHA_ValveArea) are
+    // evidence for the sector assignment; they are written unless this is
+    // false. AHA_Segment, aha_angle and aha_z are always written.
+    const bool auxiliaryFields =
+        anatDict.getOrDefault<bool>("auxiliaryFields", true);
+
+    // ventricularCellZone names a cellZone of ventricular myocardium. Cells
+    // outside it are left at AHA_Segment 0, the value for "not a segment".
+    // Without it every cell is classified, which assumes the mesh holds
+    // ventricles only.
+    const word ventricularCellZoneName =
+        anatDict.getOrDefault<word>("ventricularCellZone", word::null);
+    boolList isVentricular(mesh.nCells(), true);
+    if (!ventricularCellZoneName.empty())
+    {
+        const label zoneID = mesh.cellZones().findZoneID(ventricularCellZoneName);
+        if (zoneID < 0)
+        {
+            FatalErrorInFunction
+                << "ventricularCellZone '" << ventricularCellZoneName
+                << "' not found among this mesh's cellZones."
+                << exit(FatalError);
+        }
+        isVentricular = false;
+        const labelList& zoneCells = mesh.cellZones()[zoneID];
+        forAll(zoneCells, i)
+        {
+            isVentricular[zoneCells[i]] = true;
+        }
+        Info<< "ventricularCellZone '" << ventricularCellZoneName << "': "
+            << zoneCells.size() << " of " << mesh.nCells()
+            << " cells classified; the rest get AHA_Segment = 0." << endl;
+    }
+
+    // valveAreaMaskField names the mask a valve-aware coordinate solve wrote
+    // (fiberFoam's abSolveMask: 1 = solved myocardium, 0 = the basal band
+    // around the valve rings). Cells where it is 0 are the valve area: they
+    // are flagged in AHA_ValveArea and never set a cavity range. No AHA
+    // scheme is defined over valve-adjacent tissue.
+    const word valveAreaMaskFieldName =
+        anatDict.getOrDefault<word>("valveAreaMaskField", word::null);
 }
 '''
 
@@ -52,14 +115,11 @@ def test_a_key_the_catalogue_lacks_is_refused_naming_the_catalogue_and_how_to_li
     assert refused.value.code == "unknown_key"
 
 
-def test_a_key_the_supplied_cxx_reads_is_accepted_at_the_type_it_reads(tmp_path, monkeypatch):
-    tree = tmp_path / "tree"
-    (tree / "src" / "setCardiacConductivity").mkdir(parents=True)
-    (tree / "src" / "setCardiacConductivity" / "setCardiacConductivity.C").write_text(SET_CARDIAC_CONDUCTIVITY_MAIN)
-    monkeypatch.setenv("OMNIDRIVER_CARDIACCORE_TREE", str(tree))
-    assert record_key_validator(DOCUMENT, ("anisotropyRatio",), 2.5) == ("scalar", True)
+def test_an_anatomy_key_is_checked_at_the_type_the_catalogue_gives_it():
+    assert record_key_validator(ANATOMY_DOCUMENT, ("ventricularCellZone",), "myocardium") == ("word", True)
+    assert record_key_validator(ANATOMY_DOCUMENT, ("auxiliaryFields",), False) == ("boolean", True)
     with pytest.raises(ValueError):
-        record_key_validator(DOCUMENT, ("anisotropyRatio",), "wide")
+        record_key_validator(ANATOMY_DOCUMENT, ("ventricularCellZone",), 2.5)
 
 
 def test_a_document_the_catalogue_does_not_hold_is_refused_unless_it_is_a_system_file():
@@ -92,3 +152,20 @@ def test_the_catalogue_lists_the_control_dict_keys_beside_the_open_row_when_the_
 def test_the_catalogue_lists_every_key_the_validator_accepts(tmp_path):
     listed = {(item["document"], item["key"]) for item in record_key_catalog(tmp_path)}
     assert (DOCUMENT, "fiberField") in listed and (DOCUMENT, "conductivityExtracellular.dn") in listed
+
+
+def test_the_anatomy_reads_the_scanner_sees_agree_with_the_anatomy_catalogue(tmp_path):
+    from omnidriver.cardiaccore.catalogs.inputs import CATALOG
+    from omnidriver.openfoam.dict_keys_scanner import scan_source
+
+    utility = tmp_path / "applications" / "utilities" / "setCardiacAnatomy"
+    utility.mkdir(parents=True)
+    (utility / "setCardiacAnatomy.C").write_text(SET_CARDIAC_ANATOMY_MAIN)
+    reads = {read.key: read for read in scan_source(tmp_path).reads if read.function == "main"}
+    entries = {entry.driver_path.rpartition(".")[2]: entry for entry in CATALOG.documents["setCardiacAnatomyDict"]}
+
+    assert set(reads) == set(entries)
+    for key in ("auxiliaryFields", "rvLocalBands"):
+        assert reads[key].default == entries[key].typical_value
+    for key in ("ventricularCellZone", "valveAreaMaskField"):
+        assert reads[key].type == "word" and entries[key].value_kind == "word"

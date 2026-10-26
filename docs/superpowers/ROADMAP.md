@@ -157,7 +157,7 @@ is still on `f0fc231`, 17 commits behind. It has no tracked changes, so
   `main`, authored by the owner (`bf3b9c4`):
   - with a `sheetField`, the output is byte-identical to before;
   - without one, it writes `dt·I + (df − dt)·f⊗f`, checked at every cell of
-    the idealized heart (`cases/idealizedHeart/regression/fibreOnlyConductivityTest.sh`);
+    the idealized heart (`tutorials/idealizedHeart/humanSlab/regression/fibreOnlyConductivityTest.sh`);
   - the installed utility in `/Volumes/OpenFOAM-v2412` is built from this
     change.
 - **Results are not in the repository.** cardiacCore holds the methods. The

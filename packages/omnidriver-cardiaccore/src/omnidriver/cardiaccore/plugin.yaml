@@ -6,13 +6,13 @@ requires:
   - org.omnidriver.openfoam.environment
 # The C++ source the key scanner reads (one mechanism with cardiacFOAM's,
 # omnidriver-openfoam's dict_keys_scanner): supplied, never discovered. The
-# variable is the native cardiacCore tree;
-# `relative` is that repository's own layout. Every strict plan compares the
+# variable is the native tutorials tree;
+# `relative` reaches the repository root from it. Every strict plan compares the
 # catalog (catalogs/inputs.py) with it.
 cxx_mapping:
   source_root:
     variable: OMNIDRIVER_CARDIACCORE_TREE
-    relative: src
+    relative: ..
   reviewed_allowlist: dict_key_allowlist.json
 case_profile:
   dictionaries:

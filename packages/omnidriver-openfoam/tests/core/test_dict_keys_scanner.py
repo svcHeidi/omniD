@@ -12,7 +12,7 @@ from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.openfoam.dict_keys_scanner import cached_scan, catalog_report, scan_source, source_digest
 from omnidriver.openfoam.record_key_validation import scanned_key
 
-# cardiacCore src/setPurkinjeSlab/setPurkinjeSlab.C: main, up to its two reads.
+# cardiacCore applications/utilities/setPurkinjeSlab/setPurkinjeSlab.C: main, up to its two reads.
 SET_PURKINJE_SLAB = '''#include "fvCFD.H"
 #include "coordinatesConvention.H"
 
@@ -144,7 +144,7 @@ READ_CONDUCTIVITY_FIELD = '''tmp<volTensorField> readConductivityField
 }
 '''
 
-# cardiacCore src/generatePurkinjeTree/generatePurkinjeTree.C: main's treeDict and
+# cardiacCore applications/utilities/generatePurkinjeTree/generatePurkinjeTree.C: main's treeDict and
 # two reads of readVentParams.
 READ_VENT_PARAMS = '''int main(int argc, char *argv[])
 {
@@ -430,7 +430,7 @@ READ_COORDINATE_SYSTEM = '''inline CoordinateSystem readCoordinateSystem
 '''
 
 
-# cardiacCore src/setCardiacConductivity/setCardiacConductivity.C: writeConductivity to its first
+# cardiacCore applications/utilities/setCardiacConductivity/setCardiacConductivity.C: writeConductivity to its first
 # conditional read, and the `small` constructor main applies to a field (the last two lines close the function).
 WRITE_CONDUCTIVITY = '''#include "fvCFD.H"
 

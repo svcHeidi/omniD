@@ -8,17 +8,15 @@ records what they read and wrote.
 
 ## Records and their inputs
 
-- **`humanSlab`** runs `setCardiacConductivity`, `setCardiacAnatomy`,
-  `setPurkinjeSlab` and `setPurkinjeMorphometry` over `cases/bivCase`, in the
-  native `Allrun`'s order. It needs one supplied input, `anatomy`
-  (`--input anatomy=<dir>`): the mesh (`constant/polyMesh`), `0/fiber`,
-  `0/sheet` and the `0/uvc_*` fields, none of which are in the tracked case
-  folder. It is supplied, never discovered.
 - **`idealizedHeart`, `idealizedHeartEndocardial`,
-  `idealizedHeartPigTransmural`** run on cardiacFOAM's idealized
-  biventricular mesh, committed natively, so they need no `--input`. They use
-  the `cobiveco` convention (`0/tm`, `0/tv`, `0/apicobasal`). The endocardial
-  and pig-transmural variants end in `generatePurkinjeTree`.
+  `idealizedHeartPigTransmural`** are the native `idealizedHeart`
+  tutorials' variants `humanSlab`, `humanEndocardial` and `pigMorphometricTransmural`.
+  They run on the idealized biventricular mesh the variants share
+  (`idealizedHeart/mesh` in the tutorials root, Git LFS), which a record reads as its
+  native `mesh` input in place of the copy each `Allrun` makes, so they need
+  no `--input`. They use the `cobiveco` convention (`0/tm`, `0/tv`,
+  `0/apicobasal`). The endocardial and pig-transmural variants end in
+  `generatePurkinjeTree`.
 - No record runs `refine1Dgraph` or the Purkinje graph hand-off to
   cardiacFOAM; the graph conversion utilities are declared, not sequenced.
 
@@ -64,8 +62,14 @@ infer one from field names, and never convert one into the other's spelling.
 - `generatePurkinjeTree` recovers the RV-facing septum and applies a
   per-vertex transmural flip only under `uvc`; under `cobiveco` neither runs.
   Hence `RVSeptalEndoFaces` is produced under `uvc` only.
-- `setCardiacAnatomy` writes `AHA_Segment` and `aha_angle` in separate LV/RV
-  angle frames; do not compare raw angles across chambers.
+- `setCardiacAnatomy` writes `AHA_Segment`, `aha_angle` and `aha_z` (the
+  position along each ventricle's own cavity; the rings are thresholds on it,
+  and no cutoff is entered; the utility's `README.md` defines it). `aha_angle`
+  comes from one shared, LV-centred frame (the RV gets no origin or basis of
+  its own), so a raw `aha_angle` is not an RV-local angle. `AHA_Segment` is
+  1-17 on LV cells (AHA, Cerqueira 2002), 18-26 on RV free-wall cells (cardiacCore's own convention)
+  and 0 outside `ventricularCellZone`; the names are in cardiacCore's
+  `applications/utilities/setCardiacAnatomy/aha_segment_names.json`.
 
 ## Helper scripts
 
