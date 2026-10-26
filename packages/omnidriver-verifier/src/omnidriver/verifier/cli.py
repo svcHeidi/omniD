@@ -19,6 +19,19 @@ def _parser() -> RefusingParser:
         ("residual", "substitute a problem's exact fields into its equations (needs the symbolic extra)"),
     ):
         commands.add_parser(name, help=help_text).add_argument("problem_id")
+    cell_model = commands.add_parser(
+        "cell-model", help="gate 1 on a generated cell model: its rates and current against the problem's "
+                           "(needs the symbolic extra)")
+    cell_model.add_argument("problem_id")
+    cell_model.add_argument("--model", required=True, type=Path,
+                            help="one JSON: rates, Iion and parameters in the problem's names; optionally "
+                                 "pde_parameters (what the solver's PDE was given) and fixed_capacitance")
+    norms = commands.add_parser(
+        "norms", help="a solver's field against the problem's exact one, as the problem's error norms")
+    norms.add_argument("problem_id")
+    norms.add_argument("--values", required=True, type=Path,
+                       help="one JSON: dimension, field, time, points, values, weights (a list, or a named "
+                            "cell_volume or nodal_control_volume weight)")
     compare = commands.add_parser("compare", help="table each solver's errors per level, with observed and stated orders")
     compare.add_argument("problem_id")
     compare.add_argument("--results", nargs="+", required=True, type=Path,
@@ -44,6 +57,18 @@ def _answer(args: Any) -> dict[str, Any]:
 
         table = temporal_table if args.temporal else comparison_table
         return table(problem, [_results(path) for path in args.results])
+    if args.command == "cell-model":
+        from .residual import cell_model_verdict
+
+        model = _results(args.model)
+        if not isinstance(model, dict):
+            raise ProblemError(f"{args.model}: a cell model is one JSON object", code="results_invalid")
+        extras = {key: model.pop(key) for key in ("pde_parameters", "fixed_capacitance") if key in model}
+        return cell_model_verdict(problem, model, **extras)
+    if args.command == "norms":
+        from .convergence import norms_verdict
+
+        return norms_verdict(problem, _results(args.values))
     from .residual import residual_verdict
 
     return residual_verdict(problem)
