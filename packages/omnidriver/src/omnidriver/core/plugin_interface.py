@@ -188,6 +188,15 @@ class SolverPlugin(Protocol):
     def get_utility_manifests(self) -> dict[str, Any]:
         """``UtilityManifest`` per utility command: what it consumes and produces."""
 
+    def get_utility_manifest_scanner(self):
+        """A ``(repository_root, manifests, *, utilities=None) -> report``
+        callable comparing each utility manifest (or each of ``utilities``)
+        with the command line declared by the C++ its repository builds it from.
+        The report has ``findings`` (each a ``utility``, a ``kind`` of
+        ``uncatalogued``, ``unread`` or ``disagreement``, a ``flag`` and a
+        ``note`` or ``source``) and ``not_built``, the utilities the repository
+        does not build."""
+
     def get_solve_step_commands(self) -> frozenset[str]:
         """The commands that run the solve step, the one a parallel run rewrites."""
 

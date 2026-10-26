@@ -71,6 +71,7 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     "get_environment_commands": ("set", None),
     "is_installed_environment_command": ("single", None),
     "get_utility_manifests": ("map", None),
+    "get_utility_manifest_scanner": ("single", None),
     "get_solve_step_commands": ("set", None),
     # planning and validation
     "validate_run_semantics": ("sequence", None),

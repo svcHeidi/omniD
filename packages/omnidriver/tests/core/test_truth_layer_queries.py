@@ -135,3 +135,14 @@ def test_the_scanner_is_given_the_scanned_roots_place_in_the_supplied_repository
     context = SimpleNamespace(stack=ProviderStack((provider,)), repository=repository)
     catalog_query.cxx_evidence(context, {"TOY_NATIVE_TREE": str(tmp_path / "tutorials")})
     assert str(given["source_prefix"]) == "src"
+
+
+def test_a_scan_says_why_the_utility_manifests_were_not_compared(monkeypatch):
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    monkeypatch.setattr(catalog_query, "cxx_evidence", lambda *a, **k: {
+        "variable": "TOY_NATIVE_TREE", "relative": "../src", "root": "/src", "scanned": True,
+        "uncatalogued": [], "unresolved": [], "unread": [], "disagreements": [], "selector_values": {},
+    })
+    found = catalog_query.scan_query(load_plugin_context(_TOY), cache_root=None)["utility_manifests"]
+    assert (found["compared"], found["reason"]) == (False, "the stack has no utility manifests")

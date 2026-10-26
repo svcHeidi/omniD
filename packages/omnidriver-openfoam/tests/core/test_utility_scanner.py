@@ -183,3 +183,29 @@ def test_a_plan_notes_the_drift_of_a_utility_it_runs_and_of_no_other(tmp_path):
     (note,) = _utility_manifest_diagnostics(context, runs)
     assert (note.level, note.code, note.field) == ("warning", "utility_manifest_disagreement", "-internalRole")
     assert _utility_manifest_diagnostics(context, {"steps": [{"id": "mesh", "command": "blockMesh"}]}) == ()
+
+
+def test_catalog_lists_the_drift_of_every_manifest_through_the_stack(tmp_path):
+    from types import SimpleNamespace
+
+    from omnidriver.core.catalog_query import _utility_manifest_findings
+    from omnidriver.core.provider_stack import ProviderStack
+    from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
+
+    root = _utility(tmp_path, "refine1Dgraph", REFINE_MAKE_FILES, REFINE_MAIN)
+    manifest = _manifest(
+        "refine1Dgraph",
+        UtilityFlag(name="-maxEdgeLength", description="", takes_value=True, default="3e-4"),
+        UtilityFlag(name="-noScale", description=""),
+        arguments=2,
+    )
+    provider = SimpleNamespace(plugin_id="toy", plugin_api_version="3", get_utility_manifests=lambda: {"refine1Dgraph": manifest})
+    stack = ProviderStack((OpenFOAMEnvironmentPlugin(), provider))
+    context = SimpleNamespace(stack=stack, repository=SimpleNamespace(root=root))
+    found = _utility_manifest_findings(context, kinds=("uncatalogued", "disagreement"))
+    assert [(item["kind"], item["flag"]) for item in found["findings"]] == [("uncatalogued", "-internalRole")]
+    assert [item["flag"] for item in _utility_manifest_findings(context, kinds=("unread",))["findings"]] == ["-noScale"]
+    unplaced = SimpleNamespace(stack=stack, repository=None)
+    assert _utility_manifest_findings(unplaced, kinds=("unread",)) == {
+        "compared": False, "reason": "no repository was supplied (--repo)",
+    }

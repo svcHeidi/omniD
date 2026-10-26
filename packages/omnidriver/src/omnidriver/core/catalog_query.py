@@ -1,6 +1,6 @@
 """``omnidriver catalog``: the entries of one dictionary for one solver.
 
-One query over the stack's key catalogue (``get_record_key_catalog``), with ``cxx_values`` from the stack's scanner when the C++ source root is supplied; ``scan_query`` lists what the C++ reads and the catalogue lacks (``uncatalogued``) or no longer reads (``unread``). Core names no solver or document."""
+One query over the stack's key catalogue (``get_record_key_catalog``), with ``cxx_values`` from the stack's scanner when the C++ source root is supplied; ``scan_query`` lists what the C++ reads and the catalogue lacks (``uncatalogued``) or no longer reads (``unread``), and the same for the utility manifests' command lines. Core names no solver or document."""
 from __future__ import annotations
 
 import os
@@ -76,13 +76,46 @@ _UNREAD_HOW = (
     "effect. Delete the entry, or correct its driver_path if the C++ moved the key; its "
     "description and source_refs say what it was for."
 )
+_UTILITY_HOW = {
+    "uncatalogued": (
+        "Each utility_manifests finding compares a utility's manifest with the command line its C++ declares: "
+        "an `uncatalogued` option the manifest lacks, or a `disagreement` on a default or on the positional "
+        "arguments. Correct the manifest from the C++ at `source`."
+    ),
+    "unread": (
+        "Each utility_manifests finding is a flag the manifest lists and the utility's C++ declares no option "
+        "for. Delete it from the manifest."
+    ),
+}
+
+
+def _utility_manifest_findings(driver_context: "DriverContext", *, kinds: tuple[str, ...]) -> dict[str, Any]:
+    """The manifests compared with the supplied repository's C++, or why they were not."""
+    scanner = driver_context.stack.call("get_utility_manifest_scanner")
+    manifests = driver_context.stack.call("get_utility_manifests")
+    repository = driver_context.repository
+    reason = (
+        "the stack has no utility manifests" if not manifests
+        else "the stack has no utility manifest scanner" if scanner is None
+        else "no repository was supplied (--repo)" if repository is None
+        else None
+    )
+    if reason is not None:
+        return {"compared": False, "reason": reason}
+    report = scanner(repository.root, manifests)
+    return {
+        "compared": True,
+        "findings": [item for item in report["findings"] if item["kind"] in kinds],
+        "not_built": list(report["not_built"]),
+    }
 
 
 def scan_query(driver_context: "DriverContext", *, cache_root: Path | None, unread: bool = False) -> dict[str, Any]:
     """``omnidriver catalog --uncatalogued`` (every read the C++ makes that the
     catalogue lacks, with its scanned type, default, scope, source location and
     the entry arguments the scan can fill) or, with ``unread``, ``catalog
-    --unread`` (every catalogued key the C++ no longer reads). Refused
+    --unread`` (every catalogued key the C++ no longer reads); each with the
+    utility manifests' findings of the same kind under ``utility_manifests``. Refused
     (``TutorialRecordError``) when the stack has no C++ or none was supplied:
     an empty list would read as "everything is catalogued"."""
     cxx = cxx_evidence(driver_context, os.environ, cache_root=cache_root)
@@ -103,6 +136,12 @@ def scan_query(driver_context: "DriverContext", *, cache_root: Path | None, unre
         "how": _UNREAD_HOW if unread else _UNCATALOGUED_HOW,
         **{name: cxx[name] for name in listed},
         **({} if unread else {"disagreements": cxx["disagreements"]}),
+        "utility_manifests": {
+            "how": _UTILITY_HOW["unread" if unread else "uncatalogued"],
+            **_utility_manifest_findings(
+                driver_context, kinds=("unread",) if unread else ("uncatalogued", "disagreement"),
+            ),
+        },
     }
 
 
