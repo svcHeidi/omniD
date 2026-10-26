@@ -77,10 +77,6 @@ def build_capability_manifest(
             "plugin": sorted(plugin_commands),
             "case_scripts": sorted(case_script_commands),
             "utilities": _utility_commands(utility_manifests or {}),
-            "environment_runtime_note": (
-                "The active environment may also authorize discovered runtime "
-                "applications through its command contract."
-            ),
         },
         "utility_manifests": {
             command: _manifest_listing(manifest)

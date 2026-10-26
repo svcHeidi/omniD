@@ -38,6 +38,7 @@ def test_describe_with_no_entry_lists_the_records_the_scripts_and_the_installed_
     assert record["name"] == "toyTutorial" and record["native_case_relpath"] == "toyTutorial"
     assert set(record) == {"name", "native_case_relpath", "axes", "inputs", "serial_only"}
     assert payload["scripts"] == []
+    assert payload["utility_manifests"] == {}
     assert payload["installed_plugins"] == sorted(discover_plugins())
     assert payload["plugin"]
 

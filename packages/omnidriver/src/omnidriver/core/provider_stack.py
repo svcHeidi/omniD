@@ -71,6 +71,7 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     "get_environment_commands": ("set", None),
     "is_installed_environment_command": ("single", None),
     "get_utility_manifests": ("map", None),
+    "get_utility_manifest_scanner": ("single", None),
     "get_solve_step_commands": ("set", None),
     # planning and validation
     "validate_run_semantics": ("sequence", None),
@@ -83,7 +84,6 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     "get_environment_diagnostics": ("sequence", _no_environment_validation),
     "resolve_supplied_variables": ("map", None),
     "get_loaded_environment": ("single", lambda: dict(os.environ)),
-    "get_configured_environment": ("chain", None),
     "get_case_runtime_conventions": ("single", _no_conventions),
     # provenance
     "resolve_case_models": ("map", None),
@@ -302,7 +302,10 @@ _EMPTY = {
 
 
 class _ComposedProfile:
-    """Every provider's profile as one: case-file rules concatenated, ``requires`` unioned, the rest from the most specific provider."""
+    """Every provider's profile as one: case-file rules concatenated and the
+    digest taken over every profile; every other field (``requires``,
+    ``environment``, ``cxx_mapping``) is the most specific provider's alone.
+    The composed environment connection is ``environment_connection.stack_connection``."""
 
     def __init__(self, profiles):
         self._profiles = tuple(profiles)

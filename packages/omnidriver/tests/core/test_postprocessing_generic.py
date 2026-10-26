@@ -1,8 +1,5 @@
-"""The postprocessing package must carry no domain vocabulary.
-
-Its role is plumbing -- schedule a case-owned analysis module, apply house plot
-style, write tables. The analysis itself belongs to the case.
-"""
+"""The postprocessing helpers carry no domain vocabulary: they style plots,
+parse file stems and write tables, and the analysis belongs to the case."""
 from __future__ import annotations
 
 import re
@@ -18,7 +15,7 @@ _DOMAIN_WORDS = re.compile(
 
 
 def _executable_lines(path: Path) -> list[tuple[int, str]]:
-    """Source lines outside the licence header and outside docstrings."""
+    """Source lines outside comments and docstrings."""
     lines = path.read_text().splitlines()
     out: list[tuple[int, str]] = []
     in_doc = False

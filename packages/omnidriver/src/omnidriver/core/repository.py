@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 REPOSITORY_FILE = "omnidriver.toml"
 _KEYS = {"plugin", "tutorials", "source", "scripts"}
@@ -64,3 +64,12 @@ def repository_of_cases_root(cases_root: Path) -> Repository | None:
             if repository.tutorials == cases_root:
                 return repository
     return None
+
+
+def source_prefix(repository: Repository | None, source_root: Path) -> PurePosixPath | None:
+    """``source_root``'s path within ``repository`` when it is the
+    repository's declared ``source``, which a scanner's ``source_refs`` start
+    with; ``None`` for any other root, whose refs stay relative to it."""
+    if repository is None or Path(repository.source).resolve() != Path(source_root).resolve():
+        return None
+    return PurePosixPath(Path(repository.source).relative_to(repository.root).as_posix())

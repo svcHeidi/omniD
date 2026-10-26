@@ -71,7 +71,9 @@ def named_catalog(driver_context: "DriverContext", name: str, item: str | None =
 def describe_stack(driver_context: "DriverContext") -> dict[str, Any]:
     """What the selected stack offers, for a caller that has not chosen a record:
     its records (with their axes, inputs and whether a run may be parallel), the
-    repository's scripts, and the plugin ids installed here (what ``--plugin`` takes)."""
+    repository's scripts, each utility a step may run with its manifest (as
+    ``describe --entry`` lists them), and the plugin ids installed here (what
+    ``--plugin`` takes)."""
     records = driver_context.stack.call("get_tutorial_records")
     return {
         "plugin": [provider["id"] for provider in driver_context.identity.to_json()["providers"]],
@@ -86,6 +88,7 @@ def describe_stack(driver_context: "DriverContext") -> dict[str, Any]:
             for name, record in sorted(records.items())
         ],
         "scripts": list_scripts(driver_context),
+        "utility_manifests": _serialize(capability_manifest(driver_context)["utility_manifests"]),
         "installed_plugins": sorted(discover_plugins()),
     }
 

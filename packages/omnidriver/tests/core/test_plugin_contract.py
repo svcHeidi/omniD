@@ -28,8 +28,8 @@ def _protocol_members() -> set[str]:
     }
 
 
-def test_the_protocol_and_the_member_table_name_the_same_members():
-    assert _protocol_members() == set(MEMBERS)
+def test_the_protocol_names_every_member_a_provider_may_implement():
+    assert _protocol_members() == set(MEMBERS) - set(provider_stack._DERIVED_ANSWERS)
     assert set(SolverPlugin.__annotations__) == set(plugin_interface.IDENTITY_MEMBERS)
 
 
@@ -66,7 +66,6 @@ def test_a_provider_with_only_its_identity_joins_a_stack_and_every_neutral_membe
     assert stack.call("get_dict_entries") == ()
     assert stack.call("get_dictionary_catalog").documents == {}
     assert stack.call("get_dict_key_scanner") is None
-    assert stack.call("get_configured_environment", {"A": "1"}, context) == {"A": "1"}
     assert stack.call("get_case_runtime_conventions").generated_file_names == ()
     [unavailable] = stack.call("get_environment_diagnostics", None)
     assert unavailable.code == "environment_capability_unavailable"

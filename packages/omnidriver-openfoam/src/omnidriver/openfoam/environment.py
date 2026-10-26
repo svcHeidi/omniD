@@ -242,6 +242,11 @@ class OpenFOAMEnvironmentPlugin:
 
         return catalog_report
 
+    def get_utility_manifest_scanner(self):
+        from .utility_scanner import utility_manifest_report
+
+        return utility_manifest_report
+
     def get_case_runtime_conventions(self):
         return openfoam_case_runtime_conventions()
 
