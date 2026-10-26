@@ -301,7 +301,10 @@ _EMPTY = {
 
 
 class _ComposedProfile:
-    """Every provider's profile as one: case-file rules concatenated, ``requires`` unioned, the rest from the most specific provider."""
+    """Every provider's profile as one: case-file rules concatenated and the
+    digest taken over every profile; every other field (``requires``,
+    ``environment``, ``cxx_mapping``) is the most specific provider's alone.
+    The composed environment connection is ``environment_connection.stack_connection``."""
 
     def __init__(self, profiles):
         self._profiles = tuple(profiles)

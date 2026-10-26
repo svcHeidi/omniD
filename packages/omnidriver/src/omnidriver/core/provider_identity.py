@@ -79,9 +79,8 @@ def build_stack_identity(
     """Hash the composition RESULT, not merely its inputs.
 
     `resolutions` is member -> (winning provider id, resolved-content
-    digest). Only the profile, the dictionary entries and the manifest carry
-    a content digest; the rest carry a placeholder and contribute their
-    winner. A content change inside another member, in an editable install
+    digest). Only the profile and the dictionary catalogue carry a content
+    digest; the rest carry a placeholder and contribute their winner. A content change inside another member, in an editable install
     with no version bump, is therefore invisible here.
     """
     payload = {
