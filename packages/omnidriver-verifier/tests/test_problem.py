@@ -105,7 +105,7 @@ def test_a_derived_constant_states_which_value_a_solver_uses_and_its_tolerance(k
         ("units", "Iion", "per_unit_volume", "units.Iion"),
         ("units", "system", "SI", "units.system"),
         ("domain", "dimension_d_uses", "last_d_intervals", "domain.dimension_d_uses"),
-        ("initial", "points", {"cardiacfoam": "vertices"}, "initial.points"),
+        ("initial", "points", {"finite_volume": "vertices", "finite_element": "nodes"}, "initial.points"),
     ],
 )
 def test_the_self_description_is_checked(block, key, value, reported):
@@ -163,8 +163,11 @@ def test_each_level_is_judged_at_its_report_step(problem_id, mesh):
         (lambda p: p["time"].__setitem__("report_when", "t + dt/2"), "time.report_when"),
         (lambda p: p["time"].__setitem__("report_when", "t + tau >= end"), "tau"),
         (lambda p: p["norms"].__setitem__("at", "end"), "norms.at"),
-        (lambda p: p["norms"].__setitem__("points", "faces"), "norms.points"),
-        (lambda p: p["norms"].__setitem__("weight", "none"), "norms.weight"),
+        (lambda p: p["norms"].__setitem__("points", {"finite_volume": "faces", "finite_element": "nodes"}), "norms.points"),
+        (lambda p: p["norms"].__setitem__("weight", {"finite_volume": "none", "finite_element": "nodal_control_volume"}), "norms.weight"),
+        (lambda p: p["norms"].__setitem__("weight", {"finite_volume": "cell_volume", "finite_element": "cell_volume"}),
+         "norms.weight.finite_element"),
+        (lambda p: p["norms"].__setitem__("points", {"finite_volume": "cell_centres"}), "norms.points"),
         (lambda p: p["norms"].__setitem__("normalised_by", "cell_count"), "norms.normalised_by"),
         (lambda p: p["norms"].__setitem__("kinds", ["L1", "H1"]), "norms.kinds"),
         (lambda p: p["norms"].__setitem__("fields", ["V", "w"]), "norms.fields"),

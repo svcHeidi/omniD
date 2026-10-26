@@ -218,7 +218,7 @@ def _norms_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[s
     for kind in norms["kinds"]:
         if CXX_NORM_KINDS[kind] not in utils:
             found.append(f"norm {kind}")
-    if not all(line in utils for line in CXX_NORM_WEIGHTS[norms["weight"]]):
+    if not all(line in utils for line in CXX_NORM_WEIGHTS[norms["weight"]["finite_volume"]]):
         found.append("norm weight")
     if CXX_NORM_NORMALISATIONS[norms["normalised_by"]] not in utils:
         found.append("norm normalisation")
@@ -227,9 +227,9 @@ def _norms_drift(snippets: dict[str, str], problem: dict, commit: str) -> list[s
     centres = [line for line in verifier if "centres =" in line]
     times = [line.split("=")[1].strip().rstrip(";") for line in verifier if "const scalar t =" in line]
     pre_points, post_points = (CXX_POINTS.get(line.split(".")[-2]) for line in centres)
-    if post_points != norms["points"]:
+    if post_points != norms["points"]["finite_volume"]:
         found.append("norm points")
-    if pre_points != problem["initial"]["points"]["cardiacfoam"]:
+    if pre_points != problem["initial"]["points"]["finite_volume"]:
         found.append("initial points")
     if CXX_NORM_TIMES.get(times[1]) != norms["at"]:
         found.append("norm time")
@@ -424,7 +424,7 @@ def test_a_changed_snippet_is_reported(snippet, old, new, reported):
         ("pde", "equation", "chi*Cm*(Derivative(V, t) + Iion) - div(sigma*grad(V)) = source", "pde"),
         ("units", "Iion", "per_unit_capacitance", "units Iion"),
         ("time", "report_when", "t + dt >= end", "report rule"),
-        ("norms", "points", "nodes", "norm points"),
+        ("norms", "points", {"finite_volume": "nodes", "finite_element": "nodes"}, "norm points"),
         ("domain", "box", [[0, 1], [0, 2], [0, 1]], "domain 2D"),
         (("native", "cardiacfoam"), "verification_model", "manufacturedShellMonodomainVerifier", "tet verifier"),
     ],
