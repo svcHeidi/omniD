@@ -1,0 +1,5 @@
+# Recorded cardiac vocabulary in packages/omnidriver-openfoam/src. Format:
+# <path relative to that src>\t<token>\t<count>\t<reason>
+# This is debt, not a waiver: scripts/check-openfoam-shape.py fails on any new
+# (file, token) pair, any higher count, and any count that shrank without this
+# file being edited to match -- so the total can only go down.
