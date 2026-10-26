@@ -923,7 +923,7 @@ class DescribedQuantityPlugin(QuantityToyPlugin):
         quantity=QuantityTarget(
             artifact_format=VALUES_FORMAT, reference=Path("toy/reference.json"), at_unit=None, max_sampling_offset=0.001,
             study={"constant/mesh.json:label": "long"}, sweep_values=(2, 3), tolerance=5.0, tolerance_unit="ms",
-            parallel_tolerance=1e-9,
+            parallel_tolerance=1e-9, parallel_tolerance_unit="s",
             rank_evidence=RankEvidence(log_pattern=r"nRanks=(\d+)"),
         ),
     ))}
@@ -1071,7 +1071,7 @@ def quantity_toy_conformance_target(tmp_path: Path, *, plugin: str | None = None
             artifact_format=VALUES_FORMAT, reference=write_toy_reference(tmp_path / "reference.json"),
             pairs={"A": "A", "B": "B"}, at={"A": (0.0, 0.0, 0.007), "B": (0.02, 0.003, 0.0)},
             at_unit="m", max_sampling_offset=0.0, study={"number_cells": 2}, sweep_values=(2, 3),
-            tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9,
+            tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9, parallel_tolerance_unit="s",
             rank_evidence=RankEvidence(log_pattern=r"nRanks=(\d+)"),
         ),
     )

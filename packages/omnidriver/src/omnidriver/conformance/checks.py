@@ -657,7 +657,8 @@ def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
     output shows it ran on them (``QuantityTarget.rank_evidence``).
 
     A target that declares no quantity, or whose record is serial-only, is
-    not applicable."""
+    not applicable; one whose record is not serial-only fails when it lacks
+    ``parallel_tolerance`` or ``rank_evidence``."""
     ctx = _context(target)
     record = _record(ctx, target.record)
     declared = target.quantity
@@ -665,6 +666,9 @@ def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
         return _not_applicable("C13", "the target declares no quantity, so there is nothing to compare")
     if record.serial_only:
         return _not_applicable("C13", "the record is serial-only, so there is no parallel run to compare")
+    undeclared = [name for name in ("parallel_tolerance", "rank_evidence") if getattr(declared, name) is None]
+    if undeclared:
+        return _verdict("C13", False, f"the record runs in parallel, but its quantity declares no {' and no '.join(undeclared)}")
     serial = _run_for_quantities(target, ctx, declared.study, "serial")
     if isinstance(serial, str):
         return _verdict("C13", False, serial)
@@ -685,8 +689,13 @@ def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
         p = parallel_values[name]
         if (s.status, s.unit, s.sampled_at) != (p.status, p.unit, p.sampled_at):
             problems.append(f"{name!r}: serial reads {s.status} {s.sampled_at} {s.unit}, parallel {p.status} {p.sampled_at} {p.unit}")
-        elif s.status == "evaluated" and abs(p.value - s.value) > declared.parallel_tolerance:
-            problems.append(f"{name!r}: serial {s.value}, parallel {p.value}, beyond {declared.parallel_tolerance} {s.unit}")
+        elif s.status == "evaluated" and abs(p.value - s.value) > convert(
+            declared.parallel_tolerance, declared.parallel_tolerance_unit or s.unit, s.unit,
+        ):
+            problems.append(
+                f"{name!r}: serial {s.value}, parallel {p.value} {s.unit}, beyond "
+                f"{declared.parallel_tolerance} {declared.parallel_tolerance_unit or s.unit}"
+            )
     if not any(q.status == "evaluated" for q in serial_values.values()):
         problems.append("no declared quantity is evaluated in the serial run, so nothing was compared")
     return _verdict(

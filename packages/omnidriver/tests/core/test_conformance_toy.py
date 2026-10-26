@@ -25,7 +25,7 @@ from plugins.toy import (
     STRAY_NAME, STRAY_ROOT_VARIABLE, quantity_toy_conformance_target, toy_conformance_target,
     toy_conformance_target_with_input,
 )
-from plugins.toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN
+from plugins.toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN, VALUES_FORMAT, write_toy_reference
 
 
 #: The toy declares no output format and no quantity, so these verify nothing for it and are reported
@@ -569,6 +569,35 @@ def test_c13_bites_a_parallel_run_that_writes_other_values(tmp_path):
     verdict = run_check("C13", quantity_toy_conformance_target(tmp_path, plugin=REORDERING_PARALLEL_PLUGIN))
     assert verdict.status == "failed"
     assert "'A': serial 0.0015, parallel 0.002" in verdict.detail
+
+
+def test_c13_reads_the_parallel_tolerance_in_its_declared_unit(tmp_path):
+    """The two runs differ by 0.5 ms: within 1 ms, beyond 1 us."""
+    target = quantity_toy_conformance_target(tmp_path, plugin=REORDERING_PARALLEL_PLUGIN)
+    for unit, within in (("ms", True), ("us", False)):
+        quantity = dataclasses.replace(target.quantity, parallel_tolerance=1.0, parallel_tolerance_unit=unit)
+        verdict = run_check("C13", dataclasses.replace(target, quantity=quantity))
+        assert ("'A': serial 0.0015, parallel 0.002" not in verdict.detail) is within, verdict.detail
+
+
+def test_c13_fails_a_parallel_record_whose_quantity_declares_no_rank_evidence(tmp_path):
+    target = quantity_toy_conformance_target(tmp_path)
+    target = dataclasses.replace(target, quantity=dataclasses.replace(target.quantity, rank_evidence=None))
+    verdict = run_check("C13", target)
+    assert verdict.status == "failed" and "no rank_evidence" in verdict.detail
+
+
+def test_a_quantity_without_points_takes_the_ones_its_pairs_name_from_the_reference(tmp_path):
+    from omnidriver.core.conformance_study import QuantityTarget
+
+    quantity = QuantityTarget(
+        artifact_format=VALUES_FORMAT, reference=write_toy_reference(tmp_path / "reference.json"), at_unit=None,
+        max_sampling_offset=0.0, study={}, sweep_values=(2, 3), tolerance=5.0, tolerance_unit="ms", pairs={"A": "a"},
+    )
+    resolved = quantity.resolved(None)
+    assert (resolved.at, resolved.at_unit) == ({"a": (0, 0, 0.007)}, "m")
+    with pytest.raises(ValueError, match=r"no coordinates for \['Q'\]"):
+        dataclasses.replace(quantity, pairs={"Q": "q"}).resolved(None)
 
 
 def test_c13_bites_a_parallel_form_that_is_the_serial_run(tmp_path):
