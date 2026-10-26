@@ -28,7 +28,6 @@ def test_show_prints_the_definition(capsys):
 
 
 def test_residual_prints_the_verdict_per_dimension(capsys):
-    pytest.importorskip("sympy")
     code, answer = _run(capsys, "residual", "fda_monodomain")
     assert code == 0 and answer["status"] == "passed"
     assert [entry["residuals"]["pde"] for entry in answer["dimensions"]] == ["0", "0", "0"]
@@ -88,7 +87,6 @@ def test_compare_refuses_an_unreadable_results_file(capsys, tmp_path):
 
 
 def test_residual_prints_the_anisotropic_verdict(capsys):
-    pytest.importorskip("sympy")
     code, answer = _run(capsys, "residual", "anisotropic_monodomain")
     assert code == 0 and answer["status"] == "passed"
     assert [entry["dimension"] for entry in answer["dimensions"]] == [3]

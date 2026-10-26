@@ -10,8 +10,7 @@ import re
 from pathlib import Path
 
 import pytest
-
-sympy = pytest.importorskip("sympy")
+import sympy
 
 from omnidriver.verifier.problem import load_problem, pde_sides
 
