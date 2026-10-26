@@ -50,15 +50,16 @@ enforces; none is new. The last section is about the mesh.
   without it takes a map, `{"xMin": 0}`: each member is checked as that
   entry, and the case's sub-dictionary is replaced by exactly the map's
   members. This is how a patch moves from one map to another.
-- **`system/controlDict` is partly catalogued.** The keys the catalogue lists
-  are the ones `Foam::Time` reads (`omnidriver catalog` shows each with its
-  bounds): checked by shape and bounds when written, and with their menus and
-  relations before the run (`writeInterval` or its older name `writeFrequency`
-  is required; `endTime` when `stopAt` is `endTime`). Any other key of it, and
-  every key of `fvSchemes`, `fvSolution`, `blockMeshDict` and any other
-  `system/` document, is listed once with `validated: false` and written as
-  asked: omniD has no catalogue of OpenFOAM's other keys, so it cannot tell
-  whether the solver reads them.
+- **`system/controlDict` and `system/fvSchemes` are partly catalogued**, by
+  the OpenFOAM layer, as for every OpenFOAM-based solver: the `controlDict`
+  keys `Foam::Time` reads and each `fvSchemes` table's keys (`omnidriver
+  catalog` shows each with its bounds and menu) are checked when written, and
+  with their menus and relations before the run (`writeInterval` or its older
+  name `writeFrequency` is required; `endTime` when `stopAt` is `endTime`).
+  Any other key of them, and every key of `fvSolution`, `blockMeshDict` and
+  any other `system/` document, is listed once with `validated: false` and
+  written as asked: omniD has no catalogue of OpenFOAM's other keys, so it
+  cannot tell whether the solver reads them.
 - **Any other document is refused** by name, so a misspelt document is never
   taken for an OpenFOAM one.
 - **Region-split cases are not catalogued yet.** An electromechanics case
