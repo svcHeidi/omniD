@@ -110,20 +110,17 @@ class CardiacFoamPlugin:
         return samplable_fields(resolved)
 
     def get_solve_step_commands(self) -> frozenset:
-        """Commands that actually run the solver, for telemetry collection."""
-        from omnidriver.cardiacfoam.runtime_evidence import (
-            solve_step_commands,
-        )
+        """The solver commands: every command that runs the solver is one."""
+        from omnidriver.cardiacfoam.command_authorization import solver_commands
 
-        return solve_step_commands()
+        return solver_commands()
 
     def get_extra_provenance_paths(self, case_root) -> tuple:
-        """Extra inputs the provenance snapshot must digest beyond system/ and constant/."""
-        from omnidriver.cardiacfoam.runtime_evidence import (
-            extra_provenance_paths,
-        )
+        """The solver binary; what the case loads is the OpenFOAM layer's."""
+        del case_root
+        from omnidriver.cardiacfoam.runtime_evidence import solver_dependencies
 
-        return extra_provenance_paths(case_root)
+        return solver_dependencies()
 
     def get_artifact_value_reader(self, artifact_format: str):
         """Reader for a cardiac artifact format, or None if unsupported."""

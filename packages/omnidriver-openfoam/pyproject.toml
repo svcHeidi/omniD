@@ -20,7 +20,7 @@ openfoam-environment = "omnidriver.openfoam.environment:OpenFOAMEnvironmentPlugi
 [project.optional-dependencies]
 # The `gmsh` wheel is wanted for the *binary* it installs, not the Python
 # module -- nothing imports it. Tutorials that mesh from a .geo declare gmsh
-# through the RuntimeDependency seam (see cardiacfoam/runtime_evidence.py), so
+# through the RuntimeDependency seam (build_products.case_runtime_dependencies), so
 # a case that needs it says so and a missing binary is reported unavailable at
 # plan time rather than dying mid-run.
 #
