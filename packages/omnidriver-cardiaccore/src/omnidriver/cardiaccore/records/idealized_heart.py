@@ -5,8 +5,9 @@ The mesh is the native ``mesh`` input, overlaid onto the staged variant as each 
 from __future__ import annotations
 
 from omnidriver.core.tutorial_records import RecordInput, TutorialRecord
+from omnidriver.openfoam.polymesh import POLY_MESH_FILES
 
-from .anatomy import CONV, MESH, TREE_OUT, step
+from .anatomy import CONV, TREE_OUT, step
 
 #: The idealized mesh's coordinate fields (cobiveco naming): ``tm``
 #: 1=endocardium/0=epicardium, ``tv`` 0=LV/1=RV, ``apicobasal`` 0=apex/1=base,
@@ -19,9 +20,8 @@ COBIVECO = ("0/tm", "0/tv", "0/apicobasal")
 #: endocardial from both sides.
 COBIVECO_TREE_OUT = tuple(path for path in TREE_OUT if "RVSeptalEndoFaces" not in path)
 
-#: This mesh's polyMesh in full: it also carries `cellZones`/`faceZones`/
-#: `pointZones`, which `anatomy.MESH`'s five files omit.
-IDEALIZED_MESH = MESH + tuple(
+#: This mesh's polyMesh in full: it also carries `cellZones`/`faceZones`/`pointZones`.
+IDEALIZED_MESH = POLY_MESH_FILES + tuple(
     f"constant/polyMesh/{name}" for name in ("cellZones", "faceZones", "pointZones")
 )
 

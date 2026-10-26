@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from omnidriver.openfoam.polymesh import POLY_MESH_FILES
+
 #: The cardiacFoam dictionary every record in this package patches.
 ELECTRO_PROPERTIES = "constant/electroProperties"
 
@@ -12,14 +14,7 @@ ELECTRO_PROPERTIES = "constant/electroProperties"
 WITH_DEFAULT_VALUES = f"{ELECTRO_PROPERTIES}.withDefaultValues"
 
 #: ``blockMesh`` on one zone-free ``hex (`` block writes exactly these.
-POLY_MESH_OUTPUTS: tuple[str, ...] = (
-    "constant/polyMesh",
-    "constant/polyMesh/boundary",
-    "constant/polyMesh/faces",
-    "constant/polyMesh/neighbour",
-    "constant/polyMesh/owner",
-    "constant/polyMesh/points",
-)
+POLY_MESH_OUTPUTS: tuple[str, ...] = ("constant/polyMesh", *POLY_MESH_FILES)
 
 
 def gmsh_to_foam_outputs(*physical_volumes: str) -> tuple[str, ...]:

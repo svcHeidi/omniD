@@ -5,10 +5,7 @@
 from __future__ import annotations
 
 from omnidriver.core.tutorial_records import RecordInput, WorkflowStep
-
-#: constant/polyMesh's five files, restated here rather than imported from
-#: cardiacFOAM, which cardiacCore must not know about (package boundary).
-MESH = tuple(f"constant/polyMesh/{name}" for name in ("boundary", "faces", "neighbour", "owner", "points"))
+from omnidriver.openfoam.polymesh import POLY_MESH_FILES
 
 #: The three convention-named fields every utility reads via
 #: ``coordinatesConventionDict``'s ``uvc_*`` names.
@@ -18,7 +15,7 @@ UVC = ("0/uvc_transmural", "0/uvc_intraventricular", "0/uvc_longitudinal")
 #: ``--input anatomy=<bundle dir>`` is always required of a record that declares it.
 ANATOMY = RecordInput(
     name="anatomy",
-    files=tuple((path, path) for path in (*MESH, "0/fiber", "0/sheet", *UVC)),
+    files=tuple((path, path) for path in (*POLY_MESH_FILES, "0/fiber", "0/sheet", *UVC)),
 )
 
 #: Every utility reads this convention dictionary, though native ``Allrun``

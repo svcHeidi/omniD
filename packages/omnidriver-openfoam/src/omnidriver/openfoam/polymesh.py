@@ -15,6 +15,11 @@ from typing import NamedTuple
 
 Corner = tuple[float, float, float]
 
+#: The five files every ``polyMesh`` holds, by path from the case root; zones and sets are optional.
+POLY_MESH_FILES: tuple[str, ...] = tuple(
+    f"constant/polyMesh/{name}" for name in ("boundary", "faces", "neighbour", "owner", "points")
+)
+
 _HEADER = re.compile(rb"FoamFile\s*\{(.*?)\}", re.DOTALL)
 _ENTRY = re.compile(r'(\w+)\s+("[^"]*"|[^;]*?)\s*;')
 _ARCH = re.compile(r"(LSB|MSB);label=(32|64);scalar=(32|64)")
