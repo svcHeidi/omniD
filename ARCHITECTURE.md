@@ -2,13 +2,13 @@
 
 This repository is **OmniDriver**: a solver-agnostic workflow engine in six packages, one per concern; a seventh, `omnidriver-agents`, that measures agents driving it through the CLI and imports none of them; and an eighth, `omnidriver-verifier`, that holds manufactured problems as data and checks them, depending on core only.
 
-## The Grand Vision: Monorepo + Namespace Packages
-The engine orchestrates deterministic continuous simulations (OpenFOAM, openCARP and TorchCor today) and can steer optimization loops through autonomous agents.
+## Monorepo and namespace packages
+The engine gives an agent deterministic access to simulation solvers (OpenFOAM-based, openCARP and TorchCor today), their environments and the machines they run on. What the agent does with that access (benchmarking, comparing solvers, improving one) is the agent's reasoning, not omniD's.
 
-The project is a **Monorepo** paired with Python **Namespace Packages** (PEP 420). All the code lives in one GitHub repository, but it is published as six strictly decoupled `pip` packages.
+The project is a **Monorepo** paired with Python **Namespace Packages** (PEP 420). All the code lives in one GitHub repository, published as eight decoupled `pip` packages.
 
 ### Directory Structure & Import Semantics
-Because `src/omnidriver/` will not contain an `__init__.py` file in any of the packages, Python treats it as a namespace. Users can install them independently but import them beautifully:
+No package's `src/omnidriver/` holds an `__init__.py`, so Python treats it as a namespace: each package installs on its own and imports as `omnidriver.<package>`.
 
 ```text
 omnidriver/ (GitHub Root)
@@ -46,12 +46,13 @@ omnidriver/ (GitHub Root)
 │   ├── omnidriver-torchcor/             (import omnidriver.torchcor)
 │   │   └── src/omnidriver/torchcor/     <-- TorchCor adapter; depends on core only (Rule 5)
 │   │
-│   └── omnidriver-verifier/             (import omnidriver.verifier)
-│       └── src/omnidriver/verifier/     <-- Manufactured problems as data and their checks;
-│                                            depends on core only (Rule 6)
+│   ├── omnidriver-verifier/             (import omnidriver.verifier)
+│   │   └── src/omnidriver/verifier/     <-- Manufactured problems as data and their checks
+│   │                                        (`omnidriver-verify`); depends on core only (Rule 6)
+│   │
 │   └── omnidriver-agents/               (import omnidriver_agents; not in the namespace)
 │       └── src/omnidriver_agents/       <-- Agent harness: runs a task under agent CLIs, with
-│                                             and without omniD, through the CLI only (Rule 6)
+│                                             and without omniD, through the CLI only (Rule 7)
 │
 ├── benchmarks/                      <-- Published, solver-neutral reference definitions
 │                                        (e.g. niederer2011.json); scripts/check-benchmark-
@@ -69,8 +70,9 @@ omnidriver/ (GitHub Root)
 5. **Independent adapters:** `omnidriver.opencarp` and `omnidriver.torchcor`
    depend on core only and MUST NOT import `omnidriver.openfoam`, either
    cardiac adapter or each other, nor may any of them import either.
-6. **The verifier:** `omnidriver.verifier` depends on core only and reaches a
-   solver through the plugin contract; no other package imports it, so no
+6. **The verifier:** `omnidriver.verifier` imports only core's refusal shape.
+   It reaches no solver: it judges the results an agent hands it as JSON
+   against a problem's exact solution. No other package imports it, so no
    plugin depends on the checks that judge it.
 7. **The harness stays outside:** `omnidriver_agents` imports nothing from
    `omnidriver`, and nothing under `omnidriver` imports it; it measures omniD
@@ -90,10 +92,12 @@ Rule 1's second sentence is not "core names no OpenFOAM word". `Allrun`,
 concepts core legitimately owns, and core owns the concept, not its spelling.
 The checkable rule: core may name a binding only where it is reached through a
 declared role, a provider member or a documented, overridable default; a
-hardcoded string with no declaration path is a defect. `scripts/check-core-shape.py` holds what is left to a recorded
-baseline (`scripts/core-shape-baseline.txt`) that can only shrink, and
-`scripts/check-import-boundaries.py` enforces the import directions above.
-What is still open is tracked in `docs/superpowers/ROADMAP.md`.
+hardcoded string with no declaration path is a defect. `scripts/check-core-shape.py`
+fails on any OpenFOAM layout token in core (its baseline,
+`scripts/core-shape-baseline.txt`, is empty and may only shrink), and
+`scripts/check-openfoam-shape.py` does the same for cardiac vocabulary in the
+OpenFOAM layer; `scripts/check-import-boundaries.py` enforces the import
+directions above.
 
 ## Provider composition
 
@@ -121,7 +125,7 @@ writer, the record-key validator, the key catalogue and the case rules.
 | `catalog` | the `map` rule over a `DictionaryCatalog`'s documents, rebuilt into a catalog | `get_dictionary_catalog` |
 | `sequence` | concatenate every implementer's result, in stack order | `validate_run_semantics`, `get_record_key_catalog` |
 | `single` | the most specific non-`None` answer | `get_config_value_reader`, `get_parallel_steps` |
-| `chain` | thread the first argument through every implementer | `get_configured_environment`, `select_applicable_record_keys` |
+| `chain` | thread the first argument through every implementer | `select_applicable_record_keys` |
 | `profile` | every provider's profile: case files concatenated, the rest from the most specific | `get_profile` |
 
 A member nobody implements answers its shape's empty value (`frozenset()`,
@@ -144,3 +148,32 @@ The stack identity records, per member, the most specific implementing
 provider (`<unclaimed>` when none), and digests the content of the profile
 and the dictionary entries. A content change in another member,
 in an editable install with no version bump, is invisible to it.
+
+## What the agent knows, and how
+
+A fact an agent acts on should be a field of some command's JSON; prose is for
+the why. **Data** is a CLI field, **prose** is a document, **unknown** is
+nowhere. Where the solvers differ, the row says so.
+
+| fact | cardiacFOAM, cardiacCore | openCARP | TorchCor |
+|---|---|---|---|
+| keys | data: `describe --entry` (`record_surface.keys`), `catalog`; drift: `catalog --uncatalogued`, `--unread` | data: `catalog`, generated from `+Help` | data with `--repo` (the runner's `--describe`); with `--plugin` alone keys are written unvalidated |
+| menus | data: `menu`, `cxx_values` from the scan | data: `menu`, with `menu_labels` for integer codes | data: `device` |
+| defaults | mostly unknown: `default` is stated for a few selectors; a catalogued default the C++ contradicts is a `disagreement` warning, but the C++'s default reaches the agent only for an uncatalogued read | data: `default`, or `default_expression` | unknown: every key is required |
+| relations, bounds | data: the relation fields, `minimum`/`exclusive_minimum`/`maximum`; some positivity rules are still only `constraints` prose | data: bounds; a bound that is an expression is a refusal's `maximum_expression` | data: the runner's `--check` verdict |
+| units | partly data: `unit`, empty on most numeric entries | data: `unit`, in core's spelling | data: in the key names (`_S_per_m`, `_mV`) |
+| axes, readers | data: `record_surface.axes`, `record_surface.readers` (a format with no reader is `reader: null`) | same | same |
+| numerics, orders | data: `menu_attributes` (`formal_order`, `stated_by`, `settled_by`) on the fvSchemes tables and cardiacFOAM's `solutionAlgorithm`, `batchedIntegrator` and `timeCouplingScheme` | unknown | unknown |
+| ionic models | data: `catalog --named ionic_model_catalog` (cardiacFOAM) | unknown: a free string | one model |
+| utilities | data: `describe`'s `utility_manifests` (flags, arguments, `produces`); drift under `catalog --uncatalogued`/`--unread` | n/a | n/a |
+| native studies | prose: the solver guidance points at `setup/studies/`; no command lists them | prose: `benchmarks/niederer2011/oblique/` | same as openCARP |
+| current case values | unknown | unknown | unknown |
+| shell | data: `env` (`variables`, `shell_prefix`, `commands`, `preflight`) | same | same |
+| MPI | data: `env` (`launcher`, the 2-rank `parallel` probe); preflight refuses the other MPI's launcher | same | n/a: `serial_only` |
+| builds and source | data: `build-record`, the run document's `solverProvenance`, `stale_build` / `build_source_unknown` | data: `-buildinfo` | data: the editable install |
+| machine | data: `env`'s `host`, each step's `host` in `workflow_state.json`; a run document's process count is rechecked against the allocation at dispatch (`allocation_mismatch`) | same | same |
+| job submission | prose: `AGENT_GUIDE.md`'s Slurm script; `sweep-plan` writes each case's run document, so a sweep can be one job per case | same | n/a |
+| cross-solver mappings | prose: `docs/solver-learning/cross-solver-variables.md` | same | not covered |
+| benchmarks | data once named: `describe --benchmarks DIR`; no command lists them | same | same |
+| verification problems | data: `omnidriver-verify` (`problems`, `show`, `residual`, `cell-model`, `norms`, `compare`) | same, through the problems' finite-element norms | not mapped |
+| verification status | `check` prints `verified` per record and persists nothing; the results are prose in the ROADMAP and `docs/solver-learning` | same | same |
