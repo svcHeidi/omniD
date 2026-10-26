@@ -1,7 +1,8 @@
 # OmniD agent router
 
-This is the provider-neutral entry point for an agent working in OmniD. Read
-it before planning a change or run. It does not assume that a provider reads
+This is the one entry point for an agent working in OmniD, whatever its
+provider. Read it before planning a change or run; every other document is
+reached from the role you choose here. It does not assume that a provider reads
 files automatically: an agent launcher must inject this file and the selected
 documents from `agent-handbook/guidance-manifest.yaml`.
 When implementing such a launcher, also read
@@ -32,3 +33,14 @@ guess.
 Solver-specific behavior belongs in that solver's adapter and tests. Core
 changes require a reproduced orchestration defect, not a desire for a more
 general abstraction.
+
+## Reference documents
+
+- [`AGENT_GUIDE.md`](AGENT_GUIDE.md): what each `omnidriver` command prints and
+  refuses.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): the packages, what each may import, and
+  what the agent knows as data.
+- [`docs/superpowers/ROADMAP.md`](docs/superpowers/ROADMAP.md): the current
+  state and what is next.
+- [`CLAUDE.md`](CLAUDE.md): the maintainer's verification guide (the
+  maintainer role loads it).

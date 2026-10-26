@@ -50,16 +50,14 @@ enforces; none is new. The last section is about the mesh.
   without it takes a map, `{"xMin": 0}`: each member is checked as that
   entry, and the case's sub-dictionary is replaced by exactly the map's
   members. This is how a patch moves from one map to another.
-- **`system/controlDict` and `system/fvSchemes` are partly catalogued**, by
-  the OpenFOAM layer, as for every OpenFOAM-based solver: the `controlDict`
-  keys `Foam::Time` reads and each `fvSchemes` table's keys (`omnidriver
-  catalog` shows each with its bounds and menu) are checked when written, and
-  with their menus and relations before the run (`writeInterval` or its older
-  name `writeFrequency` is required; `endTime` when `stopAt` is `endTime`).
-  Any other key of them, and every key of `fvSolution`, `blockMeshDict` and
-  any other `system/` document, is listed once with `validated: false` and
-  written as asked: omniD has no catalogue of OpenFOAM's other keys, so it
-  cannot tell whether the solver reads them.
+- **`system/controlDict` and `system/fvSchemes` are the OpenFOAM layer's**, as
+  for every OpenFOAM-based solver: their catalogued keys (`omnidriver catalog`
+  lists each with its bounds and menu) are checked when written and, with
+  their menus and relations, before the run (`writeInterval` or its older name
+  `writeFrequency` is required; `endTime` when `stopAt` is `endTime`). Any
+  other key of them, and every key of another `system/` document
+  (`fvSolution`, `blockMeshDict`, ...), is written as asked and flagged
+  `validated: false`: omniD cannot tell whether the solver reads it.
 - **Any other document is refused** by name, so a misspelt document is never
   taken for an OpenFOAM one.
 - **Region-split cases are not catalogued yet.** An electromechanics case
@@ -83,8 +81,8 @@ check it; the refusals it names are the record's own.
 - **blockMesh is the default route.** A record runs its native case's own
   route unless the study picks another: `blockMesh` with
   `system/blockMeshDict`, or the dictionary the case's own scripts name. For
-  bidomain and eikonalECG that is `-dict system/blockMeshDict.3D`, from their
-  `regression/regressionTest.sh`. A record mirrors the native commands and
+  the manufactured cases that is `-dict system/blockMeshDict.3D`, as their
+  `Allrun` meshes by default. A record mirrors the native commands and
   never calls `./Allrun`. `describe`'s `record_preview.workflow_variant`
   says which route runs and whether the study or the record chose it.
   `record_preview.workflow_commands` shows each step's command line.
@@ -120,10 +118,11 @@ check it; the refusals it names are the record's own.
   default, `cardiacFoam`, the coupled 1D-3D myocardium/Purkinje solve) or
   `"graphOnly"` (`"solver": "graphOnly"`, `runPurkinjeGraph`, the graph
   alone with no myocardium coupling -- the case's own README "Graph-Only
-  Diagnostic"). `graphFile` (a direct `constant/electroProperties` key,
+  Diagnostic"). The `graphFile` axis (`constant/electroProperties`'
   `purkinjeGraphModelCoeffs.graphFile`) picks which committed
-  `constant/purkinjeGraph*` file either route reads, by name, checked
-  against the staged case.
+  `constant/purkinjeGraph*` file either route reads, by name, checked against
+  the staged case; a study that states `numberCells` N and no `graphFile`
+  takes the Allrun's `purkinjeGraph.nodes<N+1>`.
 - **A Purkinje graph is data, selected and never edited.** The file
   `graphFile` names is the catalogue's `purkinjeGraph` document, whose entries
   state each key, its unit and its constraints; no study key addresses it, so

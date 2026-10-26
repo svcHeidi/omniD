@@ -1,6 +1,6 @@
 # Version Policy
 
-omniD is a monorepo of independently versioned packages: `omnidriver` (core orchestrator) and plugins (`omnidriver-openfoam`, `omnidriver-cardiacfoam`, `omnidriver-cardiaccore`, `omnidriver-opencarp`, `omnidriver-torchcor`), plus `omnidriver-agents`, the agent harness, which depends on no omniD package. Each package strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/) **on its own version number** — there is no shared/lockstep version across packages.
+omniD is a monorepo of independently versioned packages: `omnidriver` (core orchestrator) and plugins (`omnidriver-openfoam`, `omnidriver-cardiacfoam`, `omnidriver-cardiaccore`, `omnidriver-opencarp`, `omnidriver-torchcor`), plus `omnidriver-verifier`, the manufactured-problem checks, which depends on core only, and `omnidriver-agents`, the agent harness, which depends on no omniD package. Each package strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/) **on its own version number** — there is no shared/lockstep version across packages.
 
 ## Core (`omnidriver`)
 

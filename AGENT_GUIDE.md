@@ -22,6 +22,7 @@ is tested against the code; verify any other module path before relying on it.
 | Locate predicted outputs | `strict_plan(...)`'s `expected_artifacts` field (also in `omnidriver plan --strict` JSON) | `omnidriver.core.strict_planning` |
 | Verify outputs vs predictions | `artifact_reconciliation` in `run`/`step` JSON output | `omnidriver.core.runtime.reconciler` |
 | Plan/run a study over a record | `omnidriver sweep-plan/sweep-run --spec sweep.json --output-dir <dir>` | `omnidriver.core.runtime.sweep_runner` |
+| Check a solver's results against a manufactured solution | `omnidriver-verify problems/show/residual/cell-model/norms/compare` | `omnidriver.verifier` |
 
 ## Selecting the stack
 
@@ -95,14 +96,11 @@ Plan strictly before launching: it tells an agent, before anything runs,
 whether the run is validated, catalogue-covered, artifact-predictable and
 workflow-addressable.
 
-For cardiacFoam, copy `omnidriver-runtime.example.yaml` once per host and
-point `OMNIDRIVER_RUNTIME_CONFIG` at it. It selects the physics backend the
-plugin's `plugin.yaml` declares (`lightweight` or `full`), the OpenFOAM
-bashrc, the solids4foam root and the `cardiacFoam.build.json` manifest, which
-`runtime_profile.py` regenerates when it is missing or older than the solver
-(from the binary's linked libraries, never an asserted flag). An unset,
-invalid, unbuilt or mismatched selection is refused. It applies to every
-cardiacFoam record and is separate from study values.
+Run from the solver's shell: `omnidriver env` lists the variables to supply
+and prints the `shell_prefix` that sources it (see "A solver's shell").
+`--environment-source` hands the stack another environment to load (for the
+OpenFOAM stacks, a bashrc); a plan loads it once, hands it to every member
+that reads the environment, and records it in `launch.command`.
 
 ```bash
 omnidriver plan --strict --repo <cardiacFOAM> --scratch-dir <scratch> --entry singleCell
@@ -267,12 +265,14 @@ omnidriver step --repo <cardiacFOAM> --run-document run.json --step solve   # si
    allowlist**: each step's command must be a known OpenFOAM/driver core
    command, a recognized case script (`Allrun`-family), an entry in the
    active plugin's utility manifests (`get_utility_manifests()`, declaring
-   `produces`), or an executable installed under
+   `produces`), or an executable installed under the loaded environment's
    `$FOAM_APPBIN`/`$FOAM_USER_APPBIN` (any core OpenFOAM app or your own
    compiled utility). Arbitrary non-OpenFOAM commands are rejected before
-   anything runs. Note: when OpenFOAM is not sourced, only the core set +
-   case scripts + declared utility manifests are accepted. A script in the
-   supplied repository's scripts folder is accepted too, named relative to it.
+   anything runs. The installed applications are looked up in the
+   environment the plan loads, not in omniD's own process, so outside the
+   solver's shell only the core set, case scripts and declared utility
+   manifests are accepted. A script in the supplied repository's scripts
+   folder is accepted too, named relative to it.
 4. Requires `launch.caseRoot` (an existing directory) and `launch.outputDir`;
    when `OMNIDRIVER_ALLOWED_RUNS_ROOT` is set, both must resolve under it.
 
@@ -363,8 +363,12 @@ One case with study values is the same spec with one-value axes:
 
 Each case is staged from the native case into `<output_dir>/cases/<case_id>/`
 and committed there; the native tree is never written. That one folder is the
-case, and `sweep-run` writes its `run_document.json`, `workflow_state.json`,
-`workflow_logs/` and `case_record.json` beside the case files. A `caseId` dependent
+case. `sweep-plan` writes its `run_document.json` there, so each case can be
+submitted on its own (`omnidriver run --run-document
+<output_dir>/cases/<case_id>/run_document.json`, one job per case), and
+`sweep-run` adds `workflow_state.json`, `workflow_logs/` and `case_record.json`
+beside the case files. `--environment-source` given to `sweep-plan` or
+`sweep-run` reaches every case's plan. A `caseId` dependent
 entry becomes the case's directory name (validated for uniqueness and
 path-safety); otherwise cases are named `case_0001`, `case_0002`, ... in
 expansion order. A case that cannot be staged or planned fails alone, not the
@@ -445,7 +449,12 @@ case are told apart in provenance. A serial run's document has no
 `SLURM_NTASKS`, only when a run asks for parallel (a scheduler's allocation is
 an ambient fact: CLAUDE.md, "supplied versus discovered"). It never overrides
 the case, and the case never overrides it: when they disagree the plan is
-refused by name, and you change one of them.
+refused by name, and you change one of them. `run --run-document` compares
+each launcher step's process count with the allocation it is run in before
+anything starts, so a plan made on a login node or under another allocation
+is refused (`allocation_mismatch`). The solve runs under the launcher the
+stack declares (`omnidriver env`'s `launcher`); a stack that declares none
+refuses a parallel run by name.
 
 - OpenFOAM: make `numberOfSubdomains` equal the allocation. Put it in the study
   (`"system/decomposeParDict:numberOfSubdomains": 64`), or request
@@ -550,9 +559,9 @@ carries a top-level `failure_context` object for the failed step:
 
 The driver surfaces raw tails and status only. It does **not** judge convergence
 or pick a fix — interpretation and remediation are the agent's job. The loop is:
-read `failure_context` → edit the case dict (e.g. via `build_electro_properties`
-or `mutators.py`) → `step --run-document <doc> --step <id>` reruns the failed step (the
-`attempt` counter increments).
+read `failure_context` → write the fix as `document:key` patches and apply them
+with `step --run-document <doc> --step <id> --apply <patches.json>` (below),
+which reruns the failed step (the `attempt` counter increments).
 
 To shorten that loop, `failure_context` also carries a
 `candidate_remediations` array — **suggestions only**, the agent applies them.
@@ -727,9 +736,52 @@ the worked case (`omnidriver check`'s C13 and C14; evidence in
    between two discretisations is a finding to report, not a request to
    retune.
 
-`benchmarks/niederer2011/campaign/` runs this over the paper's full grid; its
-`README.md` is the runbook (per-solver environment, Slurm, the pre-registered
-requests and their digests, `campaign.sh compare`).
+`benchmarks/niederer2011/campaign/` holds the pre-registered requests for the
+paper's full grid; whether it stays in omniD is open (ROADMAP).
+
+## Verifying against a manufactured solution: `omnidriver-verify`
+
+A benchmark is judged against references, and spread is a result. A
+verification problem checks a solver against an exact solution: model parity
+and convergence order. `omnidriver-verify` holds the problems as data
+(`omnidriver.verifier.problems`, one TOML each) and answers in JSON; a refusal
+has the shape and codes above, and a check that fails exits 1.
+
+```bash
+omnidriver-verify problems                                  # id, title, dimensions, mesh_progression
+omnidriver-verify show fda_monodomain                       # the whole definition
+omnidriver-verify residual fda_monodomain                   # the exact fields in the problem's own equations
+omnidriver-verify cell-model fda_monodomain --model model.json
+omnidriver-verify norms fda_monodomain --values field.json
+omnidriver-verify compare fda_monodomain --results a.json b.json [--temporal]
+```
+
+- `residual` and `cell-model` need the `symbolic` extra (sympy); without it
+  they refuse with `required_check_unavailable`. Each answers `{problem,
+  equation, status, dimensions}`, with one entry per dimension holding its
+  residuals, source, boundary, initial values, derived constants and
+  parameters, each `passed` or `failed`.
+- `cell-model` is gate 1 on a generated cell model: `model.json` holds
+  `rates` (one per state), `Iion` and `parameters` in the problem's names, and
+  optionally `pde_parameters` (what the solver's PDE was given) and
+  `fixed_capacitance`.
+- `norms` takes `{dimension, field, time, points, values, weights}`: the
+  solver's field at its own points, in the problem's units. `weights` is a
+  list, or the weight the problem names for the solver's discretisation
+  (`norms.weight`): `{"weight": "cell_volume", "cells_per_axis", "edge"}` for
+  a finite-volume solver at cell centres, `{"weight": "nodal_control_volume",
+  "elements", "element"}` for a finite-element one at nodes (`element`
+  `structured` or `tetrahedron`). It answers `norms`, each of the problem's
+  kinds (`L1`, `L2`, `Linf`), normalised by the total weight.
+- `compare` tables each solver's errors per level, with observed and stated
+  orders (`rows`). A result is `{solver, problem, mesh, stated, levels}`, each
+  level `{dimension, cells_per_axis, dt, steps, errors}` on the problem's
+  refinement ladder. `--temporal` tables the problem's time-step ladder
+  instead, from one JSON per solver configuration and reference (`solver,
+  problem, configuration, reference, stated, levels`), with orders in dt.
+
+Running the solver at each level, reading its field and choosing what to
+compare are the agent's.
 
 ## The entries of one dictionary: `omnidriver catalog`
 
@@ -744,13 +796,19 @@ shows as `record_surface.keys` and the record-key validator refuses by.
 such as `stim[0].start` finds its `stim[Int].start` template. Each entry
 names its `document`, `key`, `value_kind` and `description`. cardiacFOAM and
 cardiacCore entries add `driver_path`, `unit`, `menu`, `typical_value`,
-`applicable_when` and `source_refs` (C++ files). openCARP entries add
-`default`, `minimum`, `maximum`, `menu` and `source_refs` (the binary's
-`+Help`). No catalogue here records a default for an OpenFOAM key.
+`default` (stated only for a few selectors, so an absent key reads as it),
+`applicable_when` and `source_refs` (C++ files). An enum's `menu_attributes`
+state facts about each value: on the fvSchemes tables and cardiacFOAM's
+`solutionAlgorithm`, `batchedIntegrator` and `timeCouplingScheme`, its
+`formal_order`, where that order is stated (`stated_by`) and how it was
+settled (`settled_by`). openCARP entries add `default` (or
+`default_expression` when `+Help` gives a C expression), `minimum`,
+`maximum`, `menu`, `menu_labels` (what each integer code means) and
+`source_refs` (the binary's `+Help`).
 
 `cxx_source` says whether the C++ was read. The source root is supplied,
 never discovered. For cardiacFOAM it is `$OMNIDRIVER_NATIVE_TUTORIALS/../src`,
-and for cardiacCore `$OMNIDRIVER_CARDIACCORE_TREE/src`; the plugin profile's
+and for cardiacCore `$OMNIDRIVER_CARDIACCORE_TREE/..`; the plugin profile's
 `cxx_mapping.source_root` declares both. When the root is supplied, the
 stack's scanner runs. Every entry whose values a C++ runtime-selection table
 registers (every `ionicModel`, say) then carries them as `cxx_values`.
@@ -802,8 +860,9 @@ disappears from the C++ never fails a plan. A plan compares them with the scan:
   sets it gets an `unread_case_dict_key` warning saying it has no effect;
 - a catalogue claim the C++ refutes is a `plugin_catalog_disagreement` warning
   stating both sides: a type the C++ reads differently, a menu value no table
-  registers, a required key the C++ gives a default, or an optional key the C++
-  requires. A read counts against an entry only when it agrees with the entry
+  registers, a required key the C++ gives a default, an optional key the C++
+  requires, or a catalogued `default` the C++ reads differently (literals are
+  compared as numbers, switches or words; an expression is not compared). A read counts against an entry only when it agrees with the entry
   beyond the final name, or is in a file the entry cites, so a same-named key
   elsewhere disagrees with nothing.
 
@@ -828,7 +887,19 @@ omnidriver catalog --plugin cardiacfoam --unread               # every catalogue
 
 `catalog --uncatalogued` lists each uncatalogued read with its type,
 `value_kind`, default, scope and source location: what an agent needs to
-describe it and add it to the catalogue. Each plugin's
+describe it and add it to the catalogue. A suggested entry's `source_refs`
+are relative to the repository when the scanned root is its declared
+`source` (`repository.source_prefix`), and to the scanned root otherwise.
+
+Both commands also compare each utility manifest with the command line its
+C++ declares (the utility found by its `Make/files`; its `addOption`,
+`addBoolOption`, `addArgument` and `getOrDefault` literals), under
+`utility_manifests`: `compared`, then either `reason` (no manifests, no
+scanner, or no `--repo`) or `findings` and `not_built`. `--uncatalogued` lists
+an option the manifest lacks (`uncatalogued`) and a default or positional
+count stated differently (`disagreement`); `--unread` a flag the C++ never
+declares. A strict plan reports the same for each utility its DAG runs, and
+none of it fails a plan. Each plugin's
 `dict_key_allowlist.json` records what the scan cannot establish:
 `unseen_reads` (catalogued keys read outside the source, such as by
 OpenFOAM's `Foam::Time`, or through a non-literal key) and, for
@@ -857,17 +928,21 @@ what is set; it never searches the disk, except that OpenFOAM's
 - `preflight`: the stack's own preflight on that environment, over its solver
   command;
 - `parallel`: the same preflight over a 2-rank solve, reported on its own
-  (`ranks`, `status`, `diagnostics`). It never changes `status`: a serial-only
-  user needs no working launcher.
+  (`ranks`, `status`, `diagnostics`). A failed `parallel` turns an `ok`
+  `status` into `degraded`, never `failed`: a serial-only user needs no
+  working launcher;
+- `host`: the machine before anything runs: host name, OS, CPU, core count
+  and the ambient `SLURM_*`/`OMP_*` variables, so a laptop and a cluster
+  allocation are told apart.
 
 Run commands behind the prefix: `bash -c '<shell_prefix> omnidriver run ...'`.
-It exits 1, with the refusal named, when a required variable is unset or the
-serial check fails. Each solver's shell puts only its own MPI first, and a launcher
-from the other MPI is refused (`openfoam_mpi_launcher_mismatch`,
-`opencarp_mpi_launcher_mismatch`). Every step a run executes records where
-it ran in `workflow_state.json`, under `steps[].host`: host name, OS, CPU,
-core count, the scheduler and threading variables, the declared variables
-and, under a launcher, its path, version and rank count.
+It exits 0 for `ok` and `degraded`, and 1, with the refusal named, when a
+required variable is unset or the serial check fails. Each solver's shell puts
+only its own MPI first, and a launcher from the other MPI is refused
+(`openfoam_mpi_launcher_mismatch`, `opencarp_mpi_launcher_mismatch`). Every
+step a run executes records the same `host` in `workflow_state.json`, under
+`steps[].host`, with the declared variables and, under a launcher, its path,
+version and rank count.
 
 ## Checking a solver you are working on: `omnidriver check`
 
@@ -889,8 +964,9 @@ whenever the checks ran, and a failing check is the report doing its job. Each r
 declares how it is exercised briefly (`TutorialRecord.conformance`: a short
 study, a patch, a sweep and, for a record that compares against a benchmark, the
 quantity C13 and C14 compare); a record that declares none is reported
-`no_study`. A record whose commands are not on `PATH` is `not_run`, naming them:
-run from the solver's shell (`omnidriver env`). A record that needs a supplied
+`no_study`. A record whose commands are not on `PATH` is `not_run`, naming them
+(each a `program_not_on_path` diagnostic whose `field` is the program): run
+from the solver's shell (`omnidriver env`). A record that needs a supplied
 input takes `--input NAME=PATH`, as in a plan. The native tree is never written:
 a check fails if anything under the cases root changed while it ran.
 
@@ -990,19 +1066,21 @@ expression of other parameters is a string under its own key
    models). `omnidriver catalog --plugin P --named ionic_model_catalog` prints
    the catalog in full and `--item TNNP` one model: its states, compatible
    solvers and tissues, recommended exports.
-4. **What utilities are known?** `driver_context.stack.call("get_utility_manifests")`
-   is the stack's `dict[str, UtilityManifest]`. Strict planning fails when a
-   workflow command has missing required `produces` metadata. Core names no
-   solver's utilities by design.
+4. **What utilities may a step run?** `describe`, with or without `--entry`,
+   lists `utility_manifests`: each allowed utility's purpose, inputs, flags
+   with their defaults, positional arguments and `produces`. A manifest with
+   no `produces` authorises no step (`utility_without_produces`). Core names no
+   solver's utilities.
 5. **What does the C++ read that the catalogue lacks?** `omnidriver catalog --repo <tree> --uncatalogued`
    (see "The C++ scan" above). It fails by name when nothing was scanned (no C++
    source supplied, or a stack with no C++): an empty list would read as "all
    catalogued". (`omnidriver.plugins` is the entry-point group name, not a
    package path.)
-6. **What commands may a workflow step run, and what fields may a function object sample?** Read the `capability_manifest` block emitted by both `describe --entry <name>` and `plan --strict --entry <name>` (and `describe_entry(...)` / `strict_plan(...).to_json()` programmatically). It is the authoritative, machine-readable accept-surface: `allowed_commands` (`core`, `case_scripts`, `utilities`, plus the `$FOAM_APPBIN` note) mirrors the command allowlist exactly, and `samplable_fields` lists the field names the *resolved* model exposes,
-keyed by region. **Both blocks are plugin-dependent.** For cardiacFoam the
-regions are `electro` / `solid`; read the keys that are there rather than
-assuming a fixed set. Author `workflowDag` commands and `functions{}` field lists against this instead of guessing — a command outside `allowed_commands` is rejected before execution, and a field outside `samplable_fields` is dropped silently by the solver (see below).
+6. **What commands may a workflow step run, and what fields may a function object sample?** Read the `capability_manifest` block emitted by both `describe --entry <name>` and `plan --strict --entry <name>` (and `describe_entry(...)` / `strict_plan(...).to_json()` programmatically). It is the authoritative, machine-readable accept-surface: `allowed_commands` (`core`, `environment`, `plugin`, `case_scripts`, `utilities`) mirrors the command allowlist, beside the applications the loaded environment installs, and `samplable_fields` lists the field names the stack reports for no resolved model,
+keyed by region. A plan's `unknown_sampled_field` check judges against the
+resolved model's fields. **Both blocks are plugin-dependent.** For cardiacFOAM
+a single-region case's fields are under OpenFOAM's `region0`; read the keys
+that are there rather than assuming a fixed set. Author `workflowDag` commands and `functions{}` field lists against this instead of guessing — a command outside `allowed_commands` is rejected before execution, and a field outside `samplable_fields` is dropped silently by the solver (see below).
 
 A plan reports a note about an uncatalogued or unread key only for a dictionary
 the case holds; a read the scan cannot place in a dictionary is not noted.
@@ -1108,9 +1186,9 @@ Outputs land where OpenFOAM puts them:
 **Strict planning checks sampled field names.** `plan --strict` parses each
 `controlDict` `functions{}` sub-dict's `fields (...)` list and emits a
 **warning-level** `unknown_sampled_field` diagnostic (in the report's
-`plugin_diagnostics`) for any field the resolved model does not expose —
-`region solid;` blocks are checked against the mechanics fields, everything else
-against the electro fields (`capability_manifest.samplable_fields`). This is
+`plugin_diagnostics`) for any field the resolved model does not expose in the
+block's `region` (OpenFOAM's `region0` when the block names none); a region the
+stack does not describe is not checked. This is
 **non-blocking**: it never fails a plan, because the catalog can lag the C++
 solver and a false positive must not block a run — but it turns the solver's
 otherwise-silent field drop into a visible signal. `#includeFunc` shorthands are
@@ -1211,23 +1289,18 @@ builder by naming one under the `omnidriver.builders` entry-point group.
 
 ### Parsing Complex OpenFOAM Dictionaries
 
-`mutators.py` mutates dictionaries in two tiers.
-
-**Tier 1** is a line-based reader/writer. It is the primary path because it
-returns and writes values *verbatim* -- `5e-6` stays `5e-6`. It handles block
-comments, `#include`, and `#calc` correctly.
-
-**Tier 2** is `foam_backend.py`, backed by foamlib. It is consulted only when
-tier 1 cannot locate the target -- most commonly a brace inside a quoted value,
-which defeats brace counting. foamlib parses in process and never evaluates
-`#calc` or `#codeStream`.
-
-Reads never reach tier 2: `read_foam_entry` returns verbatim source text, and foamlib returns typed values.
+`omnidriver.openfoam.dictionary_reader` reads and writes nothing else:
+`read_foam_entry` and `read_foam_entries` return a value's source text
+verbatim (`5e-6` stays `5e-6`), handling block comments, `#include` and
+`#calc`. `omnidriver.openfoam.mutators` writes: a line-based writer first,
+then foamlib (`foam_backend.py`) where it cannot locate the target, most
+often a brace inside a quoted value. Neither evaluates `#calc` or
+`#codeStream`. A case is written only through the case writer
+(`commit_case_write`), as a study's `document:key` patches.
 
 omnidriver does not shell out to the `foamDictionary` binary, and its
-behaviour does not depend on whether OpenFOAM is sourced. If you are writing
-tools that query these dictionaries, use the `mutators.py` API -- not `grep`
-or `sed`.
+behaviour does not depend on whether OpenFOAM is sourced. A tool that queries
+these dictionaries uses `dictionary_reader`, not `grep` or `sed`.
 
 ## Known gaps
 
@@ -1247,23 +1320,21 @@ These are real limitations; the agent must not assume them:
 - **Environment preflight** is command-aware but not exhaustive. Strict planning
   derives the executables your plan will run from its `workflow_dag` steps and
   errors (`environment_diagnostics`, a first-class report field) if any are missing
-  from `PATH`, if `WM_PROJECT_DIR` is unset, or if the plan is parallel but no
+  from `PATH` (`program_not_on_path`, whose `field` names the program), if `WM_PROJECT_DIR` is unset, or if the plan is parallel but no
   `mpirun`/`mpiexec` is found. It warns on a partially-sourced environment
   (`WM_PROJECT_VERSION` / `FOAM_USER_LIBBIN` unset). It does **not** yet check free
   disk space or output-directory writability. The OpenFOAM bashrc is supplied, never
-  searched for: `--environment-source`, else `OPENFOAM_BASHRC`, else `openfoam.bashrc`
-  in the file `OMNIDRIVER_RUNTIME_CONFIG` names, else the `etc/bashrc` of the install
-  a sourced shell names through `WM_PROJECT_DIR`; a plan that needs OpenFOAM and has
-  none refuses with `missing_openfoam_env`. `omnidriver env` resolves an unset
-  `OPENFOAM_BASHRC` by the same order, minus `--environment-source`, and says where it found the file in that variable's `resolved_from` (`OMNIDRIVER_RUNTIME_CONFIG` or `WM_PROJECT_DIR`).
-
-- **Active-tension models beyond NashPanfilov and GoktepeKuhl** are not in `active_tension_catalog.py`. Future C++ models must be registered there before artifact prediction will cover their state variables.
+  searched for: `--environment-source`, else `OPENFOAM_BASHRC`, else the `etc/bashrc`
+  of the install a sourced shell names through `WM_PROJECT_DIR`; a plan that needs
+  OpenFOAM and has none refuses with `missing_openfoam_env`. `omnidriver env` resolves
+  an unset `OPENFOAM_BASHRC` by the same order, minus `--environment-source`, and says
+  where it found the file in that variable's `resolved_from` (`WM_PROJECT_DIR`).
 
 If your agent depends on any of these, expect failure and consider a workaround (e.g. starting from an existing tutorial template and overriding deltas rather than constructing from scratch).
 
 ## Where to read further
 
-- `omnidriver/dict_entries.py` — context-aware dict-key helpers (core)
+- `omnidriver/core/contracts/dictionary.py` — `DictEntry`, the catalogue entry (core)
 - `omnidriver/cardiacfoam/dict_entries_catalog.py`, `omnidriver/cardiacfoam/common_dict_entries.py` — every dict key with its constraints (`omnidriver.plugins` is the entry-point group name, not a package)
 - `omnidriver/cardiacfoam/ionic_model_catalog.py` — every ionic model
 - `omnidriver/core/utility_catalog.py` — utility manifest schema and `load_utility_manifests()`; roots come from the active plugin, not an ambient catalog
@@ -1320,9 +1391,9 @@ Implement what your solver has; omit the rest. Do not write stubs.
 | operation | refused by name without | read when present |
 |---|---|---|
 | join a stack | — | `get_profile` (case files, C++ mapping, environment connection, `requires`) |
-| `describe`, `catalog` | — | `get_tutorial_records`, `get_record_key_catalog`, `get_agent_guidance`, `get_named_catalogs`, `get_dict_entries`, `get_dictionary_catalog`, `get_owned_documents`, `get_dict_key_scanner` |
+| `describe`, `catalog` | — | `get_tutorial_records`, `get_record_key_catalog`, `select_applicable_record_keys`, `get_agent_guidance`, `get_named_catalogs`, `get_dictionary_catalog` (the stack derives `get_dict_entries` from it, and refuses a provider that implements that), `get_owned_documents`, `get_utility_manifests`, `get_dict_key_scanner`, `get_utility_manifest_scanner` |
 | strict plan | — (no `get_environment_diagnostics` is an `environment_capability_unavailable` error in the plan) | the command members, `predict_data_artifacts`, `get_plan_diagnostics`, `inspect_effective_configuration`, `get_case_runtime_conventions` |
-| run a record case | `get_record_key_validator`, `get_case_value_comparator`, `get_config_value_reader` | `validate_run_semantics`, `get_loaded_environment`, `get_configured_environment`, `explain_step_failure`, `get_step_log_files`, `get_log_redaction_patterns`, the provenance members |
+| run a record case | `get_record_key_validator`, `get_case_value_comparator`, `get_config_value_reader` | `validate_run_semantics`, `get_loaded_environment`, `explain_step_failure`, `get_step_log_files`, `get_log_redaction_patterns`, the provenance members |
 | write a case (a study patch) | `resolve_case_mutation` + `get_supported_mutation_modes`, `render_case_files` + `get_rendered_formats` (each pair from one provider) | — |
 | run in parallel | `get_parallel_steps` | `get_solve_step_commands` |
 | compare a quantity | — | `get_artifact_value_reader` (no reader: the quantity is `not_evaluated`) |

@@ -61,7 +61,9 @@ Both conditions get the same tools. `--agent-python` is a Python that cannot
 import `omnidriver` (a trial refuses one that can); `<trial>/tools/python3` and
 `python` link to it, `tools` is on PATH in both conditions, and the solver shims
 use it as their interpreter. Only the `omnid` condition adds
-`<trial>/omnid-bin`, which holds one symlink, `omnidriver`, never its venv.
+`<trial>/omnid-bin`, which holds two symlinks, `omnidriver` and
+`omnidriver-verify`, never their venv. A `bare` trial is refused when its PATH
+resolves any `omnidriver*` command.
 
 Claude Code's Bash tool runs commands in a login shell that can rebuild PATH, so
 the adapter writes `<trial>/claude-env.sh` (`export PATH=...`) and sets
@@ -75,9 +77,11 @@ trial that asks the agent to list what it was told, and records the answer.
 `<output>/<uuid>/task_record.json` (the folder name says nothing of the condition or model; the record carries both):
 model and CLI version, condition, omniD commit and dirty flag, guidance paths
 and SHA-256s, task file digest, wall time, turns, input and output tokens, cost,
-solver launches (from the shims), omniD refusals (`"status": "failed"` in the
-transcript's tool results), the oracle's verdict JSON, and the native tree's
-digest before and after. Beside it, `transcript.jsonl` and `launches.jsonl`.
+solver launches (from the shims), omniD refusals (tool results carrying
+`"status": "failed"` and a `code`), the real path and installed version of the
+`omnidriver` that ran, how many transcript events name the omniD repository's
+path, the oracle's verdict JSON, and the native tree's digest before and
+after. Beside it, `transcript.jsonl` and `launches.jsonl`.
 
 ## First experiment
 
