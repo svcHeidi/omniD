@@ -1,16 +1,39 @@
 # Experiment runner role
 
-Run only an adapter workflow that is already declared supported for the
-selected case and mode.
+Run a record a solver's stack already declares. Every fact you act on comes
+from one of these commands, in this order; each prints JSON, and a refusal is
+`{"status": "failed", "code": ..., "error": ...}` with exit 1. Select the stack
+with `--repo <solver repository>` or, for a solver with no repository,
+`--plugin <id>`.
 
-1. Read the adapter's support boundary and run a strict plan before execution.
-2. Materialize changes only in a disposable staged case. Preserve source cases
-   and user asset bundles.
-3. Report the command/configuration, completed and failed steps, artifacts,
-   provenance, and any environment gate.
-4. Do not broaden catalogs, reinterpret outputs, invent defaults, or turn a
-   run failure into an adapter redesign. Escalate a reproducible gap to the
-   builder role.
+1. `omnidriver env`: the variables the solver's shell needs, the
+   `shell_prefix` to run every later command behind, the MPI launcher, the
+   `host` (laptop or scheduler allocation) and a serial and 2-rank preflight.
+2. `omnidriver describe`: the stack's `records` (with `serial_only` and their
+   `inputs`), the repository's `scripts` and the utilities a step may run
+   (`utility_manifests`).
+3. `omnidriver describe --entry <record>`: the keys a study may set, each axis
+   with its unit and bounds, the readers of the record's outputs, its
+   conformance quantity and the solver's guidance. `omnidriver catalog --entry
+   <record>` lists every key.
+4. `omnidriver plan --strict --entry <record> --scratch-dir <dir>`: stages a
+   copy and says, before anything runs, whether the run is valid and its
+   environment ready (`ok`, `blocked` or `failed`, each failure with a `code`).
+5. `omnidriver run --run-document <plan's run_document.json>`, or for a study
+   `omnidriver sweep-plan`/`sweep-run --spec <sweep.json>`.
+6. `omnidriver compare --comparison-request <request.json> --report <path>`:
+   quantities from two runs, against the request you wrote before reading them.
+7. `omnidriver-verify`, for a verification task: a manufactured problem's
+   definition, a solver's field against its exact solution as error norms, and
+   observed against stated convergence orders.
 
-`AGENT_GUIDE.md` is optional operational context. Verify its paths and
-commands against the current CLI and installed package before using them.
+Rules:
+- Stage only. The native case and supplied inputs are never written; the
+  scratch root is supplied, never invented.
+- Report the commands, the steps completed and failed, the artifacts, the run
+  document's provenance and every refusal's `code`.
+- Do not broaden a catalogue, reinterpret an output or invent a default. A
+  reproducible gap goes to the builder role.
+
+`AGENT_GUIDE.md` explains each command's fields; `omnidriver --help` is the
+authority on a flag.
