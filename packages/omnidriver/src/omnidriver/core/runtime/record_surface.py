@@ -64,8 +64,8 @@ def conformance_quantity(record, benchmarks: Path | None = None) -> dict[str, An
 
 
 def record_readers(record, stack) -> list[dict[str, Any]]:
-    """For each format the record's steps declare on what they produce, the reader the stack reads it with,
-    and the steps producing it; a format no reader takes is not listed."""
+    """For each format the record's steps declare on what they produce, the steps producing it and the reader
+    the stack reads it with; ``reader`` is ``None`` for a format no reader takes."""
     steps: dict[str, list[str]] = {}
     for step in record.workflow_steps:
         for path in step.produces:
@@ -75,12 +75,13 @@ def record_readers(record, stack) -> list[dict[str, Any]]:
     listed = []
     for artifact_format, producers in steps.items():
         reader = stack.call("get_artifact_value_reader", artifact_format)
-        if reader is None:
-            continue
         listed.append({
-            "format": artifact_format, "steps": producers, "value_unit": reader.value_unit,
-            "sampling_rule": reader.sampling_rule, "coordinate_unit": reader.coordinate_unit,
-            "takes_points": reader.takes_points, "sentinels": sorted(reader.sentinels),
+            "format": artifact_format, "steps": producers,
+            "reader": None if reader is None else {
+                "value_unit": reader.value_unit, "sampling_rule": reader.sampling_rule,
+                "coordinate_unit": reader.coordinate_unit, "takes_points": reader.takes_points,
+                "sentinels": sorted(reader.sentinels),
+            },
         })
     return listed
 

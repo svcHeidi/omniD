@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Mapping
 
 from omnidriver.conformance import ConformanceTarget, QuantityTarget, RankEvidence
-from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
+from omnidriver.core.case_write import RenderedFile, ResolvedMutation, digest_bytes
 from omnidriver.core.conformance_study import ConformanceStudy
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from omnidriver.core.plugin_interface import CaseRuntimeConventions
@@ -27,6 +27,7 @@ from omnidriver.core.plugin_profile import CaseFileRule, EnvironmentConnection, 
 from omnidriver.core.quantities import RawSample
 from omnidriver.core.runtime import mpi
 from omnidriver.core.runtime.models import DataArtifact
+from omnidriver.core.runtime.planned_programs import PROGRAM_NOT_ON_PATH, program_diagnostics
 from omnidriver.core.runtime.sweep_manifest import CaseManifestEntry, SweepManifest, write_manifest
 from omnidriver.core.tutorial_records import (
     AxisContract, AxisPatch, AxisResult, DefaultArgument, ProducedPath, RecordInput, TutorialRecord, WorkflowStep,
@@ -235,7 +236,7 @@ class ToyStack(ToyProvider):
                 _deep_set(content_obj, target["expanded_key_path"], str(target["value"]))
             rendered.append(RenderedFile(
                 path=document, content=(json.dumps(content_obj, sort_keys=True) + "\n").encode(), mode=None,
-                exists_before=exists_before, before_digest=_digest_bytes(path.read_bytes()) if exists_before else None,
+                exists_before=exists_before, before_digest=digest_bytes(path.read_bytes()) if exists_before else None,
                 renderer_id=self.plugin_id, format=_FORMAT,
             ))
         return tuple(rendered)
@@ -244,13 +245,8 @@ class ToyStack(ToyProvider):
         return _read_json_value
 
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None) -> tuple:
-        """The toy's one real check: its solver commands resolve on the supplied PATH."""
-        path = (env or os.environ).get("PATH", "")
-        return tuple(
-            StrictDiagnostic(level="error", code="e2e_command_not_found", message=f"{command!r} is not on PATH={path!r}")
-            for command in sorted(self._solver_commands)
-            if shutil.which(command, path=path) is None
-        )
+        """The toy's one real check, core's: its planned programs resolve on the supplied PATH."""
+        return program_diagnostics(workflow_dag, env or os.environ, driver_context)
 
 
 def write_toy_native_case(cases_root: Path) -> Path:
@@ -562,7 +558,7 @@ class ReplacingRendererPlugin(ToyStack):
             rendered.append(RenderedFile(
                 path=target["document"], content=(json.dumps(content_obj) + "\n").encode(),
                 mode=None, exists_before=exists_before,
-                before_digest=_digest_bytes(path.read_bytes()) if exists_before else None,
+                before_digest=digest_bytes(path.read_bytes()) if exists_before else None,
                 renderer_id=self.plugin_id, format=_FORMAT,
             ))
         return tuple(rendered)
@@ -590,14 +586,14 @@ class WarningPreflightPlugin(ToyStack):
 
 
 class AuxiliaryOnlyPreflightPlugin(ToyStack):
-    """With the solver off PATH, names only an auxiliary command and echoes
-    the PATH it searched, as openCARP's preflight does."""
+    """With the solver off PATH, names only a program the plan does not run."""
 
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None) -> tuple:
         path = (env if env is not None else os.environ).get("PATH", "")
         if shutil.which("touch", path=path) is not None:
             return ()
-        return (StrictDiagnostic(level="error", code="toy_command_not_found", message=f"'toy-mesher' is not on PATH={path!r}"),)
+        return (StrictDiagnostic(level="error", code=PROGRAM_NOT_ON_PATH, message=f"'toy-mesher' is not on PATH={path!r}",
+                                 field="toy-mesher"),)
 
 
 class NamedCatalogPlugin(ToyStack):
@@ -927,7 +923,7 @@ class DescribedQuantityPlugin(QuantityToyPlugin):
         quantity=QuantityTarget(
             artifact_format=VALUES_FORMAT, reference=Path("toy/reference.json"), at_unit=None, max_sampling_offset=0.001,
             study={"constant/mesh.json:label": "long"}, sweep_values=(2, 3), tolerance=5.0, tolerance_unit="ms",
-            parallel_tolerance=1e-9,
+            parallel_tolerance=1e-9, parallel_tolerance_unit="s",
             rank_evidence=RankEvidence(log_pattern=r"nRanks=(\d+)"),
         ),
     ))}
@@ -1077,7 +1073,7 @@ def quantity_toy_conformance_target(tmp_path: Path, *, plugin: str | None = None
             artifact_format=VALUES_FORMAT, reference=write_toy_reference(tmp_path / "reference.json"),
             pairs={"A": "A", "B": "B"}, at={"A": (0.0, 0.0, 0.007), "B": (0.02, 0.003, 0.0)},
             at_unit="m", max_sampling_offset=0.0, study={"number_cells": 2}, sweep_values=(2, 3),
-            tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9,
+            tolerance=5.0, tolerance_unit="ms", parallel_tolerance=1e-9, parallel_tolerance_unit="s",
             rank_evidence=RankEvidence(log_pattern=r"nRanks=(\d+)"),
         ),
     )

@@ -22,10 +22,10 @@ from omnidriver.core.experiments import inspect_sweep_experiment
 from omnidriver.core.quantities import (
     Quantity, ReadRequest, ReaderDeclarationError, check_reader, convert, experiment_comparisons, read_quantities,
 )
-from omnidriver.core.runtime import mpi
 from omnidriver.core.runtime.artifacts import DRIVER_PRODUCED_BY
 from omnidriver.core.runtime.failure_context import OUTPUT_TAIL_CHARS, redact_text, why_a_child_stopped
 from omnidriver.core.runtime.models import data_artifact_from_json
+from omnidriver.core.runtime.planned_programs import PROGRAM_NOT_ON_PATH, planned_programs
 from omnidriver.core.runtime.process_control import run_child
 from omnidriver.core.runtime.case_records import build_sweep_context
 from omnidriver.core.runtime.provenance_inputs import enumerate_case_inputs
@@ -74,9 +74,6 @@ def _why_a_run_stopped(ctx, proc: subprocess.CompletedProcess, state_path: Path)
     """What a run that did not complete said (redacted), and what the failed step recorded in its workflow state."""
     said = why_a_child_stopped(proc.stdout, proc.stderr, ctx.stack.call("get_log_redaction_patterns"))
     return "; ".join(_with_recorded_failure([said], state_path, "the workflow state"))
-
-
-
 
 
 def _failed_cases(ctx, payload: Mapping[str, Any], out: Path) -> list[str]:
@@ -383,54 +380,32 @@ def check_provenance(target: ConformanceTarget) -> CheckVerdict:
     return _verdict("C8", not missing, f"consumed but not fingerprinted: {missing}" if missing else f"{len(consumed)} consumed file(s) fingerprinted")
 
 
-def _levels(diagnostics) -> list[tuple[str, str]]:
-    out = []
-    for d in diagnostics:
-        level = getattr(d, "level", None) or (d.get("level") if isinstance(d, dict) else None)
-        message = getattr(d, "message", None) or (d.get("message") if isinstance(d, dict) else str(d))
-        out.append((level, message))
-    return out
-
-
-def _planned_programs(workflow_dag) -> list[str]:
-    """The programs a plan runs, a launcher's payload named in its place."""
-    programs = []
-    for step in workflow_dag.get("steps", ()):
-        command = step["command"]
-        program = mpi.program(step.get("args", ())) if command in mpi.LAUNCHERS else command
-        if program and program not in programs:
-            programs.append(program)
-    return programs
-
-
 def check_environment(target: ConformanceTarget) -> CheckVerdict:
-    """C9: preflight is clean in the supplied environment, and names a
-    program the plan runs when it cannot be found.
-
-    "Names" means quotes the program as a token (:func:`_quotes`), after the
-    empty PATH this check supplied is removed from each message -- a bare
-    substring match would pass whenever the scratch path itself happened to
-    contain a program's name (e.g. ``~/openCARP-runs``).
-    """
+    """C9: preflight is clean in the supplied environment, and with an empty
+    PATH names a program the plan runs in the ``field`` of a
+    ``program_not_on_path`` error."""
     ctx = _context(target)
     report = _plan(target, ctx)
     if report.workflow_dag is None:
         return _verdict("C9", False, f"cannot check: plan failed: {report.error_messages()}")
     def preflight(env):
         found = ctx.stack.call("get_environment_diagnostics", report.workflow_dag, env=env, driver_context=ctx)
-        return [m for level, m in _levels(found) if level == "error"]
+        rows = [d if isinstance(d, dict) else dataclasses.asdict(d) for d in found]
+        return [d for d in rows if d.get("level") == "error"]
 
     env = _child_env(target)
-    clean = preflight(env)
+    clean = [d["message"] for d in preflight(env)]
     empty = target.scratch_root / "conformance" / "C9-empty-path"
     empty.mkdir(parents=True, exist_ok=True)
     broken = preflight({**env, "PATH": str(empty)})
-    programs = _planned_programs(report.workflow_dag)
+    programs = planned_programs(report.workflow_dag, ctx)
+    named = {d.get("field") for d in broken if d.get("code") == PROGRAM_NOT_ON_PATH}
     problems = []
     if clean:
         problems.append(f"errors in the supplied environment: {clean}")
-    if not any(_quotes(m.replace(str(empty), ""), program) for m in broken for program in programs):
-        problems.append(f"with {', '.join(map(repr, programs))} off PATH, preflight said {broken or 'nothing'}")
+    if not named & set(programs):
+        said = [d.get("message") for d in broken]
+        problems.append(f"with {', '.join(map(repr, programs))} off PATH, preflight said {said or 'nothing'}")
     return _verdict("C9", not problems, "; ".join(problems) or "clean; names a missing program")
 
 
@@ -679,7 +654,8 @@ def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
     output shows it ran on them (``QuantityTarget.rank_evidence``).
 
     A target that declares no quantity, or whose record is serial-only, is
-    not applicable."""
+    not applicable; one whose record is not serial-only fails when it lacks
+    ``parallel_tolerance`` or ``rank_evidence``."""
     ctx = _context(target)
     record = _record(ctx, target.record)
     declared = target.quantity
@@ -687,6 +663,9 @@ def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
         return _not_applicable("C13", "the target declares no quantity, so there is nothing to compare")
     if record.serial_only:
         return _not_applicable("C13", "the record is serial-only, so there is no parallel run to compare")
+    undeclared = [name for name in ("parallel_tolerance", "rank_evidence") if getattr(declared, name) is None]
+    if undeclared:
+        return _verdict("C13", False, f"the record runs in parallel, but its quantity declares no {' and no '.join(undeclared)}")
     serial = _run_for_quantities(target, ctx, declared.study, "serial")
     if isinstance(serial, str):
         return _verdict("C13", False, serial)
@@ -707,8 +686,13 @@ def check_parallel_agrees(target: ConformanceTarget) -> CheckVerdict:
         p = parallel_values[name]
         if (s.status, s.unit, s.sampled_at) != (p.status, p.unit, p.sampled_at):
             problems.append(f"{name!r}: serial reads {s.status} {s.sampled_at} {s.unit}, parallel {p.status} {p.sampled_at} {p.unit}")
-        elif s.status == "evaluated" and abs(p.value - s.value) > declared.parallel_tolerance:
-            problems.append(f"{name!r}: serial {s.value}, parallel {p.value}, beyond {declared.parallel_tolerance} {s.unit}")
+        elif s.status == "evaluated" and abs(p.value - s.value) > convert(
+            declared.parallel_tolerance, declared.parallel_tolerance_unit or s.unit, s.unit,
+        ):
+            problems.append(
+                f"{name!r}: serial {s.value}, parallel {p.value} {s.unit}, beyond "
+                f"{declared.parallel_tolerance} {declared.parallel_tolerance_unit or s.unit}"
+            )
     if not any(q.status == "evaluated" for q in serial_values.values()):
         problems.append("no declared quantity is evaluated in the serial run, so nothing was compared")
     return _verdict(

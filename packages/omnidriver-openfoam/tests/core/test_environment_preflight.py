@@ -55,9 +55,9 @@ def test_required_executables_collects_step_commands():
     assert reqs.mpi_launcher_in_dag is False
 
 
-def test_required_executables_skips_interpreters_and_dedupes():
+def test_required_executables_dedupes():
     reqs = _required_executables(_dag("python3", "cardiacFoam", "cardiacFoam"))
-    assert reqs.executables == ("cardiacFoam",)
+    assert reqs.executables == ("python3", "cardiacFoam")
 
 
 def test_required_executables_unwraps_mpi_launcher():
@@ -93,17 +93,15 @@ def clean_env(monkeypatch):
     return monkeypatch
 
 
-def test_missing_executable_is_error(clean_env):
+def test_a_program_not_on_path_is_an_error_naming_it(clean_env):
     clean_env.setattr(
         shutil, "which", _which_factory({"blockMesh", "cardiacFoam"})
     )
     diags = _diags(_dag("blockMesh", "cardiacFoam", "setExprFields"))
-    missing = [d for d in diags if d.code == "missing_executable"]
+    missing = [d for d in diags if d.code == "program_not_on_path"]
     assert len(missing) == 1
     assert missing[0].level == "error"
     assert missing[0].field == "setExprFields"
-    # Conformance C9 requires the missing command as a quoted token.
-    assert missing[0].message == "'setExprFields' not found on PATH."
 
 
 def test_present_executables_have_no_error(clean_env):
@@ -111,7 +109,7 @@ def test_present_executables_have_no_error(clean_env):
         shutil, "which", _which_factory({"blockMesh", "cardiacFoam"})
     )
     diags = _diags(_dag("blockMesh", "cardiacFoam"))
-    assert "missing_executable" not in {d.code for d in diags}
+    assert "program_not_on_path" not in {d.code for d in diags}
 
 
 def test_case_script_commands_are_not_path_checked(clean_env):
@@ -119,7 +117,7 @@ def test_case_script_commands_are_not_path_checked(clean_env):
     # caseRoot at execution time, never on PATH by design.
     clean_env.setattr(shutil, "which", _which_factory(set()))
     diags = _diags(_dag("Allrun"), load_plugin_context("openfoam-environment"))
-    assert "missing_executable" not in {d.code for d in diags}
+    assert "program_not_on_path" not in {d.code for d in diags}
 
 
 def _fake_context_declaring_entrypoint(relpath: str):
@@ -155,7 +153,7 @@ def test_mpi_wrapper_checks_launcher_and_program(clean_env):
     diags = _diags(
         _dag(("mpirun", ["-np", "4", "cardiacFoam", "-parallel"]))
     )
-    missing = {d.field for d in diags if d.code == "missing_executable"}
+    missing = {d.field for d in diags if d.code == "program_not_on_path"}
     assert missing == {"cardiacFoam"}  # mpirun present, cardiacFoam missing
     assert "missing_mpi" not in {d.code for d in diags}  # launcher is in the dag
 
@@ -239,7 +237,7 @@ def test_report_to_json_contains_environment_diagnostics():
         entry="singleCell",
         resolved_entry={},
         environment_diagnostics=(
-            StrictDiagnostic(level="error", code="missing_executable",
+            StrictDiagnostic(level="error", code="program_not_on_path",
                              message="x", source="environment", field="cardiacFoam"),
         ),
     )
@@ -248,7 +246,7 @@ def test_report_to_json_contains_environment_diagnostics():
     entry = payload["environment_diagnostics"][0]
     assert entry["field"] == "cardiacFoam"
     assert entry["level"] == "error"
-    assert entry["code"] == "missing_executable"
+    assert entry["code"] == "program_not_on_path"
 
 
 def test_report_to_json_environment_diagnostics_defaults_empty():

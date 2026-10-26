@@ -16,7 +16,7 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping
 
-from .case_write import CaseWritePlan, RenderedFile, _digest_bytes
+from .case_write import CaseWritePlan, RenderedFile, digest_bytes
 from .runtime.attempt_lease import AttemptLeaseError, acquire_case_lease, case_lease_is_held
 from .runtime.transaction_mechanics import atomic_write_bytes, fsync_directory
 
@@ -79,7 +79,7 @@ def _before_image(rendered: RenderedFile, target: Path) -> tuple[bytes, int] | N
             f"cannot read {rendered.path!r} to keep its before-image "
             f"before overwriting it: {exc}"
         ) from exc
-    if _digest_bytes(content) != rendered.before_digest:
+    if digest_bytes(content) != rendered.before_digest:
         raise CaseTransactionError(
             f"{rendered.path!r} changed since it was rendered (its digest is no longer "
             f"{rendered.before_digest!r}); plan again rather than overwrite an edit nobody reviewed"

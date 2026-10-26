@@ -11,7 +11,7 @@ from unittest import mock
 import pytest
 
 from omnidriver.cli import main
-from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
+from omnidriver.core.case_write import RenderedFile, ResolvedMutation, digest_bytes
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.plugin_interface import CaseRuntimeConventions
 from omnidriver.core.plugin_interface import driver_context as _driver_context
@@ -346,7 +346,7 @@ class _RecordSweepWriterPlugin(ToyProvider):
         for document, targets in by_document.items():
             path = Path(snapshot_root) / document
             exists_before = path.exists()
-            before_digest = _digest_bytes(path.read_bytes()) if exists_before else None
+            before_digest = digest_bytes(path.read_bytes()) if exists_before else None
             content_obj = json.loads(path.read_text()) if exists_before else {}
             for target in targets:
                 _record_deep_set(content_obj, target["expanded_key_path"], str(target["value"]))

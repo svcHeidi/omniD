@@ -5,7 +5,7 @@ import os
 from importlib import resources
 from pathlib import Path
 
-from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
+from omnidriver.core.case_write import patch_resolution, render_by_document
 from omnidriver.core.plugin_profile import load_plugin_profile
 
 from .case_rules import case_diagnostics
@@ -56,17 +56,12 @@ class OpenCARPPlugin:
             if spec is not None and spec.value_kind == "boolean" and unquote(raw) not in ("0", "1"):
                 raise ParFormatError(
                     f"{document_path}: {key} = {raw!r}; openCARP reads every Flag spelling except 0/false "
-                    "as on (F1). The native file must say 0 or 1."
+                    "as on. The native file must say 0 or 1."
                 )
             if spec is not None and spec.value_kind == "string" and not _is_quoted(raw) and "=" in raw:
-                # Unquoted, openCARP silently drops everything from an '='
-                # on, so the raw text this reader parsed (everything up to
-                # the trailing whitespace/comment) is not what openCARP
-                # actually reads. Refuse rather than report a value openCARP
-                # would truncate.
                 raise ParFormatError(
                     f"{document_path}: {key} = {raw!r} is unquoted and contains '='; openCARP "
-                    "silently truncates everything from the '=' on (F10). The native file must "
+                    "silently truncates everything from the '=' on. The native file must "
                     "quote this value."
                 )
             return unquote(raw)
@@ -81,35 +76,16 @@ class OpenCARPPlugin:
         return frozenset({_FORMAT})
 
     def resolve_case_mutation(self, request, *, driver_context):
-        targets = tuple(
-            {"qualified_id": p.qualified_id, "document": p.document,
-             "key": ".".join(p.expanded_key_path()), "value": p.value,
-             "value_kind": p.value_kind, "format": _FORMAT}
-            for p in request.parameters
-        )
-        return ResolvedMutation(
-            request=request, targets=targets,
-            expected_effects=tuple(f"set {t['key']} in {t['document']}" for t in targets),
-            semantic_owner_id=self.plugin_id,
-        )
+        return patch_resolution(request, owner_id=self.plugin_id)
 
     def render_case_files(self, resolved, *, snapshot_root, driver_context, execution_env=None):
-        by_document: dict[str, dict[str, str]] = {}
-        for target in resolved.targets:
-            by_document.setdefault(target["document"], {})[target["key"]] = format_value(target["value"], target["value_kind"])
-        rendered = []
-        for document, values in by_document.items():
-            path = Path(snapshot_root) / document      # seeded from the case by core
-            exists_before = path.is_file()
-            before = path.read_bytes() if exists_before else b""
-            text = patch_par(before.decode(), values)
-            check_indices(text)                        # refused by name before any run
-            rendered.append(RenderedFile(
-                path=document, content=text.encode(), mode=None, exists_before=exists_before,
-                before_digest=_digest_bytes(before) if exists_before else None,
-                renderer_id=self.plugin_id, format=_FORMAT,
-            ))
-        return tuple(rendered)
+        def _patch(path, targets):
+            values = {".".join(t["key_path"]): format_value(t["value"], t["value_kind"]) for t in targets}
+            text = patch_par(path.read_text() if path.is_file() else "", values)
+            check_indices(text)
+            return text.encode()
+
+        return render_by_document(resolved, snapshot_root=snapshot_root, renderer_id=self.plugin_id, format=_FORMAT, patch=_patch)
 
     # -- rules
     def validate_run_semantics(self, case_root, *, driver_context):
@@ -134,18 +110,18 @@ class OpenCARPPlugin:
         return AUXILIARY_COMMANDS
 
     def get_environment_diagnostics(self, workflow_dag, *, env=None, environment_source=None, driver_context=None):
-        del environment_source, driver_context      # openCARP needs no environment source
-        return opencarp_environment_diagnostics(workflow_dag, env if env is not None else os.environ)
+        del environment_source
+        return opencarp_environment_diagnostics(workflow_dag, env if env is not None else os.environ, driver_context)
 
     # -- parallel
     def get_solve_step_commands(self):
-        return SOLVER_COMMANDS      # the step a parallel request runs under mpirun
+        return SOLVER_COMMANDS
 
     def get_parallel_steps(self, step, *, request, read_value, allocation, launcher):
         return parallel_steps(step, request=request, read_value=read_value, allocation=allocation, launcher=launcher)
 
     def get_log_redaction_patterns(self):
-        return REDACTION_PATTERNS     # consumed by core's redact_step_logs
+        return REDACTION_PATTERNS
 
     # -- record surface
     def get_record_key_catalog(self, case_root, *, driver_context):
@@ -171,6 +147,8 @@ class OpenCARPPlugin:
                     "document": document, "key": spec.name, "value_kind": spec.value_kind,
                     "default": spec.default, "description": spec.description, "unit": spec.units,
                     "minimum": spec.minimum, "maximum": spec.maximum, "menu": list(spec.menu),
+                    **({"menu_labels": dict(spec.menu_labels)} if spec.menu_labels else {}),
+                    **({"default_expression": spec.default_expression} if spec.default_expression else {}),
                     "source_refs": [source_ref],
                 })
         return tuple(entries)

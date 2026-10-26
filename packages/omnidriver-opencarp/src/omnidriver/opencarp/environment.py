@@ -12,6 +12,7 @@ from typing import Any, Mapping
 from omnidriver.core.planning_types import StrictDiagnostic
 from omnidriver.core.plugin_interface import SolverBuild, SolverEntry, SourceIdentity
 from omnidriver.core.runtime.build_identity import file_digest
+from omnidriver.core.runtime.planned_programs import planned_programs, program_diagnostics
 
 from .catalog import load_catalog
 
@@ -55,31 +56,20 @@ def opencarp_solver_builds(
     return (SolverEntry(solver=solver, repository=None, builds=(build,)),)
 
 
-def opencarp_environment_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:
+def opencarp_environment_diagnostics(
+    workflow_dag: Mapping[str, Any], env: Mapping[str, str], driver_context: Any | None = None,
+) -> tuple[StrictDiagnostic, ...]:
     from .parallel import SOLVER, launcher_diagnostics
 
-    path = env.get("PATH", "")
-    steps = (workflow_dag or {}).get("steps", ())
-    # A parallel solve step's command is its launcher; the solver it
-    # launches is checked as if it were the command.
-    commands = sorted({step.get("command") for step in steps if step.get("command")}
-                      | {SOLVER for step in steps if SOLVER in (step.get("args") or ())})
-    # The command is quoted (``!r``): conformance C9 looks for the solver as
-    # a quoted token once the PATH echoed here is removed, so an unquoted
-    # name, or the name inside a scratch path, never counts.
-    diagnostics = [
-        StrictDiagnostic(level="error", code="opencarp_command_not_found",
-                         message=f"{command!r} is not on PATH={path!r}")
-        for command in commands if shutil.which(command, path=path) is None
-    ]
-    solver = shutil.which("openCARP", path=path)
-    if solver is not None and "openCARP" in commands:
+    diagnostics = list(program_diagnostics(workflow_dag, env, driver_context))
+    solver = shutil.which(SOLVER, path=env.get("PATH", ""))
+    if solver is not None and SOLVER in planned_programs(workflow_dag, driver_context):
         proc = subprocess.run([solver, "-buildinfo"], capture_output=True, text=True, env=dict(env), timeout=60)
         if "GIT tag" not in proc.stdout:
             diagnostics.append(StrictDiagnostic(
                 level="error", code="opencarp_binary_unloadable",
                 message="'openCARP' is on PATH but cannot start; on macOS set DYLD_LIBRARY_PATH to the "
-                        "directory holding libsundials_cvode (A4-A6): " + proc.stderr.strip()[-300:],
+                        "directory holding libsundials_cvode: " + proc.stderr.strip()[-300:],
             ))
         else:
             diagnostics.extend(_version_diagnostics(proc.stdout))
@@ -88,16 +78,16 @@ def opencarp_environment_diagnostics(workflow_dag: Mapping[str, Any], env: Mappi
 
 
 def _version_diagnostics(buildinfo: str) -> tuple[StrictDiagnostic, ...]:
-    """A warning, not an error, when the binary's ``GIT tag`` differs from the tag the committed parameter catalogue was generated from: the validator certifies keys, menus and bounds against that catalogue, so a different build may accept or mean something else. Only the tags are quoted; ``-buildinfo``'s other lines are never echoed."""
-    match = _GIT_TAG.search(buildinfo)
-    expected = load_catalog().identity.get("tag")
-    found = match.group(1) if match else None
-    if found == expected:
+    """A warning when the binary's tag or hash is not the build the committed catalogue was generated from."""
+    found = buildinfo_identity(buildinfo) or {}
+    expected = load_catalog().identity
+    if (found.get("tag"), found.get("commit")) == (expected.get("tag"), expected.get("hash")):
         return ()
+    # Only the tag and hash are quoted: -buildinfo's repository line embeds a CI token.
     return (StrictDiagnostic(
         level="warning", code="opencarp_version_mismatch",
-        message=f"openCARP on PATH reports GIT tag {found!r}, but the committed parameter catalogue "
-                f"was generated from {expected!r}; keys, menus and bounds are validated against "
-                f"{expected!r}, so regenerate the catalogue (scripts/generate-opencarp-catalog.py) "
-                "for this build",
+        message=f"openCARP on PATH reports GIT tag {found.get('tag')!r} hash {found.get('commit')!r}, but the "
+                f"committed parameter catalogue was generated from {expected.get('tag')!r} hash "
+                f"{expected.get('hash')!r}; keys, menus and bounds are validated against that build, so "
+                "regenerate the catalogue (scripts/generate-opencarp-catalog.py) for this one",
     ),)

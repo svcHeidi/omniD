@@ -34,14 +34,17 @@ class QuantityTarget:
     each named quantity is sampled, or expected, in ``at_unit``, in the
     solver's own frame; ``pairs`` names, for each label of the point
     ``reference``, the quantity that answers it. A relative ``reference`` is a
-    benchmark under the directory :meth:`resolved` is given; without ``at`` and
-    ``pairs``, each of its points that has coordinates is a quantity of the
-    same name, at those coordinates. The tolerances are the
-    solver's own physics: ``parallel_tolerance`` bounds, in the reader's unit,
-    how far a parallel run may sit from the serial one; ``tolerance`` is the
-    declared bound of C14's comparison, in ``tolerance_unit``.
-    ``parallel_study`` adds what a parallel run needs beyond ``parallel: ranks``,
-    and ``rank_evidence`` is how C13 sees that the run used them.
+    benchmark under the directory :meth:`resolved` is given. Without ``at``,
+    the points come from the reference, in its own length unit: those
+    ``pairs`` names, or, without ``pairs`` too, each of its points that has
+    coordinates, as a quantity of the same name. The tolerances are the
+    solver's own physics: ``tolerance`` is the declared bound of C14's
+    comparison, in ``tolerance_unit``; ``parallel_tolerance`` bounds, in
+    ``parallel_tolerance_unit`` (the reader's unit when undeclared), how far a
+    parallel run may sit from the serial one. ``parallel_study`` adds what a parallel run needs beyond
+    ``parallel: ranks``, and ``rank_evidence`` is how C13 sees that the run
+    used them. C13 requires ``parallel_tolerance`` and ``rank_evidence`` of a
+    record that is not serial-only; a serial-only record declares neither.
     """
 
     artifact_format: str
@@ -52,13 +55,22 @@ class QuantityTarget:
     sweep_values: tuple[Any, Any]
     tolerance: float
     tolerance_unit: str
-    parallel_tolerance: float
-    rank_evidence: RankEvidence
+    parallel_tolerance: float | None = None
+    parallel_tolerance_unit: str | None = None
+    rank_evidence: RankEvidence | None = None
     parallel_study: Mapping[str, Any] = field(default_factory=dict)
     ranks: int = 2
     both_not_reached: str = "agree"
     pairs: Mapping[str, str] | None = None
     at: Mapping[str, tuple[float, float, float]] | None = None
+
+    def __post_init__(self) -> None:
+        if self.parallel_tolerance is None and self.parallel_tolerance_unit is not None:
+            raise ValueError("a parallel_tolerance_unit is declared without a parallel_tolerance")
+        if self.at is None and self.at_unit is not None:
+            raise ValueError(
+                f"at_unit {self.at_unit!r} is declared without at; points taken from the reference are in its own unit"
+            )
 
     def resolved(self, benchmarks: Path | None) -> "QuantityTarget":
         """This target with its reference found under ``benchmarks`` and its
@@ -75,13 +87,20 @@ class QuantityTarget:
                 )
             reference = Path(benchmarks) / reference
         points = load_point_reference(reference)
-        at = self.at if self.at is not None else {
-            label: point.coordinates for label, point in points.points.items() if point.coordinates is not None
+        if self.at is not None:
+            return replace(
+                self, reference=reference, pairs=self.pairs if self.pairs is not None else {label: label for label in self.at},
+                at_unit=self.at_unit or points.length_unit,
+            )
+        pairs = self.pairs if self.pairs is not None else {
+            label: label for label, point in points.points.items() if point.coordinates is not None
         }
-        return replace(
-            self, reference=reference, at=at, pairs=self.pairs if self.pairs is not None else {label: label for label in at},
-            at_unit=self.at_unit or points.length_unit,
-        )
+        unplaced = sorted(label for label in pairs if points.points.get(label) is None
+                          or points.points[label].coordinates is None)
+        if unplaced:
+            raise ValueError(f"the reference {reference} gives no coordinates for {unplaced}, which pairs names")
+        at = {quantity: points.points[label].coordinates for label, quantity in pairs.items()}
+        return replace(self, reference=reference, at=at, pairs=pairs, at_unit=points.length_unit)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -97,7 +116,7 @@ class ConformanceStudy:
     process a check starts (C6's run, C7's sweep-run) and each sweep case
     (``sweep-run --case-timeout-s``): a child that outlives it is a failed
     verdict naming the timeout. ``quantity``, when declared, is what C13 and
-    C14 compare; without it they have nothing to compare and pass saying so.
+    C14 compare; without it they are ``not_applicable``.
     ``probes`` name what the record's solver can say about its own catalogues
     that no static scan can: each is given the stack's execution environment
     and returns whether the catalogue matches the built solver, and what it saw. They run beside the checks and report in

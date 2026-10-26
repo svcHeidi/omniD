@@ -39,6 +39,7 @@ def test_a_check_that_verifies_nothing_is_counted_apart_from_the_passed(tmp_path
     assert [(item["check"], item["status"]) for item in record["checks"]] == [
         ("C1", "passed"), ("C2", "passed"), ("C12", "not_applicable"), ("C13", "not_applicable"),
     ]
+    assert record["verified"] == ["C1", "C2"]
     assert report["summary"] == {"checks": 4, "passed": 2, "failed": 0, "not_applicable": 2}
 
 

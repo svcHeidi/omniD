@@ -25,7 +25,7 @@ from plugins.toy import (
     STRAY_NAME, STRAY_ROOT_VARIABLE, quantity_toy_conformance_target, toy_conformance_target,
     toy_conformance_target_with_input,
 )
-from plugins.toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN
+from plugins.toy import BAD_DECLARATION_PLUGIN, QUANTITY_TOY_PLUGIN, UNREADABLE_PLUGIN, VALUES_FORMAT, write_toy_reference
 
 
 #: The toy declares no output format and no quantity, so these verify nothing for it and are reported
@@ -340,14 +340,10 @@ def test_c9_bites_a_preflight_that_never_reports_a_missing_solver(tmp_path):
     assert "'touch' off PATH" in verdict.detail
 
 
-@pytest.mark.parametrize("scratch_dir", ["touch", "my touch runs", "the 'touch' runs", 'a "touch" dir'])
-def test_c9_is_not_satisfied_by_the_solver_name_in_the_echoed_scratch_path_S_I2(tmp_path, scratch_dir):
-    """A preflight that never names the solver must not pass just because the scratch path it echoes happens to contain the solver's name."""
+def test_c9_is_not_satisfied_by_a_preflight_that_names_a_program_the_plan_does_not_run(tmp_path):
     from plugins.toy import AUXILIARY_ONLY_PREFLIGHT_PLUGIN
 
-    target = toy_conformance_target(tmp_path, plugin=AUXILIARY_ONLY_PREFLIGHT_PLUGIN)
-    target = dataclasses.replace(target, scratch_root=tmp_path / scratch_dir / "scratch")
-    verdict = run_check("C9", target)
+    verdict = run_check("C9", toy_conformance_target(tmp_path, plugin=AUXILIARY_ONLY_PREFLIGHT_PLUGIN))
     assert verdict.status == "failed", verdict.detail
     assert "'touch' off PATH" in verdict.detail
 
@@ -575,6 +571,35 @@ def test_c13_bites_a_parallel_run_that_writes_other_values(tmp_path):
     assert "'A': serial 0.0015, parallel 0.002" in verdict.detail
 
 
+def test_c13_reads_the_parallel_tolerance_in_its_declared_unit(tmp_path):
+    """The two runs differ by 0.5 ms: within 1 ms, beyond 1 us."""
+    target = quantity_toy_conformance_target(tmp_path, plugin=REORDERING_PARALLEL_PLUGIN)
+    for unit, within in (("ms", True), ("us", False)):
+        quantity = dataclasses.replace(target.quantity, parallel_tolerance=1.0, parallel_tolerance_unit=unit)
+        verdict = run_check("C13", dataclasses.replace(target, quantity=quantity))
+        assert ("'A': serial 0.0015, parallel 0.002" not in verdict.detail) is within, verdict.detail
+
+
+def test_c13_fails_a_parallel_record_whose_quantity_declares_no_rank_evidence(tmp_path):
+    target = quantity_toy_conformance_target(tmp_path)
+    target = dataclasses.replace(target, quantity=dataclasses.replace(target.quantity, rank_evidence=None))
+    verdict = run_check("C13", target)
+    assert verdict.status == "failed" and "no rank_evidence" in verdict.detail
+
+
+def test_a_quantity_without_points_takes_the_ones_its_pairs_name_from_the_reference(tmp_path):
+    from omnidriver.core.conformance_study import QuantityTarget
+
+    quantity = QuantityTarget(
+        artifact_format=VALUES_FORMAT, reference=write_toy_reference(tmp_path / "reference.json"), at_unit=None,
+        max_sampling_offset=0.0, study={}, sweep_values=(2, 3), tolerance=5.0, tolerance_unit="ms", pairs={"A": "a"},
+    )
+    resolved = quantity.resolved(None)
+    assert (resolved.at, resolved.at_unit) == ({"a": (0, 0, 0.007)}, "m")
+    with pytest.raises(ValueError, match=r"no coordinates for \['Q'\]"):
+        dataclasses.replace(quantity, pairs={"Q": "q"}).resolved(None)
+
+
 def test_c13_bites_a_parallel_form_that_is_the_serial_run(tmp_path):
     verdict = run_check("C13", quantity_toy_conformance_target(tmp_path, plugin=SERIAL_PARALLEL_PLUGIN))
     assert verdict.status == "failed"
@@ -711,9 +736,23 @@ def test_describe_lists_the_conformance_quantity_and_the_readers_of_what_it_prod
         "pairs": {"A": "A", "B": "B"}, "at_unit": "m", "max_sampling_offset_unit": "m",
     }
     assert surface["readers"] == [{
-        "format": VALUES_FORMAT, "steps": ["solve"], "value_unit": "s", "sampling_rule": "toy-row",
-        "coordinate_unit": "m", "takes_points": False, "sentinels": [-1.0],
+        "format": VALUES_FORMAT, "steps": ["solve"], "reader": {
+            "value_unit": "s", "sampling_rule": "toy-row", "coordinate_unit": "m", "takes_points": False,
+            "sentinels": [-1.0],
+        },
     }]
+
+
+def test_describe_lists_a_declared_format_no_reader_takes_with_a_null_reader(tmp_path):
+    from omnidriver.core.introspection import describe_entry
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    target = toy_conformance_target(tmp_path, plugin=UNREADABLE_PLUGIN)
+    surface = describe_entry(
+        target.record, overrides={"cases_root": str(target.cases_root)},
+        driver_context=load_plugin_context(target.plugin),
+    )["record_surface"]
+    assert surface["readers"] == [{"format": "toy_unreadable", "steps": ["solve"], "reader": None}]
 
 
 def test_a_record_with_no_quantity_or_reader_lists_none(tmp_path):

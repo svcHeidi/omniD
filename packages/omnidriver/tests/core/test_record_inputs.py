@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.core.case_write import RenderedFile, ResolvedMutation, _digest_bytes
+from omnidriver.core.case_write import RenderedFile, ResolvedMutation, digest_bytes
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime import record_execution
 from omnidriver.core.tutorial_records import (
@@ -265,7 +265,7 @@ class _InputWriterPlugin(ToyProvider):
             rendered.append(RenderedFile(
                 path=target["document"], content=(json.dumps(content) + "\n").encode(),
                 mode=None, exists_before=exists_before,
-                before_digest=_digest_bytes(path.read_bytes()) if exists_before else None,
+                before_digest=digest_bytes(path.read_bytes()) if exists_before else None,
                 renderer_id=self.plugin_id, format=_FORMAT,
             ))
         return tuple(rendered)

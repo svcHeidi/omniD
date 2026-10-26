@@ -13,7 +13,8 @@ from omnidriver.core.case_write import (
     ParameterAssignment,
     RenderedFile,
     ResolvedMutation,
-    _digest_bytes,
+    patch_resolution,
+    render_by_document,
 )
 
 from .case_planning import (
@@ -41,14 +42,6 @@ def _snapshot_copy(case_root: Path, snapshot_root: Path, relpath: str) -> Path:
     return destination
 
 
-def _document_edits(resolved: Any) -> dict[str, list[Mapping[str, Any]]]:
-    """Group a resolution's targets by the document each one edits."""
-    by_document: dict[str, list[Mapping[str, Any]]] = {}
-    for target in resolved.targets:
-        by_document.setdefault(str(target["document"]), []).append(target)
-    return by_document
-
-
 def _target_for_parameter(parameter: ParameterAssignment) -> dict[str, Any]:
     """One ``render_patch_case_files`` edit target; a parameter at ``HEX_CELL_COUNTS_KEY_PATH`` becomes the structural ``plan_block_mesh_resolution`` target."""
     if parameter.key_path[:1] == HEX_CELL_COUNTS_KEY_PATH:
@@ -73,19 +66,8 @@ def _target_for_parameter(parameter: ParameterAssignment) -> dict[str, Any]:
 
 def patch_mutation(request: CaseMutationRequest, *, owner_id: str) -> ResolvedMutation:
     """The semantic owner's answer for a ``clone_and_patch`` request, for
-    every OpenFOAM-based plugin: pure, every parameter already addressed by
-    its builder. ``owner_id`` is the calling plugin's id."""
-    if request.mode != "clone_and_patch":
-        raise ValueError(f"{owner_id} resolves clone_and_patch requests here, not {request.mode!r}")
-    return ResolvedMutation(
-        request=request,
-        targets=tuple(_target_for_parameter(parameter) for parameter in request.parameters),
-        expected_effects=tuple(
-            f"{parameter.operation} {parameter.qualified_id!r} in {parameter.document}"
-            for parameter in request.parameters
-        ),
-        semantic_owner_id=owner_id,
-    )
+    every OpenFOAM-based plugin. ``owner_id`` is the calling plugin's id."""
+    return patch_resolution(request, owner_id=owner_id, target=_target_for_parameter)
 
 
 def render_patch_case_files(
@@ -119,74 +101,71 @@ def render_patch_case_files(
     del driver_context, execution_env
     case_root = Path(resolved.request.case_root)
     snapshot_root = Path(snapshot_root)
-    rendered: list[RenderedFile] = []
-    for document, edits in sorted(_document_edits(resolved).items()):
-        source = case_root / document
-        if not source.is_file():
+    for document in sorted({str(target["document"]) for target in resolved.targets}):
+        if not (case_root / document).is_file():
             raise ValueError(
                 f"patch target {document!r} does not exist under {case_root}; "
                 f"clone_and_patch edits a document that already exists"
             )
-        before_digest = _digest_bytes(source.read_bytes())
-        mode = source.stat().st_mode & 0o7777
-        snapshot_path = _snapshot_copy(case_root, snapshot_root, document)
+        _snapshot_copy(case_root, snapshot_root, document)
+    return render_by_document(
+        resolved, snapshot_root=snapshot_root, renderer_id=renderer_id, format=FORMAT, patch=_patch_document,
+    )
 
-        hex_edits = [edit for edit in edits if "hex_cell_counts" in edit]
-        dict_edits = [edit for edit in edits if "dict_operation" in edit]
-        value_edits = [
-            edit for edit in edits
-            if "hex_cell_counts" not in edit and "dict_operation" not in edit
-        ]
-        if len(hex_edits) > 1:
+
+def _patch_document(snapshot_path: Path, edits: list[Mapping[str, Any]]) -> bytes:
+    document = str(edits[0]["document"])
+    hex_edits = [edit for edit in edits if "hex_cell_counts" in edit]
+    dict_edits = [edit for edit in edits if "dict_operation" in edit]
+    value_edits = [
+        edit for edit in edits
+        if "hex_cell_counts" not in edit and "dict_operation" not in edit
+    ]
+    if len(hex_edits) > 1:
+        raise ValueError(
+            f"patch target {document!r} carries {len(hex_edits)} hex "
+            f"block-count rewrites; a document's `hex (` blocks are "
+            f"rewritten once, by one target"
+        )
+    for edit in hex_edits:
+        rewritten = _rewrite_hex_block_lines(
+            snapshot_path.read_text(), edit["hex_cell_counts"],
+            int(edit["expected_blocks"]), label=document,
+        )
+        snapshot_path.write_text(rewritten)
+    for edit in dict_edits:
+        scope = tuple(edit["scope"]) if edit.get("scope") else None
+        if edit["dict_operation"] == "remove":
+            remove_foam_dict(
+                snapshot_path, edit["dict_name"], scope=scope, missing_ok=True,
+            )
+        else:
             raise ValueError(
-                f"patch target {document!r} carries {len(hex_edits)} hex "
-                f"block-count rewrites; a document's `hex (` blocks are "
-                f"rewritten once, by one target"
+                f"patch target {document!r} declares dict_operation "
+                f"{edit['dict_operation']!r}; the known operation is "
+                f"'remove'"
             )
-        for edit in hex_edits:
-            rewritten = _rewrite_hex_block_lines(
-                snapshot_path.read_text(), edit["hex_cell_counts"],
-                int(edit["expected_blocks"]), label=document,
+    for edit in value_edits:
+        key_path = tuple(edit["expanded_key_path"])
+        scope = key_path[:-1] or None
+        key = key_path[-1]
+        operation = edit.get("operation", "set")
+        if operation == "remove" and edit.get("removes_dictionary"):
+            remove_foam_dict(snapshot_path, key, scope=scope, missing_ok=True)
+        elif operation == "remove":
+            remove_foam_entry(snapshot_path, key, scope=scope, missing_ok=True)
+        elif operation == "ensure":
+            update_foam_entry(
+                snapshot_path, key, edit["value"], scope=scope, add_if_missing=True,
             )
-            snapshot_path.write_text(rewritten)
-        for edit in dict_edits:
-            scope = tuple(edit["scope"]) if edit.get("scope") else None
-            if edit["dict_operation"] == "remove":
-                remove_foam_dict(
-                    snapshot_path, edit["dict_name"], scope=scope, missing_ok=True,
-                )
-            else:
-                raise ValueError(
-                    f"patch target {document!r} declares dict_operation "
-                    f"{edit['dict_operation']!r}; the known operation is "
-                    f"'remove'"
-                )
-        for edit in value_edits:
-            key_path = tuple(edit["expanded_key_path"])
-            scope = key_path[:-1] or None
-            key = key_path[-1]
-            operation = edit.get("operation", "set")
-            if operation == "remove" and edit.get("removes_dictionary"):
-                remove_foam_dict(snapshot_path, key, scope=scope, missing_ok=True)
-            elif operation == "remove":
-                remove_foam_entry(snapshot_path, key, scope=scope, missing_ok=True)
-            elif operation == "ensure":
-                update_foam_entry(
-                    snapshot_path, key, edit["value"], scope=scope, add_if_missing=True,
-                )
-            elif operation == "set":
-                update_foam_entry(
-                    snapshot_path, key, edit["value"], scope=scope, add_if_missing=False,
-                )
-            else:
-                raise ValueError(
-                    f"patch target {document!r} declares operation "
-                    f"{operation!r} for {key!r}; known operations are "
-                    f"'set', 'ensure' and 'remove'"
-                )
-        rendered.append(RenderedFile(
-            path=document, content=snapshot_path.read_bytes(), mode=mode,
-            exists_before=True, before_digest=before_digest,
-            renderer_id=renderer_id, format=FORMAT,
-        ))
-    return tuple(rendered)
+        elif operation == "set":
+            update_foam_entry(
+                snapshot_path, key, edit["value"], scope=scope, add_if_missing=False,
+            )
+        else:
+            raise ValueError(
+                f"patch target {document!r} declares operation "
+                f"{operation!r} for {key!r}; known operations are "
+                f"'set', 'ensure' and 'remove'"
+            )
+    return snapshot_path.read_bytes()

@@ -36,13 +36,13 @@ def test_an_index_beyond_its_count_is_refused(tmp_path):
     with pytest.raises(TutorialRecordError) as refusal:
         _plan(tmp_path, {"nversion.par:stim[1].pulse.strength": 999.0})
     assert "nversion.par" in str(refusal.value)
-    assert "stim[1].pulse.strength: index 1 is outside num_stim = 1 (F2)" in str(refusal.value)
+    assert "stim[1].pulse.strength: index 1 is outside num_stim = 1" in str(refusal.value)
 
 
 def test_a_command_line_owned_key_is_refused(tmp_path):
     with pytest.raises(TutorialRecordError) as refusal:
         _plan(tmp_path, {"nversion.par:simID": "elsewhere"})
-    assert "nversion.par:simID" in str(refusal.value) and "F14" in str(refusal.value)
+    assert "nversion.par:simID" in str(refusal.value) and "silently overridden" in str(refusal.value)
 
 
 @pytest.mark.parametrize("action", ["plan", "describe"])
@@ -64,7 +64,7 @@ def test_a_native_value_the_reader_refuses_is_refused(tmp_path, action):
                 ENTRY, overrides={"cases_root": str(cases_root), **study},
                 driver_context=load_plugin_context("opencarp"),
             )
-    assert "nversion.par:imp_region[0].im_param" in str(refusal.value) and "F10" in str(refusal.value)
+    assert "nversion.par:imp_region[0].im_param" in str(refusal.value) and "truncates" in str(refusal.value)
 
 
 def test_apply_adds_a_line_to_the_staged_par_and_keeps_every_other_byte(tmp_path):

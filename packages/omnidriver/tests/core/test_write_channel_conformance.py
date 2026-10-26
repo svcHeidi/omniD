@@ -262,7 +262,7 @@ def test_file_modes(tmp_path):
     script = tmp_path / "constant" / "Allrun"
     script.write_bytes(b"#!/bin/sh\n")
     script.chmod(0o755)
-    before = case_write._digest_bytes(b"#!/bin/sh\n")
+    before = case_write.digest_bytes(b"#!/bin/sh\n")
     plan = _plan(tmp_path, [
         _rendered("constant/Allrun", b"#!/bin/sh\necho hi\n",
                   exists_before=True, before_digest=before, mode=0o755),
@@ -276,7 +276,7 @@ def test_file_modes_an_unreadable_existing_file_is_a_transaction_error_not_a_lea
     """Mode 0o000 makes the pre-existing file unreadable; that must surface as a transaction error."""
     first = _plan(tmp_path, [_rendered("constant/a", b"one\n", mode=0o000)])
     case_transaction.commit_case_write(first, driver_context=object())
-    before = case_write._digest_bytes(b"one\n")
+    before = case_write.digest_bytes(b"one\n")
     second = _plan(tmp_path, [
         _rendered("constant/a", b"two\n", exists_before=True, before_digest=before),
     ])
@@ -299,7 +299,7 @@ def test_rollback_after_injected_failure(tmp_path):
     (tmp_path / "constant").mkdir()
     existing = tmp_path / "constant" / "a"
     existing.write_bytes(b"original\n")
-    before = case_write._digest_bytes(b"original\n")
+    before = case_write.digest_bytes(b"original\n")
     plan = _plan(tmp_path, [
         _rendered("constant/a", b"replaced\n", exists_before=True, before_digest=before),
         _rendered("constant/unwritable/b", b"two\n"),
@@ -325,7 +325,7 @@ def test_rollback_after_injected_failure(tmp_path):
 def test_rollback_failure(tmp_path, monkeypatch):
     (tmp_path / "constant").mkdir()
     (tmp_path / "constant" / "a").write_bytes(b"original\n")
-    before = case_write._digest_bytes(b"original\n")
+    before = case_write.digest_bytes(b"original\n")
     real = case_transaction.atomic_write_bytes
 
     def _cannot_restore(target, content, **kwargs):

@@ -28,8 +28,7 @@ class _Unevaluable(Exception):
 
 
 def _evaluate(expression: str, key: str, value_of) -> float:
-    """``expression`` at the values of its parameters, ``[PrMelemN]`` standing for the Nth index of ``key``.
-    Only numbers, parameters, ``+ - * /`` and unary signs are evaluated; anything else raises ``_Unevaluable``."""
+    """``expression`` at its parameters' values; ``[PrMelemN]`` is ``key``'s Nth index, and only ``+ - * /`` evaluate."""
     indexes = re.findall(r"\[(\d+)\]", key)
     expression = _PARENT_INDEX.sub(
         lambda m: f"[{indexes[int(m[1]) - 1]}]" if 0 < int(m[1]) <= len(indexes) else m[0], expression,

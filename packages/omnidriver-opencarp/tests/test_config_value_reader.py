@@ -22,7 +22,7 @@ def test_unquoted_string_with_equals_is_refused_F10(tmp_path, reader):
     message = str(excinfo.value)
     assert "imp_region[0].im_param" in message
     assert str(document) in message
-    assert "F10" in message
+    assert "truncates everything from the '=' on" in message
 
 
 def test_quoted_string_with_equals_reads_fine(tmp_path, reader):
@@ -42,7 +42,7 @@ def test_boolean_spelling_other_than_0_1_is_refused_F1(tmp_path, reader):
     document.write_text("compute_APD = no\n")
     with pytest.raises(ParFormatError) as excinfo:
         reader(document, ("compute_APD",))
-    assert "F1" in str(excinfo.value)
+    assert "must say 0 or 1" in str(excinfo.value)
 
 
 def test_absent_document_reads_as_none(tmp_path, reader):

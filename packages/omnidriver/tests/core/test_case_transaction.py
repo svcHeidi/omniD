@@ -58,7 +58,7 @@ def test_an_overwritten_file_is_restored_when_a_later_write_fails(tmp_path):
     (tmp_path / "constant").mkdir()
     existing = tmp_path / "constant" / "a"
     existing.write_bytes(b"original\n")
-    before = case_write._digest_bytes(b"original\n")
+    before = case_write.digest_bytes(b"original\n")
 
     plan = _plan(tmp_path, [
         _rendered("constant/a", b"replaced\n", exists_before=True, before_digest=before),
@@ -119,7 +119,7 @@ def test_a_file_mode_is_preserved_across_replacement(tmp_path):
     script = tmp_path / "constant" / "Allrun"
     script.write_bytes(b"#!/bin/sh\n")
     script.chmod(0o755)
-    before = case_write._digest_bytes(b"#!/bin/sh\n")
+    before = case_write.digest_bytes(b"#!/bin/sh\n")
     plan = _plan(tmp_path, [
         _rendered("constant/Allrun", b"#!/bin/sh\necho hi\n",
                   exists_before=True, before_digest=before, mode=0o755),
@@ -188,7 +188,7 @@ def test_an_unreadable_existing_file_is_wrapped_not_leaked(tmp_path):
     case_transaction.commit_case_write(first, driver_context=object())
     assert (tmp_path / "constant" / "a").stat().st_mode & 0o777 == 0o000
 
-    before = case_write._digest_bytes(b"one\n")
+    before = case_write.digest_bytes(b"one\n")
     second = _plan(tmp_path, [
         _rendered("constant/a", b"two\n", exists_before=True, before_digest=before),
     ])
@@ -240,7 +240,7 @@ def test_commit_refuses_a_render_claiming_existing_when_the_target_is_missing(tm
     plan = _plan(tmp_path, [
         _rendered(
             "constant/a", b"replaced\n", exists_before=True,
-            before_digest=case_write._digest_bytes(b"whatever was assumed\n"),
+            before_digest=case_write.digest_bytes(b"whatever was assumed\n"),
         ),
     ])
     with pytest.raises(case_transaction.CaseTransactionError, match="exists_before"):
@@ -254,7 +254,7 @@ def test_a_verify_that_refuses_rolls_the_commit_back_and_raises_as_it_is(tmp_pat
     existing.write_bytes(b"original\n")
     plan = _plan(tmp_path, [
         _rendered("constant/a", b"replaced\n", exists_before=True,
-                  before_digest=case_write._digest_bytes(b"original\n")),
+                  before_digest=case_write.digest_bytes(b"original\n")),
         _rendered("constant/new", b"one\n"),
     ])
 
@@ -306,7 +306,7 @@ def test_a_commit_a_kill_cut_short_leaves_its_marker(tmp_path):
         files = (
             case_write.RenderedFile(
                 path="constant/a", content=b"new\\n", mode=None, exists_before=True,
-                before_digest=case_write._digest_bytes(b"original\\n"), renderer_id="r", format="f"),
+                before_digest=case_write.digest_bytes(b"original\\n"), renderer_id="r", format="f"),
             case_write.RenderedFile(
                 path="constant/b", content=b"two\\n", mode=None, exists_before=False,
                 before_digest=None, renderer_id="r", format="f"),
@@ -336,7 +336,7 @@ def test_an_interrupt_during_a_commit_restores_the_case(tmp_path, monkeypatch):
     (tmp_path / "constant").mkdir()
     existing = tmp_path / "constant" / "a"
     existing.write_bytes(b"original\n")
-    before = case_write._digest_bytes(b"original\n")
+    before = case_write.digest_bytes(b"original\n")
     real = case_transaction.atomic_write_bytes
 
     def _interrupted_on_the_second_file(target, content, **kwargs):
@@ -360,7 +360,7 @@ def test_an_interrupt_during_a_commit_restores_the_case(tmp_path, monkeypatch):
 def test_a_rollback_that_itself_fails_names_the_path_and_says_to_plan_again(tmp_path, monkeypatch):
     (tmp_path / "constant").mkdir()
     (tmp_path / "constant" / "a").write_bytes(b"original\n")
-    before = case_write._digest_bytes(b"original\n")
+    before = case_write.digest_bytes(b"original\n")
     real = case_transaction.atomic_write_bytes
 
     def _cannot_restore(target, content, **kwargs):
@@ -400,7 +400,7 @@ def test_a_second_signal_during_the_rollback_waits_for_it_to_finish(tmp_path, mo
 
     monkeypatch.setattr(case_transaction, "atomic_write_bytes", _signalled_while_restoring)
     plan = _plan(tmp_path, [
-        _rendered("constant/a", b"new\n", exists_before=True, before_digest=case_write._digest_bytes(b"original\n")),
+        _rendered("constant/a", b"new\n", exists_before=True, before_digest=case_write.digest_bytes(b"original\n")),
     ])
 
     def refuse():
@@ -421,7 +421,7 @@ def test_only_the_files_a_commit_reached_are_restored(tmp_path, monkeypatch):
     (tmp_path / "constant").mkdir()
     for name in ("a", "c"):
         (tmp_path / "constant" / name).write_bytes(b"original\n")
-    digest = case_write._digest_bytes(b"original\n")
+    digest = case_write.digest_bytes(b"original\n")
     real = case_transaction.atomic_write_bytes
     touched = []
 
@@ -459,7 +459,7 @@ def test_a_signal_stays_what_propagates_when_its_rollback_then_fails(tmp_path, m
 
     monkeypatch.setattr(case_transaction, "atomic_write_bytes", _stopped_on_b_and_unable_to_restore)
     plan = _plan(tmp_path, [
-        _rendered("constant/a", b"new\n", exists_before=True, before_digest=case_write._digest_bytes(b"original\n")),
+        _rendered("constant/a", b"new\n", exists_before=True, before_digest=case_write.digest_bytes(b"original\n")),
         _rendered("constant/b", b"two\n"),
     ])
     with pytest.raises(type(stop)) as excinfo:
@@ -476,7 +476,7 @@ def test_a_file_that_changed_since_it_was_rendered_is_refused_before_any_write(t
     (tmp_path / "constant" / "a").write_bytes(b"edited by someone else\n")
     plan = _plan(tmp_path, [
         _rendered("constant/b", b"two\n"),
-        _rendered("constant/a", b"new\n", exists_before=True, before_digest=case_write._digest_bytes(b"original\n")),
+        _rendered("constant/a", b"new\n", exists_before=True, before_digest=case_write.digest_bytes(b"original\n")),
     ])
     with pytest.raises(case_transaction.CaseTransactionError, match="changed since it was rendered"):
         case_transaction.commit_case_write(plan, driver_context=object())
