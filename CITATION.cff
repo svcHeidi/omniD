@@ -6,7 +6,6 @@ authors:
 title: "omnidriver: Typed Planning, Validation, and Reproducible Workflow Orchestration for OpenFOAM Simulations"
 version: "0.1.0"
 date-released: "2026-08-25"
-license: "GPL-3.0-or-later"
 repository: "https://github.com/svcHeidi/omniD"
 keywords:
   - OpenFOAM
