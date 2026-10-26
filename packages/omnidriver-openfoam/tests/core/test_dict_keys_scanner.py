@@ -3,7 +3,7 @@ file; ``omnidriver scan`` and ``omnidriver check`` run against the whole trees."
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -1000,8 +1000,34 @@ def test_a_read_the_catalogue_lacks_is_uncatalogued_with_what_an_entry_needs(tmp
     )
     assert note["entry"] == {
         "driver_path": None, "value_kind": "scalar", "required": False, "typical_value": "3.0",
-        "source_refs": ["src/setPurkinjeSlab.C"],
+        "source_refs": ["setPurkinjeSlab.C"],
     }
+    assert report["relative_to"] == str(tmp_path / "src")
+
+
+def test_a_suggested_source_ref_starts_from_the_source_folder_the_repository_names(tmp_path):
+    root = _tree(tmp_path, **{"setPurkinjeSlab.C": SET_PURKINJE_SLAB})
+    allowlist = tmp_path / "reviewed.json"
+    allowlist.write_text("{}")
+    report = catalog_report(
+        root, allowlist_path=allowlist, catalogue=DictionaryCatalog({"setPurkinjeSlabDict": ()}),
+        source_prefix=PurePosixPath("applications/utilities"),
+    ).to_json()
+    assert {tuple(note["entry"]["source_refs"]) for note in report["uncatalogued"] if "entry" in note} == {
+        ("applications/utilities/setPurkinjeSlab.C",),
+    }
+    assert report["relative_to"] is None
+
+
+@pytest.mark.parametrize(("default", "disagrees"), [("3", False), ("3.0", False), ("2", True), ("", False)])
+def test_a_catalogued_default_the_cxx_contradicts_is_a_disagreement(tmp_path, default, disagrees):
+    entry = _entry("$PURKINJE_SLAB.multiplier", default=default, source_refs=("src/setPurkinjeSlab.C",))
+    report = _report(tmp_path, (_entry("$PURKINJE_SLAB.thickness"), entry))
+    found = [item for item in report["disagreements"] if "default" in item]
+    assert found == (
+        ["$PURKINJE_SLAB.multiplier: catalogue default '2'; the C++ defaults it to 3.0 (setPurkinjeSlab.C:45)"]
+        if disagrees else []
+    )
 
 
 def test_a_read_without_a_default_is_required_unless_the_function_tests_it_first(tmp_path):

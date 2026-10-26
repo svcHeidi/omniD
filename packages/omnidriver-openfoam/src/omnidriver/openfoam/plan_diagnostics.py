@@ -126,11 +126,15 @@ def _report(driver_context: Any, mapping: Any, source_root: Path | None, scratch
     scanner = driver_context.stack.call("get_dict_key_scanner")
     if scanner is None or mapping is None or source_root is None or not source_root.is_dir():
         return None
+    repository = getattr(driver_context, "repository", None)
+    placed = repository is not None and Path(repository.source).resolve() == Path(source_root).resolve()
+    prefix = {"source_prefix": PurePosixPath(Path(repository.source).relative_to(repository.root).as_posix())} if placed else {}
     return scanner(
         source_root,
         allowlist_path=mapping.allowlist_path,
         catalogue=driver_context.stack.call("get_dictionary_catalog"),
         cache_root=scratch_root,
+        **prefix,
     ).to_json()
 
 
