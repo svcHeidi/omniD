@@ -8,8 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
-import yaml
-
 
 @dataclass(frozen=True)
 class OpenFOAMEnvironment:
@@ -38,24 +36,6 @@ def _parse_exported_environment(payload: str) -> dict[str, str]:
     return env
 
 
-RUNTIME_CONFIG_ENV = "OMNIDRIVER_RUNTIME_CONFIG"
-
-
-def configured_openfoam_bashrc(env: Mapping[str, str]) -> str | None:
-    """The ``openfoam.bashrc`` of the host runtime file ``OMNIDRIVER_RUNTIME_CONFIG``
-    names, or ``None`` when no file is declared or it names none."""
-    config_name = env.get(RUNTIME_CONFIG_ENV)
-    if not config_name:
-        return None
-    config_path = Path(os.path.expandvars(config_name)).expanduser().resolve()
-    if not config_path.is_file():
-        return None
-    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    openfoam = payload.get("openfoam") if isinstance(payload, dict) else None
-    value = openfoam.get("bashrc") if isinstance(openfoam, dict) else None
-    return str(value) if value else None
-
-
 def resolve_bashrc(
     *,
     bashrc_path: str | Path | None = None,
@@ -63,7 +43,6 @@ def resolve_bashrc(
 ) -> tuple[Path, str] | None:
     """The bashrc to source and where it came from: ``bashrc_path``
     (``--environment-source``; ``"flag"``), else ``OPENFOAM_BASHRC``, else the
-    runtime file's ``openfoam.bashrc`` (``OMNIDRIVER_RUNTIME_CONFIG``), else the
     ``etc/bashrc`` of the install a sourced shell already names through
     ``WM_PROJECT_DIR`` (macOS strips ``DYLD_*`` when bash starts, so a step
     needs that bashrc sourced again). Nothing is searched for; a supplied path
@@ -73,9 +52,6 @@ def resolve_bashrc(
     env = os.environ if base_env is None else base_env
     if env.get("OPENFOAM_BASHRC"):
         return Path(env["OPENFOAM_BASHRC"]).expanduser(), "OPENFOAM_BASHRC"
-    configured = configured_openfoam_bashrc(env)
-    if configured:
-        return Path(configured).expanduser(), RUNTIME_CONFIG_ENV
     install = env.get("WM_PROJECT_DIR")
     sourced = Path(install).expanduser() / "etc" / "bashrc" if install else None
     return (sourced, "WM_PROJECT_DIR") if sourced is not None and sourced.is_file() else None

@@ -51,23 +51,6 @@ class CardiacFoamPlugin:
 
         return load_plugin_profile(Path(__file__).parent / "plugin.yaml")
 
-    def get_configured_environment(self, env, driver_context):
-        """Apply this plugin's declared backend and build-manifest contract.
-
-        `provider_stack.py` classifies ``get_configured_environment`` as
-        ``chain``, so when this provider is composed with
-        openfoam-environment's, that provider's (generic, no-op)
-        contribution runs first and this one runs on its result -- no
-        back-channel required.
-        """
-        del driver_context
-        from omnidriver.cardiacfoam.runtime_profile import (
-            configure_runtime_environment,
-        )
-
-        configured_env, _error = configure_runtime_environment(env)
-        return configured_env
-
     def get_dict_entries(self) -> tuple[DictEntry, ...]:
         """The same entries :meth:`get_dictionary_catalog` holds, flat."""
         entries: list[DictEntry] = list(PHYSICS_PROPERTY_ENTRIES)

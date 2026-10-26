@@ -4,33 +4,6 @@ plugin:
   api_version: "3"
 requires:
   - org.omnidriver.openfoam.environment
-runtime:
-  openfoam:
-    bashrc_env: OPENFOAM_BASHRC
-  backend:
-    required: true
-    selection_env: OMNIDRIVER_CARDIACFOAM_BACKEND
-    common_libraries:
-      - libelectroModels
-      - libionicModels
-      - libgenericWriter
-      - libactiveTensionModels
-    options:
-      lightweight:
-        build_define: USE_LIGHTWEIGHT_PHYSICSMODEL=1
-        required_libraries:
-          - libphysicsModel
-        forbidden_libraries:
-          - libsolids4FoamModels
-          - libelectroMechanicalModels
-      full:
-        build_define: USE_LIGHTWEIGHT_PHYSICSMODEL=0
-        required_source: solids4foam
-        required_libraries:
-          - libsolids4FoamModels
-          - libelectroMechanicalModels
-        forbidden_libraries:
-          - libphysicsModel
 case_profile:
   dictionaries:
     - path: constant/electroProperties
