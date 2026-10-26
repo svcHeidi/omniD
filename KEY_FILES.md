@@ -9,7 +9,7 @@ repository root.
 
 | File | Role |
 |---|---|
-| `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | **Start here.** `SolverPlugin` (the contract, member by member; only the identity is required), `DriverContext`, `validate_plugin()` and `driver_context()`. |
+| `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | `SolverPlugin` (the contract, member by member; only the identity is required), `DriverContext`, `validate_plugin()` and `driver_context()`. |
 | `packages/omnidriver/src/omnidriver/core/provider_stack.py` | `MEMBERS`, the one table of the contract: each member's composition across providers and the stack's answer when none implements it (empty, or a refusal naming the operation). `ProviderStack.call(member, ...)` is how core reaches a plugin. |
 | `packages/omnidriver/src/omnidriver/core/plugin_discovery.py` | Entry-point discovery via `importlib.metadata`. Explains `omnidriver.plugins` group name, ambiguity handling, and `_entry_points()` test seam. |
 | `packages/omnidriver/src/omnidriver/core/strict_planning.py` | The strict planner: `strict_plan()` / `omnidriver plan --strict`. Stages a copy of the record's case under the scratch root and never writes the native case; produces machine-readable JSON with readiness score, diagnostics (including the stack's `plugin_diagnostics`), and launch command. |
