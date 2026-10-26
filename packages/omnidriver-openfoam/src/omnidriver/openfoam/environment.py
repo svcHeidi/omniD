@@ -197,6 +197,42 @@ class OpenFOAMEnvironmentPlugin:
 
         return parallel_steps_for_record(step, request=request, read_value=read_value, allocation=allocation)
 
+    @staticmethod
+    def get_dict_entries():
+        from .layer_documents import layer_catalogue
+
+        return layer_catalogue().entries
+
+    @staticmethod
+    def get_dictionary_catalog():
+        """``controlDict`` and ``fvSchemes``, which OpenFOAM's own source reads for every solver."""
+        from .layer_documents import layer_catalogue
+
+        return layer_catalogue()
+
+    def get_record_key_catalog(self, case_root, *, driver_context) -> tuple:
+        """The ``controlDict`` and ``fvSchemes`` keys a study may set, and every other ``system/`` file as open."""
+        from .layer_documents import layer_record_key_catalog
+
+        return layer_record_key_catalog(case_root, catalogue=driver_context.stack.call("get_dictionary_catalog"))
+
+    def validate_run_semantics(self, case_root, *, driver_context):
+        """The catalogue's rules over the resolved case's ``controlDict``."""
+        del driver_context
+        from .layer_documents import layer_run_semantics
+
+        return layer_run_semantics(case_root)
+
+    def get_supported_mutation_modes(self) -> "frozenset[str]":
+        return frozenset({"clone_and_patch"})
+
+    def resolve_case_mutation(self, request, *, driver_context):
+        """An edit to an existing case, which this layer renders for every OpenFOAM-based solver."""
+        del driver_context
+        from .case_rendering import patch_mutation
+
+        return patch_mutation(request, owner_id=self.plugin_id)
+
     def get_dict_key_scanner(self):
         from .dict_keys_scanner import catalog_report
 

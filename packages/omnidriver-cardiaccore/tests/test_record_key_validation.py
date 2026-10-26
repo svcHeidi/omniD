@@ -152,8 +152,16 @@ def test_fv_schemes_is_validated_as_for_every_openfoam_solver_and_otherwise_open
 def test_the_catalogue_lists_the_control_dict_keys_beside_the_open_row_when_the_case_holds_one(tmp_path):
     (tmp_path / "system").mkdir()
     (tmp_path / "system" / "controlDict").write_text("")
-    listed = {(item["document"], item["key"]) for item in record_key_catalog(tmp_path)}
+    (tmp_path / "system" / "setCardiacConductivityDict").write_text("")
+    from omnidriver.core.plugin_interface import load_plugin_context
+
+    context = load_plugin_context("cardiaccore")
+    listed = {
+        (item["document"], item["key"])
+        for item in context.stack.call("get_record_key_catalog", tmp_path, driver_context=context)
+    }
     assert {("system/controlDict", "deltaT"), ("system/controlDict", "<any>")} <= listed
+    assert ("system/setCardiacConductivityDict", "<any>") not in listed
 
 
 def test_the_catalogue_lists_every_key_the_validator_accepts(tmp_path):

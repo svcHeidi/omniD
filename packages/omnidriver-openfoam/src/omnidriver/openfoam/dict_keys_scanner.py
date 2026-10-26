@@ -1578,8 +1578,15 @@ def catalog_report(
     its menu from). A read counts against an
     entry's type or required flag only when it is anchored to it
     (``_anchored``), so a same-named key elsewhere never counts."""
+    from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
+
+    from .layer_documents import layer_catalogue
     from .rtst_scanner import runtime_selection_report
 
+    # The layer's documents are read by OpenFOAM's source, never the solver's this scans.
+    catalogue = DictionaryCatalog({
+        name: entries for name, entries in catalogue.documents.items() if name not in layer_catalogue().documents
+    })
     scan = cached_scan(source_root, cache_root=cache_root, force=force)
     reviewed = json.loads(Path(allowlist_path).read_text())
     caller_guarded = {path for paths in reviewed.get("caller_guarded", {}).values() for path in paths}

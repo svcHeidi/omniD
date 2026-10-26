@@ -17,7 +17,10 @@ def test_plugin_has_a_valid_context() -> None:
     # the ordered stack) is this plugin, per
     # `identity.to_json()["providers"][-1]["id"]`.
     assert context.identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
-    assert len(context.stack.call("get_dict_entries")) == 52
+    assert set(context.stack.call("get_dictionary_catalog").documents) - set(CardiacCorePlugin().get_dictionary_catalog().documents) == {
+        "controlDict", "fvSchemes",
+    }
+    assert len(CardiacCorePlugin().get_dictionary_catalog().entries) == 52
     assert set(context.stack.call("get_tutorial_records")) == {
         "idealizedHeart", "idealizedHeartEndocardial", "idealizedHeartPigTransmural",
     }

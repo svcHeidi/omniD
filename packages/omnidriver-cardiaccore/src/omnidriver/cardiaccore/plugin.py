@@ -65,9 +65,12 @@ class CardiacCorePlugin:
     def validate_run_semantics(self, case_root: Path, *, driver_context: Any) -> tuple[Any, ...]:
         """The catalogue's relations over each utility dictionary the resolved
         case holds."""
-        from .case_rules import case_diagnostics
+        from omnidriver.openfoam.case_rules import document_rule_diagnostics
 
-        return case_diagnostics(case_root, mapping=self.get_profile().cxx_mapping)
+        return document_rule_diagnostics(
+            case_root, {f"system/{name}": entries for name, entries in CATALOG.documents.items()},
+            mapping=self.get_profile().cxx_mapping, catalogue=CATALOG,
+        )
 
     def get_auxiliary_commands(self) -> frozenset[str]:
         return frozenset(_utility_manifests())
@@ -125,14 +128,3 @@ class CardiacCorePlugin:
     def get_agent_guidance(self) -> tuple[dict[str, str], ...]:
         text = resources.files(__package__).joinpath("guidance.md").read_text()
         return ({"title": "cardiacCore: records, study keys and coordinate conventions", "text": text},)
-
-    def get_supported_mutation_modes(self) -> "frozenset[str]":
-        return frozenset({"clone_and_patch"})
-
-    def resolve_case_mutation(self, request: Any, *, driver_context: Any) -> Any:
-        """The shared OpenFOAM layer resolves every edit to an existing case."""
-        from omnidriver.openfoam.case_rendering import patch_mutation
-
-        del driver_context
-        return patch_mutation(request, owner_id=self.plugin_id)
-

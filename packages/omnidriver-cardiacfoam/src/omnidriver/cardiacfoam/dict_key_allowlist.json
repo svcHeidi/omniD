@@ -6,18 +6,6 @@
     ]
   },
   "unseen_reads": {
-    "read by upstream OpenFOAM's Foam::Time from system/controlDict, not by cardiacFOAM's source": [
-      "deltaT",
-      "endTime",
-      "purgeWrite",
-      "startFrom",
-      "startTime",
-      "stopAt",
-      "writeControl",
-      "writeFormat",
-      "writeFrequency",
-      "writeInterval"
-    ],
     "read by upstream OpenFOAM's ODESolver from the dictionary ionicModel, or the active-tension model's ODESolver sub-dictionary, hands to ODESolver::New": [
       "$ELECTRO_MODEL_COEFFS.absTol",
       "$ELECTRO_MODEL_COEFFS.maxSteps",

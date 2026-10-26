@@ -212,8 +212,12 @@ def make_validator(
     documents: Mapping[str, CataloguedDocument], *, mapping: Callable[[], Any], owner: str,
 ) -> Callable[[str, "tuple[str, ...]", Any], "tuple[str, bool]"]:
     """The ``get_record_key_validator`` answer for a plugin whose
-    catalogued ``documents`` are given. ``mapping`` returns the plugin's
-    ``cxx_mapping``; ``owner`` names the plugin in refusals."""
+    catalogued ``documents`` are given, beside the layer's own ``controlDict``
+    and ``fvSchemes``. ``mapping`` returns the plugin's ``cxx_mapping``;
+    ``owner`` names the plugin in refusals."""
+    from .layer_documents import layer_validator_documents
+
+    documents = {**layer_validator_documents(), **documents}
 
     # A key of a catalogued document is checked against its entry's ``value_kind``;
     # a key the catalogue lacks passes only when the plugin's C++ reads it there

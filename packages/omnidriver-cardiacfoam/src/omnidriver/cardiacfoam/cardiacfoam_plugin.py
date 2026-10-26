@@ -15,7 +15,6 @@ from omnidriver.cardiacfoam.common_dict_entries import (
     PURKINJE_GRAPH_ENTRIES,
 )
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
-from omnidriver.openfoam.control_dict import CONTROL_DICT_ENTRIES
 
 if TYPE_CHECKING:
     from omnidriver.core.contracts.dictionary import DictEntry
@@ -72,7 +71,6 @@ class CardiacFoamPlugin:
     def get_dict_entries(self) -> tuple[DictEntry, ...]:
         """The same entries :meth:`get_dictionary_catalog` holds, flat."""
         entries: list[DictEntry] = list(PHYSICS_PROPERTY_ENTRIES)
-        entries.extend(CONTROL_DICT_ENTRIES)
         entries.extend(PRE_PACING_PROPERTY_ENTRIES)
         entries.extend(PURKINJE_GRAPH_ENTRIES)
         entries.extend(ELECTRO_MECHANICAL_PROPERTY_ENTRIES)
@@ -89,7 +87,6 @@ class CardiacFoamPlugin:
         return DictionaryCatalog({
             "electroProperties": tuple(electro_entries),
             "physicsProperties": PHYSICS_PROPERTY_ENTRIES,
-            "controlDict": CONTROL_DICT_ENTRIES,
             "prePacingProperties": PRE_PACING_PROPERTY_ENTRIES,
             PURKINJE_GRAPH_DOCUMENT: PURKINJE_GRAPH_ENTRIES,
             "electroMechanicalProperties": ELECTRO_MECHANICAL_PROPERTY_ENTRIES,
@@ -135,16 +132,6 @@ class CardiacFoamPlugin:
         )
 
         return artifact_value_reader(artifact_format)
-
-    def get_supported_mutation_modes(self) -> "frozenset[str]":
-        return frozenset({"clone_and_patch"})
-
-    def resolve_case_mutation(self, request, *, driver_context):
-        """The shared OpenFOAM layer resolves an edit to an existing case."""
-        del driver_context
-        from omnidriver.openfoam.case_rendering import patch_mutation
-
-        return patch_mutation(request, owner_id=self.plugin_id)
 
     def get_case_runtime_conventions(self):
         """OpenFOAM's generated paths, and the ``local/`` folder a tutorial's ``Allrun`` writes."""

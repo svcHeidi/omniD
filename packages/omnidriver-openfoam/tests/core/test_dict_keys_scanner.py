@@ -1252,7 +1252,7 @@ def test_a_key_is_compared_only_with_the_catalogue_of_the_document_its_dictionar
         "prePacingProperties": (
             _entry("tolerance", source_refs=cited), _entry("minBeats", "integer", source_refs=cited),
         ),
-        "controlDict": (_entry("deltaT"),),
+        "otherProperties": (_entry("deltaT"),),
     })
     report = catalog_report(root, allowlist_path=allowlist, catalogue=catalogue).to_json()
     assert sorted(note["key"] for note in report["uncatalogued"]) == ["deltaT", "enabled", "maxBeats"]
@@ -1262,11 +1262,20 @@ def test_a_key_is_compared_only_with_the_catalogue_of_the_document_its_dictionar
     assert [item["driver_path"] for item in report["unread"]] == ["deltaT"]
 
 
+def test_the_openfoam_layer_documents_are_not_compared_with_the_solver_source(tmp_path):
+    root = _tree(tmp_path, **{"prePacingIO.H": PRE_PACING_READ_ENTRIES})
+    allowlist = tmp_path / "reviewed.json"
+    allowlist.write_text("{}")
+    catalogue = DictionaryCatalog({"controlDict": (_entry("endTime"),)})
+    report = catalog_report(root, allowlist_path=allowlist, catalogue=catalogue).to_json()
+    assert report["unread"] == []
+
+
 def test_a_read_through_a_dictionary_the_scan_cannot_place_may_be_of_any_document(tmp_path):
     root = _tree(tmp_path, **{"prePacingIO.H": PRE_PACING_READ_ENTRIES})
     allowlist = tmp_path / "reviewed.json"
     allowlist.write_text("{}")
-    catalogue = DictionaryCatalog({"controlDict": (_entry("deltaT"),)})
+    catalogue = DictionaryCatalog({"otherProperties": (_entry("deltaT"),)})
     report = catalog_report(root, allowlist_path=allowlist, catalogue=catalogue).to_json()
     assert sorted(note["key"] for note in report["uncatalogued"]) == ["enabled", "maxBeats", "minBeats", "tolerance"]
     assert all("documents" not in note for note in report["uncatalogued"])

@@ -8,10 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from omnidriver.openfoam.case_rules import match_dynamic_entry
-from omnidriver.openfoam.control_dict import CONTROL_DICT_DOCUMENT, control_dict_document, control_dict_listing
-from omnidriver.openfoam.fv_schemes import FV_SCHEMES_DOCUMENT, fv_schemes_document, fv_schemes_listing
 from omnidriver.openfoam.record_key_validation import (
-    CataloguedDocument, listed_entry, make_validator, narrow_to_selectors, open_system_documents,
+    CataloguedDocument, listed_entry, make_validator, narrow_to_selectors,
 )
 
 from .catalogs.inputs import CATALOG
@@ -50,23 +48,19 @@ def _cardiaccore_mapping() -> Any:
 
 
 record_key_validator = make_validator(
-    {**{document: _document(by_key) for document, by_key in _ENTRIES_BY_DOCUMENT.items()}, CONTROL_DICT_DOCUMENT: control_dict_document(), FV_SCHEMES_DOCUMENT: fv_schemes_document()},
+    {document: _document(by_key) for document, by_key in _ENTRIES_BY_DOCUMENT.items()},
     mapping=_cardiaccore_mapping,
     owner="cardiacCore",
 )
 
 
 def record_key_catalog(case_root: Path) -> "tuple[dict[str, Any], ...]":
-    """Every key ``record_key_validator`` accepts for the case at ``case_root``."""
-    return (
-        *(
-            listed_entry(document, key, entry)
-            for document, by_key in _ENTRIES_BY_DOCUMENT.items()
-            for key, entry in by_key.items()
-        ),
-        *control_dict_listing(case_root),
-        *fv_schemes_listing(case_root),
-        *open_system_documents(case_root, exclude=_ENTRIES_BY_DOCUMENT),
+    """Every utility-dictionary key ``record_key_validator`` accepts; the OpenFOAM layer lists the rest."""
+    del case_root
+    return tuple(
+        listed_entry(document, key, entry)
+        for document, by_key in _ENTRIES_BY_DOCUMENT.items()
+        for key, entry in by_key.items()
     )
 
 

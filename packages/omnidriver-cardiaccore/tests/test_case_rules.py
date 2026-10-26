@@ -78,6 +78,10 @@ def test_a_case_with_no_catalogued_dictionary_breaks_nothing(tmp_path):
 
 
 def test_the_control_dict_is_judged_by_what_foam_time_requires_and_by_its_bounds(tmp_path):
+    from omnidriver.core.plugin_interface import load_plugin_context
+
     (tmp_path / "system").mkdir()
     (tmp_path / "system" / "controlDict").write_text(_HEADER + "application x;\ndeltaT 0;\nwriteFrequency 1;\n")
-    assert _messages(tmp_path) == ["deltaT is 0, outside the catalogue's bounds: must be more than 0."]
+    context = load_plugin_context("cardiaccore")
+    judged = context.stack.call("validate_run_semantics", tmp_path, driver_context=context)
+    assert [item.message for item in judged] == ["deltaT is 0, outside the catalogue's bounds: must be more than 0."]
