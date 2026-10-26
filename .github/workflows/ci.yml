@@ -267,10 +267,10 @@ jobs:
       - name: Check core/openfoam/cardiac stay decoupled
         run: python3 scripts/check-import-boundaries.py
 
-      - name: Check core names no OpenFOAM layout beyond its recorded, shrinking debt
+      - name: Check core names no OpenFOAM layout
         run: python3 scripts/check-core-shape.py
 
-      - name: Check the OpenFOAM layer names no cardiac vocabulary beyond its recorded, shrinking debt
+      - name: Check the OpenFOAM layer names no cardiac vocabulary
         run: python3 scripts/check-openfoam-shape.py
 
       - name: Check tutorial-record/axis modules write nothing
