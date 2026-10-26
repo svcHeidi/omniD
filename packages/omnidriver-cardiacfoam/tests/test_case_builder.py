@@ -261,7 +261,7 @@ class TestRequiredCheck(unittest.TestCase):
         self.assertTrue(any("singleCellStimulus" in message for message in self._errors(entries, populated)))
 
     def test_optional_unset_entries_report_nothing(self) -> None:
-        from omnidriver.dict_entries import DictEntry
+        from omnidriver.core.contracts.dictionary import DictEntry
 
         only_optional = [
             DictEntry(

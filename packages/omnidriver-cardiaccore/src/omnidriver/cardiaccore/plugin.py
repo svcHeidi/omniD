@@ -41,9 +41,6 @@ class CardiacCorePlugin:
     def get_profile():
         return load_plugin_profile(Path(__file__).with_name("plugin.yaml"))
 
-    def get_dict_entries(self) -> tuple[Any, ...]:
-        return CATALOG.entries
-
     def get_dictionary_catalog(self) -> DictionaryCatalog:
         return CATALOG
 

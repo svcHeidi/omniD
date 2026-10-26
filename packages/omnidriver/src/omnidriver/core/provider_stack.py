@@ -123,6 +123,12 @@ _DERIVED = {
     "get_auxiliary_commands": _authorized_utilities,
 }
 
+#: member -> (the member it is derived from, the stack's whole answer). No
+#: provider implements one: it would be a second statement of the same fact.
+_DERIVED_ANSWERS = {
+    "get_dict_entries": ("get_dictionary_catalog", lambda stack: stack.call("get_dictionary_catalog").entries),
+}
+
 #: Members a provider implements together or not at all: which modes a
 #: resolver accepts, and which formats a renderer writes, are that provider's
 #: own answers.
@@ -348,6 +354,8 @@ class ProviderStack:
         shape, absent = _entry(member)
         if shape == "profile":
             return self._profile
+        if member in _DERIVED_ANSWERS:
+            return _DERIVED_ANSWERS[member][1](self)
         if member in _DERIVED:
             implementers = self.implementers(member)
             answer = _COMPOSE[shape](implementers, member, args, kwargs) if implementers else _EMPTY[shape](args)
@@ -407,7 +415,10 @@ def check_provider_members(provider: Any) -> list[str]:
         if name.startswith("_") or name in IDENTITY_MEMBERS:
             continue
         value = getattr(provider, name, None)
-        if name in MEMBERS:
+        if name in _DERIVED_ANSWERS:
+            if value is not None:
+                problems.append(f"{name} is derived from {_DERIVED_ANSWERS[name][0]}; implement that instead")
+        elif name in MEMBERS:
             # None declares the member absent, as a subclass removing one does.
             if value is not None and not callable(value):
                 problems.append(f"{name} must be callable")
@@ -428,7 +439,7 @@ UNCLAIMED = "<unclaimed>"
 RESOLUTION_PLACEHOLDER = "-"
 
 #: Members whose resolved content is hashed into the stack digest.
-_DIGESTED = ("get_profile", "get_dict_entries")
+_DIGESTED = ("get_profile", "get_dictionary_catalog")
 
 
 def content_digest(value) -> str:
@@ -443,7 +454,7 @@ def resolutions(stack: ProviderStack) -> dict[str, tuple[str, str]]:
     input to ``provider_identity.build_stack_identity``."""
     resolved: dict[str, tuple[str, str]] = {}
     for member in MEMBERS:
-        implementers = stack.implementers(member)
+        implementers = stack.implementers(_DERIVED_ANSWERS.get(member, (member,))[0])
         if not implementers:
             resolved[member] = (UNCLAIMED, RESOLUTION_PLACEHOLDER)
             continue
@@ -452,5 +463,7 @@ def resolutions(stack: ProviderStack) -> dict[str, tuple[str, str]]:
             resolved[member] = (winner, RESOLUTION_PLACEHOLDER)
             continue
         value = stack.call(member)
+        if member == "get_dictionary_catalog":
+            value = dict(value.documents)
         resolved[member] = (winner, value.digest if member == "get_profile" else content_digest(value))
     return resolved

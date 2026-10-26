@@ -51,16 +51,6 @@ class CardiacFoamPlugin:
 
         return load_plugin_profile(Path(__file__).parent / "plugin.yaml")
 
-    def get_dict_entries(self) -> tuple[DictEntry, ...]:
-        """The same entries :meth:`get_dictionary_catalog` holds, flat."""
-        entries: list[DictEntry] = list(PHYSICS_PROPERTY_ENTRIES)
-        entries.extend(PRE_PACING_PROPERTY_ENTRIES)
-        entries.extend(PURKINJE_GRAPH_ENTRIES)
-        entries.extend(ELECTRO_MECHANICAL_PROPERTY_ENTRIES)
-        for group in ELECTRO_PROPERTY_ENTRY_GROUPS.values():
-            entries.extend(group)
-        return tuple(entries)
-
     @staticmethod
     @lru_cache(maxsize=1)
     def get_dictionary_catalog() -> DictionaryCatalog:

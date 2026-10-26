@@ -7,7 +7,7 @@ from omnidriver.openfoam.scheme_tables import OpenFoamTableEntry
 
 
 def test_every_ode_solver_key_takes_its_menu_from_openfoams_ode_solver_table():
-    solvers = [entry for entry in CardiacFoamPlugin().get_dict_entries() if entry.driver_path.endswith(".solver")]
+    solvers = [entry for entry in CardiacFoamPlugin.get_dictionary_catalog().entries if entry.driver_path.endswith(".solver")]
     assert len(solvers) == 4
     assert all(isinstance(entry, OpenFoamTableEntry) and entry.table == "ODESolver" for entry in solvers)
     assert {entry.value_kind for entry in solvers} == {"word"}

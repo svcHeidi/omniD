@@ -36,9 +36,6 @@ def test_a_plugin_without_them_loads_describes_and_runs(check_id, tmp_path):
 class _EmptyStubs(ToyProvider):
     """Dictionary members that answer empty."""
 
-    def get_dict_entries(self):
-        return ()
-
     def get_dictionary_catalog(self):
         return DictionaryCatalog({})
 
@@ -47,6 +44,25 @@ def test_no_dictionary_entries_digests_exactly_as_an_empty_stub_did():
     absent = driver_context(ToyProvider(), source="test").identity.providers[0].provider_digest
     stubbed = driver_context(_EmptyStubs(), source="test").identity.providers[0].provider_digest
     assert absent == stubbed
+
+
+def test_the_flat_entries_are_the_stacks_derived_from_its_catalogue_and_no_provider_states_them():
+    from omnidriver.core.contracts.dictionary import DictEntry
+
+    entry = DictEntry(driver_path="endTime", description="end time", value_kind="scalar")
+
+    class WithCatalogue(ToyProvider):
+        def get_dictionary_catalog(self):
+            return DictionaryCatalog({"controlDict": (entry,)})
+
+    assert driver_context(WithCatalogue(), source="test").stack.call("get_dict_entries") == (entry,)
+
+    class StatingThemTwice(WithCatalogue):
+        def get_dict_entries(self):
+            return (entry,)
+
+    with pytest.raises(TypeError, match="get_dict_entries is derived from get_dictionary_catalog"):
+        driver_context(StatingThemTwice(), source="test")
 
 
 def test_a_stack_with_no_dictionary_implementer_records_the_member_unclaimed():

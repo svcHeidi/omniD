@@ -208,12 +208,6 @@ class OpenFOAMEnvironmentPlugin:
         )
 
     @staticmethod
-    def get_dict_entries():
-        from .layer_documents import layer_catalogue
-
-        return layer_catalogue().entries
-
-    @staticmethod
     def get_dictionary_catalog():
         """``controlDict`` and ``fvSchemes``, which OpenFOAM's own source reads for every solver."""
         from .layer_documents import layer_catalogue

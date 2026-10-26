@@ -14,7 +14,7 @@ def test_cardiacfoam_plugin_satisfies_runtime_contract() -> None:
 
     assert ctx.identity.to_json()["providers"][-1]["id"] == "org.cardiacfoam"
     assert plugin.plugin_name == "cardiacFoam"
-    assert plugin.get_dict_entries()
+    assert plugin.get_dictionary_catalog().entries
     assert {"deltaT", "endTime"} <= {
         entry.driver_path
         for entry in ctx.stack.call("get_dictionary_catalog").documents["controlDict"]

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.dict_entries import DictEntry
+from omnidriver.core.contracts.dictionary import DictEntry
 from omnidriver.cardiacfoam.dict_entries_catalog import ELECTRO_PROPERTY_ENTRY_GROUPS
 from omnidriver.cardiacfoam.common_dict_entries import (
     ELECTRO_MECHANICAL_PROPERTY_ENTRIES, PHYSICS_PROPERTY_ENTRIES, PURKINJE_GRAPH_ENTRIES,
