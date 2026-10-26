@@ -18,8 +18,8 @@ SOLVE = {"id": "solve", "command": "openCARP", "args": ["+F", "nversion.par", "-
 SLURM_4 = SchedulerAllocation(variable="SLURM_NTASKS", ranks=4)
 
 
-def _form(request, allocation=None):
-    return parallel_steps(dict(SOLVE), request=request, read_value=None, allocation=allocation)
+def _form(request, allocation=None, launcher="mpirun"):
+    return parallel_steps(dict(SOLVE), request=request, read_value=None, allocation=allocation, launcher=launcher)
 
 
 def test_the_solve_runs_under_mpirun_with_a_supplied_count():
@@ -58,7 +58,8 @@ def test_a_request_that_is_not_true_or_a_positive_count_is_refused(bad):
 def test_the_plugin_declares_openCARP_its_solve_step_and_the_form():
     plugin = OpenCARPPlugin()
     assert plugin.get_solve_step_commands() == frozenset({"openCARP"})
-    assert plugin.get_parallel_steps(dict(SOLVE), request=3, read_value=None, allocation=None)[0]["args"][:2] == ["-np", "3"]
+    (step,) = plugin.get_parallel_steps(dict(SOLVE), request=3, read_value=None, allocation=None, launcher="mpiexec")
+    assert (step["command"], step["args"][:2]) == ("mpiexec", ["-np", "3"])
 
 
 def _script(directory, name, body):

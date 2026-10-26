@@ -19,12 +19,14 @@ _HEADER_MARK = "GIT tag"
 _HOST_UNRESOLVABLE = "gethostbyname failed"
 
 
-def parallel_steps(step: Mapping[str, Any], *, request: Any, read_value: Any, allocation: Any) -> list[dict]:
-    """openCARP's ``get_parallel_steps``: the solve step under ``mpirun -np
+def parallel_steps(
+    step: Mapping[str, Any], *, request: Any, read_value: Any, allocation: Any, launcher: str | None,
+) -> list[dict]:
+    """openCARP's ``get_parallel_steps``: the solve step under ``<launcher> -np
     N``. ``request`` is ``True`` (N from the scheduler's allocation) or a
     positive integer N."""
     del read_value      # openCARP's case states no process count
-    return [mpi.wrap(step, mpi.agree(mpi.requested(request), allocation))]
+    return [mpi.wrap(step, mpi.agree(mpi.requested(request), allocation), launcher)]
 
 
 def launcher_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:

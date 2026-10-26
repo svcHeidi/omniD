@@ -18,6 +18,7 @@ from ..case_transaction import commit_case_write
 from ..case_write import CaseKeyNotFound, CaseMutationRequest, CaseWritePlan, render_mutation, resolve_mutation
 from ..provider_stack import MemberAbsent
 from ..sweep.sweep_derivation_catalog import NAMING_OUTPUT_KEYS
+from . import mpi
 from .models import DataArtifact
 from ..tutorial_records import (
     PARALLEL_STUDY_NAME,
@@ -664,6 +665,24 @@ def scheduler_allocation(environ: Mapping[str, str]) -> SchedulerAllocation | No
     return None
 
 
+def allocation_disagreements(
+    workflow_dag: Mapping[str, Any], environ: Mapping[str, str], *, launcher: str | None,
+) -> tuple[SchedulerAllocation | None, list[str]]:
+    """The scheduler allocation in ``environ``, and each step run under an MPI
+    launcher (``mpi.LAUNCHERS`` or the stack's declared ``launcher``) whose
+    process count differs from it; nothing disagrees outside a scheduler."""
+    allocation = scheduler_allocation(environ)
+    if allocation is None:
+        return None, []
+    launchers = mpi.LAUNCHERS | ({launcher} if launcher else set())
+    return allocation, [
+        f"{step.get('id')!r} runs {count}"
+        for step in workflow_dag.get("steps", ())
+        if step.get("command") in launchers
+        and (count := mpi.ranks(step.get("args") or ())) is not None and count != allocation.ranks
+    ]
+
+
 def _case_value_reader(
     record: TutorialRecord, driver_context: "DriverContext", *, case_root: Path,
     pending: Sequence[SourcedPatch] = (),
@@ -731,6 +750,9 @@ def _parallel_workflow_dag(
             f"solve command the stack declares (get_solve_step_commands: "
             f"{sorted(solve_commands)}), so there is no solve step to run in parallel"
         )
+    from ..environment_connection import stack_connection
+
+    launcher = stack_connection(driver_context)[0].mpi_launcher
     taken = {step["id"] for step in dag["steps"]}
     steps: list[dict[str, Any]] = []
     follows: dict[str, str] = {}
@@ -743,7 +765,7 @@ def _parallel_workflow_dag(
             replacement = [
                 dict(entry) for entry in stack.call(
                     "get_parallel_steps", copy.deepcopy(step), request=request, read_value=read_value,
-                    allocation=allocation,
+                    allocation=allocation, launcher=launcher,
                 )
             ]
         except ValueError as exc:

@@ -189,13 +189,15 @@ class OpenFOAMEnvironmentPlugin:
     def is_installed_environment_command(self, command: str) -> bool:
         return is_installed_openfoam_application(command)
 
-    def get_parallel_steps(self, step, *, request, read_value, allocation):
+    def get_parallel_steps(self, step, *, request, read_value, allocation, launcher):
         """A record's solve step in OpenFOAM's parallel form. The solve
         command is the solver plugin's (``get_solve_step_commands``); how
         any OpenFOAM solver runs in parallel is this layer's."""
         from .parallel_execution import parallel_steps_for_record
 
-        return parallel_steps_for_record(step, request=request, read_value=read_value, allocation=allocation)
+        return parallel_steps_for_record(
+            step, request=request, read_value=read_value, allocation=allocation, launcher=launcher,
+        )
 
     def get_dict_key_scanner(self):
         from .dict_keys_scanner import catalog_report

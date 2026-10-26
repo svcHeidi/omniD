@@ -1,4 +1,4 @@
-"""OpenFOAM's parallel form of a solve step: ``decomposePar`` -> ``mpirun -np
+"""OpenFOAM's parallel form of a solve step: ``decomposePar`` -> ``<launcher> -np
 N <solve> -parallel`` -> ``reconstructPar``, with N the case's own
 ``system/decomposeParDict:numberOfSubdomains``."""
 from __future__ import annotations
@@ -14,10 +14,10 @@ _SUBDOMAINS = f"{DECOMPOSE_PAR_DICT}:{_SUBDOMAINS_KEY_PATH[0]}"
 
 def parallel_steps_for_record(
     step: Mapping[str, Any], *, request: Any,
-    read_value: Callable[[str, tuple[str, ...]], Any], allocation: Any,
+    read_value: Callable[[str, tuple[str, ...]], Any], allocation: Any, launcher: str | None,
 ) -> list[dict]:
     """The OpenFOAM layer's ``get_parallel_steps``: a record's serial solve step as
-    ``<id>.decompose`` -> ``<id>`` under ``mpirun -np N ... -parallel`` ->
+    ``<id>.decompose`` -> ``<id>`` under ``<launcher> -np N ... -parallel`` ->
     ``<id>.reconstruct``; later steps follow the reconstruct step.
 
     N is the case's own ``numberOfSubdomains``, read through ``read_value``.
@@ -44,7 +44,7 @@ def parallel_steps_for_record(
         )
     mpi.agree(n, allocation, stated_by=_SUBDOMAINS)
     id_ = step["id"]
-    solve = mpi.wrap({**step, "args": [*step.get("args", ()), "-parallel"], "depends_on": [f"{id_}.decompose"]}, n)
+    solve = mpi.wrap({**step, "args": [*step.get("args", ()), "-parallel"], "depends_on": [f"{id_}.decompose"]}, n, launcher)
     return [
         {
             "id": f"{id_}.decompose",

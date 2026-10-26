@@ -12,8 +12,14 @@ LAUNCHERS = frozenset({"mpirun", "mpiexec", "orterun"})
 _RANK_FLAGS = ("-np", "-n", "--np")
 
 
-def wrap(step: Mapping[str, Any], n: int, launcher: str = "mpirun") -> dict[str, Any]:
-    """``step`` run as ``<launcher> -np n <command> <args>``, keeping its id, inputs and outputs."""
+def wrap(step: Mapping[str, Any], n: int, launcher: str | None) -> dict[str, Any]:
+    """``step`` run as ``<launcher> -np n <command> <args>``, keeping its id, inputs and outputs.
+    ``launcher`` is the stack's declared ``environment.mpi_launcher``; ``None`` is refused by name."""
+    if not launcher:
+        raise ValueError(
+            "the stack declares no MPI launcher (environment.mpi_launcher in its plugin profile), "
+            "so there is nothing to run the solve under in parallel"
+        )
     return {**step, "command": launcher, "args": ["-np", str(n), step["command"], *step.get("args", ())]}
 
 

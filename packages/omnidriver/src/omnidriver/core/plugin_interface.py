@@ -305,10 +305,12 @@ class SolverPlugin(Protocol):
     def get_config_value_reader(self):
         """A ``(path, key_path_tuple) -> value | None`` reader of this format."""
 
-    def get_parallel_steps(self, step, *, request, read_value, allocation):
+    def get_parallel_steps(self, step, *, request, read_value, allocation, launcher):
         """The steps replacing one serial solve step for a parallel run.
         Exactly one keeps ``step["id"]`` and its ``produces``; the first
-        follows ``step["depends_on"]``. Raises ``ValueError`` to refuse."""
+        follows ``step["depends_on"]``. ``launcher`` is the stack's declared
+        ``environment.mpi_launcher`` (``None`` when it declares none). Raises
+        ``ValueError`` to refuse."""
 
     # -- case writing ---------------------------------------------------------
     def resolve_case_mutation(self, request: Any, *, driver_context: Any) -> Any:

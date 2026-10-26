@@ -31,6 +31,7 @@ CODES: dict[str, str] = {
     "plan_failed": "the case's strict plan has an error diagnostic",
     "plan_blocked": "the case's strict plan is blocked",
     "plan_incomplete": "the strict plan produced no workflow to run",
+    "allocation_mismatch": "a run document's MPI process count differs from the scheduler allocation it is run in",
     "environment_preflight_failed": "the execution environment failed its preflight",
     "required_check_unavailable": "a check the run requires could not run",
     "run_document_unreadable": "the run document could not be loaded",

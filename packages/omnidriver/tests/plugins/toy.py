@@ -794,7 +794,7 @@ class AlwaysBrokenCasePlugin(ToyStack):
 # -- fixtures: parallel ----------------------------------------------------------------
 
 
-def toy_parallel_steps(step, *, request, read_value, allocation):
+def toy_parallel_steps(step, *, request, read_value, allocation, launcher):
     """Split, the solve with its rank count, join; the count is the case's cells."""
     if request is not True:
         raise ValueError(f"the toy reads its count from constant/mesh.json:cells; got request {request!r}")
@@ -813,8 +813,8 @@ class ParallelToyPlugin(ToyStack):
     def get_solve_step_commands(self):
         return frozenset({"touch"})
 
-    def get_parallel_steps(self, step, *, request, read_value, allocation):
-        return toy_parallel_steps(step, request=request, read_value=read_value, allocation=allocation)
+    def get_parallel_steps(self, step, *, request, read_value, allocation, launcher):
+        return toy_parallel_steps(step, request=request, read_value=read_value, allocation=allocation, launcher=launcher)
 
 
 # -- fixtures: quantities ------------------------------------------------------------------
@@ -973,7 +973,7 @@ class ParallelQuantityToyPlugin(QuantityToyPlugin):
     def _reported_ranks(self, count):
         return count
 
-    def get_parallel_steps(self, step, *, request, read_value, allocation):
+    def get_parallel_steps(self, step, *, request, read_value, allocation, launcher):
         count = mpi.agree(mpi.requested(request), allocation)
         split = {"id": f"{step['id']}.split", "command": "sh",
                  "args": ["-c", 'echo "nRanks=$0"; cp constant/mesh.json "split.$1"', str(self._reported_ranks(count)), str(count)],
@@ -984,8 +984,10 @@ class ParallelQuantityToyPlugin(QuantityToyPlugin):
 class ReorderingParallelPlugin(ParallelQuantityToyPlugin):
     """A parallel solve that writes different values from the serial one."""
 
-    def get_parallel_steps(self, step, *, request, read_value, allocation):
-        split, solve = super().get_parallel_steps(step, request=request, read_value=read_value, allocation=allocation)
+    def get_parallel_steps(self, step, *, request, read_value, allocation, launcher):
+        split, solve = super().get_parallel_steps(
+            step, request=request, read_value=read_value, allocation=allocation, launcher=launcher,
+        )
         return split, {**solve, "args": ["seed/other.txt", "values.txt"]}
 
 
@@ -999,7 +1001,7 @@ class SingleRankPlugin(ParallelQuantityToyPlugin):
 class SerialParallelPlugin(ParallelQuantityToyPlugin):
     """A parallel form that returns the serial step unchanged."""
 
-    def get_parallel_steps(self, step, *, request, read_value, allocation):
+    def get_parallel_steps(self, step, *, request, read_value, allocation, launcher):
         return (step,)
 
 

@@ -308,6 +308,33 @@ def _execute_run(
     return 0 if status == "ok" else 1
 
 
+def _refuse_an_allocation_mismatch(args, workflow_dag: dict, execution_env: dict, driver_context) -> bool:
+    """Print a refusal when the document's launched ranks differ from the allocation it now runs in: a plan
+    made on a login node or under another allocation must not start a run of a different size."""
+    from .core.environment_connection import stack_connection
+    from .core.runtime.record_execution import allocation_disagreements
+
+    try:
+        allocation, disagreeing = allocation_disagreements(
+            workflow_dag, execution_env, launcher=stack_connection(driver_context)[0].mpi_launcher,
+        )
+    except TutorialRecordError as exc:
+        print(json.dumps(failure(exc, code="allocation_mismatch", run_document=args.run_document), indent=2))
+        return True
+    if not disagreeing:
+        return False
+    print(json.dumps(failure(
+        None, code="allocation_mismatch",
+        error=(
+            f"the run document's step(s) {', '.join(disagreeing)} processes, but the scheduler allocated "
+            f"{allocation.variable}={allocation.ranks} here; plan again inside this allocation, or run it "
+            "in one of the planned size"
+        ),
+        run_document=args.run_document, allocation=allocation.to_json(),
+    ), indent=2))
+    return True
+
+
 def _context_from_run_document(args, driver_context) -> _ExecutionContext | None:
     """Load + validate an agent-authored RunDocument into executor inputs."""
     try:
@@ -348,6 +375,8 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             None, code="run_document_invalid", error="the run document fails validation; see diagnostics",
             run_document=args.run_document, diagnostics=[asdict(d) for d in diagnostics],
         ), indent=2))
+        return None
+    if _refuse_an_allocation_mismatch(args, inputs.workflow_dag, execution_env, driver_context):
         return None
     record = driver_context.stack.call("get_tutorial_records").get(run_doc.name)
     if record is not None and args.apply is None:
