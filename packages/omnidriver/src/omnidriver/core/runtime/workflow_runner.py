@@ -476,15 +476,6 @@ def run_workflow_step(
                 "message": f"Workflow step {step_id!r} exited while owned descendants were still running.",
                 "field": step_id,
             },)
-    except subprocess.TimeoutExpired as exc:
-        # Kept for defensive compatibility with alternate Popen-like test
-        # doubles; the owned wait helper normally handles timeouts itself.
-        diagnostics = ({
-            "level": "error",
-            "code": "workflow_step_timeout",
-            "message": f"Workflow step {step_id!r} timed out after {exc.timeout} seconds.",
-            "field": step_id,
-        },)
     except OSError as exc:
         diagnostics = ({
             "level": "error",
