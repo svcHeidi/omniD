@@ -366,3 +366,25 @@ def test_sweep_run_fresh_refuses_an_output_dir_that_is_a_symlink(tmp_path, capsy
     assert exit_code == 1
     assert "symlink" in json.loads(capsys.readouterr().out)["error"]
     assert (real / "important.txt").read_text() == "keep"
+
+
+@pytest.mark.parametrize("supplied", [True, False])
+def test_describe_previews_in_the_supplied_scratch_root(tmp_path, capsys, monkeypatch, supplied):
+    from omnidriver.core.runtime import record_execution
+
+    staged = []
+    real = record_execution._stage
+    monkeypatch.setattr(
+        record_execution, "_stage", lambda record, **kw: staged.append(kw["staged_case_root"]) or real(record, **kw),
+    )
+    monkeypatch.delenv("OMNIDRIVER_SCRATCH_DIR", raising=False)
+    cases_root = _native_toy_case(tmp_path)
+    scratch = tmp_path / "scratch"
+    assert main([
+        "describe", "--plugin", "plugins.toy:ToyStack", "--entry", "toyTutorial", "--cases-root", str(cases_root),
+        *(("--scratch-dir", str(scratch)) if supplied else ()),
+    ]) == 0
+    capsys.readouterr()
+    (where,) = staged
+    assert where.is_relative_to(scratch) is supplied
+    assert not where.exists()

@@ -881,8 +881,9 @@ record's native regression script (the one its case-file rules name) in a copy
 under the scratch root, against the solver your shell holds, and prints the
 verdicts as JSON, each `passed`, `failed` or `not_applicable` (the check verifies
 nothing for this record: C12 with no step declaring an output format, C13 and C14 with
-no declared quantity), with the three counted
-apart in `summary`. C14 checks the mechanism (sweep, compare, attach), never that
+no declared quantity, C13 for a serial-only record), with the three counted
+apart in `summary`; each record's `verified` lists the checks that passed, so a
+record whose status is `passed` shows what it actually verified. C14 checks the mechanism (sweep, compare, attach), never that
 the two resolutions agree. It **reports and gates nothing**: the exit code is 0
 whenever the checks ran, and a failing check is the report doing its job. Each record
 declares how it is exercised briefly (`TutorialRecord.conformance`: a short
@@ -928,6 +929,7 @@ expression of other parameters is a string under its own key
 | `plan_failed` | the case's strict plan has an error diagnostic |
 | `plan_blocked` | the case's strict plan is blocked |
 | `plan_incomplete` | the strict plan produced no workflow to run |
+| `allocation_mismatch` | a run document's MPI process count differs from the scheduler allocation it is run in |
 | `environment_preflight_failed` | the execution environment failed its preflight |
 | `required_check_unavailable` | a check the run requires could not run |
 | `run_document_unreadable` | the run document could not be loaded |
@@ -979,9 +981,10 @@ expression of other parameters is a string under its own key
    `max_sampling_offset_unit`. When `points_from` is `reference`, pass
    `describe --benchmarks <dir>` to read the points and their unit from the
    reference; without it they are `null`. `record_surface.readers` is, for each
-   format a step declares on its output, the reader `compare` uses
-   (`value_unit`, `sampling_rule`, `coordinate_unit`, `takes_points`,
-   `sentinels`) and the steps producing it, or `[]`.
+   format a step declares on its output, the steps producing it and the
+   `reader` `compare` uses (`value_unit`, `sampling_rule`, `coordinate_unit`,
+   `takes_points`, `sentinels`), `null` when no reader takes the format; `[]`
+   when no step declares a format.
 3. **What models can I pick?** `describe` lists each named catalog's items by
    name (`plugin_catalogs`: for cardiacFOAM the ionic and active-tension
    models). `omnidriver catalog --plugin P --named ionic_model_catalog` prints

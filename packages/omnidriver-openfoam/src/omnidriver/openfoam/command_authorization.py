@@ -5,9 +5,9 @@ Core asks the active environment whether a command is authorized; it never infer
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
+from typing import Mapping
 
 
 _OPENFOAM_RUNTIME_COMMANDS = frozenset(
@@ -32,17 +32,17 @@ def openfoam_runtime_commands() -> frozenset[str]:
     return _OPENFOAM_RUNTIME_COMMANDS
 
 
-def is_installed_openfoam_application(command: str) -> bool:
-    """Whether ``command`` resolves under the sourced OpenFOAM app roots."""
+def is_installed_openfoam_application(command: str, env: Mapping[str, str]) -> bool:
+    """Whether ``command`` resolves, on ``env``'s ``PATH``, under ``env``'s sourced OpenFOAM app roots."""
 
     roots = tuple(
         Path(value).resolve()
         for name in ("FOAM_APPBIN", "FOAM_USER_APPBIN")
-        if (value := os.environ.get(name))
+        if (value := env.get(name))
     )
     if not roots:
         return False
-    resolved = shutil.which(command)
+    resolved = shutil.which(command, path=env.get("PATH"))
     if resolved is None:
         return False
     resolved_path = Path(resolved).resolve()

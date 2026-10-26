@@ -26,8 +26,13 @@ command line sets.
 - Counts size arrays: `stim[1].*` needs `num_stim >= 2`, or openCARP exits (F2).
   `num_stim` defaults to 2, so a case that omits it gets two stimuli (F7).
 - Units: `dt` is in microseconds, `tend` in milliseconds (G2); `describe` lists
-  each parameter's unit as `+Help` prints it. The mesh axis `dx` is in
+  each parameter's unit in omniD's spelling (`us`, `um`, `ms`), and the catalogue
+  keeps `+Help`'s own as `units_as_printed`. The mesh axis `dx` is in
   micrometres (F3).
+- Defaults: a `default` is a literal as a `.par` spells it. Where `+Help` gives a
+  C expression of other parameters (`tracedt` defaults to `timedt`), `default`
+  is `null` and `describe` shows the expression as `default_expression`. A menu's
+  `menu_labels` say what each value means (`parab_solve` 1 is Crank-Nicolson).
 - Bounds: a bound written as a number is checked when a study sets the key. A
   bound that names parameters, or does `+ - * /` on them and numbers
   (`spacedt` <= `tend`, G1; `tend` >= `dt/1000.`), is evaluated at their

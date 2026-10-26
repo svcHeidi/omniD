@@ -86,7 +86,7 @@ def make_record_key_validator(
             raise TutorialRecordError(
                 f"{document}:{key} is set by the record's command line (record {owner.record!r}, "
                 f"step {owner.step_id!r}: -{key} {owner.value}); a .par value would be silently "
-                "overridden (F14)"
+                "overridden"
             )
         return _catalog_check(document, key, value)
 
@@ -106,7 +106,7 @@ def _catalog_check(document: str, key: str, value: Any) -> tuple[str, bool]:
         )
     problems = validate_value_shape(spec.value_kind, value)
     if problems:
-        hint = " (openCARP reads 'no' and 'off' as on: F1)" if spec.value_kind == "boolean" else ""
+        hint = " (openCARP reads 'no' and 'off' as on)" if spec.value_kind == "boolean" else ""
         raise TutorialRecordError(
             f"{document}:{key}: {'; '.join(problems)}{hint}", code="catalog_rule", rule={"value_kind": spec.value_kind},
         )
@@ -146,5 +146,5 @@ def check_indices(text: str) -> None:
         if count_text is None or not count_text.lstrip("-").isdigit():
             continue
         if int(match["index"]) >= int(count_text):
-            source = "" if raw is not None else " (its default; F7)"
-            raise ParFormatError(f"{key}: index {match['index']} is outside {count_key} = {count_text}{source} (F2)")
+            source = "" if raw is not None else " (its default)"
+            raise ParFormatError(f"{key}: index {match['index']} is outside {count_key} = {count_text}{source}")

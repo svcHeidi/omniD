@@ -9,7 +9,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from .contracts.dictionary import VALUE_KINDS, validate_value_shape
 
@@ -234,7 +234,8 @@ class CaseMutationRequest:
             seen[slot] = parameter.qualified_id
 
 
-def _digest_bytes(content: bytes) -> str:
+def digest_bytes(content: bytes) -> str:
+    """The SHA-256 hex digest a ``RenderedFile.before_digest`` carries."""
     return hashlib.sha256(content).hexdigest()
 
 
@@ -382,4 +383,69 @@ def render_mutation(
                     f"provider that produced it"
                 )
             rendered.append(file)
+    return tuple(rendered)
+
+
+def patch_target(parameter: ParameterAssignment) -> dict[str, Any]:
+    """The default ``clone_and_patch`` target for one parameter: its address, value and operation."""
+    return {
+        "qualified_id": parameter.qualified_id,
+        "document": parameter.document,
+        "key_path": list(parameter.expanded_key_path()),
+        "value": parameter.value,
+        "value_kind": parameter.value_kind,
+        "operation": parameter.operation,
+    }
+
+
+def patch_resolution(
+    request: CaseMutationRequest,
+    *,
+    owner_id: str,
+    target: Callable[[ParameterAssignment], Mapping[str, Any]] = patch_target,
+) -> ResolvedMutation:
+    """The ``clone_and_patch`` resolution every format shares: one ``target``
+    per parameter, each already addressed by the record that assigned it.
+    ``owner_id`` is the resolving provider's id."""
+    if request.mode != "clone_and_patch":
+        raise ValueError(f"{owner_id} resolves clone_and_patch requests, not {request.mode!r}")
+    return ResolvedMutation(
+        request=request,
+        targets=tuple(target(parameter) for parameter in request.parameters),
+        expected_effects=tuple(
+            f"{parameter.operation} {parameter.qualified_id!r} in {parameter.document}"
+            for parameter in request.parameters
+        ),
+        semantic_owner_id=owner_id,
+    )
+
+
+def render_by_document(
+    resolved: ResolvedMutation,
+    *,
+    snapshot_root: Path,
+    renderer_id: str,
+    format: str,
+    patch: Callable[[Path, list[Mapping[str, Any]]], bytes],
+) -> tuple[RenderedFile, ...]:
+    """One ``RenderedFile`` per document the resolution's targets edit.
+
+    ``patch(path, targets)`` returns the document's new bytes, given its copy
+    in ``snapshot_root`` (absent for a new document) and every target that
+    edits it, so several edits to one document fold into one file.
+    """
+    by_document: dict[str, list[Mapping[str, Any]]] = {}
+    for item in resolved.targets:
+        by_document.setdefault(str(item["document"]), []).append(item)
+    rendered: list[RenderedFile] = []
+    for document, targets in sorted(by_document.items()):
+        path = Path(snapshot_root) / document
+        exists_before = path.is_file()
+        before = path.read_bytes() if exists_before else None
+        mode = path.stat().st_mode & 0o7777 if exists_before else None
+        rendered.append(RenderedFile(
+            path=document, content=patch(path, targets), mode=mode, exists_before=exists_before,
+            before_digest=digest_bytes(before) if before is not None else None,
+            renderer_id=renderer_id, format=format,
+        ))
     return tuple(rendered)

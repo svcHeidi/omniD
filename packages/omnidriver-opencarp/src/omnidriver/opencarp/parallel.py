@@ -15,16 +15,19 @@ SOLVER = "openCARP"
 #: ``mpirun -np 2 openCARP +Default`` initialises MPI and prints the build
 #: header once per MPI world, then stops for want of a mesh.
 _PROBE_RANKS = 2
+_PROBE_TIMEOUT_S = 120
 _HEADER_MARK = "GIT tag"
 _HOST_UNRESOLVABLE = "gethostbyname failed"
 
 
-def parallel_steps(step: Mapping[str, Any], *, request: Any, read_value: Any, allocation: Any) -> list[dict]:
-    """openCARP's ``get_parallel_steps``: the solve step under ``mpirun -np
+def parallel_steps(
+    step: Mapping[str, Any], *, request: Any, read_value: Any, allocation: Any, launcher: str | None,
+) -> list[dict]:
+    """openCARP's ``get_parallel_steps``: the solve step under ``<launcher> -np
     N``. ``request`` is ``True`` (N from the scheduler's allocation) or a
     positive integer N."""
     del read_value      # openCARP's case states no process count
-    return [mpi.wrap(step, mpi.agree(mpi.requested(request), allocation))]
+    return [mpi.wrap(step, mpi.agree(mpi.requested(request), allocation), launcher)]
 
 
 def launcher_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]) -> tuple[StrictDiagnostic, ...]:
@@ -43,10 +46,17 @@ def launcher_diagnostics(workflow_dag: Mapping[str, Any], env: Mapping[str, str]
         if found is None or shutil.which(SOLVER, path=path) is None:
             continue    # reported as a missing command by the caller
         with tempfile.TemporaryDirectory(prefix="opencarp-launcher-probe-") as scratch:
-            proc = subprocess.run(
-                [found, "-np", str(_PROBE_RANKS), SOLVER, "+Default"], cwd=scratch,
-                capture_output=True, text=True, env=dict(env), timeout=120,
-            )
+            try:
+                proc = subprocess.run(
+                    [found, "-np", str(_PROBE_RANKS), SOLVER, "+Default"], cwd=scratch,
+                    capture_output=True, text=True, env=dict(env), timeout=_PROBE_TIMEOUT_S,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                diagnostics.append(StrictDiagnostic(
+                    level="error", code="opencarp_mpi_launcher_probe_failed",
+                    message=f"{launcher!r} ({found}) could not be probed with {_PROBE_RANKS} openCARP processes: {exc}",
+                ))
+                continue
         headers = (proc.stdout + proc.stderr).count(_HEADER_MARK)
         if headers == 1:
             continue

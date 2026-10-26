@@ -10,14 +10,13 @@
   `cpu` always, `cuda` where present, `mps` never with torch 2.14 (TorchCor's
   assembly needs a sparse CSR conversion MPS lacks; D12, G0c).
 - **`mass_lumping` decides the answer.** At dx 0.5 mm, lumping moves P8 from
-  about 40 to 68 ms (D14). The N-version case does not lump, as TorchCor's own
-  benchmark does not.
-- **`theta`** defaults to 0.5 (Crank-Nicolson) in TorchCor; the benchmark uses
-  1 (B8). The case states it.
+  about 40 to 68 ms (D14). Read the case's own value before comparing.
+- **`theta`**: TorchCor's library default and the N-version case's value differ
+  (B8); `describe` shows the default, and the case states its own.
 - **`dtype`** sets the simulation precision; TorchCor's CG always runs in
   float64 (D9).
-- **`conductivity_S_per_m.et`** is 0.24, the benchmark's value; TorchCor's own
-  `verification/benchmark.py` uses 0.2 (F6).
+- **`conductivity_S_per_m.et`**: TorchCor's own `verification/benchmark.py`
+  uses 0.2, not the N-version benchmark's value (F6); read the case's own.
 - **Activation time** is stamped at the first step a node exceeds
   `activation_threshold_mV`; a node never activated reads `-1` (G1).
 - **The first run on a machine compiles** the ionic model (`torch.compile`),

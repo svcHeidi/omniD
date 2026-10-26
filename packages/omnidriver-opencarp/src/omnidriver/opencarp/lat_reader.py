@@ -21,10 +21,10 @@ def _mesh_name(parameters: Path) -> str:
     try:
         text = parameters.read_text()
     except OSError as exc:
-        raise ValueError(f"cannot read {parameters}, where openCARP records the mesh a solve used (F16): {exc}") from exc
+        raise ValueError(f"cannot read {parameters}, where openCARP records the mesh a solve used: {exc}") from exc
     raw = read_raw(text, "meshname")
     if raw is None:
-        raise ValueError(f"{parameters} records no meshname (F16)")
+        raise ValueError(f"{parameters} records no meshname")
     return unquote(raw)
 
 
@@ -34,7 +34,7 @@ def _read_pts(path: Path) -> list[Point]:
     except OSError as exc:
         raise ValueError(f"cannot read the mesh points {path}: {exc}") from exc
     if not rows or len(rows[0]) != 1:
-        raise ValueError(f"{path} does not start with a point count (F3)")
+        raise ValueError(f"{path} does not start with a point count")
     count = int(rows[0][0])
     points = []
     for number, row in enumerate(rows[1:], start=2):
@@ -68,16 +68,16 @@ def _read_lat(path: Path, *, point_count: int) -> list[float]:
     rows = [line.split() for line in path.read_text().splitlines() if line.strip()]
     if any(len(row) != 1 for row in rows):
         raise ValueError(
-            f"{path} has more than one column: openCARP's per-event layout (lats[].all = 1, F17), "
+            f"{path} has more than one column: openCARP's per-event layout (lats[].all = 1), "
             f"not one value per node; set nversion.par:lats[0].all to false"
         )
     if len(rows) != point_count:
-        raise ValueError(f"{path} has {len(rows)} values for a mesh of {point_count} points (F6: one per node)")
+        raise ValueError(f"{path} has {len(rows)} values for a mesh of {point_count} points, not one per node")
     return [float(row[0]) for row in rows]
 
 
 def _barycentric(points: list[Point], tet: Tet, target: Point) -> tuple[float, float, float, float] | None:
-    """``target``'s barycentric weights over ``tet``, or ``None`` if outside it (beyond ``_BARYCENTRIC_TOL``, so a face/edge/node counts as inside)."""
+    """``target``'s barycentric weights over ``tet``, or ``None`` beyond ``_BARYCENTRIC_TOL`` outside it."""
     v0, v1, v2, v3 = (points[n] for n in tet)
     ax, ay, az = v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]
     bx, by, bz = v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]
@@ -97,9 +97,8 @@ def _barycentric(points: list[Point], tet: Tet, target: Point) -> tuple[float, f
     return None
 
 
+# Tets bucketed by centroid on a grid: scanning all of them is unusable at 2.1M tets (dx 0.1 mm).
 class _TetLocator:
-    """Finds the tetrahedron containing a point via a grid of nearby tets bucketed by centroid, rather than scanning all of them -- what keeps this usable at 2.1M tets (Δx 0.1 mm)."""
-
     def __init__(self, points: list[Point], tets: list[Tet]) -> None:
         self._points = points
         self._tets = tets

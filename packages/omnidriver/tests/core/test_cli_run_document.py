@@ -219,3 +219,24 @@ def test_every_diagnostic_carries_the_same_six_fields(invalid_run_document_repor
     codes = {d["code"] for d in diagnostics}
     assert "missing_workflow_dag" in codes, diagnostics
     assert "missing_case_root" in codes, diagnostics
+
+
+def test_a_document_planned_for_another_allocation_is_refused_before_it_runs(tmp_path, monkeypatch) -> None:
+    case_root = _write_case(tmp_path / "cases")
+    doc_path = tmp_path / "run.json"
+    document = _plan_to_file(case_root, doc_path, tmp_path / "scratch")
+    (step,) = document["workflowDag"]["steps"]
+    step.update(command="mpirun", args=["-np", "2", step["command"], *step.get("args", ())])
+    document["workflowState"] = None
+    doc_path.write_text(json.dumps(document))
+    monkeypatch.setenv("SLURM_NTASKS", "4")
+
+    out = StringIO()
+    with redirect_stdout(out):
+        code = main(["run", "--plugin", PLUGIN, "--run-document", str(doc_path)])
+
+    payload = json.loads(out.getvalue())
+    assert (code, payload["code"]) == (1, "allocation_mismatch"), payload
+    assert payload["allocation"] == {"variable": "SLURM_NTASKS", "ranks": 4}
+    assert "runs 2" in payload["error"]
+    assert not (Path(document["launch"]["caseRoot"]) / "ran.marker").exists()

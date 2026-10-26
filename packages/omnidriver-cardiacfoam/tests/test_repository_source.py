@@ -43,7 +43,7 @@ def test_the_repository_supplies_the_variable_the_profile_declares(tmp_path, cap
     repo = _repo(tmp_path / "repo")
     variables = _env(capsys, "--repo", str(repo))
     assert Path(variables[VARIABLE]["value"]) == (repo / "tutorials").resolve()
-    assert os.environ[VARIABLE] == str((repo / "tutorials").resolve())
+    assert VARIABLE not in os.environ, "the command leaves the process environment as it found it"
 
 
 def test_a_source_that_is_not_where_the_profile_finds_it_is_refused(tmp_path, capsys):

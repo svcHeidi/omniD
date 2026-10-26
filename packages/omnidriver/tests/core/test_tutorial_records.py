@@ -10,7 +10,7 @@ import pytest
 
 from omnidriver.core.runtime.attempt_lease import acquire_case_lease
 
-from omnidriver.core.case_write import CaseKeyNotFound, ParameterAssignment, ResolvedMutation, RenderedFile, _digest_bytes
+from omnidriver.core.case_write import CaseKeyNotFound, ParameterAssignment, ResolvedMutation, RenderedFile, digest_bytes
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.plugin_interface import driver_context
 from omnidriver.core.runtime import record_execution
@@ -141,7 +141,7 @@ class _RecordCaseWriterPlugin(ToyProvider):
         for document, targets in by_document.items():
             path = Path(snapshot_root) / document
             exists_before = path.exists()
-            before_digest = _digest_bytes(path.read_bytes()) if exists_before else None
+            before_digest = digest_bytes(path.read_bytes()) if exists_before else None
             content_obj = json.loads(path.read_text()) if exists_before else {}
             for target in targets:
                 _deep_set(content_obj, target["expanded_key_path"], str(target["value"]))

@@ -72,7 +72,7 @@ def patch_par(text: str, values: Mapping[str, str]) -> str:
         found = by_key.get(key, [])
         if len(found) > 1:
             raise ParFormatError(
-                f"{key} is assigned {len(found)} times; openCARP uses the last one (F8), "
+                f"{key} is assigned {len(found)} times; openCARP uses the last one, "
                 "so which one a patch means is ambiguous -- refusing"
             )
         if not found:
@@ -106,7 +106,7 @@ def _control_characters(text: str) -> list[str]:
 def format_value(value: Any, value_kind: str) -> str:
     if value_kind == "boolean":
         if not isinstance(value, bool):
-            raise ParFormatError(f"a Flag takes true or false, got {value!r} (openCARP reads 'no' as on: F1)")
+            raise ParFormatError(f"a Flag takes true or false, got {value!r} (openCARP reads 'no' as on)")
         return "1" if value else "0"
     if value_kind == "integer":
         if isinstance(value, bool) or int(value) != value:
@@ -131,7 +131,7 @@ def format_value(value: Any, value_kind: str) -> str:
         if "#" in text:
             raise ParFormatError(
                 f"a .par string cannot contain '#': openCARP starts a comment there even "
-                f"inside quotes, so '\"a#b\"' is read as '\"a' (F12): {text!r}"
+                f"inside quotes, so '\"a#b\"' is read as '\"a': {text!r}"
             )
         # Always quoted: quoting is transparent for a model name, a file
         # name, or a value with a space. Unquoted, text after an '=' is

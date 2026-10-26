@@ -3,7 +3,7 @@ from __future__ import annotations
 import shlex
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from .artifacts import DRIVER_PRODUCED_BY
 from . import mpi
@@ -446,12 +446,12 @@ def workflow_output_artifacts(
     )
 
 
-def _is_authorized(command: str, driver_context: Any) -> bool:
+def _is_authorized(command: str, driver_context: Any, env: Mapping[str, str] | None) -> bool:
     """The one rule for a bare command, applied to a step's command and to the program an MPI launcher wraps."""
-    return _is_declared(command, driver_context) or find_script(command, driver_context) is not None
+    return _is_declared(command, driver_context, env) or find_script(command, driver_context) is not None
 
 
-def _is_declared(command: str, driver_context: Any) -> bool:
+def _is_declared(command: str, driver_context: Any, env: Mapping[str, str] | None) -> bool:
     """Whether the command is a core, case-script, plugin, utility or environment command (not a repository script)."""
     if command in CORE_NEUTRAL_COMMANDS or command in case_script_commands(driver_context):
         return True
@@ -469,18 +469,21 @@ def _is_declared(command: str, driver_context: Any) -> bool:
     manifest = stack.call("get_utility_manifests").get(command)
     if manifest is not None:
         return bool(manifest.produces)
-    return bool(stack.call("is_installed_environment_command", command))
+    return env is not None and bool(stack.call("is_installed_environment_command", command, env=env))
 
 
 def validate_workflow_commands(
     workflow_dag: dict[str, Any] | None,
     *,
     driver_context: Any = None,
+    env: Mapping[str, str] | None = None,
 ) -> tuple[WorkflowDiagnostic, ...]:
     """Reject DAG steps whose command is not on the allowlist.
 
     See :func:`_is_authorized` for what "authorized" means; without a
     ``driver_context`` only core-neutral commands and case scripts qualify.
+    ``env`` is the execution environment an installed application is looked
+    up in; without one, no installed application is authorized.
     An explicit path form (``command`` containing ``/``) is allowed only as
     ``./<name>`` for an adapter-declared case script, keeping parity with
     ``_resolve_command`` while refusing an arbitrary ``./script`` or
@@ -523,7 +526,7 @@ def validate_workflow_commands(
                 field=step_id,
             ))
             continue
-        if find_script(command, driver_context) is not None and _is_declared(command, driver_context):
+        if find_script(command, driver_context) is not None and _is_declared(command, driver_context, env):
             diagnostics.append(WorkflowDiagnostic(
                 level="error",
                 code="ambiguous_workflow_command",
@@ -534,10 +537,10 @@ def validate_workflow_commands(
                 field=step_id,
             ))
             continue
-        if _is_authorized(command, driver_context):
+        if _is_authorized(command, driver_context, env):
             if command in mpi.LAUNCHERS:
                 payload = mpi.program(step.get("args", ()) or ())
-                if payload is not None and not _is_authorized(payload, driver_context):
+                if payload is not None and not _is_authorized(payload, driver_context, env):
                     diagnostics.append(WorkflowDiagnostic(
                         level="error",
                         code="unauthorized_mpi_payload",

@@ -75,7 +75,7 @@ def test_format_value(value, kind, text):
 def test_format_refuses_a_hash_F12(text):
     # openCARP reads '"a#b"' as '"a' -- the # starts a comment even inside
     # quotes -- so no spelling carries one.
-    with pytest.raises(ParFormatError, match="F12"):
+    with pytest.raises(ParFormatError, match="cannot contain '#'"):
         format_value(text, "string")
 
 

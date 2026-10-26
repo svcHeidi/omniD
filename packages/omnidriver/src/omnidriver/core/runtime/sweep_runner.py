@@ -8,8 +8,10 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, Mapping, Sequence
 
+from omnidriver.core.environment_connection import load_environment
 from omnidriver.core.plugin_profile import is_replica_directory_name, replica_directory_globs
-from omnidriver.core.strict_planning import _strict_plan_for_spec
+from omnidriver.core.specs.paths import refuse_inside_cases_root
+from omnidriver.core.strict_planning import _strict_plan_for_spec, write_run_document
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
 from omnidriver.core.tutorial_records import TutorialRecordError, lookup_record, sort_study_name
@@ -171,6 +173,7 @@ def _record_sweep_plan(
     record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
     output_dir: Path, cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, str | Path] | None = None,
+    environment_source: str | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     _validate_record_sweep_upfront(record, sweep_spec, driver_context=driver_context)
@@ -188,10 +191,12 @@ def _record_sweep_plan(
                 staged_case_root=staged_case_root, study_by_source=study_by_source,
                 driver_context=driver_context, inputs=inputs,
             )
-            report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
+            report = _strict_plan_for_spec(
+                record.name, spec, environment_source=environment_source, driver_context=driver_context,
+            )
+            run_document_path = write_run_document(report)
         except Exception as exc:
-            # One bad case costs one case, not the whole command (same
-            # broad-catch reasoning as sweep_plan's factory-entry branch).
+            # One bad case costs one case, not the whole command.
             case_reports.append(failure(
                 exc, code=caught_code(exc), error=f"{type(exc).__name__}: {exc}",
                 case_id=case.case_id, resolved_axis_values=case.resolved_axis_values,
@@ -201,8 +206,9 @@ def _record_sweep_plan(
             "case_id": case.case_id,
             "resolved_axis_values": case.resolved_axis_values,
             "status": report.status,
-            **({} if report.status == "ok" else {"code": "plan_blocked" if report.status == "blocked" else "plan_failed"}),
+            **({} if report.code is None else {"code": report.code}),
             "plan": report.to_json(),
+            "run_document_path": str(run_document_path),
             "record_commit_status": commit_result.status,
             # A patch that already matched the case is real information
             # about this case -- persisted here, not discarded.
@@ -219,12 +225,11 @@ def _record_sweep_run(
     output_dir: Path, case_timeout_s: float | None,
     cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, str | Path] | None = None,
+    environment_source: str | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     """Plan and run every case of a record sweep fresh and in sequence, writing a manifest; no resume or skip."""
-    execution_environment = dict(driver_context.stack.call(
-        "get_configured_environment", dict(os.environ), driver_context,
-    ))
+    execution_environment = load_environment(driver_context, environment_source)
     output_dir.mkdir(parents=True, exist_ok=True)
     base = sweep_spec.get("base", {})
 
@@ -289,11 +294,13 @@ def _record_sweep_run(
                 _serialize_sourced_patch(sourced, status="unchanged")
                 for sourced in commit_result.unchanged
             ]
-            report = _strict_plan_for_spec(record.name, spec, driver_context=driver_context)
+            report = _strict_plan_for_spec(
+                record.name, spec, environment_source=environment_source, driver_context=driver_context,
+            )
             payload = report.to_json()
             if report.status != "ok":
                 reason = _case_failure(
-                    None, code="plan_blocked" if report.status == "blocked" else "plan_failed",
+                    None, code=report.code,
                     error="; ".join(report.error_messages()) or f"strict_plan reported {report.status} status",
                     broken=report.errors(),
                 )
@@ -306,7 +313,10 @@ def _record_sweep_run(
                     workflow_state_path.unlink()
                 write_case_record(case_record_path, sweep_case_record(entry, output_dir))
                 result = run_child(
-                    omnidriver_run_command(driver_context, "--run-document", str(run_document_path)),
+                    omnidriver_run_command(
+                        driver_context, "--run-document", str(run_document_path),
+                        *(("--environment-source", environment_source) if environment_source is not None else ()),
+                    ),
                     env=execution_environment,
                     timeout=case_timeout_s,
                     state_path=workflow_state_path,
@@ -508,13 +518,15 @@ def sweep_plan(
     max_cases: int = 200,
     cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, str | Path] | None = None,
+    environment_source: str | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     """Plan every case in a sweep spec without executing it.
 
     ``cli_study``: the CLI's own study values (``--parallel``), the sweep's
     ``"cli"`` source. ``inputs`` (``--input NAME=PATH``): the record's inputs,
-    applied once to every case.
+    applied once to every case. ``environment_source``: the
+    ``--environment-source`` every case is planned, and later run, in.
     """
     try:
         sweep_spec = _load_spec(spec_path)
@@ -526,11 +538,12 @@ def sweep_plan(
         return {"case_count": 0, "cases": [], "spec_error": str(exc), "code": "spec_unreadable"}
     check_case_count_cap(sweep_spec, max_cases=max_cases)
     record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
+    refuse_inside_cases_root(output_dir, cases_root, name="sweep output directory", flag="--output-dir")
     # Resolved to absolute before staging: a relative --output-dir otherwise
     # reaches commit_record_case unresolved.
     return _record_sweep_plan(
         record, cases_root, sweep_spec, output_dir=Path(output_dir).resolve(),
-        cli_study=cli_study, inputs=inputs, driver_context=driver_context,
+        cli_study=cli_study, inputs=inputs, environment_source=environment_source, driver_context=driver_context,
     )
 
 
@@ -551,15 +564,17 @@ def sweep_run(
     fresh: bool = False,
     cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, str | Path] | None = None,
+    environment_source: str | None = None,
     driver_context: "DriverContext",
 ) -> dict[str, Any]:
     """Run every case in a sweep spec and record the sweep.
 
-    ``cli_study``/``inputs``: as :func:`sweep_plan`.
+    ``cli_study``/``inputs``/``environment_source``: as :func:`sweep_plan`.
     """
     sweep_spec = _load_spec(spec_path)
     check_case_count_cap(sweep_spec, max_cases=max_cases)
     record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
+    refuse_inside_cases_root(output_dir, cases_root, name="sweep output directory", flag="--output-dir")
     # Resolved to absolute before staging: commit_record_case requires
     # CaseMutationRequest.case_root to be absolute.
     requested_dir = Path(output_dir)
@@ -597,5 +612,5 @@ def sweep_run(
     return _record_sweep_run(
         record, cases_root, sweep_spec, resolved_cases, output_dir=output_dir,
         case_timeout_s=case_timeout_s, cli_study=cli_study,
-        inputs=inputs, driver_context=driver_context,
+        inputs=inputs, environment_source=environment_source, driver_context=driver_context,
     )

@@ -1,6 +1,6 @@
 """openCARP's parallel form and its launcher check, without the binary. What
 the real binary does is settled in docs/solver-learning/opencarp.md, section
-I, and by test_parallel_native.py; these pin the rules that follow from it."""
+I; these pin the rules that follow from it."""
 from __future__ import annotations
 
 import stat
@@ -18,8 +18,8 @@ SOLVE = {"id": "solve", "command": "openCARP", "args": ["+F", "nversion.par", "-
 SLURM_4 = SchedulerAllocation(variable="SLURM_NTASKS", ranks=4)
 
 
-def _form(request, allocation=None):
-    return parallel_steps(dict(SOLVE), request=request, read_value=None, allocation=allocation)
+def _form(request, allocation=None, launcher="mpirun"):
+    return parallel_steps(dict(SOLVE), request=request, read_value=None, allocation=allocation, launcher=launcher)
 
 
 def test_the_solve_runs_under_mpirun_with_a_supplied_count():
@@ -58,7 +58,8 @@ def test_a_request_that_is_not_true_or_a_positive_count_is_refused(bad):
 def test_the_plugin_declares_openCARP_its_solve_step_and_the_form():
     plugin = OpenCARPPlugin()
     assert plugin.get_solve_step_commands() == frozenset({"openCARP"})
-    assert plugin.get_parallel_steps(dict(SOLVE), request=3, read_value=None, allocation=None)[0]["args"][:2] == ["-np", "3"]
+    (step,) = plugin.get_parallel_steps(dict(SOLVE), request=3, read_value=None, allocation=None, launcher="mpiexec")
+    assert (step["command"], step["args"][:2]) == ("mpiexec", ["-np", "3"])
 
 
 def _script(directory, name, body):
@@ -99,11 +100,10 @@ def test_a_serial_dag_probes_no_launcher(tmp_path):
 
 
 def test_preflight_checks_the_launched_solver_as_a_command(tmp_path):
-    """A parallel DAG's solve command is mpirun; openCARP missing from PATH
-    is still reported by name (C9)."""
+    """A parallel DAG's solve command is mpirun; openCARP missing from PATH is still reported by name."""
     _script(tmp_path, "mpirun", "exit 0\n")
-    messages = [d.message for d in opencarp_environment_diagnostics(PARALLEL_DAG, {"PATH": str(tmp_path)})]
-    assert any("'openCARP' is not on PATH" in m for m in messages), messages
+    found = opencarp_environment_diagnostics(PARALLEL_DAG, {"PATH": str(tmp_path)})
+    assert [(d.code, d.field) for d in found] == [("program_not_on_path", "openCARP")]
 
 
 def test_an_unresolvable_host_name_is_its_own_diagnostic_naming_hydra_iface(tmp_path):
@@ -115,3 +115,17 @@ def test_an_unresolvable_host_name_is_its_own_diagnostic_naming_hydra_iface(tmp_
     (diagnostic,) = launcher_diagnostics(PARALLEL_DAG, {"PATH": str(tmp_path)})
     assert diagnostic.code == "opencarp_mpi_host_unresolvable"
     assert "HYDRA_IFACE" in diagnostic.message
+
+
+def test_a_launcher_that_cannot_be_probed_is_a_diagnostic_not_a_crash(tmp_path, monkeypatch):
+    import omnidriver.opencarp.parallel as parallel
+
+    _script(tmp_path, "openCARP", "exit 0\n")
+    _script(tmp_path, "mpirun", "sleep 5\n")
+    monkeypatch.setattr(parallel, "_PROBE_TIMEOUT_S", 0.2)
+    (diagnostic,) = launcher_diagnostics(PARALLEL_DAG, {"PATH": f"{tmp_path}:/bin:/usr/bin"})
+    assert diagnostic.code == "opencarp_mpi_launcher_probe_failed" and "timed out" in diagnostic.message
+
+    (tmp_path / "mpirun").write_bytes(b"\x00not an executable format")
+    (diagnostic,) = launcher_diagnostics(PARALLEL_DAG, {"PATH": str(tmp_path)})
+    assert diagnostic.code == "opencarp_mpi_launcher_probe_failed"

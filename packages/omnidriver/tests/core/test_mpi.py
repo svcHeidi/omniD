@@ -24,8 +24,15 @@ def test_ranks_reads_any_of_the_three_spellings():
 
 def test_wrap_keeps_the_step_and_runs_it_under_the_launcher():
     step = {"id": "solve", "command": "solver", "args": ["-a"], "produces": ["p"]}
-    assert mpi.wrap(step, 2) == {"id": "solve", "command": "mpirun", "args": ["-np", "2", "solver", "-a"], "produces": ["p"]}
+    assert mpi.wrap(step, 2, "mpirun") == {
+        "id": "solve", "command": "mpirun", "args": ["-np", "2", "solver", "-a"], "produces": ["p"],
+    }
     assert mpi.wrap({"id": "s", "command": "x"}, 3, "mpiexec")["args"] == ["-np", "3", "x"]
+
+
+def test_wrap_refuses_a_stack_that_declares_no_launcher():
+    with pytest.raises(ValueError, match="mpi_launcher"):
+        mpi.wrap({"id": "s", "command": "x"}, 2, None)
 
 
 def test_a_request_is_true_or_a_positive_count():

@@ -76,7 +76,6 @@ def test_a_key_the_records_command_line_sets_is_refused_by_name_F14(key_path):
     key = ".".join(key_path)
     with pytest.raises(TutorialRecordError, match=re.escape(key)) as info:
         record_key_validator("nversion.par", key_path, "anything")
-    assert "F14" in str(info.value)
     assert "silently overridden" in str(info.value)
 
 

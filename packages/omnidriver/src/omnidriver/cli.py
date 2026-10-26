@@ -32,7 +32,9 @@ from omnidriver.core.introspection import describe_entry, describe_stack, named_
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.quantities.errors import PointReferenceError
 from omnidriver.core.provider_identity import stack_identity_mismatch
-from omnidriver.core.specs.paths import SCRATCH_ENV_VAR, default_sweep_output_dir, resolve_scratch_root
+from omnidriver.core.specs.paths import (
+    SCRATCH_ENV_VAR, ScratchRootNotSupplied, default_sweep_output_dir, resolve_scratch_root,
+)
 from omnidriver.core.strict_planning import _utility_produces_by_command, strict_plan
 from .core.runtime.run_document_exec import build_execution_inputs, load_run_document, _allowed_runs_root
 from .core.runtime.fresh import ensure_fresh_output_dir
@@ -308,6 +310,33 @@ def _execute_run(
     return 0 if status == "ok" else 1
 
 
+def _refuse_an_allocation_mismatch(args, workflow_dag: dict, execution_env: dict, driver_context) -> bool:
+    """Print a refusal when the document's launched ranks differ from the allocation it now runs in: a plan
+    made on a login node or under another allocation must not start a run of a different size."""
+    from .core.environment_connection import stack_connection
+    from .core.runtime.record_execution import allocation_disagreements
+
+    try:
+        allocation, disagreeing = allocation_disagreements(
+            workflow_dag, execution_env, launcher=stack_connection(driver_context)[0].mpi_launcher,
+        )
+    except TutorialRecordError as exc:
+        print(json.dumps(failure(exc, code="allocation_mismatch", run_document=args.run_document), indent=2))
+        return True
+    if not disagreeing:
+        return False
+    print(json.dumps(failure(
+        None, code="allocation_mismatch",
+        error=(
+            f"the run document's step(s) {', '.join(disagreeing)} processes, but the scheduler allocated "
+            f"{allocation.variable}={allocation.ranks} here; plan again inside this allocation, or run it "
+            "in one of the planned size"
+        ),
+        run_document=args.run_document, allocation=allocation.to_json(),
+    ), indent=2))
+    return True
+
+
 def _context_from_run_document(args, driver_context) -> _ExecutionContext | None:
     """Load + validate an agent-authored RunDocument into executor inputs."""
     try:
@@ -348,6 +377,8 @@ def _context_from_run_document(args, driver_context) -> _ExecutionContext | None
             None, code="run_document_invalid", error="the run document fails validation; see diagnostics",
             run_document=args.run_document, diagnostics=[asdict(d) for d in diagnostics],
         ), indent=2))
+        return None
+    if _refuse_an_allocation_mismatch(args, inputs.workflow_dag, execution_env, driver_context):
         return None
     record = driver_context.stack.call("get_tutorial_records").get(run_doc.name)
     if record is not None and args.apply is None:
@@ -702,7 +733,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "An opaque value handed to the active plugin's environment hooks "
-            "for strict plan/step/run; core never reads it. What it names is "
+            "for strict plan/step/run and sweep-plan/sweep-run, and recorded in "
+            "the run document's launch command; core never reads it. What it names is "
             "the plugin's own business (a script to source, or nothing). "
             "Absent, the plugin uses whatever its tool's ambient environment is."
         ),
@@ -796,8 +828,9 @@ def build_parser() -> argparse.ArgumentParser:
             "Overrides $OMNIDRIVER_SCRATCH_DIR. There is no default: an "
             "operation that stages refuses when neither is supplied, and a "
             "scratch dir inside --cases-root is refused. Read only when an "
-            "operation stages, so describe (which previews in a discarded "
-            "temporary directory) never needs it."
+            "operation stages; describe previews in a discarded directory "
+            "under it when it is supplied, and in the system's temporary "
+            "directory when it is not, so it never needs it."
         ),
     )
     parser.add_argument(
@@ -965,9 +998,9 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error(
             "--allow-unresolved-configuration is only valid with action=plan, action=step, or action=run"
         )
-    if args.environment_source and args.action not in {"plan", "step", "run"}:
+    if args.environment_source and args.action not in {"plan", "step", "run", "sweep-plan", "sweep-run"}:
         parser.error(
-            "--environment-source is only valid with action=plan, action=step, or action=run"
+            "--environment-source is only valid with action=plan, step, run, sweep-plan or sweep-run"
         )
     if args.action != "step" and args.step:
         parser.error("--step is only valid with action=step")
@@ -1227,7 +1260,9 @@ def main(argv: list[str] | None = None) -> int:
 
         return build_main(argv[1:])
     parser = build_parser()
-    previous = os.environ.get(SCRATCH_ENV_VAR)
+    # The supplied scratch and source roots are set in this process's environment for the layers that read them
+    # there; the command leaves the environment as it found it.
+    previous_environ = dict(os.environ)
     previous_handlers: dict = {}
     try:
         args = parser.parse_args(argv)
@@ -1235,7 +1270,6 @@ def main(argv: list[str] | None = None) -> int:
         if args.action in {"step", "run", "sweep-run", "check"}:
             previous_handlers = install_signal_handlers()
         if args.scratch_dir:
-            # The one supplied scratch root, for the layers that cache a scan there.
             os.environ[SCRATCH_ENV_VAR] = str(Path(args.scratch_dir).expanduser())
         return _dispatch(parser, args)
     except Refusal as exc:
@@ -1244,10 +1278,9 @@ def main(argv: list[str] | None = None) -> int:
         for number, handler in previous_handlers.items():
             signal.signal(number, handler)
         clear_stop_request()
-        if previous is None:
-            os.environ.pop(SCRATCH_ENV_VAR, None)
-        else:
-            os.environ[SCRATCH_ENV_VAR] = previous
+        if os.environ != previous_environ:
+            os.environ.clear()
+            os.environ.update(previous_environ)
 
 
 def _dispatch(parser: argparse.ArgumentParser, args) -> int:
@@ -1338,12 +1371,17 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             return 0
         # A record refusal is JSON here, as in `plan --strict`.
         try:
+            try:
+                preview_root = resolve_scratch_root(args.scratch_dir, cases_root=cases_root)
+            except ScratchRootNotSupplied:
+                preview_root = None
             description = describe_entry(
                 selected_entry,
                 overrides=overrides,
                 cli_study=cli_study,
                 inputs=cli_inputs,
                 benchmarks=Path(args.benchmarks) if args.benchmarks else None,
+                scratch_root=preview_root,
                 driver_context=driver_context,
             )
         except (TutorialRecordError, OSError) as exc:
@@ -1407,6 +1445,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
                 max_cases=args.max_cases,
                 cli_study=cli_study,
                 inputs=cli_inputs,
+                environment_source=args.environment_source,
                 driver_context=driver_context,
             )
         except (SweepValidationError, TutorialRecordError, AttemptLeaseError) as exc:
@@ -1435,6 +1474,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
                 fresh=args.fresh,
                 cli_study=cli_study,
                 inputs=cli_inputs,
+                environment_source=args.environment_source,
                 driver_context=driver_context,
             )
         except (SweepValidationError, TutorialRecordError, AttemptLeaseError) as exc:

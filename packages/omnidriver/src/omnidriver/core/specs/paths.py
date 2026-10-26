@@ -51,13 +51,19 @@ def resolve_scratch_root(
             "tutorials tree is never written"
         )
     if cases_root is not None:
-        cases = Path(cases_root).expanduser()
-        if root.resolve().is_relative_to(cases.resolve()):
-            raise ScratchRootInsideCasesRoot(
-                f"scratch root {root} is inside cases root {cases}: staging there "
-                "would write the native tree; supply a --scratch-dir outside it"
-            )
+        refuse_inside_cases_root(root, cases_root, name="scratch root", flag="--scratch-dir")
     return root
+
+
+def refuse_inside_cases_root(path: str | Path, cases_root: str | Path, *, name: str, flag: str) -> None:
+    """Refuse ``path`` at or inside ``cases_root`` (:class:`ScratchRootInsideCasesRoot`, naming both):
+    staging or writing there would write the native tree."""
+    cases = Path(cases_root).expanduser()
+    if Path(path).expanduser().resolve().is_relative_to(cases.resolve()):
+        raise ScratchRootInsideCasesRoot(
+            f"{name} {path} is inside cases root {cases}: staging there "
+            f"would write the native tree; supply a {flag} outside it"
+        )
 
 
 def default_sweep_output_dir(

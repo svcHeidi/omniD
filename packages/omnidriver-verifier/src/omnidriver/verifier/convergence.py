@@ -5,6 +5,7 @@ import math
 from typing import Any, Iterable, Mapping, Sequence
 
 from .problem import FUNCTIONS, SPACE, TEMPORAL, TIME, ProblemError
+from .weights import cell_volume_weights, nodal_control_volumes, tetrahedron_nodal_volumes
 
 #: The decimals an order is given to, for every reference.
 _DIGITS = 3
@@ -76,6 +77,44 @@ def error_norms(problem: Mapping[str, Any], values: Sequence[float], exact: Sequ
         "Linf": max(errors),
     }
     return {kind: norms[kind] for kind in problem["norms"]["kinds"]}
+
+
+def norms_verdict(problem: Mapping[str, Any], spec: Mapping[str, Any]) -> dict[str, Any]:
+    """A solver's field against the problem's exact one, as the problem's error norms.
+
+    ``spec`` is ``{"dimension", "field", "time", "points", "values", "weights"}``: ``points`` and ``values`` are the
+    solver's, point by point, in the problem's units. ``weights`` is a list of one weight per point, or the
+    problem's weight named by ``"weight"``: ``{"weight": "cell_volume", "cells_per_axis", "edge"}`` (a uniform grid
+    of ``dimension``) or ``{"weight": "nodal_control_volume", "elements", "element"}`` (a finite-element mesh on
+    ``points``; ``element`` is ``"structured"`` for lines, quadrilaterals and hexahedra, or ``"tetrahedron"``).
+    :class:`ProblemError` for a missing key, a weight the problem's ``norms.weight`` does not offer, or a weight
+    count that is not the point count."""
+    _require("the norms input", spec, ("dimension", "field", "time", "points", "values", "weights"))
+    weights = spec["weights"]
+    if isinstance(weights, Mapping):
+        weights = _named_weights(problem, spec, weights)
+    exact = exact_values(problem, spec["dimension"], spec["field"], spec["time"], spec["points"])
+    return {
+        "status": "ok", "problem": problem["id"], "dimension": spec["dimension"], "field": spec["field"],
+        "time": spec["time"], "points": len(spec["points"]),
+        "norms": error_norms(problem, spec["values"], exact, weights),
+    }
+
+
+def _named_weights(problem: Mapping[str, Any], spec: Mapping[str, Any], named: Mapping[str, Any]) -> list[float]:
+    _require("the weights", named, ("weight",))
+    kind, offered = named["weight"], sorted(problem["norms"]["weight"].values())
+    if kind not in offered:
+        raise ProblemError(f"the weights: {kind!r} is not one of {offered}", code="results_invalid")
+    if kind == "cell_volume":
+        _require("the weights", named, ("cells_per_axis", "edge"))
+        return cell_volume_weights(named["cells_per_axis"], spec["dimension"], named["edge"])
+    _require("the weights", named, ("elements", "element"))
+    if named["element"] not in ("structured", "tetrahedron"):
+        raise ProblemError(f"the weights: element {named['element']!r} is not 'structured' or 'tetrahedron'",
+                           code="results_invalid")
+    build = tetrahedron_nodal_volumes if named["element"] == "tetrahedron" else nodal_control_volumes
+    return build(spec["points"], named["elements"])
 
 
 def observed_orders(spacings: Sequence[float], errors: Sequence[float]) -> dict[str, Any]:

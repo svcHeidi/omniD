@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import shlex
 import shutil
 from dataclasses import dataclass
 from typing import Any
 
 from omnidriver.core.planning_types import StrictDiagnostic, diagnostic
 from omnidriver.core.runtime import mpi
-from omnidriver.core.runtime.workflow import case_script_commands
-from omnidriver.core.scripts import find_script
+from omnidriver.core.runtime.planned_programs import planned_programs, program_diagnostics
 from .openfoam_environment import load_openfoam_environment
 
 
-_INTERPRETER_SKIP = frozenset({"python", "python3"})
+#: Programs a plan may run that OpenFOAM's environment does not supply.
+_INTERPRETERS = frozenset({"python", "python3"})
 
 
 @dataclass(frozen=True)
@@ -25,50 +24,18 @@ class _ExecutableRequirements:
 def _required_executables(
     workflow_dag: dict[str, Any] | None, driver_context: Any | None = None,
 ) -> _ExecutableRequirements:
-    """Derive the executables a plan will invoke from its workflow DAG."""
-    executables: list[str] = []
+    """The plan's programs, and whether it runs in parallel and names its launcher."""
     is_parallel = False
     mpi_launcher_in_dag = False
-    case_scripts = case_script_commands(driver_context)
-
-    def _add(name: str) -> None:
-        if (
-            name
-            and name not in _INTERPRETER_SKIP
-            and name.removeprefix("./") not in case_scripts
-            and find_script(name, driver_context) is None
-            and name not in executables
-        ):
-            executables.append(name)
-
     for step in (workflow_dag or {}).get("steps", ()):
-        raw_command = str(step.get("command", "")).strip()
-        args = tuple(str(arg) for arg in step.get("args", ()))
-        if not raw_command:
-            continue
-        # "command" may carry the whole invocation (e.g. "postProcess -func
-        # Niedererpoints -latestTime"); only the leading token is the executable.
-        try:
-            command, *inline_args = shlex.split(raw_command)
-        except ValueError:
-            command, *inline_args = raw_command.split()
-        if not command:
-            continue
-        args = tuple(inline_args) + args
+        command, *args = str(step.get("command", "")).split() or [""]
+        args += [str(arg) for arg in step.get("args", ())]
         if command in mpi.LAUNCHERS:
+            is_parallel = mpi_launcher_in_dag = True
+        elif command == "decomposePar" or "-parallel" in args:
             is_parallel = True
-            mpi_launcher_in_dag = True
-            _add(command)
-            wrapped = mpi.program(args)
-            if wrapped is not None:
-                _add(wrapped)
-            continue
-        if command == "decomposePar" or "-parallel" in args:
-            is_parallel = True
-        _add(command)
-
     return _ExecutableRequirements(
-        executables=tuple(executables),
+        executables=planned_programs(workflow_dag, driver_context),
         is_parallel=is_parallel,
         mpi_launcher_in_dag=mpi_launcher_in_dag,
     )
@@ -134,7 +101,9 @@ def _environment_diagnostics(
     # Derived before the environment checks: whether an unsourced environment
     # is a problem depends on what this plan actually invokes.
     requirements = _required_executables(workflow_dag, driver_context)
-    plan_needs_openfoam = bool(requirements.executables) or requirements.is_parallel
+    plan_needs_openfoam = (
+        any(program not in _INTERPRETERS for program in requirements.executables) or requirements.is_parallel
+    )
 
     if "WM_PROJECT_DIR" not in checked_env:
         if plan_needs_openfoam:
@@ -169,15 +138,7 @@ def _environment_diagnostics(
                     field=var,
                 ))
 
-    for executable in requirements.executables:
-        if not shutil.which(executable, path=checked_env.get("PATH")):
-            diagnostics.append(diagnostic(
-                "error",
-                "missing_executable",
-                f"{executable!r} not found on PATH.",
-                source="environment",
-                field=executable,
-            ))
+    diagnostics.extend(program_diagnostics(workflow_dag, checked_env, driver_context))
 
     if (
         requirements.is_parallel

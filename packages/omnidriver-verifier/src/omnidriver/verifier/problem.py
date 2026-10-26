@@ -15,8 +15,10 @@ INITIAL_KINDS = ("exact",)
 INITIAL_TIMES = ("start",)
 #: A structured hexahedral ladder, or a tetrahedral one meshed at a target element size.
 MESH_KINDS = ("hex", "tet")
-#: Where a solver holds its unknowns, and so where an exact field is evaluated against it.
-POINTS = ("cell_centres", "nodes")
+#: How a solver discretises space; the points, weights and norms of a problem are declared for each.
+DISCRETISATIONS = ("finite_volume", "finite_element")
+#: Where a discretisation holds its unknowns, and so where an exact field is evaluated against it.
+POINTS = {"finite_volume": ("cell_centres",), "finite_element": ("nodes",)}
 #: Which value of a derived constant a solver is given: the native literal, or the value derived from the data.
 DERIVED_USES = ("native", "derived")
 UNIT_SYSTEMS = ("dimensionless",)
@@ -27,7 +29,8 @@ DIMENSION_RULES = ("first_d_intervals",)
 #: tensor by rows (3 x 3: xx, xy, xz, yy, yz, zz, the order of OpenFOAM's symmTensor).
 TENSOR_KINDS = ("diagonal", "symmetric")
 NORM_KINDS = ("L1", "L2", "Linf")
-NORM_WEIGHTS = ("cell_volume",)
+#: What each discretisation weights its error norms by (see ``weights.py``).
+NORM_WEIGHTS = {"finite_volume": ("cell_volume",), "finite_element": ("nodal_control_volume",)}
 NORM_NORMALISATIONS = ("total_volume",)
 #: When a level is judged: after its ``steps`` steps of ``dt``, the first time ``time.report_when`` holds.
 NORM_TIMES = ("steps*dt",)
@@ -129,8 +132,7 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
     _menu("boundary.all_faces", problem["boundary"]["all_faces"], BOUNDARY_KINDS)
     _menu("initial.fields", problem["initial"]["fields"], INITIAL_KINDS)
     _menu("initial.time", problem["initial"]["time"], INITIAL_TIMES)
-    for solver, points in _table("initial.points", problem["initial"]["points"]).items():
-        _menu(f"initial.points.{solver}", points, POINTS)
+    _by_discretisation("initial.points", problem["initial"]["points"], POINTS)
     _menu("domain.dimension_d_uses", problem["domain"]["dimension_d_uses"], DIMENSION_RULES)
     for kind in problem["mesh_progression"]:
         _menu("mesh_progression", kind, MESH_KINDS)
@@ -231,8 +233,8 @@ def validate_problem(problem: Mapping[str, Any]) -> None:
 
     norms = problem["norms"]
     _menu("norms.at", norms["at"], NORM_TIMES)
-    _menu("norms.points", norms["points"], POINTS)
-    _menu("norms.weight", norms["weight"], NORM_WEIGHTS)
+    _by_discretisation("norms.points", norms["points"], POINTS)
+    _by_discretisation("norms.weight", norms["weight"], NORM_WEIGHTS)
     _menu("norms.normalised_by", norms["normalised_by"], NORM_NORMALISATIONS)
     for kind in norms["kinds"]:
         _menu("norms.kinds", kind, NORM_KINDS)
@@ -404,6 +406,15 @@ def _keys(prefix: str, table: Mapping[str, Any], known: Iterable[str], *, requir
 def _menu(where: str, value: Any, menu: tuple[str, ...]) -> None:
     if value not in menu:
         raise ProblemError(f"{where}: {value!r} is not one of {list(menu)}")
+
+
+def _by_discretisation(where: str, value: Any, menus: Mapping[str, tuple[str, ...]]) -> None:
+    table = _table(where, value)
+    if set(table) != set(DISCRETISATIONS):
+        raise ProblemError(f"{where}: declares {sorted(table)}, but needs one entry per discretisation "
+                           f"{list(DISCRETISATIONS)}")
+    for discretisation, entry in table.items():
+        _menu(f"{where}.{discretisation}", entry, menus[discretisation])
 
 
 def _declares(where: str, declared: Any, used: set[str]) -> None:

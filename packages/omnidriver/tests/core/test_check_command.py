@@ -39,6 +39,7 @@ def test_a_check_that_verifies_nothing_is_counted_apart_from_the_passed(tmp_path
     assert [(item["check"], item["status"]) for item in record["checks"]] == [
         ("C1", "passed"), ("C2", "passed"), ("C12", "not_applicable"), ("C13", "not_applicable"),
     ]
+    assert record["verified"] == ["C1", "C2"]
     assert report["summary"] == {"checks": 4, "passed": 2, "failed": 0, "not_applicable": 2}
 
 
@@ -104,11 +105,29 @@ def _native_with_script(tmp_path, body):
     return native, native / "regression" / "regressionTest.sh"
 
 
-def test_the_native_regression_runs_in_a_copy_and_leaves_the_native_case_alone(tmp_path):
-    from omnidriver.conformance.report import _regression
+def _regression_of(script, native, work, timeout_s, repository=None, *, inputs=(), supplied=None):
+    """``_regression`` over the toy record pointed at ``native``, declaring ``inputs``."""
+    import dataclasses
 
+    from omnidriver.conformance.report import _regression
+    from omnidriver.core.plugin_interface import load_plugin_context
+    from plugins.toy import _TOY_RECORD, _solve
+
+    consumed = tuple(destination for input_ in inputs for _, destination in input_.files)
+    record = dataclasses.replace(
+        _TOY_RECORD, native_case_relpath=native.name, inputs=tuple(inputs),
+        workflow_steps=(_solve(("touch", "solved.marker"), consumes=consumed),),
+    )
+    context = dataclasses.replace(load_plugin_context(TOY_PLUGIN), repository=repository)
+    return _regression(
+        record, script, cases_root=native.parent, work=work, timeout_s=timeout_s,
+        driver_context=context, inputs=supplied,
+    )
+
+
+def test_the_native_regression_runs_in_a_copy_and_leaves_the_native_case_alone(tmp_path):
     native, script = _native_with_script(tmp_path, "echo ran > produced.txt; echo compared\n")
-    result = _regression(script, native, tmp_path / "work", 30.0)
+    result = _regression_of(script, native, tmp_path / "work", 30.0)
     assert (result["status"], result["exit_code"], result["script"]) == ("passed", 0, "regression/regressionTest.sh")
     assert "compared" in result["output_tail"]
     assert (tmp_path / "work" / "case" / "produced.txt").is_file()
@@ -116,7 +135,6 @@ def test_the_native_regression_runs_in_a_copy_and_leaves_the_native_case_alone(t
 
 
 def test_a_regression_in_a_repository_runs_at_its_depth_beside_a_copy_of_the_repository_scripts(tmp_path):
-    from omnidriver.conformance.report import _regression
     from omnidriver.core.repository import read_repository
 
     repo = tmp_path / "repo"
@@ -130,7 +148,7 @@ def test_a_regression_in_a_repository_runs_at_its_depth_beside_a_copy_of_the_rep
     script = native / "regression" / "regressionTest.sh"
     script.write_text('sh "$(dirname "$0")/../../../applications/scripts/compare.sh"\n')
 
-    result = _regression(script, native, tmp_path / "work", 30.0, read_repository(repo))
+    result = _regression_of(script, native, tmp_path / "work", 30.0, read_repository(repo))
 
     assert (result["status"], result["output_tail"].strip()) == ("passed", "compared")
     assert result["case"] == str(tmp_path / "work" / "cases" / "case")
@@ -140,20 +158,41 @@ def test_a_regression_in_a_repository_runs_at_its_depth_beside_a_copy_of_the_rep
 
 @pytest.mark.parametrize(("body", "status"), [("exit 77\n", "skipped"), ("echo drifted >&2; exit 3\n", "failed")])
 def test_a_regression_that_declines_or_fails_is_reported_as_such(tmp_path, body, status):
-    from omnidriver.conformance.report import _regression
-
     native, script = _native_with_script(tmp_path, body)
-    result = _regression(script, native, tmp_path / "work", 30.0)
+    result = _regression_of(script, native, tmp_path / "work", 30.0)
     assert result["status"] == status
     assert "drifted" in result["output_tail"] or status == "skipped"
 
 
 def test_a_regression_that_outlives_its_timeout_is_a_failure_naming_it(tmp_path):
-    from omnidriver.conformance.report import _regression
-
     native, script = _native_with_script(tmp_path, "sleep 30\n")
-    result = _regression(script, native, tmp_path / "work", 0.5)
+    result = _regression_of(script, native, tmp_path / "work", 0.5)
     assert result["status"] == "failed" and "timed out" in result["detail"]
+
+
+def test_a_regression_runs_on_the_records_declared_inputs_as_a_run_stages_them(tmp_path):
+    from omnidriver.core.tutorial_records import RecordInput
+
+    native, script = _native_with_script(tmp_path, "cat constant/mesh/points\n")
+    mesh = tmp_path / "native" / "mesh"
+    mesh.mkdir()
+    (mesh / "points").write_text("native mesh\n")
+    shared = RecordInput(name="mesh", files=((".", "constant/mesh"),), native_relpath="mesh")
+    result = _regression_of(script, native, tmp_path / "work", 30.0, inputs=(shared,))
+    assert (result["status"], result["output_tail"].strip()) == ("passed", "native mesh")
+
+    supplied = tmp_path / "elsewhere"
+    supplied.mkdir()
+    (supplied / "points").write_text("supplied mesh\n")
+    result = _regression_of(
+        script, native, tmp_path / "again", 30.0, inputs=(shared,), supplied={"mesh": str(supplied)},
+    )
+    assert result["output_tail"].strip() == "supplied mesh"
+
+    unsupplied = RecordInput(name="anatomy", files=(("points", "constant/points"),))
+    result = _regression_of(script, native, tmp_path / "third", 30.0, inputs=(unsupplied,))
+    assert result["status"] == "failed" and "anatomy" in result["detail"]
+    assert not (native / "constant").exists()
 
 
 def test_the_regression_script_is_where_the_stacks_case_file_rule_puts_it(tmp_path):

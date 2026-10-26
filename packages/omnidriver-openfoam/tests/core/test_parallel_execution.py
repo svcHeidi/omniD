@@ -28,9 +28,10 @@ class TestRecordParallelForm(unittest.TestCase):
             return value
         return read_value
 
-    def _form(self, value="6", *, request=True, allocation=None):
+    def _form(self, value="6", *, request=True, allocation=None, launcher="mpirun"):
         return parallel_steps_for_record(
             dict(self.SOLVE), request=request, read_value=self._reader(value), allocation=allocation,
+            launcher=launcher,
         )
 
     def test_decompose_run_on_n_ranks_reconstruct(self) -> None:
@@ -46,6 +47,9 @@ class TestRecordParallelForm(unittest.TestCase):
         self.assertEqual(solve["produces"], ["record.solve.0"])
         self.assertEqual(solve["consumes"], ["system/controlDict"])
         self.assertEqual((reconstruct["command"], reconstruct["depends_on"]), ("reconstructPar", ["solve"]))
+
+    def test_the_solve_runs_under_the_declared_launcher(self) -> None:
+        self.assertEqual(self._form("2", launcher="mpiexec")[1]["command"], "mpiexec")
 
     def test_a_study_that_changes_the_dictionary_changes_n(self) -> None:
         self.assertEqual(self._form(2)[1]["args"][:2], ["-np", "2"])

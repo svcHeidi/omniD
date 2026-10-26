@@ -11,8 +11,7 @@ import re
 from pathlib import Path
 
 import pytest
-
-sympy = pytest.importorskip("sympy")
+import sympy
 
 import test_native_drift as fda
 from omnidriver.verifier.problem import load_problem

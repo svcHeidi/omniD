@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from omnidriver.core.environment_connection import load_environment, solver_environment_diagnostics
 from omnidriver.core.runtime.process_control import run_child
+from omnidriver.core.runtime.record_execution import _stage
 from omnidriver.core.runtime.repository_staging import copy_repository_scripts, staged_case_path
+from omnidriver.core.tutorial_records import TutorialRecordError
 
 from .checks import CHECKS, run_check
 from .target import ConformanceTarget
@@ -42,15 +44,21 @@ def regression_script(driver_context: "DriverContext", native_case: Path) -> Pat
 
 
 def _regression(
-    script: Path, native_case: Path, work: Path, timeout_s: float, repository: Repository | None = None,
+    record: Any, script: Path, *, cases_root: Path, work: Path, timeout_s: float,
+    driver_context: "DriverContext", inputs: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Run the native regression script in a copy under ``work``, at its
-    repository-relative depth and beside the repository's scripts when there is
-    a repository; the native case is never written."""
+    """Run the native regression script in a copy under ``work``, staged as a
+    run stages the record (its declared inputs overlaid), at its
+    repository-relative depth and beside the repository's scripts when there
+    is a repository; the native case is never written."""
+    native_case = cases_root / record.native_case_relpath
+    repository = driver_context.repository
     case = staged_case_path(native_case, repository, staging_root=work, flat=work / native_case.name)
-    shutil.rmtree(case, ignore_errors=True)
     copy_repository_scripts(repository, native_case, staging_root=work)
-    shutil.copytree(native_case, case, symlinks=True)
+    try:
+        _stage(record, cases_root=cases_root, staged_case_root=case, driver_context=driver_context, inputs=inputs)
+    except (TutorialRecordError, OSError) as exc:
+        return {"status": "failed", "detail": f"the case could not be staged: {exc}", "case": str(case)}
     started = time.monotonic()
     try:
         proc = run_child(["bash", str(case / script.relative_to(native_case))], cwd=case, timeout=timeout_s)
@@ -140,6 +148,7 @@ def check_report(
                 "check": check_id, "status": status, "detail": detail, "seconds": round(time.monotonic() - started, 1),
             })
         entry["checks"] = verdicts
+        entry["verified"] = [verdict["check"] for verdict in verdicts if verdict["status"] == "passed"]
         passed = all(v["status"] != "failed" for v in verdicts)
         if not check_ids and record.conformance.probes:
             env = load_environment(driver_context, None)
@@ -151,8 +160,8 @@ def check_report(
             script = regression_script(driver_context, native_case)
             entry["regression"] = (
                 _regression(
-                    script, native_case, scratch_root / record.name / "regression", REGRESSION_TIMEOUT_S,
-                    driver_context.repository,
+                    record, script, cases_root=cases_root, work=scratch_root / record.name / "regression",
+                    timeout_s=REGRESSION_TIMEOUT_S, driver_context=driver_context, inputs=inputs,
                 )
                 if script is not None else {"status": "no_script", "detail": "the native case has no regression script"}
             )
