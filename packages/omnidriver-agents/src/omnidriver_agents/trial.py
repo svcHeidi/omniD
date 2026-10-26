@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import time
 import uuid
@@ -18,6 +19,9 @@ from .tree import digest_tree, export_tree
 
 CONDITIONS = ("omnid", "bare")
 ORACLE_TIMEOUT = 600
+#: The omniD commands the ``omnid`` condition puts on the agent's PATH, found beside ``TrialSetup.omnidriver_bin``.
+SYSTEM_PATH = ("/usr/bin", "/bin")
+ENTRY_POINTS = ("omnidriver", "omnidriver-verify")
 
 
 @dataclass(frozen=True)
@@ -51,7 +55,7 @@ def _is_refusal(content) -> bool:
             data = json.loads(text)
         except json.JSONDecodeError:
             continue
-        if isinstance(data, dict) and data.get("status") == "failed":
+        if isinstance(data, dict) and data.get("status") == "failed" and "code" in data:
             return True
     return False
 
@@ -64,6 +68,27 @@ def _refusals(transcript: list[dict]) -> int:
              and isinstance((item.get("input") or {}).get("command"), str) and "omnidriver" in item["input"]["command"]}
     return sum(1 for item in items if item.get("type") == "tool_result" and item.get("tool_use_id") in calls
                and _is_refusal(item.get("content")))
+
+
+def _mentions(transcript: list[dict], repo: Path) -> int:
+    """Events of the transcript that name the omniD repository by either spelling of its path."""
+    spellings = {str(repo), str(repo.resolve())}
+    return sum(1 for event in transcript if any(path in json.dumps(event) for path in spellings))
+
+
+def _omnidriver_on(path: str) -> list[str]:
+    """The ``omnidriver*`` commands a PATH string resolves."""
+    names = {entry.name for directory in path.split(os.pathsep) if directory for entry in Path(directory).glob("omnidriver*")}
+    return sorted(name for name in names if shutil.which(name, path=path))
+
+
+def _installed_version(omnidriver_bin: Path) -> str | None:
+    """The version the environment of ``omnidriver_bin`` has installed, read from its distribution metadata by that
+    environment's own interpreter, so the harness imports nothing of omniD."""
+    done = subprocess.run([str(omnidriver_bin.parent / "python"), "-c",
+                           "from importlib.metadata import version; print(version('omnidriver'))"],
+                          capture_output=True, text=True)
+    return done.stdout.strip() if done.returncode == 0 and done.stdout.strip() else None
 
 
 def _field(data: dict, dotted: str):
@@ -106,6 +131,14 @@ def run_trial(task: Task, adapter: Adapter, setup: TrialSetup, index: int) -> di
             raise ValueError(f"{name} {getattr(setup, name)} is inside a git repository")
     if subprocess.run([str(setup.agent_python), "-c", "import omnidriver"], capture_output=True).returncode == 0:
         raise ValueError(f"agent_python {setup.agent_python} can import omnidriver")
+    if setup.condition == "bare":
+        resolved = _omnidriver_on(os.pathsep.join([*map(str, setup.solver_path), *SYSTEM_PATH]))
+        if resolved:
+            raise ValueError(f"the bare PATH resolves {resolved}")
+    if setup.condition == "omnid":
+        absent = [name for name in ENTRY_POINTS if not (setup.omnidriver_bin.parent / name).exists()]
+        if absent:
+            raise ValueError(f"{setup.omnidriver_bin.parent} holds no {absent}")
     omnid_commit = _git(setup.omnid_repo, "rev-parse", "HEAD")
     omnid_dirty = bool(_git(setup.omnid_repo, "status", "--porcelain"))
     folder = setup.output / uuid.uuid4().hex
@@ -116,7 +149,8 @@ def run_trial(task: Task, adapter: Adapter, setup: TrialSetup, index: int) -> di
     omnid_bin.mkdir()
     for name in ("python3", "python"):
         (tools / name).symlink_to(setup.agent_python)
-    (omnid_bin / "omnidriver").symlink_to(setup.omnidriver_bin)
+    for name in ENTRY_POINTS:
+        (omnid_bin / name).symlink_to(setup.omnidriver_bin.parent / name)
     launches = folder / "launches.jsonl"
     write_shims(shims, task.programs, launches, setup.agent_python)
     tree_commit = tree_before = None
@@ -127,7 +161,7 @@ def run_trial(task: Task, adapter: Adapter, setup: TrialSetup, index: int) -> di
     if setup.condition == "omnid":
         agent_path.append(str(omnid_bin))
     env = {**setup.extra_env, "HOME": str(setup.agent_home), "SHELL": "/bin/bash",
-           "PATH": os.pathsep.join([*agent_path, "/usr/bin", "/bin"])}
+           "PATH": os.pathsep.join([*agent_path, *SYSTEM_PATH])}
     guidance = load_guidance(setup.omnid_repo, task.role) if setup.condition == "omnid" else None
     harness_error = None
     start = time.monotonic()
@@ -152,6 +186,9 @@ def run_trial(task: Task, adapter: Adapter, setup: TrialSetup, index: int) -> di
         "model_resolved": result.init.get("model"),
         "isolation": {k: result.init.get(k) for k in ("plugins", "mcp_servers", "hooks_seen")},
         "omnid_commit": omnid_commit, "omnid_dirty": omnid_dirty,
+        "omnidriver_path": os.path.realpath(setup.omnidriver_bin),
+        "omnidriver_version": _installed_version(setup.omnidriver_bin),
+        "omnid_repo_mentions": _mentions(result.transcript, setup.omnid_repo),
         "guidance": [list(f) for f in guidance.files] if guidance else [],
         "seconds": seconds, "turns": result.turns, "cost_usd": result.cost_usd, "usage": result.usage,
         "is_error": result.is_error, "timed_out": result.timed_out, "undecodable_lines": result.undecodable_lines,

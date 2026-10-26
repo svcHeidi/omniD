@@ -47,8 +47,12 @@ def _python(tmp_path, exit_code, name="python"):
 def _setup(tmp_path, condition, **over):
     omnid_bin = tmp_path / "venv-bin"
     omnid_bin.mkdir(exist_ok=True)
-    (omnid_bin / "omnidriver").write_text("#!/bin/sh\necho '{\"status\": \"failed\", \"error\": \"x\"}'\n")
-    (omnid_bin / "omnidriver").chmod(0o755)
+    (omnid_bin / "omnidriver").write_text(
+        "#!/bin/sh\necho '{\"status\": \"failed\", \"code\": \"x\", \"error\": \"x\"}'\n")
+    (omnid_bin / "omnidriver-verify").write_text("#!/bin/sh\necho '{\"status\": \"ok\"}'\n")
+    (omnid_bin / "python").write_text("#!/bin/sh\necho 9.9.9\n")
+    for name in ("omnidriver", "omnidriver-verify", "python"):
+        (omnid_bin / name).chmod(0o755)
     (omnid_bin / "pytest").write_text("#!/bin/sh\n")
     (omnid_bin / "pytest").chmod(0o755)
     fields = dict(output=tmp_path / "out", condition=condition, omnid_repo=_repo(tmp_path),
@@ -104,13 +108,37 @@ def test_an_agent_python_that_imports_omnidriver_is_refused(tmp_path, fake_adapt
         run_trial(_task(tmp_path), fake_adapter(), _setup(tmp_path, "bare", agent_python=_python(tmp_path, 0, "py-ok")), 0)
 
 
-def test_omnid_puts_only_omnidriver_on_the_path(tmp_path, fake_adapter):
-    adapter = fake_adapter(commands=["command -v pytest || echo none", "command -v python3", "command -v omnidriver"])
+def test_omnid_puts_only_the_omnid_entry_points_on_the_path(tmp_path, fake_adapter):
+    adapter = fake_adapter(commands=["command -v pytest || echo none", "command -v python3", "command -v omnidriver",
+                                     "command -v omnidriver-verify"])
     run_trial(_task(tmp_path), adapter, _setup(tmp_path, "omnid"), 0)
     folder = _folder(tmp_path)
-    assert adapter.outputs == ["none\n", f"{folder}/tools/python3\n", f"{folder}/omnid-bin/omnidriver\n"]
+    assert adapter.outputs == ["none\n", f"{folder}/tools/python3\n", f"{folder}/omnid-bin/omnidriver\n",
+                               f"{folder}/omnid-bin/omnidriver-verify\n"]
     assert (folder / "omnid-bin/omnidriver").is_symlink()
-    assert [p.name for p in (folder / "omnid-bin").iterdir()] == ["omnidriver"]
+    assert sorted(p.name for p in (folder / "omnid-bin").iterdir()) == ["omnidriver", "omnidriver-verify"]
+
+
+def test_omnid_refuses_an_install_that_lacks_an_entry_point(tmp_path, fake_adapter):
+    setup = _setup(tmp_path, "omnid")
+    (setup.omnidriver_bin.parent / "omnidriver-verify").unlink()
+    with pytest.raises(ValueError, match="omnidriver-verify"):
+        run_trial(_task(tmp_path), fake_adapter(), setup, 0)
+
+
+def test_bare_refuses_a_solver_path_that_resolves_omnidriver(tmp_path, fake_adapter):
+    setup = _setup(tmp_path, "bare", solver_path=(tmp_path / "venv-bin",))
+    with pytest.raises(ValueError, match="omnidriver"):
+        run_trial(_task(tmp_path), fake_adapter(), setup, 0)
+
+
+def test_the_record_names_the_omnid_that_ran_and_the_mentions_of_its_repository(tmp_path, fake_adapter):
+    setup = _setup(tmp_path, "bare")
+    adapter = fake_adapter(commands=[f"ls {setup.omnid_repo}", "echo nothing"])
+    record = run_trial(_task(tmp_path), adapter, setup, 0)
+    assert record["omnidriver_path"] == os.path.realpath(setup.omnidriver_bin)
+    assert record["omnidriver_version"] == "9.9.9"
+    assert record["omnid_repo_mentions"] == 1
 
 
 def test_the_agent_gets_a_dedicated_home_and_a_fixed_shell(tmp_path, fake_adapter):
@@ -187,9 +215,10 @@ def test_only_an_omnidriver_call_can_be_refused(tmp_path, fake_adapter):
 
 def test_refusals_read_compact_json_and_text_blocks_and_ignore_other_ids():
     transcript = [
-        _call("a", "omnidriver run"), _result("a", '{"status":"failed"}'),
-        _call("b", "omnidriver run"), _result("b", [{"type": "text", "text": "note"}, {"type": "text", "text": '{"status": "failed"}'}]),
+        _call("a", "omnidriver run"), _result("a", '{"status":"failed","code":"x"}'),
+        _call("b", "omnidriver run"), _result("b", [{"type": "text", "text": "note"}, {"type": "text", "text": '{"status": "failed", "code": "y"}'}]),
         _call("c", "omnidriver run"), _result("c", '{"status": "passed"}'),
+        _call("f", "omnidriver sweep-run"), _result("f", '{"status": "failed", "cases_failed": 1}'),
         _call("d", "ls"), _result("d", '{"status": "failed"}'),
         _result("e", '{"status": "failed"}'),
     ]
