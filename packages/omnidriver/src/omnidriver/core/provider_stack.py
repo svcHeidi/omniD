@@ -83,7 +83,6 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     "get_environment_diagnostics": ("sequence", _no_environment_validation),
     "resolve_supplied_variables": ("map", None),
     "get_loaded_environment": ("single", lambda: dict(os.environ)),
-    "get_configured_environment": ("chain", None),
     "get_case_runtime_conventions": ("single", _no_conventions),
     # provenance
     "resolve_case_models": ("map", None),

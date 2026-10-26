@@ -237,9 +237,6 @@ class SolverPlugin(Protocol):
         """The execution environment built from scratch, e.g. by sourcing
         ``environment_source``."""
 
-    def get_configured_environment(self, env: dict[str, str], driver_context: Any) -> dict[str, str]:
-        """This provider's contract applied over an existing environment."""
-
     def get_case_runtime_conventions(self) -> CaseRuntimeConventions:
         """The paths this environment generates in a case."""
 

@@ -64,14 +64,11 @@ def stack_connection(driver_context: "DriverContext") -> tuple[EnvironmentConnec
 
 
 def load_environment(driver_context: "DriverContext", environment_source: str | None) -> dict[str, str]:
-    """The execution environment: sourced by the stack (``get_loaded_environment``,
-    the process environment when none sources one), then every provider's
-    contract applied over it (``get_configured_environment``)."""
-    stack = driver_context.stack
-    sourced = stack.call(
+    """The execution environment the stack sources (``get_loaded_environment``),
+    the process environment when none sources one."""
+    return dict(driver_context.stack.call(
         "get_loaded_environment", environment_source=environment_source, driver_context=driver_context,
-    )
-    return dict(stack.call("get_configured_environment", dict(sourced), driver_context))
+    ))
 
 
 def render_prefix(connection: EnvironmentConnection, environ: Mapping[str, str]) -> str:
