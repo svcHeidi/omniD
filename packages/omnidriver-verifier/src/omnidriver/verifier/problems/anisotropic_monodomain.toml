@@ -87,7 +87,7 @@ all_faces = "zero_normal_gradient"
 [initial]
 fields = "exact"
 time = "start"
-points = { cardiacfoam = "cell_centres", nodal = "nodes" }
+points = { finite_volume = "cell_centres", finite_element = "nodes" }
 
 [refinement.hex]
 dimensions = [3]
@@ -117,8 +117,8 @@ steps = [8, 16, 32, 64, 128]
 [norms]
 fields = ["V", "u1", "u2"]
 kinds = ["L1", "L2", "Linf"]
-points = "cell_centres"
-weight = "cell_volume"
+points = { finite_volume = "cell_centres", finite_element = "nodes" }
+weight = { finite_volume = "cell_volume", finite_element = "nodal_control_volume" }
 normalised_by = "total_volume"
 at = "steps*dt"
 

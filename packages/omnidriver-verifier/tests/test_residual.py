@@ -5,8 +5,7 @@ import copy
 import sys
 
 import pytest
-
-pytest.importorskip("sympy")
+import sympy  # noqa: F401  a missing [symbolic] extra must fail these tests, not skip them
 
 from omnidriver.core.refusal import failure
 from omnidriver.verifier.problem import ProblemError, load_problem
