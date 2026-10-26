@@ -39,7 +39,7 @@ produced_by = "generatePurkinjeTree"
 artifact_id = "rv_septal_endo_faces"
 path_pattern = "constant/polyMesh/sets/RVSeptalEndoFaces"
 format = "openfoam_face_set"
-description = "Generated RV septal-recovery face set (uvc only)"
+description = "Generated RV septal endocardial face set; the utility's README says under which coordinate system it is written"
 produced_by = "generatePurkinjeTree"
 optional = true
 

@@ -7,18 +7,10 @@ from __future__ import annotations
 from omnidriver.core.tutorial_records import RecordInput, TutorialRecord
 from omnidriver.openfoam.polymesh import POLY_MESH_FILES
 
-from .anatomy import CONV, TREE_OUT, step
+from .anatomy import CONV, step
 
-#: The idealized mesh's coordinate fields (cobiveco naming): ``tm``
-#: 1=endocardium/0=epicardium, ``tv`` 0=LV/1=RV, ``apicobasal`` 0=apex/1=base,
-#: per this mesh's own ``coordinatesConventionDict``.
+#: The idealized mesh's coordinate fields, as its own ``coordinatesConventionDict`` names and orients them.
 COBIVECO = ("0/tm", "0/tv", "0/apicobasal")
-
-#: generatePurkinjeTree's outputs under ``coordinateSystem cobiveco``: no
-#: ``RVSeptalEndoFaces`` set is built, since cobiveco solves transmural/
-#: intraventricular membership per chamber, so the septum already reads
-#: endocardial from both sides.
-COBIVECO_TREE_OUT = tuple(path for path in TREE_OUT if "RVSeptalEndoFaces" not in path)
 
 #: This mesh's polyMesh in full: it also carries `cellZones`/`faceZones`/`pointZones`.
 IDEALIZED_MESH = POLY_MESH_FILES + tuple(
@@ -38,22 +30,16 @@ CONDUCTIVITY = step(
     "conductivity", "setCardiacConductivity",
     # All eight mesh files: native `createMesh.H` reads the full mesh as one `fvMesh`.
     consumes=(*IDEALIZED_MESH, "0/fiber", "0/sheet"),
-    produces=("0/Conductivity",),
 )
 
 ANATOMY_STEP = step(
     "anatomy", "setCardiacAnatomy",
     consumes=(CONV, "0/apicobasal", "0/tv"),
-    produces=("0/aha_angle", "0/aha_z", "0/phiRV", "0/groove_interface", "0/AHA_Segment"),
 )
 
 MORPHOMETRY = step(
     "purkinje_morphometry", "setPurkinjeMorphometry",
     consumes=(CONV, "0/apicobasal", "0/tv"),
-    produces=(
-        "0/PurkinjeLongitudinalRegion", "0/PurkinjeCircumferentialRegion",
-        "0/PurkinjeTerminalWeightSubendocardial", "0/PurkinjeTerminalWeightIntramural",
-    ),
 )
 
 #: Mirrors the native humanSlab variant's workflow (conductivity, anatomy, slab, morphometry).
@@ -67,15 +53,14 @@ IDEALIZED_HEART = TutorialRecord(
         step(
             "purkinje_slab", "setPurkinjeSlab",
             consumes=(CONV, "0/tm"),
-            produces=("0/PurkinjeLayer", "0/Conductivity"),
         ),
         MORPHOMETRY,
     ),
 )
 
 #: Mirrors humanEndocardial's workflow (conductivity, anatomy,
-#: generatePurkinjeTree with LV/RV allLeaves+endocardial); `1DgraphToFoam` is
-#: not a step.
+#: generatePurkinjeTree with LV/RV allLeaves+endocardial); the graph conversion
+#: its Allrun ends with is not a step, since no manifest declares it.
 IDEALIZED_HEART_ENDOCARDIAL = TutorialRecord(
     name="idealizedHeartEndocardial",
     native_case_relpath="idealizedHeart/humanEndocardial",
@@ -86,7 +71,6 @@ IDEALIZED_HEART_ENDOCARDIAL = TutorialRecord(
         step(
             "purkinje_tree", "generatePurkinjeTree",
             consumes=(CONV, *COBIVECO),
-            produces=COBIVECO_TREE_OUT,
         ),
     ),
 )
@@ -108,7 +92,6 @@ IDEALIZED_HEART_PIG_TRANSMURAL = TutorialRecord(
         step(
             "purkinje_tree", "generatePurkinjeTree",
             consumes=(CONV, *COBIVECO),
-            produces=COBIVECO_TREE_OUT,
         ),
     ),
 )

@@ -528,7 +528,7 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         enum_values=("straightSegment", "gradientFollow"),
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
-        notes="'straightSegment' samples one inward direction; 'gradientFollow' re-evaluates it every step and produces fewer marches that exit the mesh (README). Both march in wall-thickness depth, so neither assumes a transmural orientation (cardiacCore 1ea6d23).",
+        notes="'straightSegment' samples one inward direction; 'gradientFollow' re-evaluates it every step and produces fewer marches that exit the mesh (README). Both march in wall-thickness depth, so neither assumes a transmural orientation.",
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.extension.depthMin",
@@ -613,9 +613,3 @@ DOCUMENTS: Final[dict[str, tuple[DictEntry, ...]]] = {
 }
 
 CATALOG: Final[DictionaryCatalog] = DictionaryCatalog(DOCUMENTS)
-
-# CONDITIONAL_INPUTS is empty: every conditional read is expressed as a real
-# DictEntry above via applicable_when/required_when/constraints. The name
-# stays bound rather than removed because plugin.py's
-# `cardiaccore_conditional_inputs` named catalog publishes it unconditionally.
-CONDITIONAL_INPUTS: Final[dict[str, tuple[dict[str, object], ...]]] = {}

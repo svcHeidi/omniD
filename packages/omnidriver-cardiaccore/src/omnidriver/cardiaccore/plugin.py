@@ -12,8 +12,8 @@ from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.core.plugin_profile import load_plugin_profile
 from omnidriver.core.utility_catalog import load_utility_manifests
 
-from .catalogs.inputs import CATALOG, CONDITIONAL_INPUTS
-from .catalogs.support_boundary import FIELD_CONVENTIONS, SUPPORT_BOUNDARY
+from .catalogs.inputs import CATALOG
+from .catalogs.support_boundary import SUPPORT_BOUNDARY
 
 
 
@@ -62,11 +62,7 @@ class CardiacCorePlugin:
 
     def get_named_catalogs(self) -> dict[str, Any]:
         # Caller annotations must not mutate declarations seen by later agents.
-        return deepcopy({
-            "cardiaccore_conditional_inputs": CONDITIONAL_INPUTS,
-            "cardiaccore_field_conventions": FIELD_CONVENTIONS,
-            "cardiaccore_support_boundary": SUPPORT_BOUNDARY,
-        })
+        return deepcopy({"cardiaccore_support_boundary": SUPPORT_BOUNDARY})
 
     def get_generated_output_globs(self, case_root: Path, resolved_case: dict[str, Any]) -> tuple[str, ...]:
         """What cardiacCore's utilities write, from their manifests: each writes a new field or set, never an input

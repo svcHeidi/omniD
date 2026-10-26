@@ -10,7 +10,7 @@ from omnidriver.cardiaccore.record_key_validation import record_key_catalog, rec
 DOCUMENT = "system/setCardiacConductivityDict"
 ANATOMY_DOCUMENT = "system/setCardiacAnatomyDict"
 
-# cardiacCore applications/utilities/setCardiacAnatomy/setCardiacAnatomy.C at chore/repo-layout (0c1bf46):
+# cardiacCore applications/utilities/setCardiacAnatomy/setCardiacAnatomy.C at chore/repo-layout:
 # main from its head to the read of valveAreaMaskField, closed with a brace.
 SET_CARDIAC_ANATOMY_MAIN = r'''int main(int argc, char *argv[])
 {
