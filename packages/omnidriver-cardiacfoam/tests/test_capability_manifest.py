@@ -6,10 +6,8 @@ from omnidriver.core.capability_manifest import build_capability_manifest
 from omnidriver.cardiacfoam.case_introspection import (
     samplable_fields as _samplable_fields,
 )
-from omnidriver.cardiacfoam.command_authorization import (
-    CARDIAC_SOLVER_COMMANDS,
-    utility_manifests,
-)
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
+from omnidriver.cardiacfoam.command_authorization import CARDIAC_SOLVER_COMMANDS
 from omnidriver.openfoam.command_authorization import openfoam_runtime_commands
 from omnidriver.openfoam.case_runtime_conventions import openfoam_case_runtime_conventions
 import functools
@@ -22,7 +20,7 @@ build_capability_manifest = functools.partial(
     build_capability_manifest,
     environment_commands=openfoam_runtime_commands(),
     plugin_commands=CARDIAC_AUTHORIZED_COMMANDS,
-    utility_manifests=dict(utility_manifests()),
+    utility_manifests=CardiacFoamPlugin().get_utility_manifests(),
     case_script_commands=frozenset(
         openfoam_case_runtime_conventions().case_script_commands
     ),

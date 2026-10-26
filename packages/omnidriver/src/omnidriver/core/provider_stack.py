@@ -110,6 +110,19 @@ MEMBERS: dict[str, tuple[str, Any]] = {
     "get_rendered_formats": ("set", None),
 }
 
+def _authorized_utilities(stack: "ProviderStack") -> frozenset:
+    # A manifest with no produces authorises nothing: strict planning credits a
+    # step's artifacts from them (``utility_without_produces`` refuses one).
+    return frozenset(name for name, manifest in stack.call("get_utility_manifests").items() if manifest.produces)
+
+
+#: member -> what the stack adds to its providers' answer, derived from
+#: another member so no provider restates it: each utility a manifest
+#: authorises is an auxiliary command.
+_DERIVED = {
+    "get_auxiliary_commands": _authorized_utilities,
+}
+
 #: Members a provider implements together or not at all: which modes a
 #: resolver accepts, and which formats a renderer writes, are that provider's
 #: own answers.
@@ -335,6 +348,11 @@ class ProviderStack:
         shape, absent = _entry(member)
         if shape == "profile":
             return self._profile
+        if member in _DERIVED:
+            implementers = self.implementers(member)
+            answer = _COMPOSE[shape](implementers, member, args, kwargs) if implementers else _EMPTY[shape](args)
+            derived = _DERIVED[member](self)
+            return answer | derived if shape == "set" else (*answer, *derived)
         implementers = self.implementers(member)
         if implementers:
             answer = _COMPOSE[shape](implementers, member, args, kwargs)

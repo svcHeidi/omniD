@@ -6,7 +6,6 @@ from copy import deepcopy
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any
 
 from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
@@ -16,17 +15,6 @@ from omnidriver.core.utility_catalog import load_utility_manifests
 from .catalogs.inputs import CATALOG, CONDITIONAL_INPUTS
 from .catalogs.support_boundary import FIELD_CONVENTIONS, SUPPORT_BOUNDARY
 
-
-# cardiacFoam's own manifests declare newVtkUnstructuredToFoam and
-# 1DgraphToFoam; declaring them here too would collide in the provider stack's
-# "map" composition, which refuses duplicate names without an overrides marker.
-_UTILITIES_ROOT = Path(__file__).parent / "utilities"
-
-
-@lru_cache(maxsize=1)
-def _utility_manifests() -> Any:
-    """Parsed once and read-only, so the shared cache cannot be mutated through a returned mapping."""
-    return MappingProxyType(load_utility_manifests(_UTILITIES_ROOT))
 
 
 class CardiacCorePlugin:
@@ -72,11 +60,8 @@ class CardiacCorePlugin:
             mapping=self.get_profile().cxx_mapping, catalogue=CATALOG,
         )
 
-    def get_auxiliary_commands(self) -> frozenset[str]:
-        return frozenset(_utility_manifests())
-
     def get_utility_manifests(self) -> dict[str, Any]:
-        return dict(_utility_manifests())
+        return dict(load_utility_manifests(Path(__file__).parent / "utilities"))
 
     def get_named_catalogs(self) -> dict[str, Any]:
         # Caller annotations must not mutate declarations seen by later agents.
@@ -86,22 +71,13 @@ class CardiacCorePlugin:
             "cardiaccore_support_boundary": SUPPORT_BOUNDARY,
         })
 
-    def get_generated_output_globs(
-        self,
-        case_root: Path,
-        resolved_case: dict[str, Any],
-    ) -> tuple[str, ...]:
-        """Exclude utility outputs from source-input provenance.
-
-        A consuming DAG step still takes precedence, so ``0/Conductivity``
-        remains an explicit input to ``setPurkinjeSlab`` after the preceding
-        utility has generated it.
-        """
+    def get_generated_output_globs(self, case_root: Path, resolved_case: dict[str, Any]) -> tuple[str, ...]:
+        """What cardiacCore's utilities write, from their manifests: each writes a new field or set, never an input
+        in place. A consuming DAG step still takes precedence, so ``0/Conductivity`` stays an input to
+        ``setPurkinjeSlab`` after the preceding utility has generated it."""
         del case_root, resolved_case
         return tuple(sorted({
-            produced.path_pattern
-            for manifest in _utility_manifests().values()
-            for produced in manifest.produces
+            produced.path_pattern for manifest in self.get_utility_manifests().values() for produced in manifest.produces
         }))
 
     # -- Tutorial records -----------------------------------------------------

@@ -4,23 +4,13 @@ Core names no solver's utilities; the dataclasses below define the schema."""
 
 from __future__ import annotations
 
-import sys
-from dataclasses import dataclass, field
+import tomllib
+from collections.abc import Mapping
+from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
+from types import MappingProxyType
 from typing import Final
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    try:
-        import tomllib  # type: ignore[no-reattr]
-    except ImportError:
-        try:
-            import tomli as tomllib  # type: ignore[no-reattr]
-        except ImportError as exc:
-            raise ImportError(
-                "Python < 3.11 requires the 'tomli' package: pip install tomli"
-            ) from exc
 
 from .runtime.models import _validate_path_pattern
 
@@ -367,8 +357,9 @@ def _parse_manifest(toml_path: Path) -> UtilityManifest:
     )
 
 
-def load_utility_manifests(utilities_root: Path) -> dict[str, UtilityManifest]:
-    """Walk ``utilities_root/*/utility.manifest.toml`` and return a name → manifest map.
+@lru_cache(maxsize=None)
+def load_utility_manifests(utilities_root: Path) -> Mapping[str, UtilityManifest]:
+    """Walk ``utilities_root/*/utility.manifest.toml`` and return a read-only name → manifest map, parsed once per root.
 
     Loader guarantees:
     - Non-directory entries under ``utilities_root`` are silently skipped.
@@ -380,7 +371,7 @@ def load_utility_manifests(utilities_root: Path) -> dict[str, UtilityManifest]:
     catalog: dict[str, UtilityManifest] = {}
 
     if not utilities_root.is_dir():
-        return catalog
+        return MappingProxyType(catalog)
 
     for child in sorted(utilities_root.iterdir()):
         if not child.is_dir():
@@ -400,4 +391,4 @@ def load_utility_manifests(utilities_root: Path) -> dict[str, UtilityManifest]:
 
         catalog[manifest.name] = manifest
 
-    return catalog
+    return MappingProxyType(catalog)

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from omnidriver.cardiaccore import CardiacCorePlugin
 from omnidriver.cardiaccore import plugin as plugin_module
+from omnidriver.core.plugin_interface import load_plugin_context
 
 
 def test_utility_manifests_load_from_the_declared_root() -> None:
@@ -11,7 +12,7 @@ def test_utility_manifests_load_from_the_declared_root() -> None:
     manifests = plugin.get_utility_manifests()
     root = Path(plugin_module.__file__).parent / "utilities"
 
-    assert plugin.get_auxiliary_commands() == frozenset(manifests)
+    assert load_plugin_context("cardiaccore").stack.call("get_auxiliary_commands") == frozenset(manifests)
     assert {"setCardiacConductivity", "generatePurkinjeTree", "refine1Dgraph"} <= set(manifests)
     assert all(manifest.source_path.is_relative_to(root) for manifest in manifests.values())
 

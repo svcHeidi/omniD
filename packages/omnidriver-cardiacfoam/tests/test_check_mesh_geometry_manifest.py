@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import unittest
 
-from omnidriver.cardiacfoam.command_authorization import utility_manifests
+from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
 
-UTILITY_CATALOG = utility_manifests()
+UTILITY_CATALOG = CardiacFoamPlugin().get_utility_manifests()
 
 
 class TestCheckMeshGeometryCatalogued(unittest.TestCase):

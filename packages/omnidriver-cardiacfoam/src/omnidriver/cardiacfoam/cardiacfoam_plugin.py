@@ -226,10 +226,6 @@ class CardiacFoamPlugin:
 
     def get_utility_manifests(self) -> dict:
         """This plugin's ``utility.manifest.toml`` sidecars, by command name."""
-        from omnidriver.cardiacfoam.command_authorization import (
-            utility_manifests,
-        )
+        from omnidriver.core.utility_catalog import load_utility_manifests
 
-        # utility_manifests() is cached and returns a read-only view; copy so a
-        # caller mutating what it gets back cannot reach the shared cache.
-        return dict(utility_manifests())
+        return dict(load_utility_manifests(Path(__file__).parent / "utilities"))
