@@ -55,18 +55,23 @@ answers without them, is the table in `AGENT_GUIDE.md`, "Plugin Guide"; `provide
 | File | Role |
 |---|---|
 | `AGENT_GUIDE.md` | Agent CLI reference: `omnidriver` commands, stack selection, RunDocument, case folders, sweeps, post-processing, plugin guide. |
+| `packages/omnidriver-verifier/` | `omnidriver-verify`, the manufactured-problem library and its checks (`problems`, `show`, `residual`, `cell-model`, `norms`, `compare`), each answering in JSON. |
 | `packages/omnidriver-agents/` | `omnidriver-agents`, the harness that runs one task under agent CLIs with and without omniD and writes a task record per trial. It imports nothing from omniD; its plan is `docs/superpowers/plans/2026-10-09-agent-harness.md`. |
 
 ### Environment Variables
+
+Core reads three variables of its own:
 
 | Variable | Purpose |
 |---|---|
 | `OMNIDRIVER_ALLOWED_RUNS_ROOT` | Restrict where `--fresh` may delete and where a run document's `caseRoot`/`outputDir` may resolve; recommended in production. |
 | `OMNIDRIVER_SCRATCH_DIR` | The scratch root a staging command writes under, when `--scratch-dir` is not given. No default. |
 | `OMNIDRIVER_CASES_ROOT` | The cases root when `--cases-root` is not given; a repository's tutorials folder selects that repository. |
-| `FOAM_APPBIN` | Standard OpenFOAM binary path; required for environment preflight. |
-| `FOAM_USER_APPBIN` | User-compiled binary path; also checked during preflight. |
-| `WM_PROJECT_DIR` | OpenFOAM installation root; sourced by `etc/bashrc`. |
+
+Every solver variable (`OPENFOAM_BASHRC`, `OPENCARP_MPI_BIN`, `TORCHCOR_BIN`,
+the source-root variables, ...) is declared in that solver's manifest:
+`omnidriver env --plugin <id>` (or `--repo <dir>`) lists each with why it is
+needed, whether it is required and whether it is set.
 
 ### Common Troubleshooting
 
