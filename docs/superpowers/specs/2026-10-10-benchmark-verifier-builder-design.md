@@ -124,7 +124,7 @@ architecture: a declared place for each kind of knowledge, filled solver by
 solver as verification runs. For the OpenFOAM family, most numerics options
 (`fvSchemes`: gradient, divergence, laplacian, snGrad, interpolation, ddt) ship
 with OpenFOAM itself. Their knowledge belongs to the shared OpenFOAM layer, one
-reality for cardiacFOAM and cardiacCore. Each solver's own numerics stay in its
+reality for cardiacFOAM and cardiacSubstrateFOAM. Each solver's own numerics stay in its
 plugin, for example cardiacFOAM's time coupling, solution algorithm and
 batched ionic integrator.
 
@@ -136,7 +136,7 @@ numerics catalogue.
   each menu value to attributes that core does not interpret. The verifier
   package owns their schema: formal order (space and time), conditions,
   stability, composition rules, and where each claim comes from.
-- **OpenFOAM layer** (one reality for cardiacFOAM and cardiacCore):
+- **OpenFOAM layer** (one reality for cardiacFOAM and cardiacSubstrateFOAM):
   - `system/fvSchemes` stops being an unvalidated `<any>` entry. Its keys
     (`ddtSchemes`, `gradSchemes`, `laplacianSchemes`, `snGradSchemes`,
     `interpolationSchemes`, `divSchemes`) are catalogued, with menus read from
@@ -199,7 +199,7 @@ plugin.
 
 **Stays with each solver family:** scanners and catalogues. For example the
 OpenFOAM C++ key scanner stays in `omnidriver-openfoam`, shared by cardiacFOAM
-and cardiacCore ("one reality").
+and cardiacSubstrateFOAM ("one reality").
 
 ## Decoupling core, point by point
 

@@ -36,8 +36,8 @@ omnidriver/ (GitHub Root)
 │   │       └── physics_layout.py/.json  <-- Which region(s) a case's physics type
 │   │                                        declares, one row per type
 │   │
-│   ├── omnidriver-cardiaccore/          (import omnidriver.cardiaccore)
-│   │   └── src/omnidriver/cardiaccore/  <-- Cardiac preprocessing adapter; sibling to
+│   ├── omnidriver-cardiacsubstrate/          (import omnidriver.cardiacsubstrate)
+│   │   └── src/omnidriver/cardiacsubstrate/  <-- Cardiac preprocessing adapter; sibling to
 │   │                                         cardiacfoam, not a dependent of it (Rule 4)
 │   │
 │   ├── omnidriver-opencarp/             (import omnidriver.opencarp)
@@ -63,7 +63,7 @@ omnidriver/ (GitHub Root)
 1. **Core Independence:** `omnidriver.core` MUST NOT import anything from `openfoam` or `cardiac`. It must contain **zero** physics rules and **zero** OpenFOAM vocabulary.
 2. **Environment Boundary:** `omnidriver.openfoam` depends on `omnidriver.core`, but knows nothing about specific physics.
 3. **Domain Implementation:** `omnidriver.cardiacfoam` depends on both.
-4. **Sibling adapters:** `omnidriver.cardiaccore` also depends on core and
+4. **Sibling adapters:** `omnidriver.cardiacsubstrate` also depends on core and
    openfoam, and MUST NOT import `omnidriver.cardiacfoam` (nor the reverse).
    The two cardiac adapters are siblings; what passes between them is declared
    and mediated, not imported.
@@ -102,7 +102,7 @@ directions above.
 ## Provider composition
 
 A plugin is a stack of providers: a solver plugin layered on the environment
-it `requires:` (cardiacFOAM and cardiacCore on the OpenFOAM layer), or one
+it `requires:` (cardiacFOAM and cardiacSubstrateFOAM on the OpenFOAM layer), or one
 provider on its own (openCARP). `provider_stack.order_providers` orders them
 least specific first from their profiles' `requires:`, refusing an unmet
 requirement or a cycle, stably, since the stack digest hashes the order.
@@ -155,7 +155,7 @@ A fact an agent acts on should be a field of some command's JSON; prose is for
 the why. **Data** is a CLI field, **prose** is a document, **unknown** is
 nowhere. Where the solvers differ, the row says so.
 
-| fact | cardiacFOAM, cardiacCore | openCARP | TorchCor |
+| fact | cardiacFOAM, cardiacSubstrateFOAM | openCARP | TorchCor |
 |---|---|---|---|
 | keys | data: `describe --entry` (`record_surface.keys`), `catalog`; drift: `catalog --uncatalogued`, `--unread` | data: `catalog`, generated from `+Help` | data with `--repo` (the runner's `--describe`); with `--plugin` alone keys are written unvalidated |
 | menus | data: `menu`, `cxx_values` from the scan | data: `menu`, with `menu_labels` for integer codes | data: `device` |

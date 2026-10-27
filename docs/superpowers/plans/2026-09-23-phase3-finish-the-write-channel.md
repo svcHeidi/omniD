@@ -81,7 +81,7 @@ stays: `dict_builder.py`'s `Allrun` write is still a real caller.
 
 ## What this plan does not do, and why
 
-**`cardiaccore/operations/vtu_selection.py::write_cell_set`.** It writes a
+**`cardiacsubstrate/operations/vtu_selection.py::write_cell_set`.** It writes a
 `cellSet`, a format no renderer understands. Building one has a single consumer,
 and this repository's rule is that a shared abstraction needs two demonstrated
 consumers. Migrating it means inventing a `cellSet` renderer for one caller.
@@ -99,7 +99,7 @@ phases, and G5 needs owner decisions this plan does not make.
 - Python floor is **3.11**.
 - `omnidriver.core` MUST NOT import from any adapter; the waiver list in
   `scripts/check-import-boundaries.py` stays empty.
-- `omnidriver.cardiaccore` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
+- `omnidriver.cardiacsubstrate` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
 - **No OpenFOAM syntax in core.** Core moves bytes and digests.
 - **`update_foam_entry` is legitimate only inside a renderer.** Writing into the
   isolated snapshot `render_case_files` is given is correct; writing into a live
@@ -205,7 +205,7 @@ cross-checked against `grep -rln "CaseMutationRequest(" packages/*/src/` and
 
 | mode | production call sites | what each needs |
 |---|---|---|
-| `clone_and_patch` | 1 — `cardiaccore/workflows/overrides.py::apply_input_overrides_planned` (the only production `CaseMutationRequest(mode="clone_and_patch", ...)`; declared supported by `cardiaccore/plugin.py`'s `get_supported_mutation_modes` → `{"clone_and_patch"}`) | edits keys in a case that already exists; no source artifacts |
+| `clone_and_patch` | 1 — `cardiacsubstrate/workflows/overrides.py::apply_input_overrides_planned` (the only production `CaseMutationRequest(mode="clone_and_patch", ...)`; declared supported by `cardiacsubstrate/plugin.py`'s `get_supported_mutation_modes` → `{"clone_and_patch"}`) | edits keys in a case that already exists; no source artifacts |
 | `synthesize` | 1 — `cardiacfoam/dict_builder.py`'s `build_and_launch` resolution path (the only production `CaseMutationRequest(mode="synthesize", ...)`; declared supported by `cardiacfoam/cardiacfoam_plugin.py`'s `get_supported_mutation_modes` → `{"synthesize"}`) | explicit, non-empty `source_artifacts` — a case built from nothing is refused |
 | `generated_input` | **0** | nothing — no adapter's `get_supported_mutation_modes()` ever names it, `openfoam/case_rendering.py` has no renderer for it, and neither production `CaseMutationRequest` constructor ever builds one |
 
@@ -254,7 +254,7 @@ both here and as a comment beside `PRECONDITION_KINDS` in `case_write.py`.
   container would not enforce.
 - `preconditions` and `semantic_owner_id` genuinely *are* passed straight
   through untouched by both producers
-  (`cardiaccore/workflows/overrides.py::resolve_patch_mutation`,
+  (`cardiacsubstrate/workflows/overrides.py::resolve_patch_mutation`,
   `cardiacfoam/dict_builder.py`'s synthesis resolver) into `CaseWritePlan`.
   That is expected of a resolve/render boundary, not a defect.
 - `expected_effects` is a genuine finding: both producers build one, but
@@ -370,14 +370,14 @@ non-empty scope, against the catalog's own templated form (first scope
 segment replaced by the literal `$ELECTRO_MODEL_COEFFS` token, since that is
 how every scoped entry is actually declared). `qualified_id` is the
 **concrete** dotted path (`".".join(key_path)`), matching how
-`cardiacCore.workflows.overrides._parameters_for` keeps its caller's own
+`cardiacsubstrate.workflows.overrides._parameters_for` keeps its caller's own
 concrete `driver_path` as `qualified_id` rather than an abstract template —
 not a bare unqualified leaf key, which is what S1/S3 fixed.
 
 **An override naming a key the catalog does not declare: found, and
 refused, not inferred.** `resolve_entry_overrides` raises `ValueError`
 (matching the precedent already set by
-`cardiaccore.workflows.overrides.validate_input_overrides`) when neither
+`cardiacsubstrate.workflows.overrides.validate_input_overrides`) when neither
 lookup matches. A real, in-tree instance: `manufactured_bath_bidomain.py`'s
 `_apply_case` unconditionally submits
 `<solver>Coeffs.manufacturedBidomain.fdaBathVariant`, a key
@@ -631,15 +631,15 @@ named this exact list (citing `ionicModelIO.C:182-189`), so this is a
 correction from silently-open to correctly-closed, not a new open
 declaration.
 
-**Found, out of scope for this task, not fixed:** `omnidriver-cardiaccore`'s
+**Found, out of scope for this task, not fixed:** `omnidriver-cardiacsubstrate`'s
 `catalogs/inputs.py` declares `$PURKINJE_SCAR.regions.<region_id>.*` (four
 entries) as `dynamic_path=True` with no `allowed_bindings` at all — the
 same undeclared-placeholder shape Gap 2 closed here, in the sibling
-package. Not touched: cardiaccore's own matcher
+package. Not touched: cardiacsubstrate's own matcher
 (`workflows/overrides.py::_template_for`) does not consult
 `allowed_bindings` for matching at all (it hardcodes `VENT_KEYS` instead),
 so this is a purely declarative gap there, unconnected to the mechanism
-this task changed, and cardiaccore is outside Task 2/3's mandate.
+this task changed, and cardiacsubstrate is outside Task 2/3's mandate.
 
 *Closed 2026-09-23*, in separate work outside this plan's task list — the
 paragraph above is left standing because it is an accurate record of what
@@ -812,7 +812,7 @@ concrete `("deltaT",)` key against an existing document can make. The
 **mechanism** that folds multiple edit targets addressing one document into
 a single `RenderedFile` (`case_rendering.py`'s `_document_edits` /
 `render_synthesis_case_files`) is genuinely shared already, by both
-`resolve_patch_mutation` (cardiacCore's `clone_and_patch` producer) and
+`resolve_patch_mutation` (cardiacSubstrateFOAM's `clone_and_patch` producer) and
 `resolve_synthesis_mutation` — this task adds no second copy of *that*, which
 is the duplication the plan actually warns against. A smaller, optional
 reuse **is** available and was deliberately left for a later task rather
@@ -1030,7 +1030,7 @@ by side.
 | Before-image restore | `apply_overrides.py`'s own `_restore_on_failure`, in-process only, no crash recovery | `commit_case_write`'s journal. Strictly stronger: `case_root` is never touched at all until the final atomic replace (today it's touched then restored), and a mid-commit crash is now recoverable, which `_restore_on_failure` never provided. `_restore_on_failure`/`_apply_validated_overrides` are removed (confirmed gone by `test_the_pre_channel_direct_write_helpers_are_removed`) |
 | F1 `execution_env` readback | loop after the direct write succeeds | Unchanged loop, repositioned to run after `commit_case_write` succeeds |
 | F1b typed comparison (`effective_values_agree`) | same loop | Unchanged |
-| `environment` precondition's second consumer | no precondition machinery on this path | New: `apply_overrides.py` calls `case_rendering.patch_preconditions` before building the plan — the same function cardiacCore's Task 8 consumer already calls |
+| `environment` precondition's second consumer | no precondition machinery on this path | New: `apply_overrides.py` calls `case_rendering.patch_preconditions` before building the plan — the same function cardiacSubstrateFOAM's Task 8 consumer already calls |
 | `;`/`#`/newline security refusal (SECURITY.md) | `_format_value` inside `update_foam_entry` | Unchanged — still applied automatically; nothing bypasses it |
 | Case lease / serialization | `cli.py`'s `_dispatch_context` holds the case lease for the whole `step`; `apply_overrides.py` never acquired one itself | **The one property with no home without a core change.** `commit_case_write`'s own lease is not reentrant from the same thread (`acquire_case_lease` finds its own lock file and refuses it), so calling it unmodified from inside `--apply`'s already-held lease would refuse itself on every call — a guaranteed regression, not a hypothetical (confirmed by reproducing the refusal directly). Closed by giving `commit_case_write` an explicit, opt-in, **verified** `case_lease_held: bool = False` parameter (`core/case_transaction.py`, commit `b6fe66f`, its own commit because it changes shared machinery every future consumer inherits) — a caller claiming to already hold the lease without holding it is refused loudly (`case_lease_is_held` checked, never trusted), and every existing caller omitting the parameter is byte-identical to before. Three alternatives were considered and rejected: making `acquire_case_lease` itself silently reentrant (weakens `test_a_second_attempt_under_a_held_lease_is_refused`, an existing guard); releasing `cli.py`'s lease around override-application (opens a real race window `remediation_transaction.py`'s own lease-held assertions already rely on not existing); duplicating `commit_case_write`'s write/journal logic lease-free inside `apply_overrides.py` (DRY-violating, strictly riskier, no less "shared surface" than an opt-in parameter). |
 
@@ -1148,7 +1148,7 @@ Report the count at the start and at the end. Task 8 owns the last one.
 `plan_delta_t`/`plan_end_time` (Task 3) and `plan_block_mesh_resolution` (Task 4)
 do the same for `controlDict` and the hex-block rewrite. What Task 6 needed
 was the missing middle: a `clone_and_patch` **resolver** for cardiacFoam
-(cardiacCore already has one, `workflows/overrides.py::resolve_patch_mutation`,
+(cardiacSubstrateFOAM already has one, `workflows/overrides.py::resolve_patch_mutation`,
 from Phase 2) and a shared **commit** helper every tutorial's `plan_case`
 calls once. Both landed in `cardiacfoam/overrides.py`:
 
@@ -1161,12 +1161,12 @@ calls once. Both landed in `cardiacfoam/overrides.py`:
   `update_foam_entry(..., edit["value"], ...)` would otherwise be handed
   `ParameterAssignment.value` (the *typed* value — a tuple, a
   `{"value":..., "dimensions":...}` mapping) and render it differently from
-  what `apply_entry_overrides` always wrote. cardiacCore's own
+  what `apply_entry_overrides` always wrote. cardiacSubstrateFOAM's own
   `resolve_patch_mutation` can pass `parameter.value` straight through
   because none of its parameters carry `evidence_refs` or need container
   formatting; cardiacFoam's can, so its resolver cannot copy that shortcut.
 - `resolve_patch_mutation(request) -> ResolvedMutation` — cardiacFoam's own
-  `clone_and_patch` resolver, mirroring cardiacCore's in shape, differing
+  `clone_and_patch` resolver, mirroring cardiacSubstrateFOAM's in shape, differing
   in exactly that one line (`"value": _write_value_for_assignment(parameter)`
   instead of `parameter.value`).
 - `merge_assignments(*groups)` — collapses several `ParameterAssignment`
@@ -1192,7 +1192,7 @@ calls once. Both landed in `cardiacfoam/overrides.py`:
   `None` when there is nothing to write — `CaseMutationRequest` refuses an
   empty `parameters` tuple for `clone_and_patch` outright, so this check runs
   before one is constructed, the same no-op contract
-  `cardiaccore.apply_input_overrides_planned` already gives.
+  `cardiacsubstrate.apply_input_overrides_planned` already gives.
 
 **`cardiacfoam_plugin.CardiacFoamPlugin` now declares `clone_and_patch`
 support.** `get_supported_mutation_modes()` → `frozenset({"synthesize",
@@ -1202,7 +1202,7 @@ Chosen over building each tutorial's `ResolvedMutation` directly (the way
 `openfoam/apply_overrides.py` does, since that module resolves overrides
 against *whichever* plugin's declared scopes the composed stack carries and
 cannot claim one identity) because cardiacFoam tutorials genuinely are one
-plugin's own semantic-owner resolution, the same shape cardiacCore's
+plugin's own semantic-owner resolution, the same shape cardiacSubstrateFOAM's
 `resolve_patch_mutation` already has — declaring the mode is the honest
 statement of what is now true, not an invented distinction (Task 1's own
 lesson).
@@ -1356,7 +1356,7 @@ grep -rn "apply_case=" packages/*/src/ | grep -v "/build/"
 ```
 
 **Count at the start of this task: 16. Count at the end: 16** (unchanged —
-see above). Breakdown: 3 in `cardiaccore/workflows/preprocessing.py`
+see above). Breakdown: 3 in `cardiacsubstrate/workflows/preprocessing.py`
 (already migrated in Phase 2, outside this task), 11 in
 `cardiacfoam/tutorials/` (all eleven Task 6 tutorials, `manufactured_purkinje_graph`
 included — Task 7's), 1 in `core/runtime/generic_case.py` (Task 8's, and
@@ -1446,7 +1446,7 @@ is supplied. That is a small core change to `core/runtime/models.py`, and it is
 what lets Task 11 read bypass 1 honestly. Until then, the meaningful measure is:
 **does any tutorial write outside `commit_case_write`?** Ten do not. The remaining
 six are `heart_solver_comparison` and `manufactured_purkinje_graph` (Task 7),
-`core/runtime/generic_case.py` (Task 8), and three cardiacCore sites already
+`core/runtime/generic_case.py` (Task 8), and three cardiacSubstrateFOAM sites already
 migrated in Phase 2 that still wire the field.
 
 **Two tutorials write a key where the native solver does not read it.** Both
@@ -1767,7 +1767,7 @@ adapter's own, e.g. `cardiacfoam.tutorials.generic_case.make_generic_case_spec`)
 is used instead, wired to a real, adapter-owned mutation callback — a
 different code path this task does not touch. The only test exercising the
 true bypass-2 path end to end,
-`packages/omnidriver-cardiaccore/tests/test_generic_contract.py::test_controlled_allrun_executes_without_domain_claims`,
+`packages/omnidriver-cardiacsubstrate/tests/test_generic_contract.py::test_controlled_allrun_executes_without_domain_claims`,
 proves this concretely: it hands `omnidriver run --entry controlled-case` a
 case folder containing nothing but a user-written `Allrun` script, and the
 observable output (`generic-proof.txt`) comes entirely from that script
@@ -1972,7 +1972,7 @@ overrides are not merely unmatched — every factory rejects them. No path in th
 codebase produces catalog-shaped overrides from a real invocation.
 
 **`ResolvedMutation.expected_effects` is the other half of this gap.** Task 1
-found it computed by both producers — `cardiaccore/workflows/overrides.py` and
+found it computed by both producers — `cardiacsubstrate/workflows/overrides.py` and
 `cardiacfoam/dict_builder.py` — and read by nothing: `CaseWritePlan` has no such
 field. It was designed in Phase 2 as "what the semantic owner expects this edit
 to change", which is exactly what `proposed_changes` needs and cannot currently
@@ -2041,7 +2041,7 @@ hashes every file under the real fixture `case_root` before and after calling
 that no stray staging/journal file was left beside it either.
 
 **The other half: `expected_effects` given its first real consumer.** Task 1
-found it computed by every producer (`cardiaccore/workflows/overrides.py`,
+found it computed by every producer (`cardiacsubstrate/workflows/overrides.py`,
 `cardiacfoam/overrides.py`, `cardiacfoam/dict_builder.py`) and read by nothing
 -- `CaseWritePlan` had no field for it. Closed, not removed: `CaseWritePlan`
 gained an `expected_effects: tuple[str, ...] = ()` field, threaded from
@@ -2411,7 +2411,7 @@ spot-checked five and found none miscategorised; check the ones this phase adds.
 rm -rf /tmp/od311 /tmp/odcore /tmp/wheeltest /tmp/wheelenv
 uv venv --python 3.11 /tmp/od311 && VIRTUAL_ENV=/tmp/od311 uv pip install -q \
   -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam \
-  -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiaccore pytest build
+  -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiacsubstrate pytest build
 uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
   -e "packages/omnidriver[post]" pytest
 python -m build --outdir /tmp/wheeltest packages/omnidriver
@@ -2489,8 +2489,8 @@ class applies within a file.
 | `openfoam/mesh_geometry.py`, `function_object_fields.py`, `case_dict_keys.py`, `cardiacfoam/detection.py`, `runtime_evidence.py`, `run_document_config.py`, `validation.py`, `dict_builder.py:452` | not a write | every `FoamFile(...)` here is a getitem/`.get`/`.keys()` read chain, confirmed by direct reading (no `[...] =`, no `del`) |
 | `openfoam/tet_mesh_provisioning.py::render_tet_geo` | **framework-authored case input — open bypass** | writes `box.geo` (a gmsh mesh template with `__LC__` substituted) directly into `case_root`; called from three tutorials' tet paths, none through the channel (see list below) |
 | `cardiacfoam/dict_builder.py` (`regenerate_electro_properties`, lines 800/821/823) | transaction mechanics | confirmed by tracing its one caller, `overrides.electro_properties_regeneration_scope`, into `apply_overrides.py`'s `regen_scope.regenerate(snapshot_root / ...)` — this is Task 5's own "regeneration scope," already migrated, running on the snapshot |
-| `cardiaccore/operations/electrodes.py` (`write_reference_offset_bundle`, `write_electrode_positions`) | standalone export (Phase 2 classification, unchanged) | both functions carry their own 2026-09-23 Phase 2 Task 12 classification comment in source: a coordinate bundle for cross-tool consumption, no dictionary key |
-| `cardiaccore/operations/vtu_selection.py::write_cell_set` | **declared exception** | unchanged from Phase 2 — writes a `cellSet` format no renderer understands; single consumer, revisit when a second appears |
+| `cardiacsubstrate/operations/electrodes.py` (`write_reference_offset_bundle`, `write_electrode_positions`) | standalone export (Phase 2 classification, unchanged) | both functions carry their own 2026-09-23 Phase 2 Task 12 classification comment in source: a coordinate bundle for cross-tool consumption, no dictionary key |
+| `cardiacsubstrate/operations/vtu_selection.py::write_cell_set` | **declared exception** | unchanged from Phase 2 — writes a `cellSet` format no renderer understands; single consumer, revisit when a second appears |
 | `cardiacfoam/mesh_provisioning.py::provision_mesh` (`shutil.copyfile`) + `cardiacfoam/ionic_catalog_verification.py` (all hits: 3× `write_text`, `provision_mesh`, `subprocess.run`) | test scaffolding / drift-gate tooling | `provision_mesh`'s **only** production caller is `ionic_catalog_verification.py` (confirmed: `grep -rn "provision_mesh(" packages/*/src/` outside its own definition), which authors a throwaway scratch case per ionic model solely to run the real `listCellModelsVariables` utility and diff its output against the static catalog — a maintainer drift-gate, invoked only from `tests/test_ionic_catalog_live_verification.py`/`test_ionic_catalog_verification.py`, no CLI entry point, no tutorial or workflow reachability; the case it authors is never a real user's case |
 | `cardiacfoam/runtime_profile.py` (`subprocess.run` × 3, `manifest_path.write_text`, `artifact_path.open("rb")`) | framework bookkeeping | a build/runtime evidence manifest (library digests, `WM_PROJECT_VERSION`, …), not case configuration |
 | `cardiacfoam/tutorials/cable_1d_restitution.py` (`.driverfoam_case_id`, `.cardiacfoam_protocol.json`) | framework bookkeeping / standalone export (Task 7 classification, unchanged) | reader traced in Task 7 to the native tree's own `postProcessing_cableRestitution.py`; unchanged, re-confirmed present in current source |
@@ -2588,7 +2588,7 @@ cannot place one in a case):
 
 **Declared exceptions:**
 
-- `cardiaccore/operations/vtu_selection.py::write_cell_set` — a `cellSet`
+- `cardiacsubstrate/operations/vtu_selection.py::write_cell_set` — a `cellSet`
   format no renderer understands; single consumer; revisit when a second
   appears. Unchanged from earlier tasks.
 

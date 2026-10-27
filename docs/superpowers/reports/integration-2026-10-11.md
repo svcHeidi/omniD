@@ -13,7 +13,7 @@ is merged too: the verifier-temporal branch had left it at `90674a80`.
 | `packages/omnidriver` (core) | 47 | 1707 | 394 |
 | `packages/omnidriver-openfoam` | 66 | 2064 | 95 |
 | `packages/omnidriver-cardiacfoam` | 37 | 736 | 105 |
-| `packages/omnidriver-cardiaccore` | 5 | 21 | 23 |
+| `packages/omnidriver-cardiacsubstrate` | 5 | 21 | 23 |
 | `packages/omnidriver-opencarp` | 14 | 190 | 40 |
 | `packages/omnidriver-torchcor` (new) | 24 | 6449 | 0 |
 | `packages/omnidriver-verifier` (new) | 38 | 3720 | 0 |

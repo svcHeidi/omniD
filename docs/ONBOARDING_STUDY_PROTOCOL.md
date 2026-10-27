@@ -3,7 +3,7 @@
 ## Status
 
 Prospective methods study.  The protocol was created before semantic
-implementation of the cardiacCoreStandalone OmniD adapter and is now being
+implementation of the cardiacSubstrateFOAM OmniD adapter and is now being
 used to record its first native vertical slice.
 
 ## Working question
@@ -43,7 +43,7 @@ completion establishes scientific validity.
 | ID | Role | Evidence source | Status |
 | --- | --- | --- | --- |
 | CF-1 | Mature adapter reference: cardiacFOAM tutorial experiments | Native tutorials, OmniD plans/runs, solver-owned checkers | Completed baseline |
-| CC-1 | Source-only onboarding case: cardiacCoreStandalone `bivCase` | Native `Allrun`, dictionaries, source utilities, README, named local asset case | Native vertical slice completed with a separately staged local asset bundle; clean-clone asset-distribution closure pending |
+| CC-1 | Source-only onboarding case: cardiacSubstrateFOAM `bivCase` | Native `Allrun`, dictionaries, source utilities, README, named local asset case | Native vertical slice completed with a separately staged local asset bundle; clean-clone asset-distribution closure pending |
 | S-3 | Non-cardiac OpenFOAM solver/workflow | To be selected before a generality claim | Required for broad claim |
 
 ## Unit of evidence

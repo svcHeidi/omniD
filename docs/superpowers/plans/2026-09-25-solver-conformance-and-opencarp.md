@@ -165,7 +165,7 @@ packages/omnidriver-opencarp/
   Create a branch and venvs for it (memory: a worktree needs its own venv):
   ```bash
   git switch -c solver-conformance main
-  uv venv --python 3.11 /tmp/odconf && VIRTUAL_ENV=/tmp/odconf uv pip install -q -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiaccore pytest
+  uv venv --python 3.11 /tmp/odconf && VIRTUAL_ENV=/tmp/odconf uv pip install -q -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiacsubstrate pytest
   uv venv --python 3.11 /tmp/odconfcore && VIRTUAL_ENV=/tmp/odconfcore uv pip install -q -e "packages/omnidriver[post]" pytest
   /tmp/odconf/bin/python -c "import omnidriver, pathlib; print(pathlib.Path(omnidriver.__path__[0]).resolve())"
   ```
@@ -1795,7 +1795,7 @@ packages/omnidriver-opencarp/
 
 - [ ] **Step 7: The gates learn the package (K7, reduced)**
 
-  - In `scripts/check-import-boundaries.py`, define `OPENCARP_SRC = REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp"`. In `main()`, add a check block for it modelled on `CARDIACCORE_SRC`'s, forbidding `("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore")`.
+  - In `scripts/check-import-boundaries.py`, define `OPENCARP_SRC = REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp"`. In `main()`, add a check block for it modelled on `CARDIACSUBSTRATE_SRC`'s, forbidding `("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiacsubstrate")`.
   - In `scripts/check-case-writes.py`:
     - add `OPENCARP_RECORDS_SRC = REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp/records"`;
     - append it to `SCANNED_ROOTS`;
@@ -3075,7 +3075,7 @@ The owner's gaps 1 and 3 (2026-09-25). Without this, `describe` shows cardiacFOA
 
 - [ ] **Step 1: A CI job that installs openCARP's plugin without OpenFOAM**
 
-  In `.github/workflows/ci.yml`, add a job `test-opencarp`, modelled on `test-cardiaccore`:
+  In `.github/workflows/ci.yml`, add a job `test-opencarp`, modelled on `test-cardiacsubstrate`:
   - install `packages/omnidriver` and `packages/omnidriver-opencarp` only (**no** `omnidriver-openfoam`: this is C1 as an install fact);
   - run `python -m pytest packages/omnidriver-opencarp/tests -m "not native_opencarp" -q`.
   
@@ -3188,7 +3188,7 @@ Owner decision 2026-09-25. It waits for step 5 because it edits cardiacFOAM's `p
   from omnidriver.core.plugin_discovery import load_discovered_plugin
   from omnidriver.core.runtime_records import CORE_RUNTIME_RECORDS
 
-  STACKS = ("cardiacfoam", "cardiaccore", "opencarp")
+  STACKS = ("cardiacfoam", "cardiacsubstrate", "opencarp")
   GENERIC_NAMESPACES = {"plugin", "case"}
 
 

@@ -11,7 +11,7 @@ Owner decisions of 2026-10-01. Findings G1–G18 are in `.superpowers/sdd/genera
 | G1 | One source of truth: a tutorial's native pipeline is the default, and records are the only entry kind. The case-folder entry, both non-record sweeps, `--entry-kind`, `--config` and the `TutorialSpec` validators are deleted. |
 | G4 | `step --apply` takes the same `document:key` patches a study takes, through `commit_case_write`. The second grammar and the second journal are deleted. |
 | G7 | The catalog's rules run on every record before it runs. The cross-field science rules are a pre-run step for records. The C++'s own checks stay. |
-| G13 | Solver-side helper scripts live in each solver repository's `applications/scripts/`. omnidriver lists them, each with its usage line. An agent uses a script as a record step when the record declares it, or as an auxiliary tool. cardiacCore's `operations/` moves there, and cardiacCore's `scripts/` becomes `applications/scripts/`. |
+| G13 | Solver-side helper scripts live in each solver repository's `applications/scripts/`. omnidriver lists them, each with its usage line. An agent uses a script as a record step when the record declares it, or as an auxiliary tool. cardiacSubstrateFOAM's `operations/` moves there, and cardiacSubstrateFOAM's `scripts/` becomes `applications/scripts/`. |
 | G15 | `regression_equivalence/` is deleted. Regression runs through omnidriver with the native `tutorials/Alltest-regression`. |
 | G18 | Each solver repository has an `omnidriver.toml` at its root, naming `plugin`, `tutorials`, `source` and `scripts`. omnidriver reads it from the repository it is pointed at. The default-plugin selection graph is deleted. `--plugin` remains for a solver with no repository; when both are given, they must agree. |
 
@@ -21,7 +21,7 @@ Owner decisions of 2026-10-01. Findings G1–G18 are in `.superpowers/sdd/genera
 - **Case synthesis, launch and the dictionary builder are kept** as a clearly separate build with its own command, outside the record path.
 - **`omnidriver.postprocessing` stays in core** as generic helpers; anything OpenFOAM-specific moves to its package.
 - **All GPL licence headers are removed.** The licence itself is still open.
-- **cardiacCore's `operations/` moves to `applications/scripts/`,** as G13 says.
+- **cardiacSubstrateFOAM's `operations/` moves to `applications/scripts/`,** as G13 says.
 
 The cardiacFOAM native branch stays on `omnid/tutorials-are-pointers`. Merging native `main` waits for the owner. A later rescan then shows its new keys as `uncatalogued`, which is the intended behaviour.
 
@@ -35,7 +35,7 @@ Tracks within a wave touch disjoint files and can run in parallel. Every track l
    - The cache is keyed by the source hash.
    - The strict plan reports `uncatalogued` as a note, and the drift error goes.
    - `omnidriver scan` and `catalog --uncatalogued` are added.
-   - cardiacFOAM and cardiacCore use it the same way. openCARP's baseline is its `+Help` dump.
+   - cardiacFOAM and cardiacSubstrateFOAM use it the same way. openCARP's baseline is its `+Help` dump.
    - The tests that pin key lists go; tests of the scanner on real C++ replace them.
 2. **Dead code:** the repair loop (G3) and compatibility residue (G17).
 3. **Parallel and harness:** one MPI helper (G9) and one native harness (G10).
@@ -50,7 +50,7 @@ Tracks within a wave touch disjoint files and can run in parallel. Every track l
 
 **Wave 3**
 8. **The plugin contract collapsed (G2).**
-9. **Script discovery (G13)**, with cardiacCore's native move. **Toy plugins merged (G14).** **Always-skipping tests deleted or made native (G8).** **`regression_equivalence/` deleted (G15).**
+9. **Script discovery (G13)**, with cardiacSubstrateFOAM's native move. **Toy plugins merged (G14).** **Always-skipping tests deleted or made native (G8).** **`regression_equivalence/` deleted (G15).**
 10. **The separate build** (synthesis, launch and the dictionary builder behind one command). **The post-processing split. The licence headers removed. N-rank evidence in `check`'s C13.**
 11. **The final prose sweep.**
 

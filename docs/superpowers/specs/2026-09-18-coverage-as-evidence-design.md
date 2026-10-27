@@ -5,7 +5,7 @@
 > were amended by `2026-09-18-coverage-as-evidence-review.md` and the
 > consolidation records each change with its reason. In particular: §2's
 > corollary, §4.1's scoring formula, §4.5.3's `native_owned` outcome and
-> §4.5.4's numeric-literal lint are **not** the current design. Its cardiaccore
+> §4.5.4's numeric-literal lint are **not** the current design. Its cardiacsubstrate
 > census in §4.5.2 is stale. Do not implement from this file.
 
 Design, 2026-09-18. Status: superseded; retained for reasoning.
@@ -246,7 +246,7 @@ Not mechanised, by decision:
   sixteen lookups hang off a receiver bound to `subDict(ventKey)` where
   `ventKey` is a runtime parameter called twice. No textual analysis recovers
   that a key lives under both `lv` and `rv`.
-- **Enumerations.** Of three `Enum<>` tables in cardiacCoreStandalone and five
+- **Enumerations.** Of three `Enum<>` tables in cardiacSubstrateFOAM and five
   in noFrontendCardiacFoam, zero and one respectively describe a user
   dictionary key. Real enumerations take four shapes -- `if`/`else` chains
   ending in `FatalErrorInFunction`, chained ternaries, `List<word>` from a
@@ -317,7 +317,7 @@ mechanisms already cover that ground without hard-coding one symbol per test.
 
 610 Python test functions across the two domain packages.
 
-| | cardiaccore | cardiacfoam |
+| | cardiacsubstrate | cardiacfoam |
 |---|---|---|
 | structural / agnostic | 49 | ~482 |
 | correspondence | 7 | ~63 |
@@ -333,7 +333,7 @@ any of it. Under the two-suite split most of these are builder-suite tests that
 correctly report `unavailable` in a checkout with no native tree -- but today
 they report nothing at all, and their silence is indistinguishable from success.
 
-**cardiaccore inverts it.** No `conftest.py`, no `skipif` anywhere, all 62 tests
+**cardiacsubstrate inverts it.** No `conftest.py`, no `skipif` anywhere, all 62 tests
 run -- and not one opens a C++ file. Its docstrings cite
 `coordinatesConvention.H`, `generatePurkinjeTree.C`, and the commit `1ea6d23`;
 none is read at test time. It has the appearance of correspondence with none of
@@ -391,7 +391,7 @@ are listed in section 8 for the owner, not automated.
 
 #### 4.5.5 Sequencing, which matters more than the rule
 
-Removing the hand-written C++ ties before the cardiacCore regression exists and
+Removing the hand-written C++ ties before the cardiacSubstrateFOAM regression exists and
 runs would move this repository from dark verification to none. The regression
 comes first; the deletions follow it. The practical loss is small either way --
 `regenerate-ionic-catalog --check` is in no CI job and returns zero without its
@@ -432,7 +432,7 @@ running.
   the other direction, describing "two logical layers with three ownership
   boundaries" and declining a "wholesale rewrite".
 - **A regenerated `dict_entries.json`.** It existed at
-  `cardiacCoreStandalone/agent/dict_entries.json` with very nearly the schema
+  `cardiacSubstrateFOAM/agent/dict_entries.json` with very nearly the schema
   such a proposal would reach for, churned six times in thirty commits -- nearly
   as often as the source it described -- and was deleted deliberately when the
   agent-facing interface was handed to this repository. Rebuilding it is not a
@@ -470,14 +470,14 @@ Each step is independently valuable and independently revertible.
 4. **`evidence_channel` / `evidence_status` on `DictEntry`**, defaulting weak,
    with no gate yet. Purely additive; nothing changes behaviour.
 5. **The catalogue gate**, with its four rules, wired into CI.
-6. **`cxx_mapping` for cardiaccore** so `strict_dict_key_report` can run there
+6. **`cxx_mapping` for cardiacsubstrate** so `strict_dict_key_report` can run there
    at all. It cannot today: no `cxx_mapping` block, no allowlist file.
 
 7. **Split the suites by role.** Mark every test builder or runner, and report
    their coverage separately. A skipped builder gate becomes `unavailable` to a
    builder and `not_applicable` to a runner instead of vanishing. This is step
    1's rule applied to the test suite, and it depends on nothing else.
-8. **The cardiacCore regression** -- the idealized case across two workflows,
+8. **The cardiacSubstrateFOAM regression** -- the idealized case across two workflows,
    static and native-owned -- with a runner-suite test that runs the adapter's
    declared operations against its output and asserts their verdicts.
 9. **Delete the hand-written C++ ties**, once step 8 runs. Not before: see
@@ -507,7 +507,7 @@ the contradiction.
    existing preflight rule; the newer one records that this preflight is being
    retired and its replacements return empty tuples. A stated domain constraint
    is currently enforced by nothing.
-3. **Three incompatible next steps (C7)** for the cardiaccore package, written
+3. **Three incompatible next steps (C7)** for the cardiacsubstrate package, written
    on three consecutive days.
 4. **The nine originated quantities.** Each needs a ruling: delete, demote to a
    correspondence test, or move native. The six in
@@ -531,7 +531,7 @@ otherwise be rediscovered.
   `method`. `is_complete` checks `{"content", "absence"}`. The docstring names
   a value that field never holds. Observed 2026-09-18.
 - `scan-dict-keys.py` is invoked nowhere -- not CI, not a test, not a caller --
-  though it is the front end to the scanner the cardiaccore input catalogue
+  though it is the front end to the scanner the cardiacsubstrate input catalogue
   cites as its provenance.
 - retired equivalence_protocol.yaml has no executed reader. Its consumer computes
   `Path(omnidriver.__file__)` against a PEP 420 namespace package, so it raises
@@ -539,8 +539,8 @@ otherwise be rediscovered.
   **Fixed 2026-09-25:** `dual_run.check_protocol` now has an executed reader
   (`load_equivalence_protocol`), exercised unpatched by the
   `test_check_protocol_*` tests.
-- `check-import-boundaries.py` has no rule naming `cardiaccore` in either
-  direction, and there is no `test-cardiaccore` CI job, while CLAUDE.md
+- `check-import-boundaries.py` has no rule naming `cardiacsubstrate` in either
+  direction, and there is no `test-cardiacsubstrate` CI job, while CLAUDE.md
   presents that gate as the enforcement behind core's cardiac-freedom.
 - **Declared-to-exists is gated; exists-to-declared is not.**
   `test_advertised_operations_have_resolvable_interfaces` proves every declared
@@ -559,9 +559,9 @@ otherwise be rediscovered.
   read by no code anywhere. Its help text still promises "Plan and print
   simulation cases without running OpenFOAM." The real dry run is
   `plan --strict`.
-- **The README of `omnidriver-cardiaccore` documents an operation and a module
-  that do not exist** (`cardiaccore.cobiveco.normalize.v1`,
-  `omnidriver.cardiaccore.operations.cobiveco`). Nothing checks a README against
+- **The README of `omnidriver-cardiacsubstrate` documents an operation and a module
+  that do not exist** (`cardiacsubstrate.cobiveco.normalize.v1`,
+  `omnidriver.cardiacsubstrate.operations.cobiveco`). Nothing checks a README against
   `OPERATIONS`.
 - CLAUDE.md documents three packages; there are four. Its "Where authority
   lives" section names only documents that stop at 2026-09-04, and none of the

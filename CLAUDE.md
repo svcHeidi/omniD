@@ -16,7 +16,7 @@ seventh that measures agents using it, and an eighth that verifies solvers:
 | `omnidriver` (core) | DAG execution, schemas, provenance, the plugin contract | OpenFOAM, any solver, any physics |
 | `omnidriver-openfoam` | `foamlib`, dictionaries, meshing, MPI decomposition | cardiology |
 | `omnidriver-cardiacfoam` | electrophysiology, ionic models, the cardiac plugin | — |
-| `omnidriver-cardiaccore` | evidence-backed cardiacCore preprocessing workflows | cardiacFoam solver semantics |
+| `omnidriver-cardiacsubstrate` | evidence-backed cardiacSubstrateFOAM preprocessing workflows | cardiacFoam solver semantics |
 | `omnidriver-opencarp` | the openCARP binary, `.par` format, `mesher`, IGB/LAT outputs | OpenFOAM, cardiacFoam |
 | `omnidriver-torchcor` | TorchCor, its solver repository's runner (`run_case.py`) and `case.json` | OpenFOAM, openCARP |
 | `omnidriver-agents` | the `omnidriver` CLI and its JSON, agent CLIs, task records | every `omnidriver` import: it measures omniD from outside |
@@ -39,7 +39,7 @@ of defect is only visible from a wheel.
 # if needed. Build these once; they are not in the repo.
 uv venv --python 3.11 /tmp/od311 && VIRTUAL_ENV=/tmp/od311 uv pip install -q \
   -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam \
-  -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiaccore \
+  -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiacsubstrate \
   -e packages/omnidriver-opencarp -e packages/omnidriver-torchcor -e packages/omnidriver-agents \
   -e "packages/omnidriver-verifier[symbolic]" pytest
 uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
@@ -86,7 +86,7 @@ export `DYLD_LIBRARY_PATH`, which macOS strips when bash starts).
 ```bash
 omnidriver check --repo <cardiacFOAM> --scratch-dir <scratch> --record singleCell --benchmarks <omnidriver>/benchmarks
 omnidriver check --plugin opencarp --cases-root <opencarp>/share/tutorials --scratch-dir <scratch> --benchmarks <omnidriver>/benchmarks
-omnidriver check --repo <cardiacCore> --scratch-dir <scratch> --record idealizedHeart
+omnidriver check --repo <cardiacSubstrateFOAM> --scratch-dir <scratch> --record idealizedHeart
 omnidriver check --repo <torchcor-cases> --scratch-dir <scratch> --record nversion --benchmarks <omnidriver>/benchmarks
 ```
 
@@ -137,10 +137,10 @@ A skip here hides exactly what the guard exists to find.
 | a solver repository names its plugin, tutorials, C++ source and scripts in `omnidriver.toml`, read only from `--repo` or the repository of a supplied cases root (never searched for); `--plugin` alone serves a solver with no repository, and when both are given they must select the same stack | `test_repository.py`; `test_repository_source.py` (cardiacfoam) |
 | a repository's scripts folder (`omnidriver.toml`'s `scripts`, carried on the `DriverContext` as `repository`, which every child process the stack starts receives as `--repo`) is the only truth about its scripts: `describe` lists them with a usage line read from the file and runs none, and only a script a step may run is listed; a step may name one, which then runs under the `python3` on the stack's own `PATH`; a name outside the folder is an unknown command, and a script named like a case script, plugin command or installed command is refused as ambiguous | `test_scripts.py` (core) |
 | a plan report carries one `plugin_diagnostics` list, composed by the stack's `get_plan_diagnostics`; core names no function-object, nondimensional or dictionary-resolution concept | `scripts/check-core-shape.py`; `test_strict_planning.py`; `test_plan_diagnostics.py` (openfoam) |
-| a tutorial record/axis module never writes a case directly | `scripts/check-case-writes.py` (empty waiver list, scoped to `openfoam/axes/`, `cardiacfoam/records/`, `opencarp/records/`, `cardiaccore/records/`, `torchcor/records/` and the writer-free planner module `openfoam/case_planning.py`; relative imports are resolved before matching) |
+| a tutorial record/axis module never writes a case directly | `scripts/check-case-writes.py` (empty waiver list, scoped to `openfoam/axes/`, `cardiacfoam/records/`, `opencarp/records/`, `cardiacsubstrate/records/`, `torchcor/records/` and the writer-free planner module `openfoam/case_planning.py`; relative imports are resolved before matching) |
 | a strict plan reads C++ only at a supplied source root (`cxx_mapping.source_root`), scans it when supplied, caches the scan under the supplied scratch root by a digest of the source and the scanner, and says `plugin_cxx_source_not_supplied` once when not | `test_plan_diagnostics.py`, `test_dict_keys_scanner.py` (openfoam) |
 | a key, model or compared literal (`word == "x"` in the function that reads it) the C++ names and the catalog lacks is an `uncatalogued` note carrying what the scan knows, a catalogued key the C++ no longer reads an `unread` note (a case that sets it a warning), a catalog claim the C++ refutes (a menu value a closed `if` chain never compares, included) a `disagreement` warning stating both sides: none of them fails a plan, and a study may set an uncatalogued key at exactly the path the scan places its read; a value is judged against the kind the C++ reads | `test_dict_keys_scanner.py`, `test_plan_diagnostics.py`, `test_runtime_selection_report.py`, `test_cxx_requirements.py` (openfoam) |
-| a resolved record case passes the catalogue's relations and numeric bounds, the enum menus (the names the C++'s selection table registers, or the literals its code compares the value against, when its source is supplied) and the cross-field rules before it runs, `omnidriver.openfoam.case_rules` being the one evaluator of them; a key the supplied C++ reads with no default in a class the case builds is refused when missing, and noted when the scan cannot tell whether the case builds the class; `step --apply` runs the same rules after its edit and rolls the edit back when they refuse it | `test_case_rules.py`, `test_cxx_requirements.py` (openfoam), `test_case_rules.py` (cardiacCore), the commit and apply tests in core's `test_tutorial_records.py` |
+| a resolved record case passes the catalogue's relations and numeric bounds, the enum menus (the names the C++'s selection table registers, or the literals its code compares the value against, when its source is supplied) and the cross-field rules before it runs, `omnidriver.openfoam.case_rules` being the one evaluator of them; a key the supplied C++ reads with no default in a class the case builds is refused when missing, and noted when the scan cannot tell whether the case builds the class; `step --apply` runs the same rules after its edit and rolls the edit back when they refuse it | `test_case_rules.py`, `test_cxx_requirements.py` (openfoam), `test_case_rules.py` (cardiacSubstrateFOAM), the commit and apply tests in core's `test_tutorial_records.py` |
 | a solver's shell is declared in its manifest and rendered from supplied values only; a launcher from the other solver's MPI is refused | `test_environment_and_machine.py`; `test_an_mpirun_from_another_mpi_family_is_refused` (openfoam) |
 | a run document lists each solver's builds with the source each was built from, and a plan compares that source with the supplied repository by digest (never by file times) | `test_solver_provenance.py`, `test_build_record.py`, `test_build_identity.py` (core); `test_build_products.py` (openfoam); `test_solver_builds.py` (opencarp, torchcor) |
 | core names no OpenFOAM layout, and the OpenFOAM layer no cardiac vocabulary | `scripts/check-core-shape.py`, `scripts/check-openfoam-shape.py` (both baselines empty; a baseline may only shrink) |
@@ -148,7 +148,7 @@ A skip here hides exactly what the guard exists to find.
 
 ## One reality
 
-cardiacFOAM and cardiacCore are both OpenFOAM-based, so they do every shared job the same way. That covers records, catalogs and how they are built, validation, case reading and writing, and key scanning. The shared mechanism lives in `omnidriver-openfoam`, never as two variants. openCARP is a different solver and may work differently, but only inside its own package. Nothing is kept for compatibility: no legacy paths, no old format versions, no retired names.
+cardiacFOAM and cardiacSubstrateFOAM are both OpenFOAM-based, so they do every shared job the same way. That covers records, catalogs and how they are built, validation, case reading and writing, and key scanning. The shared mechanism lives in `omnidriver-openfoam`, never as two variants. openCARP is a different solver and may work differently, but only inside its own package. Nothing is kept for compatibility: no legacy paths, no old format versions, no retired names.
 
 ## Two rules that were learned the hard way
 
@@ -179,7 +179,7 @@ is not a count of concepts. Delete on evidence from every package and script.
 
 - `ARCHITECTURE.md` — the layer map, the package-independence rules and what
   core may name.
-- `docs/superpowers/ROADMAP.md` — **start here for the current state**: the clean state of all three repositories (omniD, native cardiacFOAM, native cardiacCore), exactly how the owner's native branches relate to ours, and what is next. `docs/superpowers/specs/` and
+- `docs/superpowers/ROADMAP.md` — **start here for the current state**: the clean state of all three repositories (omniD, native cardiacFOAM, native cardiacSubstrateFOAM), exactly how the owner's native branches relate to ours, and what is next. `docs/superpowers/specs/` and
   `plans/` are the design reasoning and the executed record. The owner's
   decisions sit with the work they settle: `plans/2026-10-01-pass2-convergence.md`
   for pass 2, and each later spec for its own (for example

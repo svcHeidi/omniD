@@ -73,7 +73,7 @@ reader to start here, and there was no table). Built from `git log`.
   ```bash
   uv venv --python 3.11 /tmp/odA-$N && VIRTUAL_ENV=/tmp/odA-$N uv pip install -q \
     -e "$W/packages/omnidriver[post]" -e $W/packages/omnidriver-openfoam \
-    -e $W/packages/omnidriver-cardiacfoam -e $W/packages/omnidriver-cardiaccore \
+    -e $W/packages/omnidriver-cardiacfoam -e $W/packages/omnidriver-cardiacsubstrate \
     -e $W/packages/omnidriver-opencarp pytest build
   uv venv --python 3.11 /tmp/odAcore-$N && VIRTUAL_ENV=/tmp/odAcore-$N uv pip install -q \
     -e "$W/packages/omnidriver[post]" pytest
@@ -1476,7 +1476,7 @@ So:
 **The stable "none" digest.** A provider that does not implement `get_dict_entries` digests with `dictionary_entries = ()`. That is the same input a stub returning `()` produced, so **every provider digest is unchanged**.
 
 Stack digests:
-- **Unchanged** for every stack with a real implementer: `cardiacfoam`, `cardiaccore`. There, `resolutions()` already named the solver as the `dictionaries` winner, and the OpenFOAM layer's empty stub contributed `()` to the composed tuple.
+- **Unchanged** for every stack with a real implementer: `cardiacfoam`, `cardiacsubstrate`. There, `resolutions()` already named the solver as the `dictionaries` winner, and the OpenFOAM layer's empty stub contributed `()` to the composed tuple.
 - **Changed once** for `opencarp` and standalone `openfoam-environment`. Each one's stub was the only "implementer", so it was recorded as the `dictionaries` winner. That is the false provenance claim `openfoam-environment.yaml`'s own comment documents. With the stub gone, the existing rule records `<unclaimed>`, as it does for every capability no provider implements (audit C3). The plan does not fake a winner to keep the old digest.
 
 **Files:**
@@ -1511,7 +1511,7 @@ Stack digests:
   ```bash
   cd $W && /tmp/odA-core-gen-p3/bin/python - > /tmp/odA-core-gen-p3-identity-before.txt <<'EOF'
   from omnidriver.core.plugin_discovery import load_discovered_plugin
-  for stack in ("cardiacfoam", "cardiaccore", "opencarp", "openfoam-environment"):
+  for stack in ("cardiacfoam", "cardiacsubstrate", "opencarp", "openfoam-environment"):
       identity = load_discovered_plugin(stack).identity
       print(stack, identity.capability_digest, identity.resolutions["dictionaries"],
             identity.resolutions["tutorials"], [p.provider_digest for p in identity.providers])
@@ -1780,7 +1780,7 @@ Stack digests:
   ```bash
   cd $W && /tmp/odA-core-gen-p3/bin/python - > /tmp/odA-core-gen-p3-identity-after.txt <<'EOF'
   from omnidriver.core.plugin_discovery import load_discovered_plugin
-  for stack in ("cardiacfoam", "cardiaccore", "opencarp", "openfoam-environment"):
+  for stack in ("cardiacfoam", "cardiacsubstrate", "opencarp", "openfoam-environment"):
       identity = load_discovered_plugin(stack).identity
       print(stack, identity.capability_digest, identity.resolutions["dictionaries"],
             identity.resolutions["tutorials"], [p.provider_digest for p in identity.providers])
@@ -1788,7 +1788,7 @@ Stack digests:
   diff /tmp/odA-core-gen-p3-identity-before.txt /tmp/odA-core-gen-p3-identity-after.txt
   ```
   Expected:
-  - the `cardiacfoam` and `cardiaccore` lines are identical;
+  - the `cardiacfoam` and `cardiacsubstrate` lines are identical;
   - the `opencarp` and `openfoam-environment` lines differ only in the capability digest and in `dictionaries` (now `<unclaimed>`);
   - every provider digest is identical on every line.
   
@@ -2812,7 +2812,7 @@ Where a test's *fake plugin* changes shape (Task 8), what it asserts about which
 - Modify, plugins:
   - `packages/omnidriver-openfoam/src/omnidriver/openfoam/environment.py` (`get_selected_start_time` becomes `get_input_roots`)
   - `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/case_provenance.py`, `cardiacfoam_plugin.py`, `plugin.yaml` (comment), `run_document_config.py` (docstring)
-  - `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.py`
+  - `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.py`
 - Modify, tests:
   - `packages/omnidriver/tests/core/test_provenance_inputs.py`
   - `packages/omnidriver/tests/core/test_case_file_contract.py`
@@ -2821,7 +2821,7 @@ Where a test's *fake plugin* changes shape (Task 8), what it asserts about which
   - `packages/omnidriver/tests/core/test_case_provenance_capability.py`
   - `packages/omnidriver-openfoam/tests/core/test_provenance_integration.py`
   - `packages/omnidriver-cardiacfoam/tests/test_case_provenance_capability.py`
-  - `packages/omnidriver-cardiaccore/tests/test_biv_preprocessing_contract.py`
+  - `packages/omnidriver-cardiacsubstrate/tests/test_biv_preprocessing_contract.py`
 - Modify, docs: `ARCHITECTURE.md` (regenerated table; the `single` examples row), retired ENVIRONMENT_CONTRACT (a dated note).
 
 **Interfaces:**
@@ -2844,7 +2844,7 @@ Where a test's *fake plugin* changes shape (Task 8), what it asserts about which
   from omnidriver.core.runtime.registry import list_tutorials, load_entry_spec
   root = Path("/Users/simaocastro/noFrontendCardiacFoam_minor_errors/tutorials")
   out = {}
-  for stack in ("cardiacfoam", "cardiaccore"):
+  for stack in ("cardiacfoam", "cardiacsubstrate"):
       ctx = load_discovered_plugin(stack)
       for name in list_tutorials(ctx):
           spec = load_entry_spec(name, overrides={"cases_root": str(root)}, driver_context=ctx)
@@ -2957,7 +2957,7 @@ Where a test's *fake plugin* changes shape (Task 8), what it asserts about which
   Drop the third positional argument `"0"` from every `required_inputs(...)`/`generated_output_globs(...)` call in these files, and nothing else:
   - `packages/omnidriver/tests/core/test_case_provenance_capability.py`: 4 calls, e.g. `generic.required_inputs(tmp_path, {}, "0")` becomes `generic.required_inputs(tmp_path, {})`;
   - `packages/omnidriver-cardiacfoam/tests/test_case_provenance_capability.py`: 2 calls;
-  - `packages/omnidriver-cardiaccore/tests/test_biv_preprocessing_contract.py`: `generated_output_globs(tmp_path, {}, "0")` becomes `generated_output_globs(tmp_path, {})`.
+  - `packages/omnidriver-cardiacsubstrate/tests/test_biv_preprocessing_contract.py`: `generated_output_globs(tmp_path, {}, "0")` becomes `generated_output_globs(tmp_path, {})`.
 
   Run: `/tmp/odA-core-gen-a2/bin/python -m pytest $W/packages/omnidriver-openfoam/tests/core/test_provenance_integration.py $W/packages/omnidriver/tests/core/test_provenance_inputs.py $W/packages/omnidriver/tests/core/test_case_file_contract.py -v`
   
@@ -3121,7 +3121,7 @@ Where a test's *fake plugin* changes shape (Task 8), what it asserts about which
   - in the `plugin.yaml` comment, `del case_root, resolved_case, selected_start_time; return ()` becomes `del case_root, resolved_case; return ()`;
   - in the `run_document_config._read_control_dict_values` docstring, the sentence "``CardiacFoamPlugin.get_selected_start_time`` already resolves the same file the same way." becomes "``OpenFOAMEnvironmentPlugin.get_input_roots`` resolves the same file the same way (corrected 2026-09-26: this named ``CardiacFoamPlugin.get_selected_start_time``, which that class never had, and which left the contract in spec A2)."
 
-  cardiaccore `plugin.py::get_generated_output_globs`: drop the `selected_start_time: str,` parameter, and drop it from the `del`.
+  cardiacsubstrate `plugin.py::get_generated_output_globs`: drop the `selected_start_time: str,` parameter, and drop it from the `del`.
 
   `ARCHITECTURE.md`, the `single` row of the composition table: replace the example `get_selected_start_time` with `get_case_runtime_conventions`. Regenerate the seam table: `cd $W && /tmp/odA-core-gen-a2/bin/python scripts/export-capability-seams.py`.
 
@@ -3133,7 +3133,7 @@ Where a test's *fake plugin* changes shape (Task 8), what it asserts about which
 - [ ] **Step 5: Run the tests to verify they pass**
 
   ```bash
-  /tmp/odA-core-gen-a2/bin/python -m pytest $W/packages/omnidriver-openfoam/tests/core/test_provenance_integration.py $W/packages/omnidriver/tests/core/test_provenance_inputs.py $W/packages/omnidriver/tests/core/test_case_file_contract.py $W/packages/omnidriver/tests/core/test_resolution_provenance.py $W/packages/omnidriver/tests/core/test_case_provenance_capability.py $W/packages/omnidriver/tests/core/test_capability_seam_documentation.py $W/packages/omnidriver/tests/core/test_contract_tier_coherence.py $W/packages/omnidriver-cardiacfoam/tests/test_case_provenance_capability.py $W/packages/omnidriver-cardiacfoam/tests/test_provenance_inputs.py $W/packages/omnidriver-cardiaccore/tests/test_biv_preprocessing_contract.py -q
+  /tmp/odA-core-gen-a2/bin/python -m pytest $W/packages/omnidriver-openfoam/tests/core/test_provenance_integration.py $W/packages/omnidriver/tests/core/test_provenance_inputs.py $W/packages/omnidriver/tests/core/test_case_file_contract.py $W/packages/omnidriver/tests/core/test_resolution_provenance.py $W/packages/omnidriver/tests/core/test_case_provenance_capability.py $W/packages/omnidriver/tests/core/test_capability_seam_documentation.py $W/packages/omnidriver/tests/core/test_contract_tier_coherence.py $W/packages/omnidriver-cardiacfoam/tests/test_case_provenance_capability.py $W/packages/omnidriver-cardiacfoam/tests/test_provenance_inputs.py $W/packages/omnidriver-cardiacsubstrate/tests/test_biv_preprocessing_contract.py -q
   grep -rn "selected_start_time" $W/packages --include='*.py' --include='*.yaml' | grep -v /build/
   ```
   Expected:
@@ -3159,7 +3159,7 @@ Where a test's *fake plugin* changes shape (Task 8), what it asserts about which
   
   Generality-log row:
   ```
-  | 2026-09-26 | core generality (A) | A2c: provenance hook `CaseProvenanceCapability.input_roots(case_root, resolved_case)` (member `get_input_roots`, `sequence`); `CaseIntrospectionCapability.selected_start_time` and `get_selected_start_time` deleted; `required_inputs`/`generated_output_globs` lose the start-time argument; the OpenFOAM layer declares its start time and replicas | core computed OpenFOAM's restart directory and walked its replicas | neutral: characterization test `test_the_start_time_is_walked_serially_and_in_every_replica` passes before and after; native provenance of every registered cardiacFOAM/cardiacCore tutorial is byte-identical; a stack declaring no roots walks only its case-file roots |
+  | 2026-09-26 | core generality (A) | A2c: provenance hook `CaseProvenanceCapability.input_roots(case_root, resolved_case)` (member `get_input_roots`, `sequence`); `CaseIntrospectionCapability.selected_start_time` and `get_selected_start_time` deleted; `required_inputs`/`generated_output_globs` lose the start-time argument; the OpenFOAM layer declares its start time and replicas | core computed OpenFOAM's restart directory and walked its replicas | neutral: characterization test `test_the_start_time_is_walked_serially_and_in_every_replica` passes before and after; native provenance of every registered cardiacFOAM/cardiacSubstrateFOAM tutorial is byte-identical; a stack declaring no roots walks only its case-file roots |
   ```
   ```bash
   git -C $W add -A packages ARCHITECTURE.md retired ENVIRONMENT_CONTRACT docs/superpowers/plans/2026-09-25-tutorials-are-pointers-remaining.md

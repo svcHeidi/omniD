@@ -8,17 +8,17 @@ repository was changed. Raw outputs sit next to this file.
 
 | solver | knob | where | form |
 |---|---|---|---|
-| OpenFOAM family (cardiacFOAM, cardiacCore) | `system/fvSchemes` (grad, div, laplacian, snGrad, interpolation, ddt) | nowhere: `describe`/`catalog` list `{"document":"system/fvSchemes","key":"<any>","validated":false}` | **missing**. The guidance prose for both plugins says "omniD has no catalogue of OpenFOAM's keys" |
+| OpenFOAM family (cardiacFOAM, cardiacSubstrateFOAM) | `system/fvSchemes` (grad, div, laplacian, snGrad, interpolation, ddt) | nowhere: `describe`/`catalog` list `{"document":"system/fvSchemes","key":"<any>","validated":false}` | **missing**. The guidance prose for both plugins says "omniD has no catalogue of OpenFOAM's keys" |
 | same | `system/fvSolution` (linear solvers, `nOuterCorrectors`, `nNonOrthogonalCorrectors`) | same `<any>`, `validated:false` | **missing** |
 | same | formal order of any scheme | nowhere | **missing** |
-| same | ddt stability limit (`Euler` 2, `backward` 4 for `rate*dt`) | `omnidriver.cardiacfoam.validation._DDT_STABILITY_LIMIT` | **data, in the wrong package**: a property of OpenFOAM's ddt schemes, held by cardiacFOAM, so cardiacCore cannot reach it (breaks "one reality") |
+| same | ddt stability limit (`Euler` 2, `backward` 4 for `rate*dt`) | `omnidriver.cardiacfoam.validation._DDT_STABILITY_LIMIT` | **data, in the wrong package**: a property of OpenFOAM's ddt schemes, held by cardiacFOAM, so cardiacSubstrateFOAM cannot reach it (breaks "one reality") |
 | same | `ODESolver` (`solver` key: `RKF45`, `Euler`) | cardiacFOAM catalogue entry, menu curated to 2 names; `dict_key_allowlist.json` classifies it `not_runtime_selected: "OpenFOAM ODESolver"` | data (menu), but never compared with OpenFOAM's table (13 names); no order |
 | cardiacFOAM | `timeCouplingScheme` godunov/sbdf2 | catalogue entry, menu + source_refs | menu is data; **orders are prose** in the description ("godunov is first-order Lie splitting; sbdf2 is second-order ...") |
 | cardiacFOAM | `solutionAlgorithm` implicit/explicit | catalogue entry | menu data; "operator-split forward-Euler" is prose; no order |
 | cardiacFOAM | `batchedIntegrator` euler/rushLarsen, `batchedSubsteps` | catalogue entries | menu/default data; no order |
 | cardiacFOAM | `electrophysicsAdvanceScheme` (staggered only) | catalogue, RTST-checked | menu data; staggering order not stated |
 | cardiacFOAM | how `ddt(Vm)` composes with `timeCouplingScheme` | nowhere | **missing** (also noted in `docs/solver-learning/cross-solver-variables.md` item 10) |
-| cardiacCore | any numerics | nothing in its catalogues | missing (its solves are OpenFOAM `fvSchemes` too) |
+| cardiacSubstrateFOAM | any numerics | nothing in its catalogues | missing (its solves are OpenFOAM `fvSchemes` too) |
 | openCARP | `parab_solve`, `theta`, `mass_lumping`, `operator_splitting`, `ode_fac`, `dt` | `opencarp_parameters.json` (generated from `+Help`) | menu/bounds/default are data, **but menu labels are dropped**: `+Help parab_solve` prints `2 "2nd order dt"`, `1 "Crank-Nicolson"`, `0 "Explicit"`; the catalogue holds `["2","1","0"]`. `catalog_generation._MENU_ITEM` captures the label as group 3 and discards it |
 | openCARP | element order (P1), ionic integration (per IMP, Rush–Larsen in limpet) | not keys; `docs/solver-learning/opencarp.md` J | prose / missing |
 | TorchCor | `theta`, `mass_lumping`, `dtype`, `cg.*` | `torchcor-cases/scripts/run_case.py` `KEYS`, via `--describe` | data with descriptions; "1 implicit Euler, 0.5 Crank–Nicolson" is prose; element order (P1 tets) and ionic integrator absent |
@@ -108,7 +108,7 @@ nothing new. Rejected alternative: a `formal_order` field on core's
 scheme specs (a phrase like `Gauss linear corrected` is a grammar of three
 tables, not one enum), and fvSchemes has no DictEntries anyway.
 
-### 3.2 OpenFOAM schemes — `omnidriver-openfoam`, shared by cardiacFOAM and cardiacCore
+### 3.2 OpenFOAM schemes — `omnidriver-openfoam`, shared by cardiacFOAM and cardiacSubstrateFOAM
 
 `omnidriver/openfoam/numerics/openfoam_numerics.json`, served by the OpenFOAM
 environment provider. Names validated against a scan of `$FOAM_SRC` (ambient

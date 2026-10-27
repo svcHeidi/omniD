@@ -33,7 +33,7 @@ has to cover every solver a run uses.
 
 | solver | how the source of what runs is known | `known` |
 |---|---|---|
-| cardiacFOAM, cardiacCore (wmake) | nothing in a binary says where it came from: the build record beside it | `recorded` |
+| cardiacFOAM, cardiacSubstrateFOAM (wmake) | nothing in a binary says where it came from: the build record beside it | `recorded` |
 | openCARP | the binary reports its own git tag and hash (`-buildinfo`'s tag and hash lines, which the plugin already reads; the repository line embeds a CI token and is never read) | `self_reported` |
 | TorchCor | an editable install: the code that runs is the repository's own package (`torchcor.__file__` inside `repository.source`), read when the plan is made | `live` |
 | any of them, when that evidence is missing | — | `unknown` |
@@ -124,7 +124,7 @@ not one the run document can carry (a `digest` that is not `sha256:<64 hex>`, a
 type) is no record: `unknown`, and replaced by the next `build-record`.
 
 **The OpenFOAM layer** implements the member once, for cardiacFOAM and
-cardiacCore ("one reality"):
+cardiacSubstrateFOAM ("one reality"):
 
 - **products:** each `Make/files` the source digest reads: `EXE = $(FOAM_USER_APPBIN)/<name>`
   or `EXE = $(FOAM_MODULE_APPBIN)/<name>` is an executable, `LIB =
@@ -179,7 +179,7 @@ solver that answered:
   stay hashed in the resume snapshot, as today.
 
 Several solvers used in one session, a cross-solver comparison or a
-cardiacCore-then-cardiacFOAM chain, each leave their entries in their own runs'
+cardiacSubstrateFOAM-then-cardiacFOAM chain, each leave their entries in their own runs'
 documents, so the solvers behind every result are listed.
 
 The resume snapshot is unchanged and keeps guarding a resume.

@@ -4,7 +4,7 @@
 described below.
 **Written:** 2026-09-20, against main at `351283e`.
 **Evidence:** seven read-only audits run 2026-09-20 over all four packages —
-three on the declaration side (cardiacFoam, cardiacCore, core+OpenFOAM
+three on the declaration side (cardiacFoam, cardiacSubstrateFOAM, core+OpenFOAM
 reception), three on the execution side (run path, materialization and sweeps,
 tools and subprocess), one on the agent-facing surface.
 
@@ -70,7 +70,7 @@ Every symptom follows from that omission:
   `omnidriver.plugins` entry-point group. An environment adapter therefore
   *competes with* a solver plugin instead of layering under it.
 - Each solver plugin embeds the environment adapter by hand, and the two do it
-  differently. `CardiacCorePlugin` holds a class attribute `_openfoam =
+  differently. `CardiacSubstratePlugin` holds a class attribute `_openfoam =
   OpenFOAMEnvironmentPlugin()` and hand-delegates nine methods. `CardiacFoamPlugin`
   holds no instance and uses function-local imports of loose OpenFOAM functions.
 - The two embeddings already disagree. `get_config_value_reader` returns
@@ -83,7 +83,7 @@ Every symptom follows from that omission:
   Protocol. Core's own `test_plugin_dependency_boundary` forbids exactly this,
   and core is clean — but the guard does not cover `omnidriver.openfoam`, so a
   private, unversioned plugin ABI grew there unnoticed.
-- `CardiacCorePlugin` is refused `step --strict --apply` — `legacy_apply_overrides`
+- `CardiacSubstratePlugin` is refused `step --strict --apply` — `legacy_apply_overrides`
   raises — because six one-line delegations to `_openfoam` were never written,
   while the same package maintains parallel override machinery in
   `workflows/overrides` reachable only through `TutorialSpec.apply_case`.
@@ -97,7 +97,7 @@ The redesign must not damage these. Each was verified by audit, not assumed.
 
 | property | evidence |
 |---|---|
-| one executor | `runtime.workflow_runner.run_workflow_step` is the only `subprocess.Popen` for a workflow step; `openfoam`, `cardiacfoam` and `cardiaccore` do not import `subprocess` for invocation at all |
+| one executor | `runtime.workflow_runner.run_workflow_step` is the only `subprocess.Popen` for a workflow step; `openfoam`, `cardiacfoam` and `cardiacsubstrate` do not import `subprocess` for invocation at all |
 | one authorization point | `runtime.workflow.validate_workflow_commands`, reached from `strict_planning`, `run_document_exec`, and `dict_builder.build_and_launch` |
 | one environment path | `EnvironmentPreflightCapability`, in two modes — `load` (source fresh) and `configure` (overlay ambient), correctly implementing `CLAUDE.md`'s "Supplied versus discovered" |
 | one run pipeline | CLI → `strict_plan` → `normalize_workflow_dag` → `run_workflow` → `run_workflow_step`; `--run-document` rejoins at `_dispatch_context` |
@@ -132,13 +132,13 @@ subject of §4.
 
 A *tolerant* merge — "identical declarations dedup silently, differing ones
 error" — was considered and rejected. Tolerance permits duplication, and
-duplication is how cardiacCore's `plugin.yaml` and its `catalogs/inputs.DOCUMENTS`
+duplication is how cardiacSubstrateFOAM's `plugin.yaml` and its `catalogs/inputs.DOCUMENTS`
 drifted into disagreeing about which `system/*Dict` files a case has. Therefore:
 
 > **A case-file rule is declared by exactly one provider. A duplicate path
 > across providers is an error, always.**
 
-Migration consequence: cardiacCore's `plugin.yaml` loses `system/controlDict`
+Migration consequence: cardiacSubstrateFOAM's `plugin.yaml` loses `system/controlDict`
 and `constant`, which belong to the environment provider. All three plugin
 manifests lose `Allrun`. This closes the duplicate-entrypoint intake (§3.2) by
 construction rather than by rule.
@@ -261,12 +261,12 @@ Each is independent and small. Several are live bugs.
 - `legacy_dict_key_scanner` has no capability, no hook and no probe.
   `strict_planning._catalog_diagnostics` imports it at module scope and calls it
   unconditionally. It is a permanently-active "fallback" no adapter can override.
-- cardiacCore's `plugin.yaml` declares no rule for `setCardiacScarDict`,
+- cardiacSubstrateFOAM's `plugin.yaml` declares no rule for `setCardiacScarDict`,
   `setPurkinjeScarDict`, `coordinatesConventionDict` or
   `generatePurkinjeTreeDict`, though `catalogs/inputs` declares `DictEntry`s for
   all four and `workflows/preprocessing` names two of them in a `workflow_dag`
   step's `consumes`.
-- cardiacCore's `catalogs/inputs.GRAPH_FILE_KEYS` and `UTILITY_CLI_OPTIONS` have
+- cardiacSubstrateFOAM's `catalogs/inputs.GRAPH_FILE_KEYS` and `UTILITY_CLI_OPTIONS` have
   zero references repo-wide. `UTILITY_CLI_OPTIONS` additionally contradicts
   `catalogs/utilities.UTILITY_MANIFESTS` on `-internalRole`'s default.
 - `tutorial_contracts` hardcodes five reception slots to `[]` — `mesh_files`,
@@ -275,7 +275,7 @@ Each is independent and small. Several are live bugs.
 
 ### 3.4 Caching, which Phase 1 turns into a prerequisite
 
-`get_named_catalogs()` is the most expensive method on `CardiacCorePlugin`: per
+`get_named_catalogs()` is the most expensive method on `CardiacSubstratePlugin`: per
 call it re-parses `agent_guidance/manifest.yaml` from package resources,
 recomputes `utility_index()`, and deep-copies the whole payload.
 `CardiacFoamPlugin.get_named_catalogs()` rebuilds the entire capability manifest,
@@ -414,10 +414,10 @@ than a silent default — forced four decisions the six rows above do not make.
    declarer anywhere) is still refused by name at call time, by the check
    `_OverrideScopeAdapter.target_paths` already carried.
 
-The map row implements the cardiacCore/cardiacFOAM seam decision recorded on
+The map row implements the cardiacSubstrateFOAM/cardiacFOAM seam decision recorded on
 2026-09-18 and shelved before a spec existed: where cardiacFOAM's entries
-duplicate a name cardiacCore already declares for the same physical artifact,
-the cardiacFOAM value defaults from cardiacCore's declaration, with an explicit
+duplicate a name cardiacSubstrateFOAM already declares for the same physical artifact,
+the cardiacFOAM value defaults from cardiacSubstrateFOAM's declaration, with an explicit
 override still allowed. Not a hard equality gate.
 
 ### 4.4 Identity and the digest
@@ -475,18 +475,18 @@ covers, recording resolution *decisions* for the rest.
 
 ### 4.5 What Phase 1 deletes, and what it fixes
 
-Deletes: `CardiacCorePlugin._openfoam` and its nine hand-delegations;
+Deletes: `CardiacSubstratePlugin._openfoam` and its nine hand-delegations;
 cardiacFoam's function-local `omnidriver.openfoam` imports for the same
 concerns; both `getattr` back-channels, because core asks providers in order
 rather than OpenFOAM reaching backwards; the copy-pasted
 `get_selected_start_time`; the divergent `get_config_value_reader`;
 `_default_selection`'s `LookupError` when two adapters are installed.
 
-Fixes as a consequence rather than as separate work: cardiacCore's six silently
+Fixes as a consequence rather than as separate work: cardiacSubstrateFOAM's six silently
 neutral methods — `get_base_mesh_geometry_diagnostics`, `get_config_value_reader`,
 `apply_overrides`, `get_override_target_paths`, `inspect_effective_configuration`,
 `get_override_scopes` — become the environment provider's declarations, so
-`step --strict --apply` works with **zero new cardiacCore code**.
+`step --strict --apply` works with **zero new cardiacSubstrateFOAM code**.
 
 **Blast radius.** Small, and this is the strongest argument for doing it. The
 run-path audit found that no production core module touches
@@ -512,13 +512,13 @@ Two candidates, decided by a spike rather than by argument.
 **Spike — RESOLVED 2026-09-20.** Recommendation: **own it**. Prototype A was
 169 insertions across 3 files; prototype B, 291 across 5, plus a runtime
 dependency, for identical rule coverage. Both met the criterion with zero
-changes in `omnidriver-cardiaccore`. The seam table survived untouched on
+changes in `omnidriver-cardiacsubstrate`. The seam table survived untouched on
 both branches — a narrower result than this section predicted, because the
 Protocols were kept as documentation rather than replaced. Full measurements:
 `docs/superpowers/specs/2026-09-20-composition-mechanism-spike.md`.
 
 The original criterion, kept for the record: `step --strict --apply` succeeds
-on a cardiacCore case with no new cardiacCore code.
+on a cardiacSubstrateFOAM case with no new cardiacSubstrateFOAM code.
 
 Read how `pluggy` resolved this before inventing, whichever is chosen. Verify
 its current API directly; this document's summary of it is from memory and is
@@ -537,16 +537,16 @@ There are **two** materialization mechanisms, and they do not meet.
 | used by | every registered tutorial; entry-based sweeps | generic cross-product `sweep.json` sweeps only |
 | constructs a `TutorialSpec`? | yes | **no — bypasses it entirely** |
 | cardiacFoam | yes | yes, straight to `dict_builder.build_and_launch` |
-| cardiacCore | yes | **no** — `legacy_materialize_sweep_case` raises |
+| cardiacSubstrateFOAM | yes | **no** — `legacy_materialize_sweep_case` raises |
 
 cardiacFoam therefore has two materialization paths of its own, and which runs
-depends on how the sweep was invoked. cardiacCore can be entry-swept but not
+depends on how the sweep was invoked. cardiacSubstrateFOAM can be entry-swept but not
 cross-product swept — not by design, but because one hook pair is absent.
 
 Alongside this, "apply an override" has **three shapes**, one of them entirely
 off the capability grid:
 
-| | `openfoam.apply_overrides` | `cardiacfoam.overrides` | `cardiaccore.workflows.overrides` |
+| | `openfoam.apply_overrides` | `cardiacfoam.overrides` | `cardiacsubstrate.workflows.overrides` |
 |---|---|---|---|
 | registered as a capability | yes | yes (it *is* OpenFOAM's implementation for cardiacFoam) | **no** |
 | reachable from `step --strict --apply` | yes | yes | **no** |
@@ -555,7 +555,7 @@ off the capability grid:
 | value-kind vocabulary | catalog enums | catalog enums | **its own** — integer/scalar/word/enum/vector3 |
 | path templating | — | — | **its own** `<ventKey>` placeholder |
 
-cardiacCore's is a parallel, self-contained reimplementation of the same
+cardiacSubstrateFOAM's is a parallel, self-contained reimplementation of the same
 `$SCOPE.path → dict key` idea, reached only through `apply_case` at
 materialization time — before any `step --strict --apply` transaction exists.
 
@@ -564,7 +564,7 @@ independent case-authoring implementations across the four packages. They
 converge on exactly one shared primitive, `openfoam.mutators.update_foam_entry`,
 and only for the narrow case of *patch one key in an existing dictionary*. Every
 from-scratch or bespoke-format write is its own implementation, including
-cardiacCore's `operations.vtu_selection.write_cell_set` and
+cardiacSubstrateFOAM's `operations.vtu_selection.write_cell_set` and
 `operations.electrodes.write_*`, which bypass `mutators` entirely and perform no
 atomic rename.
 
@@ -582,7 +582,7 @@ same operation at different arities. A `CaseWriter` capability with two members:
 
 Four consequences justify the work:
 
-1. cardiacCore's parallel override module stops being parallel.
+1. cardiacSubstrateFOAM's parallel override module stops being parallel.
    `workflows/overrides` becomes its `plan_case` implementation and gains
    rollback and the transaction ledger, having neither today.
 2. **`CaseWritePlan` is inspectable before execution.** `plan --strict` can show
@@ -594,15 +594,15 @@ Four consequences justify the work:
    `mutators.update_foam_entry`) and `synthesize` (whole file from catalog,
    today `build_electro_properties` and `regenerate_electro_properties`). Only
    `synthesize` need be provider-supplied, because only it needs vocabulary.
-4. cardiacCore's two bespoke writers route through the shared atomic writer.
+4. cardiacSubstrateFOAM's two bespoke writers route through the shared atomic writer.
 
 ### 5.3 Two vocabularies promoted to core
 
 By §2.1, both already have a home and are being restated:
 
-- cardiacCore's `_check_value` value kinds (integer/scalar/word/enum/vector3) →
+- cardiacSubstrateFOAM's `_check_value` value kinds (integer/scalar/word/enum/vector3) →
   `DictEntry.value_kind`, which exists.
-- cardiacCore's `<ventKey>` placeholder, spelled independently in
+- cardiacSubstrateFOAM's `<ventKey>` placeholder, spelled independently in
   `workflows/overrides.VENT_KEY_PLACEHOLDER` and inside the catalog's
   `driver_path` strings → `DictEntry.dynamic_path`, which exists.
 
@@ -617,7 +617,7 @@ These are consequences of the three phases, not a fourth phase.
 | the sweep spec has **no schema mechanism at all** — no file, no hook; an agent learns it from `spec_error` failures | Phase 2, derived from the same declarations |
 | two live "what can I do here" entrypoints (`describe`, `plan --strict`) that overlap and diverge, plus five catalogs reachable only through dev-time export scripts — report catalog, tutorial displays, utility manifests, dict catalog, capability seams | Phase 0 (§3.2), extending `describe` |
 | `$TOKEN.`-scoped override syntax never appears in `describe` | Phase 2, via `CaseWritePlan` |
-| in-process "operations" — cardiacCore's seven Python callables — have **no core type**; `utility_catalog` models only binaries, so they travel as an opaque blob through `get_named_catalogs` | Phase 2 |
+| in-process "operations" — cardiacSubstrateFOAM's seven Python callables — have **no core type**; `utility_catalog` models only binaries, so they travel as an opaque blob through `get_named_catalogs` | Phase 2 |
 
 ### 5.5 The largest risk in this specification
 
@@ -645,7 +645,7 @@ Phase 0 does not fully close before Phase 1 begins, by construction (§3.1).
 ## 7. What this does not change
 
 - The dependency direction rules — `cardiacfoam` → `openfoam` → `core`,
-  `cardiaccore` → `openfoam` → `core`, and the sibling prohibition between the
+  `cardiacsubstrate` → `openfoam` → `core`, and the sibling prohibition between the
   two cardiac adapters. `scripts/check-import-boundaries.py` keeps its empty
   waiver list.
 - The single executor, the single authorization point, the single environment

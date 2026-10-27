@@ -16,7 +16,7 @@
 
 - Python floor is **3.11**. Keep `from __future__ import annotations` in `plugin_interface.py`; several annotations there name `TYPE_CHECKING`-only types and eager evaluation raises `NameError` on 3.11/3.12.
 - `omnidriver.core` MUST NOT import from any adapter package. `scripts/check-import-boundaries.py` enforces this and **its waiver list must stay empty**.
-- `omnidriver.cardiaccore` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
+- `omnidriver.cardiacsubstrate` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
 - No production module — in core **or in an adapter**, which is new in this phase — may touch `driver_context.plugin`/`.providers` directly. Go through `.capabilities`.
 - Do not weaken or skip a guard to make a change pass.
 - **The `Files:` block is authoritative for what to commit, not the per-step `git add` list.** Those lists were written before the tasks ran and have been stale three times (Phase 0 Tasks 1, 4 and 6). Commit every file the task actually changed; if that differs from the `Files:` block, say so in the report.
@@ -90,11 +90,11 @@ continuing rather than guessed:
   `StackIdentity` shape rather than a single-provider shim.
 - **Task 9** (the payoff task) found two further things once its own
   case-file-duplication fix let real adapters compose for the first time:
-  cardiacCore and cardiacFoam each independently declared two identical
+  cardiacSubstrateFOAM and cardiacFoam each independently declared two identical
   utilities (`newVtkUnstructuredToFoam`, `1DgraphToFoam`) with diverging
-  documentation — resolved by deleting cardiacCore's copies, since
+  documentation — resolved by deleting cardiacSubstrateFOAM's copies, since
   cardiacFoam's were more complete and neither utility had any consumer
-  inside cardiacCore itself. And `default_driver_context()` (Task 7's own
+  inside cardiacSubstrateFOAM itself. And `default_driver_context()` (Task 7's own
   change) was found to silently compose *any* two mutually-independent
   solver-tier plugins together with no way to pick a winner beyond
   alphabetical accident — fixed by making it refuse (name the candidates,
@@ -201,8 +201,8 @@ Each task's test step runs at minimum its own test. Before each commit also run 
 - `core/plugin_discovery.py` — `_default_selection` composes rather than refusing.
 
 **Adapters — modified:**
-- `omnidriver-openfoam/.../openfoam-environment.yaml`, `omnidriver-cardiacfoam/.../plugin.yaml`, `omnidriver-cardiaccore/.../plugin.yaml` — gain `provides:`/`requires:`, lose duplicated case-file rules.
-- `omnidriver-cardiaccore/.../plugin.py` — `_openfoam` and nine delegations deleted.
+- `omnidriver-openfoam/.../openfoam-environment.yaml`, `omnidriver-cardiacfoam/.../plugin.yaml`, `omnidriver-cardiacsubstrate/.../plugin.yaml` — gain `provides:`/`requires:`, lose duplicated case-file rules.
+- `omnidriver-cardiacsubstrate/.../plugin.py` — `_openfoam` and nine delegations deleted.
 - `omnidriver-cardiacfoam/.../cardiacfoam_plugin.py` — function-local OpenFOAM imports for composed concerns deleted.
 - `omnidriver-openfoam/.../openfoam_environment.py` — two `getattr` back-channels deleted.
 
@@ -1290,7 +1290,7 @@ Add to that file:
 ADAPTER_PACKAGES = (
     "packages/omnidriver-openfoam/src",
     "packages/omnidriver-cardiacfoam/src",
-    "packages/omnidriver-cardiaccore/src",
+    "packages/omnidriver-cardiacsubstrate/src",
 )
 
 
@@ -1348,25 +1348,25 @@ git commit -m "fix(openfoam,cardiacfoam): delete the private plugin ABI, compose
 
 ## Task 9: Delete the hand-embedding
 
-The payoff task. `CardiacCorePlugin._openfoam` and its nine delegations go, and `step --strict --apply` starts working.
+The payoff task. `CardiacSubstratePlugin._openfoam` and its nine delegations go, and `step --strict --apply` starts working.
 
 **Files:**
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.py`
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.yaml`
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.py`
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.yaml`
 - Modify: `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/cardiacfoam_plugin.py`
 - Modify: `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/plugin.yaml`
 - Modify: `packages/omnidriver-openfoam/src/omnidriver/openfoam/openfoam-environment.yaml`
 
 **Interfaces:**
 - Consumes: everything above.
-- Produces: nothing new; deletes `CardiacCorePlugin._openfoam` and nine methods.
+- Produces: nothing new; deletes `CardiacSubstratePlugin._openfoam` and nine methods.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `packages/omnidriver-cardiaccore/tests/test_apply_works_through_the_stack.py`:
+Create `packages/omnidriver-cardiacsubstrate/tests/test_apply_works_through_the_stack.py`:
 
 ```python
-"""cardiacCore gains --apply by composition, not by writing an implementation.
+"""cardiacSubstrateFOAM gains --apply by composition, not by writing an implementation.
 
 Six one-line delegations were never written, so `legacy_apply_overrides`
 raised and strict applying was refused for this adapter entirely -- while the
@@ -1376,28 +1376,28 @@ package maintained parallel override machinery reachable only through
 
 import inspect
 
-from omnidriver.cardiaccore.plugin import CardiacCorePlugin
+from omnidriver.cardiacsubstrate.plugin import CardiacSubstratePlugin
 
 
 def test_the_plugin_no_longer_embeds_an_environment_adapter():
-    source = inspect.getsource(CardiacCorePlugin)
+    source = inspect.getsource(CardiacSubstratePlugin)
     assert "OpenFOAMEnvironmentPlugin()" not in source, (
         "a provider must not embed another provider"
     )
     assert "_openfoam" not in source
 
 
-def test_applying_overrides_is_supported(cardiaccore_stack_context, tmp_case):
-    scopes = cardiaccore_stack_context.capabilities.override_scopes
+def test_applying_overrides_is_supported(cardiacsubstrate_stack_context, tmp_case):
+    scopes = cardiacsubstrate_stack_context.capabilities.override_scopes
     scopes.apply({}, case_root=tmp_case)   # must not raise
 ```
 
-Build `cardiaccore_stack_context` as a fixture composing the OpenFOAM environment adapter with `CardiacCorePlugin`, and `tmp_case` as a minimal case directory.
+Build `cardiacsubstrate_stack_context` as a fixture composing the OpenFOAM environment adapter with `CardiacSubstratePlugin`, and `tmp_case` as a minimal case directory.
 
 - [ ] **Step 2: Run to verify it fails**
 
 ```bash
-python -m pytest packages/omnidriver-cardiaccore/tests/test_apply_works_through_the_stack.py -v
+python -m pytest packages/omnidriver-cardiacsubstrate/tests/test_apply_works_through_the_stack.py -v
 ```
 
 Expected: both FAIL.
@@ -1455,7 +1455,7 @@ disagree, the census wins and the stub gets deleted.
 
 Verify that list against `provider_stack.implemented_capabilities(OpenFOAMEnvironmentPlugin())` rather than trusting it — Task 2's guard errors on any it does not fully implement.
 
-`cardiaccore/plugin.yaml` and `cardiacfoam/plugin.yaml` each gain:
+`cardiacsubstrate/plugin.yaml` and `cardiacfoam/plugin.yaml` each gain:
 
 ```yaml
 requires:
@@ -1474,13 +1474,13 @@ this is not uniform, and the earlier "all three" instruction was wrong:**
 | manifest | remove | keep, and why |
 |---|---|---|
 | `cardiacfoam/plugin.yaml` | `system/controlDict` (exact duplicate, same role), `Allrun` (exact duplicate, same role `openfoam.entrypoint`) | `constant/electroProperties` and `constant/physicsProperties` — these are **not** duplicates of the environment's bare `constant` entry. Different path, different role (`plugin.configuration`), finer granularity. cardiacfoam declares no bare `constant` rule at all. |
-| `cardiaccore/plugin.yaml` | `system/controlDict` and `constant` (exact duplicates), plus `Allrun` | — |
+| `cardiacsubstrate/plugin.yaml` | `system/controlDict` and `constant` (exact duplicates), plus `Allrun` | — |
 | `openfoam-environment.yaml` | nothing — it is the declarer | all three |
 
-cardiaccore's `Allrun` is a **role-mismatched** duplicate: same path, but role
-`cardiaccore.entrypoint` against the environment's `openfoam.entrypoint`. Still
+cardiacsubstrate's `Allrun` is a **role-mismatched** duplicate: same path, but role
+`cardiacsubstrate.entrypoint` against the environment's `openfoam.entrypoint`. Still
 a single-declarer violation, so it still goes — but before deleting, grep for
-any consumer keying off the literal string `cardiaccore.entrypoint`. Case
+any consumer keying off the literal string `cardiacsubstrate.entrypoint`. Case
 entrypoint resolution reads `CaseRuntimeConventions.case_entrypoints`, not this
 role, so that consumer is safe; confirm no other is.
 
@@ -1508,7 +1508,7 @@ implementation against what its fallback returns.
 | provider | real implementations | hollow stubs, equal to the fallback |
 |---|---|---|
 | `openfoam-environment` | none of the nine | **all nine** — `get_auxiliary_commands`, `get_dict_entry_catalog`, `get_override_schema`, `get_run_document_config_schema`, `get_samplable_fields`, `get_solver_commands`, `get_utility_manifests`, `get_utility_roots`, `resolve_case_models` |
-| `cardiaccore` | `get_auxiliary_commands`, `get_dict_entry_catalog`, `get_run_document_config_schema`, `get_utility_manifests` | `get_override_schema`, `get_samplable_fields`, `get_solver_commands`, `get_utility_roots`, `resolve_case_models` |
+| `cardiacsubstrate` | `get_auxiliary_commands`, `get_dict_entry_catalog`, `get_run_document_config_schema`, `get_utility_manifests` | `get_override_schema`, `get_samplable_fields`, `get_solver_commands`, `get_utility_roots`, `resolve_case_models` |
 | `cardiacfoam` | **all nine** | none |
 
 Every stub in that table exists only because the pre-Task-4 validator demanded
@@ -1521,14 +1521,14 @@ Delete the stubs in this table alongside the delegations below. Leave every
 
 - [ ] **Step 4: Delete the delegations**
 
-From `CardiacCorePlugin`, delete `_openfoam` and these nine methods, which now compose from the environment provider: `get_environment_commands`, `is_installed_environment_command`, `get_case_runtime_conventions`, `get_selected_start_time`, `get_environment_diagnostics`, `get_loaded_environment`, `get_configured_environment`, `get_function_object_field_diagnostics`, `get_case_dict_key_diagnostics`.
+From `CardiacSubstratePlugin`, delete `_openfoam` and these nine methods, which now compose from the environment provider: `get_environment_commands`, `is_installed_environment_command`, `get_case_runtime_conventions`, `get_selected_start_time`, `get_environment_diagnostics`, `get_loaded_environment`, `get_configured_environment`, `get_function_object_field_diagnostics`, `get_case_dict_key_diagnostics`.
 
 From `CardiacFoamPlugin`, delete the function-local `omnidriver.openfoam` imports for the same composed concerns — `command_authorization`, `profile`, `config_values`, `time_selection`, `case_runtime_conventions`. Keep imports for concerns cardiacFoam genuinely extends rather than delegates, such as `mesh_geometry`.
 
 - [ ] **Step 5: Run the tests**
 
 ```bash
-python -m pytest packages/omnidriver-cardiaccore/tests/ -v
+python -m pytest packages/omnidriver-cardiacsubstrate/tests/ -v
 python -m pytest packages/ -q -m "not slow"
 python3 scripts/check-import-boundaries.py
 ```
@@ -1538,7 +1538,7 @@ Expected: `0 failed`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/omnidriver-cardiaccore/ packages/omnidriver-cardiacfoam/ \
+git add packages/omnidriver-cardiacsubstrate/ packages/omnidriver-cardiacfoam/ \
         packages/omnidriver-openfoam/
 git commit -m "refactor(adapters): compose the environment provider, stop embedding it"
 ```
@@ -1619,7 +1619,7 @@ dict to share. Verify that outcome rather than re-adding a defensive copy.
 
 - [ ] **Step 4: Move manifest assembly into core**
 
-`build_capability_manifest` currently takes arguments the plugin gathers. Change it to take the composed `PluginCapabilities` and read each declaration once. `CardiacFoamPlugin.get_capabilities` and `CardiacCorePlugin.get_capabilities` then return only what core cannot compose — the domain model catalogues — and core merges.
+`build_capability_manifest` currently takes arguments the plugin gathers. Change it to take the composed `PluginCapabilities` and read each declaration once. `CardiacFoamPlugin.get_capabilities` and `CardiacSubstratePlugin.get_capabilities` then return only what core cannot compose — the domain model catalogues — and core merges.
 
 - [ ] **Step 5: Collapse the case predicate**
 
@@ -1630,7 +1630,7 @@ dict to share. Verify that outcome rather than re-adding a defensive copy.
 ```bash
 python -m pytest packages/ -q -m "not slow"
 git add packages/omnidriver/src/omnidriver/core/ \
-        packages/omnidriver-cardiacfoam/ packages/omnidriver-cardiaccore/ \
+        packages/omnidriver-cardiacfoam/ packages/omnidriver-cardiacsubstrate/ \
         packages/omnidriver/tests/core/test_deferred_duplicate_intakes.py
 git commit -m "refactor(core): collapse the four duplicate intakes providers unblocked"
 ```
@@ -1746,11 +1746,11 @@ Expected: all clean, waiver list still empty.
 - [ ] **Step 4: Confirm the payoff**
 
 ```bash
-python -m omnidriver step --plugin cardiaccore --strict --apply <a cardiaccore case>
-git diff --stat main -- packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/
+python -m omnidriver step --plugin cardiacsubstrate --strict --apply <a cardiacsubstrate case>
+git diff --stat main -- packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/
 ```
 
-Expected: the command succeeds, and the second shows no change to cardiacCore's override machinery. Phase 1's thesis was that the missing capability was a composition gap, not missing cardiacCore code.
+Expected: the command succeeds, and the second shows no change to cardiacSubstrateFOAM's override machinery. Phase 1's thesis was that the missing capability was a composition gap, not missing cardiacSubstrateFOAM code.
 
 - [ ] **Step 5: Commit**
 

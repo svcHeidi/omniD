@@ -8,7 +8,7 @@
 
 A patient ECG and a simulated ECG disagree. The simulation is cardiacFOAM's;
 two of the things that could be wrong are not. The Purkinje tree comes from
-cardiacCore, and the ionic heterogeneity is cardiacFOAM's own. Answering "why
+cardiacSubstrateFOAM, and the ionic heterogeneity is cardiacFOAM's own. Answering "why
 do these disagree" therefore means running steps from two adapters, in one
 ordered whole, and being able to say afterwards which input moved between
 attempt three and attempt four.
@@ -28,9 +28,9 @@ An artifact is already declared **once**, by whoever writes it, as a
 `ProducesEntry` in a utility manifest, and surfaces to core as a
 `DataArtifact` carrying `artifact_id`, `path_pattern`, `format`, `variables`,
 `produced_by` and `optional`. Both adapters do this: cardiacFOAM in twelve
-`utility.manifest.toml` files, cardiacCore in `catalogs/utilities.py`, which
+`utility.manifest.toml` files, cardiacSubstrateFOAM in `catalogs/utilities.py`, which
 builds thirty-five `ProducesEntry` values in Python. **Corrected 2026-09-18**:
-an earlier reading of this design claimed cardiacCore declared no `produces`.
+an earlier reading of this design claimed cardiacSubstrateFOAM declared no `produces`.
 It declares them at the utility level; what it does not do is restate them on
 workflow steps, which is correct — see below.
 
@@ -76,9 +76,9 @@ the `produces` fill-in above — the mechanism that makes the single truth work 
 silently covers one adapter.
 
 `normalize_workflow_dag`'s unclaimed-artifact credit resolves its producer set
-from one context too. cardiacCore's commands are not in cardiacFOAM's
+from one context too. cardiacSubstrateFOAM's commands are not in cardiacFOAM's
 `solver_commands()`, so in a mixed DAG the last *cardiacFOAM* producer absorbs
-artifacts a cardiacCore step actually wrote. That misattribution is worse than a
+artifacts a cardiacSubstrateFOAM step actually wrote. That misattribution is worse than a
 failure, because the run still succeeds and the provenance is quietly wrong.
 
 **3. `consumes` speaks a different language from `produces`.** Both are parsed
@@ -110,7 +110,7 @@ context_kwargs = {} if context is None else {"driver_context": context}
 
 `driver_contexts` is `Mapping[str, DriverContext]`, **supplied by the caller,
 never discovered by core**. Core learns one relation — *a step names a context
-by key* — and never learns that cardiacCore exists. This is
+by key* — and never learns that cardiacSubstrateFOAM exists. This is
 `CLAUDE.md`'s "Supplied versus discovered", and the same rule that made
 `own_driver_context` necessary on 2026-09-18: an identity has no ambient truth,
 so discovering it invents an answer.
@@ -120,8 +120,8 @@ through `LaunchReadiness` before anything executes — not a crash partway
 through a DAG that has already written files.
 
 Each step's command is then authorised by its own adapter's
-`command_authorization` capability, which is the behaviour you want: cardiacCore's
-utilities are authorised by cardiacCore and by nothing else.
+`command_authorization` capability, which is the behaviour you want: cardiacSubstrateFOAM's
+utilities are authorised by cardiacSubstrateFOAM and by nothing else.
 
 ### Core change 2 — the normalizer resolves per adapter
 
@@ -133,7 +133,7 @@ silent last-wins — the same shape as `plugin_discovery`'s refusal to guess
 between contested names.
 
 Unclaimed-artifact credit resolves a step's producer status against **that
-step's** adapter, so a cardiacCore step is judged by cardiacCore's
+step's** adapter, so a cardiacSubstrateFOAM step is judged by cardiacSubstrateFOAM's
 `solver_commands()`. An artifact left unclaimed across a mixed DAG has no
 single defensible owner, so it is a planning error rather than a guess — the
 existing last-producer-wins rule is only safe within one adapter.
@@ -144,7 +144,7 @@ A `consumes` entry resolves as an artifact id first, through the declared
 artifacts, and is fingerprinted at the path the declaration gives.
 
 This must preserve a distinction that is two different facts, not two versions
-of one. cardiacCore's real steps consume `system/setCardiacConductivityDict`,
+of one. cardiacSubstrateFOAM's real steps consume `system/setCardiacConductivityDict`,
 `0/fiber`, `0/sheet` — none of which any step produces. They were in the case
 before the run began. So a `consumes` entry is either:
 
@@ -156,7 +156,7 @@ before the run began. So a `consumes` entry is either:
   component when a required input does not resolve.
 
 The payoff is the verification that motivates the whole design: when cardiacFOAM
-consumes `purkinje_graph_dict`, core can establish that the cardiacCore step
+consumes `purkinje_graph_dict`, core can establish that the cardiacSubstrateFOAM step
 declaring it ran **in this run**, rather than finding a file and calling the
 contract satisfied.
 
@@ -278,16 +278,16 @@ The coordinate fields are the worked example of the case-input member of
 `consumes` (change 3), and they are worth naming because they look like seam
 artifacts and are not.
 
-cardiacCore *consumes* `_COORD["transmural"]`, `["longitudinal"]` and
+cardiacSubstrateFOAM *consumes* `_COORD["transmural"]`, `["longitudinal"]` and
 `["intraventricular"]`, and declares none of them among its thirty-one
 artifacts. They are produced upstream of the whole pipeline — a UVC or cobiveco
 computation that omnidriver does not run. **Confirmed with the author
-2026-09-18** after an earlier reading of this design assumed cardiacCore
+2026-09-18** after an earlier reading of this design assumed cardiacSubstrateFOAM
 produced the transmural field. It does not; the quantity arrives from before.
 
 Note also that cardiacFOAM's `setFibreField` produces `0/t`, a fibre-side
 transmural quantity. That is a *different* field from the UVC transmural
-coordinate cardiacCore consumes, despite both being "transmural". Provenance
+coordinate cardiacSubstrateFOAM consumes, despite both being "transmural". Provenance
 must never be inferred from a field's name.
 
 Consequences for the design:
@@ -325,9 +325,9 @@ Three conventions are in use for this one field:
 |---|---|---|
 | core's model | `{time}/Scar` | substituted, then globbed — works |
 | cardiacFOAM | `0/*` | no placeholder; works because core globs |
-| cardiacCore | `<current-time>/Scar`, `<output-vtk>`, `<current-time>/<vtk-cell-data-name>` | `.format()` leaves it alone; `<` and `>` are not glob metacharacters, so it matches only a directory literally named `<current-time>` — **never matches** |
+| cardiacSubstrateFOAM | `<current-time>/Scar`, `<output-vtk>`, `<current-time>/<vtk-cell-data-name>` | `.format()` leaves it alone; `<` and `>` are not glob metacharacters, so it matches only a directory literally named `<current-time>` — **never matches** |
 
-cardiacCore's angle-bracket patterns are prose where core expects a placeholder.
+cardiacSubstrateFOAM's angle-bracket patterns are prose where core expects a placeholder.
 They do not raise; they silently match nothing, so `_artifact_snapshot` returns
 an empty snapshot and step attribution for those artifacts is vacuous. This
 affects precisely the artifacts whose location varies, which are the ones worth
@@ -349,7 +349,7 @@ chooses. Angle brackets are not inherently wrong in this repository; they are
 wrong in a `path_pattern`, where core substitutes braces and then globs.
 
 **Resolution.** `{case_id}` and `{time}` stay as the only *substitution*
-placeholders and cardiacCore's `<current-time>` uses are rewritten. Patterns
+placeholders and cardiacSubstrateFOAM's `<current-time>` uses are rewritten. Patterns
 whose value comes from configuration are handled by core change 4 below, not by
 rewriting. A guard at manifest load rejects any `path_pattern` containing a
 `<...>` group or a `{...}` naming anything other than a known placeholder or a
@@ -360,12 +360,12 @@ load rather than at execution.
 ### Divergence 2 — authoring medium
 
 cardiacFOAM declares utilities as TOML data (`utilities/<name>/utility.manifest.toml`);
-cardiacCore declares them as Python building `UtilityManifest` objects. Both
+cardiacSubstrateFOAM declares them as Python building `UtilityManifest` objects. Both
 produce the same type, so core is indifferent, and this is **not** a defect.
 
 It is worth recording why they differ before anyone "fixes" it: cardiacFOAM's
 manifests sit beside the utility sources they describe and are checked against
-them, whereas cardiacCore's are declared from a native wrapper and its
+them, whereas cardiacSubstrateFOAM's are declared from a native wrapper and its
 documentation, which is a different provenance with a different drift risk.
 Unifying the medium without preserving that difference would lose information.
 What should be unified is the *shape* — every field core reads, populated by
@@ -373,8 +373,8 @@ both — not the file format.
 
 ### Divergence 3 — module naming
 
-cardiacCore has `workflows/`, cardiacFOAM has `tutorials/`; both return core's
-`TutorialSpec`. cardiacCore has `operations/` and `catalogs/` packages where
+cardiacSubstrateFOAM has `workflows/`, cardiacFOAM has `tutorials/`; both return core's
+`TutorialSpec`. cardiacSubstrateFOAM has `operations/` and `catalogs/` packages where
 cardiacFOAM has flat modules. This is cosmetic today and becomes real when a
 single DAG spans both and a reader has to find "the thing that declares the
 steps" twice, in two places, under two names. Renaming is out of scope here and
@@ -428,7 +428,7 @@ that uses the mechanism, tested in its own package.
   one DAG that exchange declared artifacts. `scripts/check-import-boundaries.py`
   forbids the import, and nothing here needs it.
 - **Renaming `workflows/` and `tutorials/`.** Recorded above, not done here.
-- **Reconciling the transmural orientation.** cardiacCore reads `endocardium`
+- **Reconciling the transmural orientation.** cardiacSubstrateFOAM reads `endocardium`
   and `epicardium` as required scalars from a case's
   `coordinatesConventionDict`, allowing either orientation and any range;
   cardiacFOAM never reads that dictionary and instead asserts a normalized
@@ -490,7 +490,7 @@ time, so the DAG is declared as a graph and executed as a topological sequence.
 
 `consumes` and `produces` affect **none** of that. They drive provenance and
 artifact attribution only. So the two keys are not redundant today — they are
-disconnected, which is worse. In cardiacCore's real preprocessing DAG,
+disconnected, which is worse. In cardiacSubstrateFOAM's real preprocessing DAG,
 `purkinje_slab` consumes `0/Conductivity`, which the `conductivity` step writes,
 and the ordering happens to hold only through the chain
 `purkinje_slab → anatomy → conductivity`. Nothing checks that those two facts
@@ -525,7 +525,7 @@ with neutral tests. Change 3 is what makes the seam verifiable rather than
 merely expressible.
 
 Change 4 is independent of all three and should land **first**. It is the
-smallest, it fixes a live defect in cardiacCore's artifact attribution whether
+smallest, it fixes a live defect in cardiacSubstrateFOAM's artifact attribution whether
 or not cross-adapter execution is ever built, and it is the one that removes a
 duplicated truth about the seam artifact itself — so every later change is built
 on a `path_pattern` that is right rather than one that happens to match the

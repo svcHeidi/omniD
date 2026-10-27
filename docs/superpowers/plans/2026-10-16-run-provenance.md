@@ -31,7 +31,7 @@
 1. A malformed or foreign `omnidriver-build.json` beside a binary: read as no record (`unknown`), never a crash; `build-record` replaces it. Test in Task 2.
 2. A binary reached through a symlink on `PATH` (`/usr/local/bin/openCARP` links into the install): `used_paths` and product paths are compared resolved, so it is still listed. Test in Task 5.
 3. A `.git` that is not a usable repository (a worktree file pointing nowhere, or no `git` on `PATH`): `git` is `null`, no crash. Test in Task 1.
-4. A repository whose `Make/files` declare nothing (cardiacCore's case tree): no entry, so `build-record` refuses with `build_products_undeclared` instead of reporting an empty success. Test in Task 5.
+4. A repository whose `Make/files` declare nothing (cardiacSubstrateFOAM's case tree): no entry, so `build-record` refuses with `build_products_undeclared` instead of reporting an empty success. Test in Task 5.
 5. Two worktrees building into one platform folder: recording one keeps the other's entries. Test in Task 2.
 
 ---
@@ -53,7 +53,7 @@
 cd /Users/simaocastro/omnidriver/.claude/worktrees/run-provenance
 rm -rf /tmp/od-prov && uv venv -q --python 3.11 /tmp/od-prov && VIRTUAL_ENV=/tmp/od-prov uv pip install -q \
   -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam -e packages/omnidriver-cardiacfoam \
-  -e packages/omnidriver-cardiaccore -e packages/omnidriver-opencarp -e packages/omnidriver-torchcor \
+  -e packages/omnidriver-cardiacsubstrate -e packages/omnidriver-opencarp -e packages/omnidriver-torchcor \
   -e packages/omnidriver-agents -e "packages/omnidriver-verifier[symbolic]" pytest
 /tmp/od-prov/bin/python -c "import omnidriver.core, sympy; print(omnidriver.core.__file__)"
 ```
@@ -1314,7 +1314,7 @@ Expected: no output.
 
 - [ ] **Step 6: Run the tests**
 
-Run: `/tmp/od-prov/bin/python -m pytest packages/omnidriver-openfoam packages/omnidriver-cardiacfoam packages/omnidriver-cardiaccore -q -m "not slow"`
+Run: `/tmp/od-prov/bin/python -m pytest packages/omnidriver-openfoam packages/omnidriver-cardiacfoam packages/omnidriver-cardiacsubstrate -q -m "not slow"`
 Expected: 0 failed.
 
 - [ ] **Step 7: Commit**
@@ -1630,7 +1630,7 @@ Replace the paragraph beginning "Preflight links the binary to this source" with
 Every plan lists, in its run document's `solverProvenance`, each solver it uses
 and each build of it the run runs: path, digest, and the source it was built
 from. How that source is known is the solver's: a wmake build (cardiacFOAM,
-cardiacCore) through the build record `omnidriver build-record --repo <src>`
+cardiacSubstrateFOAM) through the build record `omnidriver build-record --repo <src>`
 writes beside the products after `./Allwmake` (`recorded`); openCARP from its
 own `-buildinfo` tag and hash (`self_reported`); TorchCor from the editable
 package the stack's `python3` imports (`live`). A build recorded from other

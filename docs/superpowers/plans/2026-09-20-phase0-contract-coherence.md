@@ -13,8 +13,8 @@
 ## Global Constraints
 
 - Python floor is **3.11**. Annotations must stay lazy (`from __future__ import annotations`) in `plugin_interface.py` — several annotations there name types imported only under `TYPE_CHECKING`, and evaluating them eagerly raises `NameError` on 3.11/3.12.
-- `omnidriver.core` MUST NOT import from `omnidriver.openfoam`, `omnidriver.cardiacfoam`, or `omnidriver.cardiaccore`. `scripts/check-import-boundaries.py` enforces this and **its waiver list must stay empty**.
-- `omnidriver.cardiaccore` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
+- `omnidriver.core` MUST NOT import from `omnidriver.openfoam`, `omnidriver.cardiacfoam`, or `omnidriver.cardiacsubstrate`. `scripts/check-import-boundaries.py` enforces this and **its waiver list must stay empty**.
+- `omnidriver.cardiacsubstrate` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
 - No production module in core may touch `driver_context.plugin` directly; go through `driver_context.capabilities`. Guarded by `test_plugin_dependency_boundary.py`.
 - Do not weaken or skip an existing guard to make a change pass. If a guard fails, fix the cause.
 - **The `Files:` block is authoritative for what to commit, not the per-step `git add` list.** Those lists were written before the tasks ran and have been stale three times (Phase 0 Tasks 1, 4 and 6). Commit every file the task actually changed; if that differs from the `Files:` block, say so in the report.
@@ -38,7 +38,7 @@
 | 8 · stop discarding records and contexts | done | `5c1eb68` |
 | 9 · `ConfigValueCapability` | done | `c8c5581` |
 | 10 · one diagnostic shape | done | `d3f0d9d` |
-| 11 · cardiacCore declaration hygiene | done | `07a71b2` |
+| 11 · cardiacSubstrateFOAM declaration hygiene | done | `07a71b2` |
 | 12 · caching (prerequisite for Phase 1's digest) | done | `41056a4` |
 | 13 · the three remaining §3.3 defects | done | `43bd487` |
 | 14 · all four shapes, close-out | done | no commit needed |
@@ -137,13 +137,13 @@ The environments `/tmp/od311` and `/tmp/odcore` are built once per `CLAUDE.md`'s
 **Core — created:**
 - `packages/omnidriver/tests/core/test_contract_tier_coherence.py` — the tier guard.
 - `packages/omnidriver/tests/core/test_capability_calls_are_cheap.py` — the caching guard Phase 1's digest depends on.
-- `packages/omnidriver-cardiaccore/tests/test_profile_matches_catalog.py` — profile and catalogue agree.
+- `packages/omnidriver-cardiacsubstrate/tests/test_profile_matches_catalog.py` — profile and catalogue agree.
 
 **Adapters — modified:**
 - `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/cardiacfoam_plugin.py` — `get_dict_entries` completeness.
 - `packages/omnidriver-openfoam/src/omnidriver/openfoam/apply_overrides.py` — stop self-re-contexting.
-- `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.yaml` — missing dictionary rules.
-- `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/catalogs/inputs.py` — orphan constants deleted.
+- `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.yaml` — missing dictionary rules.
+- `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/catalogs/inputs.py` — orphan constants deleted.
 
 **Docs — modified:**
 - `ARCHITECTURE.md` — regenerated seam table (never edited by hand).
@@ -1363,14 +1363,14 @@ git commit -m "refactor(core): one diagnostic shape reaches an agent"
 
 ---
 
-## Task 11: cardiacCore declaration hygiene
+## Task 11: cardiacSubstrateFOAM declaration hygiene
 
 Three independent findings in one package.
 
 **Files:**
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.yaml`
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/catalogs/inputs.py`
-- Test: `packages/omnidriver-cardiaccore/tests/` (place beside that package's existing catalog tests)
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.yaml`
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/catalogs/inputs.py`
+- Test: `packages/omnidriver-cardiacsubstrate/tests/` (place beside that package's existing catalog tests)
 
 **Interfaces:**
 - Consumes: nothing.
@@ -1378,7 +1378,7 @@ Three independent findings in one package.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `packages/omnidriver-cardiaccore/tests/test_profile_matches_catalog.py`:
+Create `packages/omnidriver-cardiacsubstrate/tests/test_profile_matches_catalog.py`:
 
 ```python
 """The profile and the dict catalogue must agree on which files a case has."""
@@ -1386,13 +1386,13 @@ Create `packages/omnidriver-cardiaccore/tests/test_profile_matches_catalog.py`:
 from pathlib import Path
 
 from omnidriver.core.plugin_profile import load_plugin_profile
-from omnidriver.cardiaccore.catalogs.inputs import DOCUMENTS
+from omnidriver.cardiacsubstrate.catalogs.inputs import DOCUMENTS
 
 
 def test_every_catalogued_document_has_a_profile_rule():
     profile = load_plugin_profile(
         Path(__file__).resolve().parents[1]
-        / "src/omnidriver/cardiaccore/plugin.yaml"
+        / "src/omnidriver/cardiacsubstrate/plugin.yaml"
     )
     declared = {rule.path for rule in profile.case_files}
     catalogued = {f"system/{name}" for name in DOCUMENTS}
@@ -1406,7 +1406,7 @@ def test_every_catalogued_document_has_a_profile_rule():
 - [ ] **Step 2: Run to verify it fails**
 
 ```bash
-python -m pytest packages/omnidriver-cardiaccore/tests/test_profile_matches_catalog.py -v
+python -m pytest packages/omnidriver-cardiacsubstrate/tests/test_profile_matches_catalog.py -v
 ```
 
 Expected: FAIL naming `setCardiacScarDict`, `setPurkinjeScarDict`, `coordinatesConventionDict`, `generatePurkinjeTreeDict`.
@@ -1418,23 +1418,23 @@ In `plugin.yaml`, under `case_profile.dictionaries`, add four entries following 
 ```yaml
     - path: system/setCardiacScarDict
       kind: openfoam_dictionary
-      role: cardiaccore.scar_dictionary
+      role: cardiacsubstrate.scar_dictionary
       required: conditional
     - path: system/setPurkinjeScarDict
       kind: openfoam_dictionary
-      role: cardiaccore.purkinje_scar_dictionary
+      role: cardiacsubstrate.purkinje_scar_dictionary
       required: conditional
     - path: system/coordinatesConventionDict
       kind: openfoam_dictionary
-      role: cardiaccore.coordinates_convention_dictionary
+      role: cardiacsubstrate.coordinates_convention_dictionary
       required: conditional
     - path: system/generatePurkinjeTreeDict
       kind: openfoam_dictionary
-      role: cardiaccore.purkinje_tree_dictionary
+      role: cardiacsubstrate.purkinje_tree_dictionary
       required: conditional
 ```
 
-The `cardiaccore.` namespace already validates through `plugin_profile._is_valid_environment_role`; no change to `KNOWN_ROLES` is needed.
+The `cardiacsubstrate.` namespace already validates through `plugin_profile._is_valid_environment_role`; no change to `KNOWN_ROLES` is needed.
 
 - [ ] **Step 4: Delete the two orphan constants**
 
@@ -1449,7 +1449,7 @@ Delete both `GRAPH_FILE_KEYS` and `UTILITY_CLI_OPTIONS`. `UTILITY_CLI_OPTIONS` a
 - [ ] **Step 5: Run the tests**
 
 ```bash
-python -m pytest packages/omnidriver-cardiaccore/tests/ -v
+python -m pytest packages/omnidriver-cardiacsubstrate/tests/ -v
 python -m pytest packages/ -q -m "not slow"
 ```
 
@@ -1458,10 +1458,10 @@ Expected: `0 failed`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.yaml \
-        packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/catalogs/inputs.py \
-        packages/omnidriver-cardiaccore/tests/test_profile_matches_catalog.py
-git commit -m "fix(cardiaccore): profile now declares every catalogued document"
+git add packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.yaml \
+        packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/catalogs/inputs.py \
+        packages/omnidriver-cardiacsubstrate/tests/test_profile_matches_catalog.py
+git commit -m "fix(cardiacsubstrate): profile now declares every catalogued document"
 ```
 
 ---
@@ -1471,7 +1471,7 @@ git commit -m "fix(cardiaccore): profile now declares every catalogued document"
 §4.4 of the spec makes this load-bearing: the stack digest materializes capabilities at context construction, and three of them currently re-parse from disk on every call.
 
 **Files:**
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/agent_guidance/__init__.py`
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/agent_guidance/__init__.py`
 - Modify: `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/runtime_profile.py`
 - Modify: `packages/omnidriver/src/omnidriver/core/plugin_capabilities.py`
 - Test: `packages/omnidriver/tests/core/test_capability_seam_documentation.py`
@@ -1496,8 +1496,8 @@ import pytest
 
 
 def test_named_catalogs_does_not_reparse_on_every_call():
-    pytest.importorskip("omnidriver.cardiaccore")
-    from omnidriver.cardiaccore import agent_guidance
+    pytest.importorskip("omnidriver.cardiacsubstrate")
+    from omnidriver.cardiacsubstrate import agent_guidance
 
     first = agent_guidance.describe_guidance()
     second = agent_guidance.describe_guidance()
@@ -1515,7 +1515,7 @@ Expected: FAIL — `_load_manifest` does not exist.
 
 - [ ] **Step 3: Cache the manifest parse**
 
-In `cardiaccore/agent_guidance/__init__.py`, extract the `yaml.safe_load` of `manifest.yaml` into:
+In `cardiacsubstrate/agent_guidance/__init__.py`, extract the `yaml.safe_load` of `manifest.yaml` into:
 
 ```python
 @lru_cache(maxsize=1)
@@ -1558,7 +1558,7 @@ Expected: `0 failed`. If a test depended on `_profile_contract` re-reading a fil
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/agent_guidance/__init__.py \
+git add packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/agent_guidance/__init__.py \
         packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/runtime_profile.py \
         packages/omnidriver/src/omnidriver/core/plugin_capabilities.py \
         packages/omnidriver/tests/core/test_capability_calls_are_cheap.py
@@ -1763,8 +1763,8 @@ Not a refactor — a **decision with evidence**. Its deliverable is a written re
 Create the spike document with this at the top, so the prototype cannot be graded after the fact:
 
 > **Success criterion.** `omnidriver step --strict --apply` succeeds on a
-> cardiacCore case with **zero new code in `omnidriver-cardiaccore`**. Today it
-> is refused: `CardiacCorePlugin` implements none of `apply_overrides`,
+> cardiacSubstrateFOAM case with **zero new code in `omnidriver-cardiacsubstrate`**. Today it
+> is refused: `CardiacSubstratePlugin` implements none of `apply_overrides`,
 > `get_override_target_paths`, `inspect_effective_configuration`,
 > `get_override_scopes`, so `legacy_apply_overrides` raises. Under a working
 > provider stack the OpenFOAM provider supplies all four.
@@ -1772,7 +1772,7 @@ Create the spike document with this at the top, so the prototype cannot be grade
 - [ ] **Step 2: Reproduce the current refusal**
 
 ```bash
-python -m omnidriver step --plugin cardiaccore --strict --apply <a cardiaccore case> 2>&1 | tail -5
+python -m omnidriver step --plugin cardiacsubstrate --strict --apply <a cardiacsubstrate case> 2>&1 | tail -5
 ```
 
 Expected: a `ValueError` naming `apply_overrides`. Paste the exact message into the spike document — that message disappearing is the test.
@@ -1792,10 +1792,10 @@ Record the same three things, plus: what happens to `capability_seams.parse_fiel
 - [ ] **Step 5: Measure both against the criterion**
 
 ```bash
-python -m omnidriver step --plugin cardiaccore --strict --apply <the same case>
+python -m omnidriver step --plugin cardiacsubstrate --strict --apply <the same case>
 ```
 
-Expected on both branches: succeeds, with `git diff --stat main -- packages/omnidriver-cardiaccore` showing **no changes**. A prototype that needs cardiacCore edits has not met the criterion.
+Expected on both branches: succeeds, with `git diff --stat main -- packages/omnidriver-cardiacsubstrate` showing **no changes**. A prototype that needs cardiacSubstrateFOAM edits has not met the criterion.
 
 - [ ] **Step 6: Write the recommendation**
 

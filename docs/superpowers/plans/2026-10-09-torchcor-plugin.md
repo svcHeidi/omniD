@@ -18,7 +18,7 @@
 - Owner decisions (2026-10-09): `et = 0.24` (the benchmark), TorchCor's `0.2` noted in the case; `source` is a git submodule of TorchCor pinned at `b02daee`, installed editable into the venv from there; licence MIT.
 - Values in `case.json` each cite their source line (`verification/benchmark.py` at `b02daee`, or the benchmark paper for `et`).
 - House style per `CLAUDE.md`. Commit messages end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
-- Venv for this worktree: `/tmp/od-torchcor` with all packages editable from `/Users/simaocastro/omnidriver/.claude/worktrees/torchcor` (core, openfoam, cardiacfoam, cardiaccore, opencarp, torchcor). Confirm `omnidriver.core.__file__` resolves into the worktree.
+- Venv for this worktree: `/tmp/od-torchcor` with all packages editable from `/Users/simaocastro/omnidriver/.claude/worktrees/torchcor` (core, openfoam, cardiacfoam, cardiacsubstrate, opencarp, torchcor). Confirm `omnidriver.core.__file__` resolves into the worktree.
 - Verification after every omniD task: package tests, then whole repo `-m "not slow"`, core alone, the wheel shape and all four static gates (`CLAUDE.md` "How to verify anything"): 0 failed.
 
 ## Files
@@ -96,7 +96,7 @@ environment:
 
 `path_prepend` takes variable names whose value is a directory; check how `core/environment_connection.py` renders `path_prepend` (openCARP prepends `OPENCARP_MPI_BIN` itself). If it cannot take `$TORCHCOR_VENV/bin`, declare the supplied variable as `TORCHCOR_BIN` (the venv's `bin`) instead — do not add a core feature for it.
 
-- [ ] Steps: boundary rule in `adapter_rules` (`TORCHCOR_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.opencarp")`, and add `"omnidriver.torchcor"` to every other adapter's forbidden tuple); `test_layer_ownership.py` mirroring openCARP's; CI job copying `test-opencarp`; guards updated; gates + whole repo green; commit.
+- [ ] Steps: boundary rule in `adapter_rules` (`TORCHCOR_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiacsubstrate", "omnidriver.opencarp")`, and add `"omnidriver.torchcor"` to every other adapter's forbidden tuple); `test_layer_ownership.py` mirroring openCARP's; CI job copying `test-opencarp`; guards updated; gates + whole repo green; commit.
 
 ### Task 3: The case.json document writer
 

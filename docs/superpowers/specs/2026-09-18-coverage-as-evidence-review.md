@@ -16,7 +16,7 @@ boundaries. Amend the scoring, test policy, evidence model, and rollout before
 implementation. This is a valuable assurance design, but is not by itself a
 complete plan for building the agent-facing product.
 
-The next deliverable should be an installed cardiacCore workflow that an agent
+The next deliverable should be an installed cardiacSubstrateFOAM workflow that an agent
 can inspect, modify in a disposable case, plan, execute, and reconcile. Use
 cardiacFoam immediately as the more demanding second adapter and source of
 existing integration machinery. Do not finish a universal source scanner or
@@ -134,7 +134,7 @@ dictionary scanner matches sets of names, not species, semantic scope, units,
 conditional branches, or compiled availability. A generic key gate therefore
 cannot replace all of those guards. Replace each only after identifying an
 equivalent assertion with at least the same failure sensitivity. A working
-cardiacCore regression alone does not cover cardiacFoam model metadata.
+cardiacSubstrateFOAM regression alone does not cover cardiacFoam model metadata.
 
 ### 5. Record evidence for a scoped claim, not just an entire entry
 
@@ -193,7 +193,7 @@ unless a replacement build attestation binds the dirty source to the executable.
    skipped/unavailable/failed/applicable outcomes and a separate OpenFOAM test
    for missing scanner roots. Stop source-check CLIs returning success without
    evidence. Make the shared launch predicate consume the result.
-2. **Make cardiacCore installed and repeatable.** Add its package to CI and
+2. **Make cardiacSubstrateFOAM installed and repeatable.** Add its package to CI and
    wheel/discovery checks. Select a bounded workflow, runtime/build identity,
    native input asset manifest, disposable output, and native checker. Start
    with the existing declared preprocessing path; bring the intended human/pig
@@ -204,7 +204,7 @@ unless a replacement build attestation binds the dirty source to the executable.
    Use the short single-cell and small tissue paths already described by T7.
    Keep exact-input/command correspondence separate from numerical acceptance.
 4. **Bind provenance and catalog claims.** Add consumed-file enumeration
-   coverage and scoped evidence for the selected workflows. Add cardiacCore
+   coverage and scoped evidence for the selected workflows. Add cardiacSubstrateFOAM
    source mapping and reviewed exclusions when source verification is selected.
    Extend the catalog only as supported workflows need it.
 5. **Close the agent loop over these existing operations.** Expose bounded
@@ -213,7 +213,7 @@ unless a replacement build attestation binds the dirty source to the executable.
    artifact handles, and plan identity; fetch full catalogs/logs on demand.
    Evaluate whether an agent can complete the supported task and stop truthfully
    on unavailable evidence. A resident agent service is not a prerequisite.
-6. **Then verify the producer-to-consumer workflow.** Bind cardiacCore outputs
+6. **Then verify the producer-to-consumer workflow.** Bind cardiacSubstrateFOAM outputs
    to one selected cardiacFoam mode: field names, dimensions, mesh identity,
    tissue/scope, and declared dependencies. Successful runs of each tool alone
    do not establish their compatibility. Generalize after this succeeds.
@@ -226,19 +226,19 @@ unless a replacement build attestation binds the dirty source to the executable.
 | Core | Plan may exist offline; required unavailable execution checks prevent dispatch through run/step/sweep; permitted overrides remain explicit. |
 | Core provenance | Consumed direct file included; required missing root prevents complete/resume; optional absence and unconsumed documentation do not; policy changes invalidate reuse. |
 | OpenFOAM | Missing/empty scanner scope cannot masquerade as verified coverage; scope ambiguities remain candidates. |
-| cardiacCore | Installed discovery and child-process use work; effective overrides reach the disposable case; source assets stay unchanged; required artifacts and native checker results are recorded. |
+| cardiacSubstrateFOAM | Installed discovery and child-process use work; effective overrides reach the disposable case; source assets stay unchanged; required artifacts and native checker results are recorded. |
 | cardiacFoam | The same coverage contract handles nondimensional, tissue, unavailable-runtime, missing-hook, and intentionally suppressed paths without all collapsing to passed. |
 | Native acceptance | A failing native checker fails the acceptance claim even when driver exit is zero; unrequested and missing required checker are distinct. |
 
 ## Verification performed for this review
 
-The initial focused pytest command could not collect cardiacCore: the local
-`.venv` does not have `omnidriver.cardiaccore` installed. With all four package
+The initial focused pytest command could not collect cardiacSubstrateFOAM: the local
+`.venv` does not have `omnidriver.cardiacsubstrate` installed. With all four package
 source directories explicitly placed on `PYTHONPATH`, the following selection
 returned **76 passed, 16 skipped**:
 
 ```text
-packages/omnidriver-cardiaccore/tests
+packages/omnidriver-cardiacsubstrate/tests
 packages/omnidriver-cardiacfoam/tests/test_strict_planning.py
 packages/omnidriver-cardiacfoam/tests/test_selected_cardiacfoam_fixture.py
 packages/omnidriver-cardiacfoam/tests/test_selected_cardiacfoam_fixture_acceptance.py
@@ -250,14 +250,14 @@ This is source-level test evidence, not installed-package or live-solver
 validation. Native source trees exist locally; no native runtime/fixture was
 selected for execution in this review. No native scientific run was performed.
 
-The proposed spec's no-skips cardiacCore census is therefore stale. Its cited
+The proposed spec's no-skips cardiacSubstrateFOAM census is therefore stale. Its cited
 ionic export floors also need rewording: `>= 5` and `>= 4` are inconsistent
 policies, but not logically incompatible assertions. Historical study-ledger
 entries are dated observations; do not treat every older entry as a competing
 current instruction. Verify current code and preserve owner decisions.
 
 Three Luna agents independently reviewed Core coverage/provenance, cardiacFoam
-integration/testing, and cardiacCore/native-contract scope. The original
+integration/testing, and cardiacSubstrateFOAM/native-contract scope. The original
 proposal is left intact so these amendments can be assessed separately.
 
 ### Additional source-drift checks
@@ -267,10 +267,10 @@ native roots produced these results:
 
 | Catalog | Local native HEAD | Entries / unique references | Unresolved references |
 | --- | --- | --- | --- |
-| cardiacCore | `d1afc3e47a78b92c87288f73aef818b23bbdc9e3` | 87 / 18 | 6 |
+| cardiacSubstrateFOAM | `d1afc3e47a78b92c87288f73aef818b23bbdc9e3` | 87 / 18 | 6 |
 | cardiacFoam | `e34024e000d99ca1fcf8acb092b8fa56c547d911` | 173 / 73 | 3 |
 
-cardiacCore's unresolved paths are
+cardiacSubstrateFOAM's unresolved paths are
 `cases/bivCase/system/generatePurkinjeTreeDict`, three files under
 `src/setCardiacScar/`, and two under `src/setPurkinjeScar/`. cardiacFoam's are
 the bath, eikonal, and pseudo ECG manufactured verifier `.C` files under
@@ -280,13 +280,13 @@ features are unsupported everywhere. Reconcile them through reviewed migration
 or explicitly historical/unsupported catalog scope; do not waive them wholesale.
 
 cardiacFoam's current profile resolves its scanner root to
-`/Users/simaocastro/src`, not the native checkout. cardiacCore has no mapping.
+`/Users/simaocastro/src`, not the native checkout. cardiacSubstrateFOAM has no mapping.
 The builder gate needs an explicit native checkout root for references and
 explicit scan subdirectories; a static relative profile path and ancestor-based
 test discovery are not sufficient. The existing selected-source fixture is a
 useful starting point, but does not currently supply these older gates.
 
-Current cardiacCore documentation already distinguishes the removed standalone
+Current cardiacSubstrateFOAM documentation already distinguishes the removed standalone
 UVC-threshold implementation from the retained native-surface/AHA proposal;
 `catalogs/purkinje.py` explicitly scopes its assumptions rather than claiming
 universal scientific acceptance. Update the spec's seed question to that
@@ -303,5 +303,5 @@ Useful implementation starting points:
 - [cardiacFoam selected fixture](../../../packages/omnidriver-cardiacfoam/tests/selected_cardiacfoam_fixture.py),
   [driver/checker harness](../../../packages/omnidriver-cardiacfoam/tests/selected_cardiacfoam_integration.py),
   and [native acceptance test](../../../packages/omnidriver-cardiacfoam/tests/test_selected_cardiacfoam_native_integration.py).
-- [cardiacCore support boundary](../../../packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/catalogs/support_boundary.py)
-  and [input catalog](../../../packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/catalogs/inputs.py).
+- [cardiacSubstrateFOAM support boundary](../../../packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/catalogs/support_boundary.py)
+  and [input catalog](../../../packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/catalogs/inputs.py).

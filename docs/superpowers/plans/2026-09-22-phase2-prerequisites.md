@@ -5,7 +5,7 @@
 **Goal:** Close the eight audit findings that must land before any write-channel
 refactor can be trusted — deterministic provider composition, truthful
 resolution provenance, effective-value readback through the real public path,
-native include parity, and qualified parameter addressing in cardiacCore.
+native include parity, and qualified parameter addressing in cardiacSubstrateFOAM.
 
 **Architecture:** Nothing here is a new abstraction. Each task repairs one
 existing symbol so that a guarantee the codebase already claims becomes true.
@@ -29,7 +29,7 @@ which must not start until this plan closes.
 | 2 · resolution provenance names the provider that answered | C3 | done | `0bab354` |
 | 3 · `execution_env` reaches the hook; readback compares typed values | F1, F1b | done | `e2fead3` |
 | 4 · `#includeEtc` follows the native search chain | F2 | done | `d0f13ed`, corrected `628e39e`, corrected again `0f9654c` |
-| 5 · cardiacCore addressing keeps document scope; values are checked | S1 | done | `bd8b89e` |
+| 5 · cardiacSubstrateFOAM addressing keeps document scope; values are checked | S1 | done | `bd8b89e` |
 | 6 · final workflow inputs are resolved once, from effective config | S3 | done | `3b1e0f5` |
 | 7 · `validate_configuration` is wired to the plugin | S2 | done | `97ac44c` |
 | 8 · required-check coverage blocks at the dispatch boundary | C2 | done | `75ba387` |
@@ -88,7 +88,7 @@ apply once the runtime is discovered correctly.
 
 ```
 org.cardiacfoam: implements but does not declare ['case_introspection', 'case_provenance', 'command_authorization', 'environment_preflight', 'mesh_diagnostic_policy', 'override_scopes', 'runtime_evidence']
-org.omnidriver.cardiaccore: implements but does not declare ['artifacts', 'case_files', 'case_introspection', 'case_provenance', 'command_authorization', 'configuration_validator', 'run_semantic_validator', 'runtime_evidence']
+org.omnidriver.cardiacsubstrate: implements but does not declare ['artifacts', 'case_files', 'case_introspection', 'case_provenance', 'command_authorization', 'configuration_validator', 'run_semantic_validator', 'runtime_evidence']
 org.omnidriver.openfoam.environment: implements but does not declare ['artifacts', 'case_files', 'case_introspection', 'command_authorization', 'configuration_validator', 'cxx_mapping', 'dictionaries', 'manifest', 'mesh_diagnostic_policy', 'named_catalogs', 'run_document_configuration', 'run_semantic_validator', 'runtime_evidence', 'tutorials']
 ```
 
@@ -128,7 +128,7 @@ not assumed correct as written:
   `_evaluate_structured` reads presence through
   `_entry_value_present`/`_predicate_matches`, which also needed the qualified
   lookup. `validate_configuration` needed a composed stack, because
-  cardiacCore declares `requires: [org.omnidriver.openfoam.environment]` and
+  cardiacSubstrateFOAM declares `requires: [org.omnidriver.openfoam.environment]` and
   the Task 1 fix now refuses an unmet requirement.
 - **Task 8:** `test_the_dag_gate_receives_the_audit`, as drafted in the plan,
   inspected `cli.py`'s source text. Batch G0-D replaced it with a behavioural
@@ -216,7 +216,7 @@ that audit claims are claims until measured.
 | F1b | `result.value == _effective_value_text(override["value"])` — string equality. |
 | F2 | `_inspect_source_closure` resolves `#includeEtc` as `$FOAM_ETC/<name>` only; no user/site/version chain. |
 | S1 | `validate_input_overrides` accepts `$PURKINJE_TREE.banana.seed`, accepts `'not a vector at all'` for a `vector3`, and accepts `nan`/`inf` for a `scalar`. |
-| S2 | `CardiacCorePlugin.validate_configuration` is `del spec; return ()`. `tests/test_validate_configuration.py` — 1 failed, 2 passed. |
+| S2 | `CardiacSubstratePlugin.validate_configuration` is `del spec; return ()`. `tests/test_validate_configuration.py` — 1 failed, 2 passed. |
 | S3 | `make_human_purkinje_slab_spec(input_overrides={"$CARDIAC_CONDUCTIVITY.fiberField": "myFibre"})` → `config["preprocessing"]["fiberField"] is None`, **no diagnostic**. |
 
 **Corrected 2026-09-22 (review R1).** Both gate scripts import `omnidriver`, so
@@ -232,7 +232,7 @@ Four batches, **run in sequence, not in parallel**. The tasks touch disjoint
 packages and would look parallelisable, but they are not: the four verification
 shapes are shared absolute-path virtualenvs (`/tmp/od311`, `/tmp/odcore`)
 holding editable installs of this one working tree, so a batch mid-edit poisons
-another batch's suite run. cardiacCore's tests import `omnidriver.openfoam`
+another batch's suite run. cardiacSubstrateFOAM's tests import `omnidriver.openfoam`
 directly, and Task 1 changes composition order, which the plan warns may move
 existing expectations. One tree, one batch at a time, one `git` index.
 
@@ -240,7 +240,7 @@ existing expectations. One tree, one batch at a time, one `git` index.
 |---|---|---|---|
 | G0-A · core composition | 1, 2 | `core/provider_stack.py`, `core/provider_identity.py` | no |
 | G0-B · OpenFOAM evidence | 3, 4 | `openfoam/*`, `core/plugin_interface.py`, `core/plugin_capabilities.py` | no |
-| G0-C · cardiacCore addressing | 5, 6, 7 | `cardiaccore/*`, possibly `core/specs/validation.py` | no |
+| G0-C · cardiacSubstrateFOAM addressing | 5, 6, 7 | `cardiacsubstrate/*`, possibly `core/specs/validation.py` | no |
 | G0-D · dispatch gate and close-out | 8, 9 | `core/runtime/*`, `cli.py` | **yes — R1** |
 
 **R1, the G0 exit review**, is the only review in this plan, and it reviews the
@@ -266,7 +266,7 @@ Reviewing per task would not catch items 3, 5 or 6, which are gate-level facts.
 - Python floor is **3.11**. Keep lazy annotations in `plugin_interface.py`.
 - `omnidriver.core` MUST NOT import from any adapter package; the waiver list in
   `scripts/check-import-boundaries.py` stays empty.
-- `omnidriver.cardiaccore` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
+- `omnidriver.cardiacsubstrate` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
 - No production module in core or an adapter may touch `driver_context.providers` directly.
 - Do not weaken or skip a guard to make a change pass. If a guard fails, fix the cause.
 - Do not quote suite totals. The durable claim is `0 failed`.
@@ -279,8 +279,8 @@ Reviewing per task would not catch items 3, 5 or 6, which are gate-level facts.
   finds itself choosing a number for a physical quantity has left its scope.
 - **Do not stage pre-existing work.** retired OMNIDRIVER_ROADMAP,
   `docs/superpowers/plans/2026-09-20-phase2-one-write-channel.md`,
-  `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/run_config.py`
-  and `packages/omnidriver-cardiaccore/tests/test_validate_configuration.py` were
+  `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/run_config.py`
+  and `packages/omnidriver-cardiacsubstrate/tests/test_validate_configuration.py` were
   modified before this plan started. Tasks 6 and 7 do touch the last two; they
   say so explicitly and say what to preserve. Never `git add -A`.
 
@@ -345,19 +345,19 @@ information, not a failure.
 - `tests/test_effective_value_comparison.py` (Task 3)
 - `tests/test_etc_search_chain.py` (Task 4)
 
-**cardiacCore — modified:**
-- `cardiaccore/workflows/overrides.py` — scope-preserving addressing, dynamic
+**cardiacSubstrateFOAM — modified:**
+- `cardiacsubstrate/workflows/overrides.py` — scope-preserving addressing, dynamic
   binding validation, finite/vector value checks (Task 5).
-- `cardiaccore/workflows/run_config.py` — one resolution of effective inputs
+- `cardiacsubstrate/workflows/run_config.py` — one resolution of effective inputs
   (Task 6); `_relevant_catalog_paths`'s collision workaround retired (Task 7).
-- `cardiaccore/workflows/preprocessing.py` — DAG `consumes` derives from the
+- `cardiacsubstrate/workflows/preprocessing.py` — DAG `consumes` derives from the
   resolved field names (Task 6).
-- `cardiaccore/plugin.py` — `validate_configuration` delegates instead of
+- `cardiacsubstrate/plugin.py` — `validate_configuration` delegates instead of
   returning `()` (Task 7).
-- `cardiaccore/plugin.yaml` — the comment claiming the hook is a stub is
+- `cardiacsubstrate/plugin.yaml` — the comment claiming the hook is a stub is
   corrected with a date (Task 7).
 
-**cardiacCore — created:**
+**cardiacSubstrateFOAM — created:**
 - `tests/test_qualified_addressing.py` (Task 5)
 - `tests/test_workflow_inputs_follow_overrides.py` (Task 6)
 
@@ -1678,11 +1678,11 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 5: cardiacCore addressing keeps document scope, and values are checked
+## Task 5: cardiacSubstrateFOAM addressing keeps document scope, and values are checked
 
 **Finding:** S1. **Files:**
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/overrides.py` — `_template_for`, `_check_value`, plus a new `qualified_slot_key`
-- Create: `packages/omnidriver-cardiaccore/tests/test_qualified_addressing.py`
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/overrides.py` — `_template_for`, `_check_value`, plus a new `qualified_slot_key`
+- Create: `packages/omnidriver-cardiacsubstrate/tests/test_qualified_addressing.py`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -1702,7 +1702,7 @@ in this plan.
 
 ```bash
 cd /tmp && /tmp/od311/bin/python - <<'PY'
-from omnidriver.cardiaccore.workflows.overrides import (
+from omnidriver.cardiacsubstrate.workflows.overrides import (
     validate_input_overrides, declared_path_template,
 )
 print("undeclared vent segment matches a template:",
@@ -1731,7 +1731,7 @@ Expected: both print `fiberField`. Two documents, one slot.
 
 - [ ] **Step 2: Write the failing test**
 
-Create `packages/omnidriver-cardiaccore/tests/test_qualified_addressing.py`:
+Create `packages/omnidriver-cardiacsubstrate/tests/test_qualified_addressing.py`:
 
 ```python
 """A parameter address identifies one parameter.
@@ -1754,7 +1754,7 @@ import math
 
 import pytest
 
-from omnidriver.cardiaccore.workflows.overrides import (
+from omnidriver.cardiacsubstrate.workflows.overrides import (
     VENT_KEYS,
     declared_path_template,
     qualified_slot_key,
@@ -1832,7 +1832,7 @@ def test_an_ordinary_finite_scalar_is_still_accepted():
 - [ ] **Step 3: Run to verify it fails**
 
 ```bash
-/tmp/od311/bin/python -m pytest packages/omnidriver-cardiaccore/tests/test_qualified_addressing.py -v
+/tmp/od311/bin/python -m pytest packages/omnidriver-cardiacsubstrate/tests/test_qualified_addressing.py -v
 ```
 
 Expected: FAIL — `qualified_slot_key` does not exist, `banana` is accepted, the
@@ -1840,7 +1840,7 @@ non-vector string is accepted, and the non-finite values are accepted.
 
 - [ ] **Step 4: Implement**
 
-In `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/overrides.py`:
+In `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/overrides.py`:
 
 ```python
 def qualified_slot_key(driver_path: str) -> str:
@@ -1994,12 +1994,12 @@ bindings that exist. In `validate_input_overrides`, before the generic message:
 - [ ] **Step 6: Run the new test and both adapter suites**
 
 ```bash
-/tmp/od311/bin/python -m pytest packages/omnidriver-cardiaccore/tests/test_qualified_addressing.py -v
-/tmp/od311/bin/python -m pytest packages/omnidriver-cardiaccore/tests -q
+/tmp/od311/bin/python -m pytest packages/omnidriver-cardiacsubstrate/tests/test_qualified_addressing.py -v
+/tmp/od311/bin/python -m pytest packages/omnidriver-cardiacsubstrate/tests -q
 /tmp/od311/bin/python -m pytest packages/omnidriver-cardiacfoam/tests -q
 ```
 
-Expected: the new file PASSES. cardiacCore reports one failure — the
+Expected: the new file PASSES. cardiacSubstrateFOAM reports one failure — the
 pre-existing `test_validate_configuration.py`, which Task 7 closes. cardiacFoam
 reports `0 failed`.
 
@@ -2014,8 +2014,8 @@ reviewable changes.
 edit unstaged and say so.
 
 ```bash
-git add packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/overrides.py packages/omnidriver-cardiaccore/tests/test_qualified_addressing.py
-git commit -m "fix(cardiaccore): qualify parameter addresses and check value syntax (S1)
+git add packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/overrides.py packages/omnidriver-cardiacsubstrate/tests/test_qualified_addressing.py
+git commit -m "fix(cardiacsubstrate): qualify parameter addresses and check value syntax (S1)
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -2025,9 +2025,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ## Task 6: Final workflow inputs are resolved once, from effective configuration
 
 **Finding:** S3. **Files:**
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/run_config.py` — `build_config` (**pre-existing uncommitted changes — see below**)
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/preprocessing.py` — the DAG `consumes` lists
-- Create: `packages/omnidriver-cardiaccore/tests/test_workflow_inputs_follow_overrides.py`
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/run_config.py` — `build_config` (**pre-existing uncommitted changes — see below**)
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/preprocessing.py` — the DAG `consumes` lists
+- Create: `packages/omnidriver-cardiacsubstrate/tests/test_workflow_inputs_follow_overrides.py`
 
 **Interfaces:**
 - Consumes: `qualified_slot_key` from Task 5.
@@ -2048,8 +2048,8 @@ altering that function, stop and report rather than rewriting someone's WIP.
 cd /tmp && /tmp/od311/bin/python - <<'PY'
 from pathlib import Path
 import tempfile
-from omnidriver.cardiaccore.workflows.preprocessing import make_human_purkinje_slab_spec
-from omnidriver.cardiaccore.workflows.run_config import build_config
+from omnidriver.cardiacsubstrate.workflows.preprocessing import make_human_purkinje_slab_spec
+from omnidriver.cardiacsubstrate.workflows.run_config import build_config
 
 root = Path(tempfile.mkdtemp())
 spec = make_human_purkinje_slab_spec(
@@ -2084,7 +2084,7 @@ absent scar dictionary's `None` wins.
 
 - [ ] **Step 2: Write the failing test**
 
-Create `packages/omnidriver-cardiaccore/tests/test_workflow_inputs_follow_overrides.py`:
+Create `packages/omnidriver-cardiacsubstrate/tests/test_workflow_inputs_follow_overrides.py`:
 
 ```python
 """One resolution of the effective configuration feeds everything.
@@ -2107,10 +2107,10 @@ from pathlib import Path
 
 import pytest
 
-from omnidriver.cardiaccore.workflows.preprocessing import (
+from omnidriver.cardiacsubstrate.workflows.preprocessing import (
     make_human_purkinje_slab_spec,
 )
-from omnidriver.cardiaccore.workflows.run_config import build_config
+from omnidriver.cardiacsubstrate.workflows.run_config import build_config
 
 
 def _case(root: Path, **overrides) -> object:
@@ -2178,7 +2178,7 @@ resolution there rather than mutating the spec afterwards.
 - [ ] **Step 3: Run to verify it fails**
 
 ```bash
-/tmp/od311/bin/python -m pytest packages/omnidriver-cardiaccore/tests/test_workflow_inputs_follow_overrides.py -v
+/tmp/od311/bin/python -m pytest packages/omnidriver-cardiacsubstrate/tests/test_workflow_inputs_follow_overrides.py -v
 ```
 
 Expected: FAIL on the qualified key, on the DAG `consumes`, and on the missing
@@ -2186,7 +2186,7 @@ diagnostic.
 
 - [ ] **Step 4: Implement the single resolution**
 
-In `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/run_config.py`,
+In `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/run_config.py`,
 replace `build_config` and add the shared resolver above it. Leave
 `_relevant_catalog_paths` and `validate_configuration` exactly as they are.
 
@@ -2195,7 +2195,7 @@ def resolve_workflow_inputs(spec):
     """Resolve the effective configuration for a spec, once.
 
     Returns ``(values, diagnostics)`` keyed by
-    :func:`~omnidriver.cardiaccore.workflows.overrides.qualified_slot_key`, so a
+    :func:`~omnidriver.cardiacsubstrate.workflows.overrides.qualified_slot_key`, so a
     leaf name declared by two documents occupies two slots. Staging, validation,
     the workflow DAG and provenance all read this one answer; resolving twice is
     how a DAG came to declare inputs the case does not read.
@@ -2246,7 +2246,7 @@ Import `qualified_slot_key` from `.overrides` alongside the existing imports.
 
 - [ ] **Step 5: Derive the DAG's field inputs**
 
-In `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/preprocessing.py`,
+In `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/preprocessing.py`,
 add a helper near `coordinate_field_paths`:
 
 ```python
@@ -2288,7 +2288,7 @@ conductivity step's `consumes`:
 There are three such sites. Find them all:
 
 ```bash
-grep -n '"0/fiber"' packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/preprocessing.py
+grep -n '"0/fiber"' packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/preprocessing.py
 ```
 
 Expected before the edit: three matches. Expected after: none.
@@ -2300,14 +2300,14 @@ check whether any consumer treats the manifest as the run's actual inputs, and
 report what you find. If one does, that is a second occurrence of this defect
 and belongs in your report rather than in a silent extra edit.
 
-- [ ] **Step 6: Run the new test and the cardiacCore suite**
+- [ ] **Step 6: Run the new test and the cardiacSubstrateFOAM suite**
 
 ```bash
-/tmp/od311/bin/python -m pytest packages/omnidriver-cardiaccore/tests/test_workflow_inputs_follow_overrides.py -v
-/tmp/od311/bin/python -m pytest packages/omnidriver-cardiaccore/tests -q
+/tmp/od311/bin/python -m pytest packages/omnidriver-cardiacsubstrate/tests/test_workflow_inputs_follow_overrides.py -v
+/tmp/od311/bin/python -m pytest packages/omnidriver-cardiacsubstrate/tests -q
 ```
 
-Expected: the new file PASSES; cardiacCore reports one failure — the
+Expected: the new file PASSES; cardiacSubstrateFOAM reports one failure — the
 pre-existing `test_validate_configuration.py`.
 
 The `preprocessing` slice keys are now qualified (`$CARDIAC_CONDUCTIVITY.df`
@@ -2340,8 +2340,8 @@ fingerprint was not affected. Do not claim either without the grep result.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/run_config.py packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/preprocessing.py packages/omnidriver-cardiaccore/tests/test_workflow_inputs_follow_overrides.py
-git commit -m "fix(cardiaccore): resolve workflow inputs once from effective config (S3)
+git add packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/run_config.py packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/preprocessing.py packages/omnidriver-cardiacsubstrate/tests/test_workflow_inputs_follow_overrides.py
+git commit -m "fix(cardiacsubstrate): resolve workflow inputs once from effective config (S3)
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -2356,14 +2356,14 @@ and name what was pre-existing: `_relevant_catalog_paths` and the
 ## Task 7: `validate_configuration` is wired to the plugin
 
 **Finding:** S2. **Files:**
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.py` — `validate_configuration`
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/run_config.py` — `_relevant_catalog_paths` (**pre-existing WIP**)
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.yaml` — the stub comment
-- Modify: `packages/omnidriver-cardiaccore/tests/test_validate_configuration.py` (**pre-existing WIP**)
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.py` — `validate_configuration`
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/run_config.py` — `_relevant_catalog_paths` (**pre-existing WIP**)
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.yaml` — the stub comment
+- Modify: `packages/omnidriver-cardiacsubstrate/tests/test_validate_configuration.py` (**pre-existing WIP**)
 
 **Interfaces:**
 - Consumes: `qualified_slot_key` (Task 5) and `resolve_workflow_inputs` (Task 6).
-- Produces: `CardiacCorePlugin.validate_configuration(spec) -> tuple[StrictDiagnostic, ...]`
+- Produces: `CardiacSubstratePlugin.validate_configuration(spec) -> tuple[StrictDiagnostic, ...]`
   — delegating to `workflows.run_config.validate_configuration`.
 
 **Two files here are someone else's work in progress.** Review before changing.
@@ -2379,11 +2379,11 @@ dictionary that does not exist"). Keep the scoping; correct the docstring.
 - [ ] **Step 1: Reproduce the defect**
 
 ```bash
-/tmp/od311/bin/python -m pytest packages/omnidriver-cardiaccore/tests/test_validate_configuration.py -v
+/tmp/od311/bin/python -m pytest packages/omnidriver-cardiacsubstrate/tests/test_validate_configuration.py -v
 /tmp/od311/bin/python -c "
 import inspect
-from omnidriver.cardiaccore.plugin import CardiacCorePlugin
-print(inspect.getsource(CardiacCorePlugin.validate_configuration))"
+from omnidriver.cardiacsubstrate.plugin import CardiacSubstratePlugin
+print(inspect.getsource(CardiacSubstratePlugin.validate_configuration))"
 ```
 
 Expected: one failure — `assert 'conductivityIntracellular.df' in ''` — and a
@@ -2392,7 +2392,7 @@ method body of `del spec; return ()`. The implementation in
 
 - [ ] **Step 2: Wire the hook**
 
-In `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.py`:
+In `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.py`:
 
 ```python
     def validate_configuration(self, spec: Any) -> tuple[Any, ...]:
@@ -2412,7 +2412,7 @@ In `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.py`:
 - [ ] **Step 3: Run the WIP test**
 
 ```bash
-/tmp/od311/bin/python -m pytest packages/omnidriver-cardiaccore/tests/test_validate_configuration.py -v
+/tmp/od311/bin/python -m pytest packages/omnidriver-cardiacsubstrate/tests/test_validate_configuration.py -v
 ```
 
 Expected: all three PASS. If `test_a_half_set_bidomain_pair_...` still fails,
@@ -2458,7 +2458,7 @@ def _slice_value(run, phase: str, driver_path: str):
     Both spellings are legitimate slot keys: an adapter whose documents share
     leaf names must qualify, and one whose documents do not may not. Try the
     full path first, then the scope-stripped form. Added 2026-09-22 alongside
-    cardiacCore's qualified addressing (audit findings S1, S3).
+    cardiacSubstrateFOAM's qualified addressing (audit findings S1, S3).
     """
     slice_ = run.config.get(phase, {}) or {}
     if driver_path in slice_:
@@ -2516,7 +2516,7 @@ this verbatim.
 - [ ] **Step 7: Run everything**
 
 ```bash
-/tmp/od311/bin/python -m pytest packages/omnidriver-cardiaccore/tests -q
+/tmp/od311/bin/python -m pytest packages/omnidriver-cardiacsubstrate/tests -q
 /tmp/od311/bin/python -m pytest packages/ -q -m "not slow"
 /tmp/od311/bin/python scripts/check-import-boundaries.py
 /tmp/od311/bin/python scripts/export-capability-seams.py --check
@@ -2533,8 +2533,8 @@ is the case the WIP's `generic_case` bypass exists to protect. Confirm it passes
 - [ ] **Step 8: Commit**
 
 ```bash
-git add packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.py packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.yaml packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/run_config.py packages/omnidriver-cardiaccore/tests/test_validate_configuration.py
-git commit -m "fix(cardiaccore): wire validate_configuration to the plugin (S2)
+git add packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.py packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.yaml packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/run_config.py packages/omnidriver-cardiacsubstrate/tests/test_validate_configuration.py
+git commit -m "fix(cardiacsubstrate): wire validate_configuration to the plugin (S2)
 
 Closes the pre-existing untracked regression test. The implementation existed
 in workflows/run_config.py and was unreachable.
@@ -2753,7 +2753,7 @@ visible from a wheel — and a stale wheel tests stale code.
 rm -rf /tmp/od311 /tmp/odcore
 uv venv --python 3.11 /tmp/od311 && VIRTUAL_ENV=/tmp/od311 uv pip install -q \
   -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam \
-  -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiaccore pytest
+  -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiacsubstrate pytest
 uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
   -e "packages/omnidriver[post]" pytest
 ```

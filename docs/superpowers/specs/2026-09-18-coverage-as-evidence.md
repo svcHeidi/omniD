@@ -278,7 +278,7 @@ Not mechanised, by decision:
   sixteen lookups hang off a receiver bound to `subDict(ventKey)`, a runtime
   parameter called twice; no textual analysis recovers that a key lives under
   both `lv` and `rv`.
-- **Enumerations** — of three `Enum<>` tables in cardiacCoreStandalone and five
+- **Enumerations** — of three `Enum<>` tables in cardiacSubstrateFOAM and five
   in noFrontendCardiacFoam, zero and one respectively describe a user dictionary
   key. Real ones take four shapes, none self-labelling.
 - **Units** — sometimes bound at the lookup, usually absent.
@@ -293,7 +293,7 @@ The 15% a scanner cannot see is exactly the scientific content, and rules 3–4 
 **Baseline to reconcile first:** the current scanner does not expose the `scope`,
 `method` or `dict_read_default` API the builder guide describes, and cardiacFoam's
 profile resolves its scanner root to `/Users/simaocastro/src` rather than the
-native checkout, while cardiacCore has no `cxx_mapping` at all. The gate needs an
+native checkout, while cardiacSubstrateFOAM has no `cxx_mapping` at all. The gate needs an
 explicit native checkout root and explicit scan subdirectories; a static relative
 profile path with ancestor-based discovery is not sufficient. Reconcile this
 before assigning implementation work.
@@ -349,14 +349,14 @@ numeric literal.
 dictionary scanner matches sets of names — not species, semantic scope, units,
 conditional branches or compiled availability — so a generic key gate cannot
 replace those guards. Each is replaced only after an equivalent assertion with at
-least the same failure sensitivity is identified. A working cardiacCore
+least the same failure sensitivity is identified. A working cardiacSubstrateFOAM
 regression does not cover cardiacFoam model metadata.
 
 ### 9.2 Measured state
 
 610 Python test functions across the domain packages at the time of the design:
 
-| | cardiaccore | cardiacfoam |
+| | cardiacsubstrate | cardiacfoam |
 |---|---|---|
 | structural / agnostic | 49 | ~482 |
 | correspondence | 7 | ~63 |
@@ -370,13 +370,13 @@ case or committed reference is skipped in a bare checkout.** Under the audience
 split most are builder-audience checks correctly reporting `unavailable`; today
 they report nothing, and silence is indistinguishable from success.
 
-**cardiaccore inverts it.** No `conftest.py`, and not one test opens a C++ file,
+**cardiacsubstrate inverts it.** No `conftest.py`, and not one test opens a C++ file,
 though its docstrings cite `coordinatesConvention.H`, `generatePurkinjeTree.C`
 and commit `1ea6d23`. It has the appearance of correspondence with none of the
 substance.
 
 **Updated 2026-09-18 (post-integration):** the census is stale in two ways the
-review predicted. cardiaccore now runs 69 tests with one skip — the optional
+review predicted. cardiacsubstrate now runs 69 tests with one skip — the optional
 `pyvista` bridge in `test_electrode_normalization.py` — not 62 with none. And it
 is now installed in the documented environment with its own CI job, so the
 review's `PYTHONPATH` workaround is no longer needed. Re-measure before citing
@@ -420,7 +420,7 @@ scores in front of you.
 | 8 | `get`/`getOrDefault` ⇒ requiredness | it is read-site behaviour, not case-level requiredness. |
 | 9 | builder/runner as a partition of the suite | they are report audiences; test kinds are orthogonal. |
 | 9.1 | numeric-literal lint | would forbid legitimate unit tests and would be satisfied by writing an invented threshold to a file. Replaced by the oracle-and-scope rule. |
-| 9.2 | cardiaccore census | stale: 69 tests, one skip, now installed with a CI job. |
+| 9.2 | cardiacsubstrate census | stale: 69 tests, one skip, now installed with a CI job. |
 | — | dirty-tree rule | see §12: dirty source does not establish what a binary was built from. |
 
 ## 12. Pinning and dirty trees
@@ -469,9 +469,9 @@ programme order is the owner's; the mechanism order sits inside its step 1.
    and launch policy.** Completion: skipped checks cannot earn success; required
    unavailable checks block execution; neutral tests demonstrate both.
 3. Extract reusable acceptance machinery from cardiacFoam.
-4. Complete one installed cardiacCore preprocessing workflow.
+4. Complete one installed cardiacSubstrateFOAM preprocessing workflow.
 5. Exercise cardiacFoam's short workflows through the same contract.
-6. Connect cardiacCore outputs to one cardiacFoam workflow.
+6. Connect cardiacSubstrateFOAM outputs to one cardiacFoam workflow.
 
 **Mechanism**, inside programme step 2 and after:
 
@@ -487,11 +487,11 @@ programme order is the owner's; the mechanism order sits inside its step 1.
    yet. Purely additive.
 5. The catalogue gate with its four rules, wired into CI — after the scanner
    baseline of §8 is reconciled.
-6. `cxx_mapping` for cardiaccore, so `strict_dict_key_report` can run there at
+6. `cxx_mapping` for cardiacsubstrate, so `strict_dict_key_report` can run there at
    all. It cannot today.
 7. Report coverage per audience. The cheapest single change that would have
    surfaced the ~83 dark tests, and it depends on nothing else.
-8. The cardiacCore regression: the idealized case across two workflows, static
+8. The cardiacSubstrateFOAM regression: the idealized case across two workflows, static
    and native-owned, with a runner-audience test asserting the adapter's declared
    operations against its output.
 9. Retire hand-written C++ ties **only** after step 8 runs, and only where an
@@ -525,8 +525,8 @@ unresolved contradiction mechanises the contradiction.
    dictionary entries; `test_dict_entries_catalog.py` asserts `> 80`. Structural,
    not scientific, but still two answers.
 5. **Unresolved catalogue references**, measured by the review against local
-   native roots: cardiacCore 6 of 18 unique references, cardiacFoam 3 of 73.
-   cardiacCore's are `cases/bivCase/system/generatePurkinjeTreeDict`, three under
+   native roots: cardiacSubstrateFOAM 6 of 18 unique references, cardiacFoam 3 of 73.
+   cardiacSubstrateFOAM's are `cases/bivCase/system/generatePurkinjeTreeDict`, three under
    `src/setCardiacScar/` and two under `src/setPurkinjeScar/`; cardiacFoam's are
    the bath, eikonal and pseudo-ECG verifier sources. These are resolution
    failures against those checkouts, not proof the features are unsupported.
@@ -534,7 +534,7 @@ unresolved contradiction mechanises the contradiction.
    do not waive wholesale.
 
 **Withdrawn.** The design's UVC seed-rule question (C4) is superseded: current
-cardiacCore documentation already distinguishes the removed standalone
+cardiacSubstrateFOAM documentation already distinguishes the removed standalone
 UVC-threshold implementation from the retained native-surface/AHA proposal, and
 `catalogs/purkinje.py` scopes its assumptions rather than claiming universal
 acceptance. No further ruling needed on the question as the design posed it.

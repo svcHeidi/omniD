@@ -69,7 +69,7 @@ four installation shapes and both static gates pass. Phase 2 may begin at G1.
 | G2 | 9 · vertical slice B — one synthesis path | done | `8721f21` +R3 fixes |
 | G3 | 10 · entry cases migrate | done (partial -- cardiacfoam specs not migrated, see report) | `255a34a` |
 | G3 | 11 · sweeps migrate, and the sweep spec gets a versioned schema | done | `2480f3f` |
-| G3 | 12 · cardiacCore operations and remediation migrate | done (partial -- `write_cell_set` classified, not migrated, see report) | `5e350eb` |
+| G3 | 12 · cardiacSubstrateFOAM operations and remediation migrate | done (partial -- `write_cell_set` classified, not migrated, see report) | `5e350eb` |
 | G3 | 13 · `describe` shows the write surface | done | `b0ac9dd` |
 | G3 | 14 · four shapes, the mutation inventory, and the close-out | done -- G3 does NOT close; five open bypasses recorded, see close-out below | `docs`-only, this commit |
 
@@ -121,7 +121,7 @@ nothing to do with case mutation.
    `plan_case` occurrences in all twelve files, confirmed 2026-09-23).
 2. *(known)* `core/runtime/generic_case.py` constructs an `apply_case`-only
    `TutorialSpec` (line naming `apply_case=partial(...)`; zero `plan_case`).
-3. *(known)* `cardiaccore/operations/vtu_selection.py::write_cell_set` — no
+3. *(known)* `cardiacsubstrate/operations/vtu_selection.py::write_cell_set` — no
    `cellSet`-format renderer exists; classified, not migrated (Task 12's own
    table).
 4. *(new)* **The `--apply`/regeneration override CLI surface is a second,
@@ -205,7 +205,7 @@ remains, roughly sized:
 
 - Migrate the 12 cardiacfoam tutorial specs to `plan_case` — the largest
   item; each spec's `_apply_case` becomes a `_plan_case` the way the four
-  cardiacCore preprocessing specs already did (Task 10's pattern), but twelve
+  cardiacSubstrateFOAM preprocessing specs already did (Task 10's pattern), but twelve
   specs each with their own file layout (`tet_mesh_provisioning`, per-tutorial
   overlay copies, `.driverfoam_case_id`/`.cardiacfoam_protocol.json` markers)
   means twelve individual migrations, not one shared fix.
@@ -481,11 +481,11 @@ grep -rn "generated_input" packages/*/src/
 ```
 
 Zero. Neither adapter's `get_supported_mutation_modes()` ever named it
-(`cardiaccore/plugin.py` declares `{"clone_and_patch"}`,
+(`cardiacsubstrate/plugin.py` declares `{"clone_and_patch"}`,
 `cardiacfoam/cardiacfoam_plugin.py` declares `{"synthesize"}`), no renderer in
 `openfoam/case_rendering.py` ever handled it, and the only two production
 constructors of a `CaseMutationRequest`
-(`cardiaccore/workflows/overrides.py::apply_input_overrides_planned`,
+(`cardiacsubstrate/workflows/overrides.py::apply_input_overrides_planned`,
 `cardiacfoam/dict_builder.py`'s synthesis path) never built one. It was
 declared, tested, and never used.
 
@@ -510,7 +510,7 @@ per-mode consumer count.
 - Python floor is **3.11**. Keep lazy annotations in `plugin_interface.py`.
 - `omnidriver.core` MUST NOT import from any adapter package; the waiver list in
   `scripts/check-import-boundaries.py` stays empty.
-- `omnidriver.cardiaccore` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
+- `omnidriver.cardiacsubstrate` MUST NOT import `omnidriver.cardiacfoam`, nor the reverse.
 - **No OpenFOAM syntax in core.** Core moves bytes and digests. If a core module
   needs to know what a `;` means, the design is wrong.
 - No production module in core or an adapter may touch `driver_context.providers` directly.
@@ -620,9 +620,9 @@ information, not a failure.
   synthesis becomes a resolve/render pair (Task 9).
 - `omnidriver-cardiacfoam/.../sweep.py` — `route`/`materialize` become resolve
   plus a plan (Task 11).
-- `omnidriver-cardiaccore/.../workflows/overrides.py` — resolve only; the write
+- `omnidriver-cardiacsubstrate/.../workflows/overrides.py` — resolve only; the write
   moves to the channel (Task 8).
-- `omnidriver-cardiaccore/.../operations/vtu_selection.py`,
+- `omnidriver-cardiacsubstrate/.../operations/vtu_selection.py`,
   `operations/electrodes.py` — case inputs join the channel; standalone exports
   get their own stated artifact contract (Task 12).
 
@@ -694,7 +694,7 @@ from omnidriver.core import case_write
 def _assignment(**overrides):
     fields = dict(
         qualified_id="$CARDIAC_CONDUCTIVITY.df",
-        owner="org.cardiaccore",
+        owner="org.cardiacsubstrate",
         document="system/setCardiacConductivityDict",
         key_path=("df",),
         binding={},
@@ -1731,7 +1731,7 @@ generated from them:
     def get_supported_mutation_modes(self) -> "frozenset[str]":
         """Which creation modes this adapter supports.
 
-        Adapters differ and are meant to: cardiacCore preprocessing patches
+        Adapters differ and are meant to: cardiacSubstrateFOAM preprocessing patches
         declared dictionaries, cardiacFoam synthesizes a case from a catalog.
         Absent -> every mode the adapter's ``resolve_case_mutation`` accepts."""
         ...
@@ -3004,14 +3004,14 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ## Task 8: Vertical slice A — one patch path
 
 **Files:**
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/overrides.py`
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/overrides.py`
 - Create: `packages/omnidriver-openfoam/src/omnidriver/openfoam/case_rendering.py`
 - Modify: `packages/omnidriver-openfoam/src/omnidriver/openfoam/environment.py`
-- Create: `packages/omnidriver-cardiaccore/tests/test_patch_through_the_channel.py`
+- Create: `packages/omnidriver-cardiacsubstrate/tests/test_patch_through_the_channel.py`
 
 **Interfaces:**
 - Consumes: Tasks 1–7.
-- Produces: `CardiacCorePlugin.resolve_case_mutation` for `clone_and_patch`;
+- Produces: `CardiacSubstratePlugin.resolve_case_mutation` for `clone_and_patch`;
   `OpenFOAMEnvironment.get_rendered_formats() -> {"openfoam_dictionary"}` and
   `.render_case_files`. `apply_input_overrides` keeps its public signature and
   routes through `commit_case_write`.
@@ -3044,17 +3044,17 @@ the migrated path must produce them too.
 
 - [ ] **Step 2: Write the failing test for the new path**
 
-Create `packages/omnidriver-cardiaccore/tests/test_patch_through_the_channel.py`
+Create `packages/omnidriver-cardiacsubstrate/tests/test_patch_through_the_channel.py`
 with the characterization test above plus:
 
 ```python
 def test_a_patch_is_planned_before_it_is_written(tmp_path):
     case = _case_with_conductivity_dict(tmp_path)
     request = CaseMutationRequest(
-        mode="clone_and_patch", case_root=case, adapter_id="org.cardiaccore",
+        mode="clone_and_patch", case_root=case, adapter_id="org.cardiacsubstrate",
         workflow="preprocessing", source_artifacts=(),
         parameters=(ParameterAssignment(
-            qualified_id="$CARDIAC_CONDUCTIVITY.df", owner="org.cardiaccore",
+            qualified_id="$CARDIAC_CONDUCTIVITY.df", owner="org.cardiacsubstrate",
             document="system/setCardiacConductivityDict", key_path=("df",),
             binding={}, value=0.42, value_kind="scalar", source="case",
         ),),
@@ -3084,7 +3084,7 @@ def test_a_rolled_back_patch_leaves_the_dictionary_byte_identical(tmp_path):
 
 def test_the_public_entry_point_keeps_its_signature(tmp_path):
     import inspect
-    from omnidriver.cardiaccore.workflows.overrides import apply_input_overrides
+    from omnidriver.cardiacsubstrate.workflows.overrides import apply_input_overrides
 
     signature = inspect.signature(apply_input_overrides)
     assert list(signature.parameters) == ["case_root", "overrides"]
@@ -3113,7 +3113,7 @@ want the record. Do not change a return type in a migration commit.
 - [ ] **Step 5: Run everything, including the characterization test**
 
 ```bash
-/tmp/od311/bin/python -m pytest packages/omnidriver-cardiaccore/tests/test_patch_through_the_channel.py -v
+/tmp/od311/bin/python -m pytest packages/omnidriver-cardiacsubstrate/tests/test_patch_through_the_channel.py -v
 /tmp/od311/bin/python -m pytest packages/ -q -m "not slow"
 python3 scripts/check-import-boundaries.py
 ```
@@ -3125,8 +3125,8 @@ before adjusting it, and report what changed and why it is acceptable.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/omnidriver-openfoam/src/omnidriver/openfoam/case_rendering.py packages/omnidriver-openfoam/src/omnidriver/openfoam/environment.py packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/overrides.py packages/omnidriver-cardiaccore/tests/test_patch_through_the_channel.py
-git commit -m "feat: route cardiacCore overrides through the write channel
+git add packages/omnidriver-openfoam/src/omnidriver/openfoam/case_rendering.py packages/omnidriver-openfoam/src/omnidriver/openfoam/environment.py packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/overrides.py packages/omnidriver-cardiacsubstrate/tests/test_patch_through_the_channel.py
+git commit -m "feat: route cardiacSubstrateFOAM overrides through the write channel
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -3304,11 +3304,11 @@ exactly **one** production call site:
 `core/runtime/sweep_runner.py::_materialize_entry_case`
 (`spec.apply_case(spec.case_root, cases[0])`). Every other hit is a
 `TutorialSpec` construction site (`apply_case=partial(_apply_case, ...)`,
-~19 of them across `cardiaccore/workflows/preprocessing.py` and 13
+~19 of them across `cardiacsubstrate/workflows/preprocessing.py` and 13
 `cardiacfoam/tutorials/*.py` files) or a test. So "prefer `plan_case`" only
 has to change in one place.
 
-Two of the four `cardiaccore/workflows/preprocessing.py` specs' `_apply_case`
+Two of the four `cardiacsubstrate/workflows/preprocessing.py` specs' `_apply_case`
 already delegate to `overrides.apply_input_overrides`, which (Slice A,
 `dc7fbef`) already calls `apply_input_overrides_planned` internally — the
 write channel is already underneath them; what is missing is only that
@@ -3352,7 +3352,7 @@ Concrete steps:
 5. `apply_case` is **not** retired this batch: the grep in step (1) still
    returns 13 non-test cardiacfoam construction sites after step 3. Report
    the count before (this section) and after (post-migration, still 13 + the
-   2 cardiaccore-authored functions kept for the direct-`apply_case` test).
+   2 cardiacsubstrate-authored functions kept for the direct-`apply_case` test).
 
 - [ ] **Step 1: Find every consumer before changing anything**
 
@@ -3504,12 +3504,12 @@ VIRTUAL_ENV=/tmp/wheelenv uv pip install -q "/tmp/wheeltest/omnidriver-*.whl[pos
 
 ---
 
-## Task 12: cardiacCore operations and remediation migrate, and shared mechanics are extracted
+## Task 12: cardiacSubstrateFOAM operations and remediation migrate, and shared mechanics are extracted
 
 **Files:**
-- Modify: `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/operations/vtu_selection.py`, `operations/electrodes.py`
+- Modify: `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/operations/vtu_selection.py`, `operations/electrodes.py`
 - Modify: `packages/omnidriver/src/omnidriver/core/runtime/remediation_transaction.py`
-- Create: `packages/omnidriver-cardiaccore/tests/test_operations_write_contract.py`
+- Create: `packages/omnidriver-cardiacsubstrate/tests/test_operations_write_contract.py`
 
 Two different things live in these operations, and the refuted draft's Task 7
 treated them as one:
@@ -3524,7 +3524,7 @@ treated them as one:
 G2 code and one correction to this task's own file list:**
 
 **Correction:** `mesh_provisioning.provision_mesh` (Step 3's explicit target)
-is not in `cardiaccore` at all — it lives in
+is not in `cardiacsubstrate` at all — it lives in
 `packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/mesh_provisioning.py`.
 This task's "Files" header omits it; adding it here rather than silently
 touching an unlisted file.
@@ -3591,7 +3591,7 @@ Concrete steps:
 - [ ] **Step 1: Classify every write in these modules, in writing**
 
 ```bash
-grep -rn "write_text\|write_bytes\|open(.*[\"']w" packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/operations/
+grep -rn "write_text\|write_bytes\|open(.*[\"']w" packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/operations/
 ```
 
 For each hit, record in your report: case input or standalone export, and why.
@@ -3615,7 +3615,7 @@ deletion target: what in `remediation_transaction.py` goes away.
 
 The refuted draft's Task 9 deleted the second materialization mechanism. Delete
 it only when the migrated public routes prove semantic parity, per route, with
-a test. Supporting patch-based sweeps does not imply asset-free cardiacCore
+a test. Supporting patch-based sweeps does not imply asset-free cardiacSubstrateFOAM
 synthesis works; those are different modes with different prerequisites.
 
 Report, per retired route: the parity test that justifies it.
@@ -3718,7 +3718,7 @@ def test_every_described_value_carries_its_source():
 rm -rf /tmp/od311 /tmp/odcore /tmp/wheeltest /tmp/wheelenv
 uv venv --python 3.11 /tmp/od311 && VIRTUAL_ENV=/tmp/od311 uv pip install -q \
   -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam \
-  -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiaccore pytest
+  -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiacsubstrate pytest
 uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
   -e "packages/omnidriver[post]" pytest
 python -m build --outdir /tmp/wheeltest packages/omnidriver
@@ -3791,7 +3791,7 @@ Then record, explicitly, the four audit findings this phase deliberately does
 | F3 — no reusable numerical-parameter/default knowledge surface; builders author numerical choices | Task 4's value kinds give shapes, not defaults. An inventory separating authored templates from native defaults is G4's | G4 |
 | F4 — `typical_value_fallback=True` promotes catalog examples into generated inputs; the C++ scanner misses reads after `//` inside a string and duplicates nested matches | this phase makes value *origin* recordable (`VALUE_SOURCES`) and does not repair the scanner or change the fallback policy | G4 |
 | placeholder grammar is declared three times | `_PLACEHOLDER` in `core/contracts/dictionary.py`, plus its own copies in `core/specs/validation.py` and `cardiacfoam/dict_builder.py`. The regex cannot see `<_x>` or `<x-y>`, so the all-declared-bindings guard is defeatable; widening one copy without the others diverges them silently. Zero production declarations are affected today, so it is latent. Found by R2 2026-09-23; the fix batch reported it rather than widening one copy, which was the right call. One fact, three declarers — model the relation instead of restating it. | G4 |
-| R1 — release tags omit cardiacCore; eligibility is not bound to all gates at the exact revision | release work follows contract convergence, and the supported profile and distribution terms are the owner's decisions | G5 |
+| R1 — release tags omit cardiacSubstrateFOAM; eligibility is not bound to all gates at the exact revision | release work follows contract convergence, and the supported profile and distribution terms are the owner's decisions | G5 |
 
 `VALUE_SOURCES` exists from Task 1 and F4 is the first place it earns its keep:
 a catalog example promoted into a generated input is a `template` value
@@ -3821,7 +3821,7 @@ one went. The draft itself is at `db93cc4`.
 | 3 — writer capability | Task 3: planning and rendering specified before the executor; patch rendering explicit; ownership per format, not one exclusive writer. |
 | 4 — value kinds | Task 4: generic shapes in core; OpenFOAM text parsing stays in OpenFOAM; scientific constraints stay in the adapter. G0 Task 5 fixed the weak validation first. |
 | 5 — dynamic paths | Task 4: allowed bindings validated, not just placeholders expanded; full document scope preserved. |
-| 6 — cardiacCore migration | Task 8, after G0's addressing and validation fixes; source artifacts and effective configuration explicit. |
+| 6 — cardiacSubstrateFOAM migration | Task 8, after G0's addressing and validation fixes; source artifacts and effective configuration explicit. |
 | 7 — Python operation writers | Task 12, split: case inputs join the channel, standalone exports get their own stated artifact contract. Atomic rename alone is not a planned transaction. |
 | 8 — split `build_and_launch` | Task 9, after the contract is executable. Characterizes complete content, modes and declared effects — not five files' existence. Public compatibility preserved. |
 | 9 — retire duplicate materialization | Task 12, deferred until migrated public routes prove per-route semantic parity. |

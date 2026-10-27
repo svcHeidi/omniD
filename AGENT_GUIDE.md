@@ -44,7 +44,7 @@ from the working directory:
   `source` must be where the plugin's `cxx_mapping` finds the C++ relative to
   the tutorials folder. omnidriver exports the profile's declared source
   variable (`OMNIDRIVER_NATIVE_TUTORIALS` for cardiacFOAM,
-  `OMNIDRIVER_CARDIACCORE_TREE` for cardiacCore) from the repository, and
+  `OMNIDRIVER_CARDIACSUBSTRATE_TREE` for cardiacSubstrateFOAM) from the repository, and
   refuses a variable already set to something else. `scripts` goes onto the
   stack itself (see "Repository scripts").
   TorchCor's repository names its runner's folder as `scripts` and the
@@ -126,7 +126,7 @@ is not sourced; or `failed`), `entry`,
 `plugin_diagnostics`, `workflow_dag`, `workflow_state`, `expected_artifacts`,
 `launch`, `run_document` and `capability_manifest`. `plugin_diagnostics` is
 the stack's own check (`get_plan_diagnostics`): errors fail the plan, warnings
-and notes never do. `plan --strict` exits 0 only for `ok`. For cardiacFOAM and cardiacCore it compares the catalogue
+and notes never do. `plan --strict` exits 0 only for `ok`. For cardiacFOAM and cardiacSubstrateFOAM it compares the catalogue
 with the scanned C++ (see "The C++ scan") and reports `unknown_sampled_field`
 (see "Function objects") and `uncatalogued_case_dict_key` warnings; a key the
 scan reads is reported once, as the `uncatalogued` note.
@@ -795,7 +795,7 @@ shows as `record_surface.keys` and the record-key validator refuses by.
 `--document` and `--key` filter it, and both are optional. A concrete key
 such as `stim[0].start` finds its `stim[Int].start` template. Each entry
 names its `document`, `key`, `value_kind` and `description`. cardiacFOAM and
-cardiacCore entries add `driver_path`, `unit`, `menu`, `typical_value`,
+cardiacSubstrateFOAM entries add `driver_path`, `unit`, `menu`, `typical_value`,
 `default` (stated only for a few selectors, so an absent key reads as it),
 `applicable_when` and `source_refs` (C++ files). An enum's `menu_attributes`
 state facts about each value: on the fvSchemes tables and cardiacFOAM's
@@ -808,7 +808,7 @@ settled (`settled_by`). openCARP entries add `default` (or
 
 `cxx_source` says whether the C++ was read. The source root is supplied,
 never discovered. For cardiacFOAM it is `$OMNIDRIVER_NATIVE_TUTORIALS/../src`,
-and for cardiacCore `$OMNIDRIVER_CARDIACCORE_TREE/..`; the plugin profile's
+and for cardiacSubstrateFOAM `$OMNIDRIVER_CARDIACSUBSTRATE_TREE/..`; the plugin profile's
 `cxx_mapping.source_root` declares both. When the root is supplied, the
 stack's scanner runs. Every entry whose values a C++ runtime-selection table
 registers (every `ionicModel`, say) then carries them as `cxx_values`.
@@ -833,7 +833,7 @@ unreadable or altered cache file is rescanned.
 Every plan lists, in its run document's `solverProvenance`, each solver it uses
 and each build of it the run runs: path, digest, and the source it was built
 from. How that source is known is the solver's: a wmake build (cardiacFOAM,
-cardiacCore) through the build record `omnidriver build-record --repo <src>`
+cardiacSubstrateFOAM) through the build record `omnidriver build-record --repo <src>`
 writes beside the products after `./Allwmake` (`recorded`); openCARP from its
 own `-buildinfo` tag and hash (`self_reported`); TorchCor from the editable
 package the stack's `python3` imports (`live`). `build-record` credits the
@@ -915,7 +915,7 @@ HYDRA_IFACE=lo0 omnidriver env --plugin opencarp
 Each plugin's manifest declares its environment: the variables you supply
 (each with why it is needed and whether it is required), the file to source,
 the directories to put first on `PATH`, and its MPI launcher. The OpenFOAM
-layer declares one shell for cardiacFOAM and cardiacCore. `env` reads only
+layer declares one shell for cardiacFOAM and cardiacSubstrateFOAM. `env` reads only
 what is set; it never searches the disk, except that OpenFOAM's
 `OPENFOAM_BASHRC`, when unset, is resolved in the order `plan` and `run` use
 (see "Environment preflight" below). It prints JSON with:
@@ -1096,7 +1096,7 @@ the rule's own message, and each rule as one of its `refusals`. The rules read t
 and the native case all count.
 
 - **Catalogue relations** (cardiacFOAM's `electroProperties`, `prePacingProperties`
-  and `system/controlDict`, each cardiacCore utility dictionary and its `system/controlDict`)
+  and `system/controlDict`, each cardiacSubstrateFOAM utility dictionary and its `system/controlDict`)
   — `applicable_when` / `required_when` / `forbidden_when` / `mutually_exclusive_with` /
   `co_required_with` / `required_one_of`, once per instance of a `<name>` block. A
   predicate on a selector the case omits reads the selector's catalogued `default`
@@ -1377,7 +1377,7 @@ solvers do not need to read this section.
 
 A plugin is a stack of providers: a Python class implementing `SolverPlugin`
 (`omnidriver/core/plugin_interface.py`), layered on any environment it
-`requires:` in its profile (cardiacFOAM and cardiacCore on the OpenFOAM layer;
+`requires:` in its profile (cardiacFOAM and cardiacSubstrateFOAM on the OpenFOAM layer;
 openCARP stands alone).
 
 **Only the identity is required:** `plugin_name`, `plugin_id` (reverse-DNS,

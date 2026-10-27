@@ -7,9 +7,9 @@ owner's decisions sit with the work they settle.
 
 | repository | remote | notes |
 |---|---|---|
-| omniD (`svcHeidi/omniD`) | `main` = `origin/main` | The only long-lived branch. The follow-up to cardiacFOAM #59, cardiacCore's new layout and the audit fixes (§2a) are on `audit/2026-10-26`, which lands on `main` next. Local-only and ignored: `.venv`, caches, `.claude/`, `.superpowers/` (agent reports) |
+| omniD (`svcHeidi/omniD`) | `main` = `origin/main` | The only long-lived branch. The follow-up to cardiacFOAM #59, cardiacSubstrateFOAM's new layout and the audit fixes (§2a) are on `audit/2026-10-26`, which lands on `main` next. Local-only and ignored: `.venv`, caches, `.claude/`, `.superpowers/` (agent reports) |
 | cardiacFOAM (`solids4foam/cardiacFoam`) | `main` | PR #59 merged on 2026-10-25. v0.1 is not tagged yet; omniD relates to cardiacFOAM by version and PR, never by commit |
-| cardiacCore (`svcHeidi/cardiacCore`) | `main` | Carries the repository layout omniD follows (`applications/utilities/`, `applications/scripts/`, `tutorials/idealizedHeart/`), the `ccore` utility names and PRs #2 to #7, which omniD follows; #6 adds an OpenFOAM build and regression CI on every pull request. PR #8 (a HeartViz README section) is closed unmerged on the owner's decision; PR #9 (docs only) added an outputs table to `docs/architecture.md`, naming the tool that writes each field, face set, seed and tree. The owner's checkout matches `origin/main` |
+| cardiacSubstrateFOAM (`svcHeidi/cardiacSubstrateFOAM`) | `main` | Carries the repository layout omniD follows (`applications/utilities/`, `applications/scripts/`, `tutorials/idealizedHeart/`), the `csub` utility names and PRs #2 to #7, which omniD follows; #6 adds an OpenFOAM build and regression CI on every pull request. PR #8 (a HeartViz README section) is closed unmerged on the owner's decision; PR #9 (docs only) added an outputs table to `docs/architecture.md`, naming the tool that writes each field, face set, seed and tree. The owner's checkout matches `origin/main` |
 
 Pass 2 (`plans/2026-10-01-pass2-convergence.md`) is complete.
 
@@ -22,7 +22,7 @@ Pass 2 (`plans/2026-10-01-pass2-convergence.md`) is complete.
   tutorials, C++ source and scripts. omnidriver reads it from `--repo`, or
   from the repository of a supplied cases root. It never searches for one, and
   a cases root or a scratch root has no default.
-- **Four solvers of three shapes.** cardiacFOAM and cardiacCore (OpenFOAM,
+- **Four solvers of three shapes.** cardiacFOAM and cardiacSubstrateFOAM (OpenFOAM,
   finite volume, sharing the OpenFOAM layer), openCARP (a binary with `.par`
   files, finite elements) and TorchCor (a PyTorch API with no input file, a
   runner in its own venv, no MPI). cardiacFOAM, openCARP and TorchCor run the
@@ -151,7 +151,7 @@ recorded from with the supplied repository by digest (`stale_build`), and a
 run that fails on a key the scanned source never reads says the binary was
 built from other source.
 
-## 4. cardiacCore: exactly where it stands
+## 4. cardiacSubstrateFOAM: exactly where it stands
 
 - **Records:** three, `idealizedHeart`, `idealizedHeartEndocardial` and
   `idealizedHeartPigTransmural`, on the `idealizedHeart` variants `humanSlab`,
@@ -163,7 +163,7 @@ built from other source.
   `main`: with a `sheetField` the output is unchanged; without one it writes
   `dt·I + (df − dt)·f⊗f`, checked at every cell of the idealized heart
   (`tutorials/idealizedHeart/humanSlab/regression/fibreOnlyConductivityTest.sh`).
-- **Results are not in the repository.** cardiacCore holds the methods; the
+- **Results are not in the repository.** cardiacSubstrateFOAM holds the methods; the
   validation results on local anatomies are in the owner's git-ignored
   `local/`, beside the git-ignored `cases/` and
   `tutorials/idealizedBivEllipsoid/`.
@@ -200,11 +200,11 @@ built from other source.
    - *Units across solvers.* Each axis states the unit of its value in its own
      solver's unit; whether sweeps should be stated in SI across solvers is
      open. It includes the electrode seam: cardiacFOAM reads electrode
-     positions in metres, and cardiacCore's
+     positions in metres, and cardiacSubstrateFOAM's
      `applications/scripts/electrode_positions.py` takes a caller-declared unit
      and converts nothing, so a millimetre case gives a pseudo-ECG a factor of
      1000 off.
-   - *Bounds and menus the catalogue lacks.* cardiacCore's range bounds depend
+   - *Bounds and menus the catalogue lacks.* cardiacSubstrateFOAM's range bounds depend
      on the mesh; openCARP's ionic-model menu could come from
      `bench --list-imps`.
    - *`compare`.* `--scaffold` to write a request, non-sweep runs, and
@@ -346,7 +346,7 @@ built from other source.
    1.16e-3 and never reaches 1e-6. A run with the stimulus at 5 ms took 786 s
    instead of 42 s; the results were unaffected.
 9. **Later:**
-   - one run using cardiacCore and cardiacFOAM steps
+   - one run using cardiacSubstrateFOAM and cardiacFOAM steps
      (`specs/2026-09-18-cross-adapter-workflow-design.md`);
    - region-aware key validation;
    - the licence. There is no `LICENSE`, and `CITATION.cff` states none;
@@ -396,10 +396,10 @@ built from other source.
 6. **Native, not edited by omniD:** #59's `dryrun` authorship; the
    eikonal-domain warning of unconstrained regions; eight silent selectors;
    cardiacFOAM's `source = "."`; the eikonalECG `electrodes` default;
-   cardiacCore's conventions (RunFunctions, `lib.sh`); the electroHeart
-   Purkinje provenance; the `solids4foam` fork branch; deleting cardiacCore's
+   cardiacSubstrateFOAM's conventions (RunFunctions, `lib.sh`); the electroHeart
+   Purkinje provenance; the `solids4foam` fork branch; deleting cardiacSubstrateFOAM's
    native `refine1Dgraph` manifest now that omniD's has landed
-   (`ccore1DgraphToFoam` and `ccoreVtkUnstructuredToFoam` keep theirs, since
+   (`csub1DgraphToFoam` and `csubVtkUnstructuredToFoam` keep theirs, since
    omniD declares neither).
 7. **The guidance the OpenFOAM layer serves.** The layer implements no
    `get_agent_guidance`, so the paragraph on its `controlDict` and `fvSchemes`

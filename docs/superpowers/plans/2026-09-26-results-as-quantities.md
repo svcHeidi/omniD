@@ -243,7 +243,7 @@ packages/omnidriver-cardiacfoam/src/omnidriver/cardiacfoam/activation_probes.py 
   git log --oneline main -20 | grep -iE "instance|A2|A5|K3 core" || echo "topic A's A2/A5 not on main yet"
   uv venv --python 3.11 /tmp/odB-<wt> && VIRTUAL_ENV=/tmp/odB-<wt> uv pip install -q \
     -e "packages/omnidriver[post]" -e packages/omnidriver-openfoam -e packages/omnidriver-cardiacfoam \
-    -e packages/omnidriver-cardiaccore -e packages/omnidriver-opencarp pytest build
+    -e packages/omnidriver-cardiacsubstrate -e packages/omnidriver-opencarp pytest build
   uv venv --python 3.11 /tmp/odBcore-<wt> && VIRTUAL_ENV=/tmp/odBcore-<wt> uv pip install -q -e "packages/omnidriver[post]" pytest
   /tmp/odB-<wt>/bin/python -c "import omnidriver, pathlib; print(pathlib.Path(omnidriver.__path__[0]).resolve())"
   ```

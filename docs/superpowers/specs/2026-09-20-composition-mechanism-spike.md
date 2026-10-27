@@ -13,9 +13,9 @@ deleted. This document is the only artifact that survives.
 
 ## Success criterion (written before either prototype was built)
 
-> `omnidriver step --strict --apply` succeeds on a cardiacCore case with
-> **zero new code in `omnidriver-cardiaccore`**. Today it is refused:
-> `CardiacCorePlugin` implements none of `apply_overrides`,
+> `omnidriver step --strict --apply` succeeds on a cardiacSubstrateFOAM case with
+> **zero new code in `omnidriver-cardiacsubstrate`**. Today it is refused:
+> `CardiacSubstratePlugin` implements none of `apply_overrides`,
 > `get_override_target_paths`, `inspect_effective_configuration`,
 > `get_override_scopes`, so `legacy_apply_overrides` raises. Under a working
 > provider stack the OpenFOAM provider supplies all four.
@@ -29,7 +29,7 @@ the *first* fallback hit is `legacy_override_target_paths`, not
 `legacy_apply_overrides` — `step --apply`'s call order resolves mutation
 target paths before applying anything
 (`core/runtime/step_candidate.execute_step_candidate_owned`), and
-`CardiacCorePlugin` implements neither hook, so the target-paths probe fails
+`CardiacSubstratePlugin` implements neither hook, so the target-paths probe fails
 first. The underlying finding is unaffected: both fallbacks raise for the
 same reason (no adapter-side hook), and both disappear under composition.
 Recorded per house style rather than silently fixed in the plan.
@@ -38,9 +38,9 @@ Recorded per house style rather than silently fixed in the plan.
 
 ## Reproducing the current refusal
 
-A **real** cardiacCore case was required and one was available at
-`/Users/simaocastro/cardiacCore-local-cases/bivCase_Pig_Morphometric_Tree` —
-a previously-executed native cardiacCore case (real anatomy, UVC, fibre and
+A **real** cardiacSubstrateFOAM case was required and one was available at
+`/Users/simaocastro/cardiacSubstrateFOAM-local-cases/bivCase_Pig_Morphometric_Tree` —
+a previously-executed native cardiacSubstrateFOAM case (real anatomy, UVC, fibre and
 Purkinje-tree fields under `0/`, real `Allrun`/dict files, `postProcessing/`
 output from an actual run). No case was invented. It was copied into the
 session scratchpad before any `--apply` run, so a mutating override never
@@ -51,7 +51,7 @@ Built environments (per `CLAUDE.md`'s recipe, already present this session):
 `/tmp/od311` (all four packages, editable).
 
 ```bash
-$ /tmp/od311/bin/python -m omnidriver step --plugin cardiaccore \
+$ /tmp/od311/bin/python -m omnidriver step --plugin cardiacsubstrate \
     --entry-kind case_folder --entry <the copied case> \
     --step run --strict --apply /tmp/overrides.json
 ```
@@ -68,8 +68,8 @@ $ /tmp/od311/bin/python -m omnidriver step --plugin cardiaccore \
 That exact message — `"the selected adapter does not implement override
 target declaration"`, raised by
 `omnidriver.core.compatibility.legacy_override_target_paths` — disappearing
-under composition is the test. (`--plugin cardiaccore --entry-kind
-case_folder --entry <path>` was needed because `CardiacCorePlugin` declares
+under composition is the test. (`--plugin cardiacsubstrate --entry-kind
+case_folder --entry <path>` was needed because `CardiacSubstratePlugin` declares
 no `has_case_marker`; the resolver falls back to `_has_entrypoint`, which
 looks for the case's declared entrypoint relpath — `Allrun` for this plugin's
 `CaseRuntimeConventions` — so only case folders that actually carry an
@@ -82,8 +82,8 @@ lack a run script and were not used.)
 
 The criterion's literal wording — `step --strict --apply` **succeeds** — was
 only partially reachable in this environment, for a reason unrelated to
-composition: `Allrun` on this case shells out to a native cardiacCore build
-(`run_cardiac_core_case.sh`) that does not exist in this sandbox. No
+composition: `Allrun` on this case shells out to a native cardiacSubstrateFOAM build
+(`run_cardiac_substrate_case.sh`) that does not exist in this sandbox. No
 prototype, however correct, can make an uncompiled native solver execute.
 This is the blocker the task anticipated; the honest substitute it names —
 "driving the four capability calls directly through a composed context" —
@@ -94,7 +94,7 @@ real case was in fact available:
    (`"the selected adapter does not implement override target
    declaration"`) is gone under composition. The command instead reaches
    real execution and fails there, with a *different, unrelated* error:
-   `Allrun: line 6: .../run_cardiac_core_case.sh: No such file or directory`.
+   `Allrun: line 6: .../run_cardiac_substrate_case.sh: No such file or directory`.
    This is evidence the composition layer resolved cleanly and handed off to
    the real `Allrun` step — the thing Task 15 is measuring — and that the
    remaining failure is an execution-environment gap, not a mechanism defect.
@@ -104,21 +104,21 @@ real case was in fact available:
    `apply_overrides`/`get_override_target_paths` never invoke the solver,
    only OpenFOAM's own dictionary mutator). This is the cleanest measurement
    of the actual thing under test, and it is unambiguous:
-   - Against the **uncomposed** context (`CardiacCorePlugin` alone):
+   - Against the **uncomposed** context (`CardiacSubstratePlugin` alone):
      `target_paths()` raises the same `"the selected adapter does not
      implement override target declaration"`.
-   - Against the **composed** context (`CardiacCorePlugin` +
+   - Against the **composed** context (`CardiacSubstratePlugin` +
      `OpenFOAMEnvironmentPlugin`): `target_paths()` resolves a real path,
      `apply()` writes a real value into `system/setCardiacAnatomyDict` on
      disk (verified by re-reading the file), `inspect()` returns real
      `foamDictionary`-backed evidence, `scopes()` returns OpenFOAM's
-     declared scopes. **Zero new code in `omnidriver-cardiaccore`** in
-     either prototype (confirmed by `git diff --stat -- packages/omnidriver-cardiaccore`
+     declared scopes. **Zero new code in `omnidriver-cardiacsubstrate`** in
+     either prototype (confirmed by `git diff --stat -- packages/omnidriver-cardiacsubstrate`
      showing no changes on either branch).
 
 Verdict: **both prototypes meet the criterion** as far as this environment
 can exercise it. Neither can be driven to a literal process exit 0 without a
-compiled native cardiacCore, which no mechanism choice changes.
+compiled native cardiacSubstrateFOAM, which no mechanism choice changes.
 
 ---
 
@@ -136,7 +136,7 @@ in the main working tree were never touched or carried across.
 | `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | 30 | 1 |
 | `packages/omnidriver/src/omnidriver/core/plugin_capabilities.py` | 118 | 2 |
 | `packages/omnidriver/src/omnidriver/cli.py` | 21 | 0 |
-| **`packages/omnidriver-cardiaccore/`** | **0** | **0** |
+| **`packages/omnidriver-cardiacsubstrate/`** | **0** | **0** |
 
 **What was built**, only as far as the criterion needs (not all 24
 capabilities, not all six §4.3 rules):
@@ -168,7 +168,7 @@ capabilities, not all six §4.3 rules):
     the **diagnostics rule** — concatenate every implementing provider's
     results, in stack order.
 - A hardcoded, clearly-marked prototype hack in `cli.py`'s plugin-loading
-  block: when the selected plugin's id is `org.omnidriver.cardiaccore`, look
+  block: when the selected plugin's id is `org.omnidriver.cardiacsubstrate`, look
   up the installed `openfoam-environment` plugin and compose it in. This is
   **not** spec §4.1/§4.2's declared mechanism (`plugin.yaml`'s
   `requires:`/`provides:` and a topological sort) — building that was out of
@@ -253,15 +253,15 @@ adoption should have removed, not introduced.
 | `packages/omnidriver/src/omnidriver/core/pluggy_composition.py` (new) | 227 | 0 |
 | `packages/omnidriver/src/omnidriver/core/plugin_capabilities.py` | 17 | 2 |
 | `packages/omnidriver/src/omnidriver/core/plugin_interface.py` | 24 | 1 |
-| **`packages/omnidriver-cardiaccore/`** | **0** | **0** |
+| **`packages/omnidriver-cardiacsubstrate/`** | **0** | **0** |
 
 291 insertions / 3 deletions across 5 files, versus Prototype A's 169 / 3
 across 3 files — **72% more code for the same subset of the same
 capability**, almost all of it in the new `pluggy_composition.py`
 (hookspecs, a per-provider `_ProviderShim` because neither
-`CardiacCorePlugin` nor `OpenFOAMEnvironmentPlugin` carries `@hookimpl` and
+`CardiacSubstratePlugin` nor `OpenFOAMEnvironmentPlugin` carries `@hookimpl` and
 neither package may be touched, and the hand-rolled arity check above). Zero
-changes in `omnidriver-cardiaccore`, same as Prototype A. A runtime
+changes in `omnidriver-cardiacsubstrate`, same as Prototype A. A runtime
 dependency (`pluggy>=1.6`) was added to a core package that `CLAUDE.md`
 states "has nearly none" — the same cost the spec named in advance.
 
@@ -305,7 +305,7 @@ Same two tests broke, for the same reasons, as Prototype A (`git diff` on
 | Criterion met (capability-level, real case) | yes | yes |
 | Criterion met (full CLI, same real case) | refusal gone; blocked on missing native binary (environment, not mechanism) | identical |
 | Lines changed | 169 / 3, 3 files | 291 / 3, 5 files |
-| Changes in `omnidriver-cardiaccore` | 0 | 0 |
+| Changes in `omnidriver-cardiacsubstrate` | 0 | 0 |
 | New runtime dependency | none | `pluggy>=1.6` |
 | §4.3 rules exercised | 2 of 6 (refusing, diagnostics) | same 2 of 6 |
 | "Exactly one" arity | hand-written, ~15 lines | hand-written, ~20 lines (pluggy does not provide it) |
@@ -400,14 +400,14 @@ machinery, and neither prototype touched them.
 - The copied case directories used for real-file mutation testing
   (`spike-case`, `spike-case-b`, `spike-case-b-cli`) live only under this
   session's scratchpad, never under the original
-  `/Users/simaocastro/cardiacCore-local-cases/`, which was never written to.
+  `/Users/simaocastro/cardiacSubstrateFOAM-local-cases/`, which was never written to.
 - This spike touched only files inside the two throwaway worktrees plus this
   document in the main working tree. The pre-existing uncommitted changes
   present in the main working tree before this task started (`.github/workflows/ci.yml`,
-  `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/plugin.py`,
-  `packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/workflows/run_config.py`,
+  `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/plugin.py`,
+  `packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/workflows/run_config.py`,
   `packages/omnidriver-cardiacfoam/tests/test_all_packages_wheel_install.py`,
   `packages/omnidriver/tests/core/test_trust_boundary_end_to_end.py`, and the
-  untracked `packages/omnidriver-cardiaccore/tests/test_validate_configuration.py`
+  untracked `packages/omnidriver-cardiacsubstrate/tests/test_validate_configuration.py`
   and `packages/omnidriver/tests/fixtures/`) were never staged, committed, or
   otherwise touched by this task, and remain exactly as they were.

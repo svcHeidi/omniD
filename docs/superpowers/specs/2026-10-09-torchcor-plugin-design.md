@@ -39,7 +39,7 @@ solver to one shared reference.
 
 omniD ships no case (tutorials are pointers), and TorchCor has none to point
 at. The case and the runner therefore live in a **solver-side repository**,
-`torchcor-cases`, laid out like cardiacCore:
+`torchcor-cases`, laid out like cardiacSubstrateFOAM:
 
 ```
 torchcor-cases/

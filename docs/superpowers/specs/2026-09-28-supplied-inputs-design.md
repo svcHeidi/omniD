@@ -2,10 +2,10 @@
 
 Written 2026-09-28 against `main` at `12533b3`. Design only: no code, no
 commits. Roadmap item 3 (`docs/superpowers/ROADMAP.md` §10). It governs how
-cardiacCore's four factory workflows become records (item 4), and so how the
+cardiacSubstrateFOAM's four factory workflows become records (item 4), and so how the
 factory plumbing is deleted (item 5).
 
-Sources read: native cardiacCore `main` at `d1afc3e` (through `git show`);
+Sources read: native cardiacSubstrateFOAM `main` at `d1afc3e` (through `git show`);
 native cardiacFOAM `omnid/tutorials-are-pointers` at `c184d702`; the stopped
 `cc-records` diff (read-only); the owner's local data directories, listed
 but never written.
@@ -25,16 +25,16 @@ each input came from. C11 expects the native paths plus the input
 destinations. Nothing else changes: `WorkflowStep`, `DefaultArgument`,
 `AxisContract`, `ProducedPath` and the runner stay as they are.
 
-## 1. The four cardiacCore workflows
+## 1. The four cardiacSubstrateFOAM workflows
 
 ### 1.1 What exists
 
 | omniD factory workflow | native tutorial (`tutorials/biventricularPreprocessing/variants/`) | native case folder on `main` | anatomy bundle (local, git-ignored) |
 |---|---|---|---|
-| `cardiaccore-human-purkinje-slab` | `humanSlab` | `cases/bivCase`: `Allrun`, `system/` (controlDict, fvSchemes, fvSolution, coordinatesConventionDict, 4 utility dicts) | only inside the owner's checkout, `cases/bivCase/{0,constant}` |
-| `cardiaccore-human-purkinje-endocardial` | `humanEndocardial` (the human anatomy bundle) | **none**. `COMPARISON.md` names the human anatomy bundle's directory, which `.gitignore` ignores whole | `~/cardiacCore-local-cases/<human anatomy bundle>` |
-| `cardiaccore-pig-morphometric-purkinje` (weighted LV) | `pigMorphometricTransmural` (the pig-extended anatomy bundle) | **none**. The pig-extended bundle's directory is ignored whole | `~/cardiacCore-local-cases/<pig-extended anatomy bundle>` (to confirm, §6) |
-| `cardiaccore-pig-transmural-purkinje` (all-leaves LV) | **none**. `.gitignore` lists `variants/pigTransmural/` as exploratory and "redundant with one of the three canonical tutorials" | none | — |
+| `cardiacsubstrate-human-purkinje-slab` | `humanSlab` | `cases/bivCase`: `Allrun`, `system/` (controlDict, fvSchemes, fvSolution, coordinatesConventionDict, 4 utility dicts) | only inside the owner's checkout, `cases/bivCase/{0,constant}` |
+| `cardiacsubstrate-human-purkinje-endocardial` | `humanEndocardial` (the human anatomy bundle) | **none**. `COMPARISON.md` names the human anatomy bundle's directory, which `.gitignore` ignores whole | `~/cardiacSubstrateFOAM-local-cases/<human anatomy bundle>` |
+| `cardiacsubstrate-pig-morphometric-purkinje` (weighted LV) | `pigMorphometricTransmural` (the pig-extended anatomy bundle) | **none**. The pig-extended bundle's directory is ignored whole | `~/cardiacSubstrateFOAM-local-cases/<pig-extended anatomy bundle>` (to confirm, §6) |
+| `cardiacsubstrate-pig-transmural-purkinje` (all-leaves LV) | **none**. `.gitignore` lists `variants/pigTransmural/` as exploratory and "redundant with one of the three canonical tutorials" | none | — |
 
 Every factory workflow defaults to `case_dir_name="bivCase"`. So on a clean
 native tree the two tree workflows run against a case that has no
@@ -44,7 +44,7 @@ native tree the two tree workflows run against a case that has no
 
 Every utility builds `Time` and `fvMesh` (`#include "createTime.H"`,
 `"createMesh.H"`), so each one reads `constant/polyMesh`. Every field is read
-at `runTime.timeName()`, which is `0` from `controlDict`'s `startTime 0`: cardiacCore
+at `runTime.timeName()`, which is `0` from `controlDict`'s `startTime 0`: cardiacSubstrateFOAM
 has no time and always writes `0/`. The case folder holds only `system/`.
 Everything below comes from the bundle.
 
@@ -77,7 +77,7 @@ would pass `generatePurkinjeTree`'s declared face sets on stale files.
 
 ### 1.3 The records, written out
 
-The shared parts, in `cardiaccore/records/anatomy.py`:
+The shared parts, in `cardiacsubstrate/records/anatomy.py`:
 
 ```python
 MESH = tuple(f"constant/polyMesh/{n}" for n in ("boundary", "faces", "neighbour", "owner", "points"))
@@ -127,12 +127,12 @@ PIG_MORPHOMETRIC_TRANSMURAL = TutorialRecord(      # variants/pigMorphometricTra
              produces=TREE_OUT)))
 ```
 
-- `cases_root` is the native cardiacCore tree root.
+- `cases_root` is the native cardiacSubstrateFOAM tree root.
 - `setPurkinjeSlab` consumes `0/Conductivity`, which an earlier step
   produced. So it is an intermediate, and `record_generated_relpaths`
   already excludes it from a restage.
 - No record has axes. A study sets `document:key` directly (for example
-  `system/setPurkinjeSlabDict:thickness`), checked against cardiacCore's
+  `system/setPurkinjeSlabDict:thickness`), checked against cardiacSubstrateFOAM's
   catalog (§5, S3).
 - The native READMEs list a fifth stage, `1DgraphToFoam → constant/purkinjeGraph`,
   which the factory never ran. It is left out until the owner decides (§6, D4).
@@ -144,7 +144,7 @@ PIG_MORPHOMETRIC_TRANSMURAL = TutorialRecord(      # variants/pigMorphometricTra
 | `humanSlab` | **fits** with step S; native case exists; needs the bundle supplied |
 | `humanEndocardial` | fits once a native case folder is tracked (`system/` only, from dicts the owner confirms; two local copies differ in their seeds, §6 D2) |
 | `pigMorphometricTransmural` | fits once a native case folder is tracked. The only dicts are the older form: `uvcConventionDict`, which `main`'s C++ no longer reads (it reads `coordinatesConventionDict`). They must be rewritten and run for real before the record counts |
-| `cardiaccore-pig-transmural-purkinje` | **does not fit: no native tutorial**. Deleted (owner rule), not migrated |
+| `cardiacsubstrate-pig-transmural-purkinje` | **does not fit: no native tutorial**. Deleted (owner rule), not migrated |
 
 ## 2. The mechanism
 
@@ -258,7 +258,7 @@ fields). Clone-on-write copies are deferred until a sweep shows the cost.
 
 | abstraction | which current solver-use problem requires it | why a small solver-specific function is insufficient |
 |---|---|---|
-| `TutorialRecord.inputs` / `RecordInput` (about 70 code lines) | cardiacCore's workflows read a mesh and five fields that are not in the case folder (§1.2), so no record can run them, and `cc-records` stopped for this reason. The idealized heart's four cases read `../mesh` | Staging is core's (`record_execution._stage`) and runs before any solver code. `WorkflowStep.consumes` must be case-relative. Two plugins need the same thing, so a per-plugin copy would break "one reality" |
+| `TutorialRecord.inputs` / `RecordInput` (about 70 code lines) | cardiacSubstrateFOAM's workflows read a mesh and five fields that are not in the case folder (§1.2), so no record can run them, and `cc-records` stopped for this reason. The idealized heart's four cases read `../mesh` | Staging is core's (`record_execution._stage`) and runs before any solver code. `WorkflowStep.consumes` must be case-relative. Two plugins need the same thing, so a per-plugin copy would break "one reality" |
 | `--input NAME=PATH`, `strict_plan(inputs=)` (about 40) | A patient bundle has no ambient truth (§12), so it must be supplied | The CLI, the planner and the run document are core's. A per-solver environment variable would be discovery under another name |
 | `_stage_entry_case(overlays=)` (about 25) | The copy must share the staging lease and promotion, or a crash leaves a half-staged case | Staging is core's |
 | `resolvedEntry.inputs` (about 10) | A run must say which bundle it used; the fingerprints say only what the files held | The run document is core's |
@@ -276,7 +276,7 @@ fields). Clone-on-write copies are deferred until a sweep shows the cost.
 - **Input mappings that change with the route.** An agent supplies a
   different file instead (§3).
 - **A per-case input in a sweep.** §4.
-- **A default location for cardiacCore bundles** (`~/cardiacCore-local-cases`,
+- **A default location for cardiacSubstrateFOAM bundles** (`~/cardiacSubstrateFOAM-local-cases`,
   or the owner's `cases/`). It would invent an answer.
 
 ## 3. One reality: the same mechanism on the idealized heart
@@ -327,7 +327,7 @@ idealized-heart record (S7).
 
 | case | what is missing | what it would need |
 |---|---|---|
-| `cardiaccore-pig-transmural-purkinje` | no native tutorial | delete (S5) |
+| `cardiacsubstrate-pig-transmural-purkinje` | no native tutorial | delete (S5) |
 | `humanEndocardial`, `pigMorphometricTransmural` | no tracked native case folder | owner-confirmed dicts tracked natively (§6 D1-D3); a real run each |
 | `electroHeart`, `pathos/ionicPathology` | no `system/controlDict` or `constant/electroProperties` natively: `Allrun` links `controlDict.<variant>` and `electroProperties.<variant>` in. `controlDict` is the mandatory marker, so the native default does not exist | a native default: the monodomain files under the plain names (owner). ionicPathology also has no default pathology (`Allrun` refuses with no argument) |
 | `pathos/conductionBlock` | no default pathology; the graph is cut by an `awk` function inside `Allrun` | a case-local script, or the `lbbb`/`rbbb` graphs committed; the owner picks a default |
@@ -350,9 +350,9 @@ The prerequisites:
 |---|---|---|---|---|---|
 | **S1** core mechanism | `core/tutorial_records.py` (`RecordInput`, field, checks, `resolve_record_inputs`); `core/runtime/record_execution.py` (`_stage`, metadata, plumbing through preview/commit/spec); `core/runtime/sweep_runner.py` (`overlays`); `core/strict_planning.py`; `core/runtime/record_surface.py`; `cli.py` (`--input`) | +190 | +70 | +260: every §2.1 and §2.2 refusal; destinations never taken from the case; the input copied, not linked; the run document's `inputs`; lazy native default | toy suite |
 | **S2** conformance | `conformance/target.py` (`inputs`), `checks.py` (C5-C7 forward, C10 key, C11 expected set); a toy record with a supplied bundle passing C1-C12 in core | +30 | +10 | +70 | toy C1-C12 |
-| **S3 first real proof: `humanSlab`** | cardiacCore: `records/{__init__,anatomy,human_slab}.py`; `get_tutorial_records`; a record-key validator and key catalog over `catalogs/inputs.py`, sharing the OpenFOAM half (`system/*` written as asked, unvalidated) with cardiacFOAM's through `omnidriver-openfoam`, per one reality; `UTILITY_MANIFESTS` gains `phiRV` and `groove_interface`; guidance, 10 lines; `tests/test_conformance_native.py`, marker `native_cardiaccore`, with `OMNIDRIVER_CARDIACCORE_TREE` (a clean native worktree) and `OMNIDRIVER_CARDIACCORE_ANATOMY` (the bundle), both supplied, failing rather than skipping when unset; a new `CLAUDE.md` shapes row. Native (the `omnid/records` worktree): the README's expected outputs gain the two fields | +150 (records 60, validator and catalog 75, wiring 15) | +35 | +130 | `plan --strict` and `run --strict --input anatomy=...` for real; C1-C12; **parity**: the factory workflow and the record on the same bundle give byte-identical `0/` outputs (the method of the earlier migrations' parity checks), reported before S5 |
+| **S3 first real proof: `humanSlab`** | cardiacSubstrateFOAM: `records/{__init__,anatomy,human_slab}.py`; `get_tutorial_records`; a record-key validator and key catalog over `catalogs/inputs.py`, sharing the OpenFOAM half (`system/*` written as asked, unvalidated) with cardiacFOAM's through `omnidriver-openfoam`, per one reality; `UTILITY_MANIFESTS` gains `phiRV` and `groove_interface`; guidance, 10 lines; `tests/test_conformance_native.py`, marker `native_cardiacsubstrate`, with `OMNIDRIVER_CARDIACSUBSTRATE_TREE` (a clean native worktree) and `OMNIDRIVER_CARDIACSUBSTRATE_ANATOMY` (the bundle), both supplied, failing rather than skipping when unset; a new `CLAUDE.md` shapes row. Native (the `omnid/records` worktree): the README's expected outputs gain the two fields | +150 (records 60, validator and catalog 75, wiring 15) | +35 | +130 | `plan --strict` and `run --strict --input anatomy=...` for real; C1-C12; **parity**: the factory workflow and the record on the same bundle give byte-identical `0/` outputs (the method of the earlier migrations' parity checks), reported before S5 |
 | **S4** the other two | native: `cases/humanEndocardial/system/*`, `cases/pigMorphometricTransmural/system/*` (controlDict, fvSchemes, fvSolution, coordinatesConventionDict, utility dicts; about 250 data lines); omniD: two records (+45 each) and conformance parametrization | +95 | +10 | +20 | each run for real against its anatomy bundle; C1-C12; parity with the factory on the same bundle where the factory can run it |
-| **S5** delete cardiacCore's factory | `workflows/preprocessing.py` (−499); the factory parts of `run_config.py`, `overrides.py`, `plugin.py` (`get_tutorial_catalog` empty, `get_override_schema`); `test_biv_preprocessing_contract.py`, `test_entry_case_parity.py`, `test_workflow_inputs_follow_overrides.py`. The `cc-records` diff is a reference, never merged | about −750 | about −120 | about −450 | all shapes at 0 failed; the three records still pass C1-C12 |
+| **S5** delete cardiacSubstrateFOAM's factory | `workflows/preprocessing.py` (−499); the factory parts of `run_config.py`, `overrides.py`, `plugin.py` (`get_tutorial_catalog` empty, `get_override_schema`); `test_biv_preprocessing_contract.py`, `test_entry_case_parity.py`, `test_workflow_inputs_follow_overrides.py`. The `cc-records` diff is a reference, never merged | about −750 | about −120 | about −450 | all shapes at 0 failed; the three records still pass C1-C12 |
 | **S6** delete core's factory plumbing (audit O1-O12, less the case folder) | `TutorialSpec` shrinks to the planned-case object records and case folders both build (drop `build_cases`, `apply_case`, `plan_case`, `setup_root`, `output_dir`), and `CaseConfig` goes; delete `tutorial_contracts.py`, `tutorials_display.py`, `specs/validation.py`, `specs/common.py`, `--entry-kind registered_tutorial`, the registry's factory resolution, `describe`'s factory fields (`registered_tutorials`, `special_tutorial_aliases`, `available_tutorials`), the required `get_tutorial_catalog` (M11), cardiacFOAM's `tutorial_displays.py`, and `export-tutorials-catalog.py`. **Kept:** `--entry <case dir>` through `generic_case.py` | about −1,300 to −1,800 (measured when the task starts) | about −300 | about −1,500 | all shapes at 0 failed; the core-shape baseline reaches zero only if the case-folder path's one OpenFOAM token moves too (roadmap item 5, owner) |
 | **S7** (optional) idealized heart, the second consumer | native: the monodomain default under the plain names (owner, §4); omniD: `electroHeart` record (+40), the LFS-pointer refusal in staging (+8) | +48 | +10 | +40 | a real serial run; probe against `regression/injection.monodomain.reference`; C1-C12 |
 
@@ -365,10 +365,10 @@ S3's parity report is accepted.
 | # | decision | recommendation |
 |---|---|---|
 | D1 | Where the two new native cases live | `cases/humanEndocardial/` and `cases/pigMorphometricTransmural/` beside `cases/bivCase`, so the existing `cases/*/0/` and `cases/*/constant/polyMesh/` ignore rules keep the data out. The alternative, un-ignoring the two anatomy-bundle directories under `cases/` to match `COMPARISON.md`, would mark the owner's local data directories as untracked |
-| D2 | Which of the human case's dicts are authoritative | The owner's checkout copy (the human bundle's `system/`, 23 September, `coordinatesConventionDict`, seeds from a placement script) differs in its seeds from `~/cardiacCore-local-cases/<human anatomy bundle>`. Recommend the newer one, confirmed by a run |
+| D2 | Which of the human case's dicts are authoritative | The owner's checkout copy (the human bundle's `system/`, 23 September, `coordinatesConventionDict`, seeds from a placement script) differs in its seeds from `~/cardiacSubstrateFOAM-local-cases/<human anatomy bundle>`. Recommend the newer one, confirmed by a run |
 | D3 | The pig case's dicts and bundle | The only dicts use `uvcConventionDict`. Rewrite them as `coordinatesConventionDict`, and confirm the pig-extended anatomy bundle is the pig-extended case's mesh and fields |
 | D4 | `1DgraphToFoam` in the tree records | Leave it out now (the factory never ran it; the edge-length scaling is pending); add it as a step when the graph hand-off is decided |
-| D5 | The `humanSlab` bundle for S3 | It exists only inside the owner's checkout (`cases/bivCase/{0,constant}`), which agents must not touch. The owner copies `constant/polyMesh/{boundary,faces,neighbour,owner,points}`, `0/fiber`, `0/sheet` and `0/uvc_*` to `~/cardiacCore-local-cases/bivCase_base/`, or allows a read-only supply from the checkout |
-| D6 | Record names | The native variant names (`humanSlab`, `humanEndocardial`, `pigMorphometricTransmural`), replacing `cardiaccore-*` with no alias |
-| D7 | The native test marker | `native_cardiaccore`, with the two variables of S3, and the cardiacCore utilities built from the native worktree (the binaries on `/Volumes/OpenFOAM-v2412` were built on different days, and include `setCardiacScar` from 16 September, before `main` removed scar, so which commit built each one is unknown) |
+| D5 | The `humanSlab` bundle for S3 | It exists only inside the owner's checkout (`cases/bivCase/{0,constant}`), which agents must not touch. The owner copies `constant/polyMesh/{boundary,faces,neighbour,owner,points}`, `0/fiber`, `0/sheet` and `0/uvc_*` to `~/cardiacSubstrateFOAM-local-cases/bivCase_base/`, or allows a read-only supply from the checkout |
+| D6 | Record names | The native variant names (`humanSlab`, `humanEndocardial`, `pigMorphometricTransmural`), replacing `cardiacsubstrate-*` with no alias |
+| D7 | The native test marker | `native_cardiacsubstrate`, with the two variables of S3, and the cardiacSubstrateFOAM utilities built from the native worktree (the binaries on `/Volumes/OpenFOAM-v2412` were built on different days, and include `setCardiacScar` from 16 September, before `main` removed scar, so which commit built each one is unknown) |
 | D8 | S7 and the idealized-heart native defaults | Yes, after S4: it is the second consumer that proves one reality. The native change (monodomain as the plain files) is the owner's |
