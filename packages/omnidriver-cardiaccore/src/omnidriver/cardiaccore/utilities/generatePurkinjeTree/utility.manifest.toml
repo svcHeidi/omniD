@@ -6,9 +6,11 @@ purpose = "Declared from cardiacCore's native tutorial wrappers and utility docu
 inputs = [
   "system/generatePurkinjeTreeDict",
   "system/coordinatesConventionDict",
-  "0/transmural",
-  "0/intraventricular",
-  "0/apicobasal",
+  "0/<transmuralField>",
+  "0/<longitudinalField>",
+  "0/<intraventricularField> (only without endo_lv/endo_rv/epi patches)",
+  "0/PurkinjeTerminalWeightSubendocardial (only under weightedField)",
+  "0/PurkinjeTerminalWeightIntramural (only under weightedField with terminalModel transmural)",
 ]
 requires_mesh = true
 example = "generatePurkinjeTree -case <case>"
@@ -34,14 +36,12 @@ format = "openfoam_face_set"
 description = "Generated epicardial face set"
 produced_by = "generatePurkinjeTree"
 
-# Built only under coordinateSystem uvc (RV-facing septal recovery); a cobiveco case never constructs it.
 [[produces]]
 artifact_id = "rv_septal_endo_faces"
 path_pattern = "constant/polyMesh/sets/RVSeptalEndoFaces"
 format = "openfoam_face_set"
-description = "Generated RV septal endocardial face set; the utility's README says under which coordinate system it is written"
+description = "Generated RV endocardial face set over the septum"
 produced_by = "generatePurkinjeTree"
-optional = true
 
 [[produces]]
 artifact_id = "purkinje_vtk"

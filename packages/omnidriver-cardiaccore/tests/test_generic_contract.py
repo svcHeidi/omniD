@@ -20,7 +20,7 @@ def test_plugin_has_a_valid_context() -> None:
     assert set(context.stack.call("get_dictionary_catalog").documents) - set(CardiacCorePlugin().get_dictionary_catalog().documents) == {
         "controlDict", "fvSchemes",
     }
-    assert len(CardiacCorePlugin().get_dictionary_catalog().entries) == 52
+    assert len(CardiacCorePlugin().get_dictionary_catalog().entries) == 60
     assert set(context.stack.call("get_tutorial_records")) == {
         "idealizedHeart", "idealizedHeartEndocardial", "idealizedHeartPigTransmural",
     }
@@ -114,9 +114,9 @@ def test_declared_tree_extension_targets_are_wall_thickness_depths() -> None:
 
 def test_every_ventkey_entry_declares_its_allowed_bindings() -> None:
     """Every ``<ventKey>`` entry must declare `allowed_bindings` from
-    `VENT_KEYS = ("lv", "rv")`, which sits immediately above `TREE_ENTRIES`
-    with a comment marking the domain closed -- so a placeholder can never
-    silently accept an arbitrary binding (e.g. "banana" as a ventricle)."""
+    `VENT_KEYS = ("lv", "rv")`, whose comment marks the domain closed -- so a
+    placeholder can never silently accept an arbitrary binding (e.g. "banana"
+    as a ventricle)."""
     from omnidriver.cardiaccore.catalogs.inputs import VENT_KEYS
 
     entries = list(
@@ -124,7 +124,7 @@ def test_every_ventkey_entry_declares_its_allowed_bindings() -> None:
         .stack.call("get_dict_entries")
     )
     vent_key_entries = [e for e in entries if "<ventKey>" in e.driver_path]
-    assert len(vent_key_entries) == 21, len(vent_key_entries)
+    assert len(vent_key_entries) == 30, len(vent_key_entries)
     for entry in vent_key_entries:
         assert entry.allowed_bindings.get("<ventKey>") == tuple(VENT_KEYS), entry.driver_path
 

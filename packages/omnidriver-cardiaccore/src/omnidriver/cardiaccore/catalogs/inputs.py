@@ -16,10 +16,13 @@ _CONDUCTIVITY_SOURCE = "applications/utilities/setCardiacConductivity/setCardiac
 _ANATOMY_SOURCE = "applications/utilities/setCardiacAnatomy/setCardiacAnatomy.C"
 _SLAB_SOURCE = "applications/utilities/setPurkinjeSlab/setPurkinjeSlab.C"
 _MORPHOMETRY_SOURCE = "applications/utilities/setPurkinjeMorphometry/setPurkinjeMorphometry.C"
+_MORPHOMETRY_WEIGHTS_SOURCE = "src/purkinjeMorphometry/PurkinjeMorphometryCore.H"
+_MORPHOMETRY_README = "applications/utilities/setPurkinjeMorphometry/README.md"
 _COORDINATES_CONVENTION_SOURCE = "src/coordinatesConvention/coordinatesConvention.H"
 _ANATOMY_README = "applications/utilities/setCardiacAnatomy/README.md"
 _AHA_SEGMENT_NAMES = "applications/utilities/setCardiacAnatomy/aha_segment_names.json"
 _TREE_SOURCE = "applications/utilities/generatePurkinjeTree/generatePurkinjeTree.C"
+_TREE_PARAMS_SOURCE = "applications/utilities/generatePurkinjeTree/PurkinjeVentricleParams.H"
 _TREE_README = "applications/utilities/generatePurkinjeTree/README.md"
 
 
@@ -197,8 +200,7 @@ ANATOMY_ENTRIES: Final[tuple[DictEntry, ...]] = (
         driver_path="$CARDIAC_ANATOMY.auxiliaryFields",
         description=(
             "Whether setCardiacAnatomy also writes phiRV and groove_interface (and AHA_ValveArea when "
-            "valveAreaMaskField is set). False writes only AHA_Segment, aha_angle and aha_z. Optional; "
-            "the C++ default is true."
+            "valveAreaMaskField is set). Optional; the C++ default is true."
         ),
         source_refs=(_ANATOMY_SOURCE, _ANATOMY_README),
         value_kind="boolean",
@@ -257,21 +259,39 @@ SLAB_ENTRIES: Final[tuple[DictEntry, ...]] = (
     ),
 )
 
-# setPurkinjeMorphometryDict has no reviewed x-values other than
-# subendocardialWeight: groove detection is unconditional native behaviour,
-# never a dictionary input. subendocardialWeight is declared, optional, and
-# matching the SLAB_ENTRIES precedent above.
-MORPHOMETRY_ENTRIES: Final[tuple[DictEntry, ...]] = (
-    DictEntry(
-        driver_path="$PURKINJE_MORPHOMETRY.subendocardialWeight",
-        description=(
-            "Weight blending the subendocardial and intramural terminal-sampling "
-            "fields written by setPurkinjeMorphometry."
-        ),
-        source_refs=("tutorials/template/system/setPurkinjeMorphometryDict", _MORPHOMETRY_SOURCE),
-        value_kind="scalar",
-        typical_value="0.56",
-        required=False,
+#: The ventricle blocks generatePurkinjeTree and setPurkinjeMorphometry read:
+#: ``lv`` and ``rv``, and no other. The domain is closed -- a third block
+#: would be ignored -- so a ``<ventKey>`` path expands to exactly these two.
+VENT_KEYS: Final[tuple[str, ...]] = ("lv", "rv")
+
+
+# setPurkinjeMorphometry reads one block per ventricle through readClassWeights
+# (PurkinjeMorphometryCore.H), every entry optional. What each class covers,
+# the defaults, and how an rv block falls back to lv are the utility's README.
+_MORPHOMETRY_CLASSES: Final[dict[str, tuple[str, ...]]] = {
+    "longitudinal": ("base", "mid", "apex"),
+    "circumferential": ("posterior", "septal", "anterior", "lateral"),
+    "transmural": ("subendocardial", "intramural"),
+}
+
+MORPHOMETRY_ENTRIES: Final[tuple[DictEntry, ...]] = build_group(
+    {"allowed_bindings": {"<ventKey>": VENT_KEYS}},
+    tuple(
+        DictEntry(
+            driver_path=f"$PURKINJE_MORPHOMETRY.<ventKey>.{axis}.{name}",
+            description=(
+                f"Relative terminal density of the {axis} class '{name}' in this ventricle; "
+                "a cell's terminal weight is the product of its three class weights."
+            ),
+            source_refs=(_MORPHOMETRY_WEIGHTS_SOURCE, _MORPHOMETRY_SOURCE, _MORPHOMETRY_README),
+            value_kind="scalar",
+            notes=(
+                "The rv block's septal weight applies to no cell, and setting it prints a warning."
+                if name == "septal" else ""
+            ),
+        )
+        for axis, names in _MORPHOMETRY_CLASSES.items()
+        for name in names
     ),
 )
 
@@ -297,17 +317,9 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
         required=True,
         enum_values=("uvc", "cobiveco"),
         notes=(
-            "'uvc': Bayer et al. biventricular convention -- transmural and "
-            "intraventricular membership are solved together against the LV "
-            "boundary, so the RV-facing septal wall reads near-epicardial "
-            "and needs the septal-flip/RV-septal-recovery correction "
-            "generatePurkinjeTree applies (useSeptalFlip = coordinateSystem "
-            "== uvc, generatePurkinjeTree.C). 'cobiveco': tm/tv/apicobasal "
-            "fields solved independently per chamber, so no correction is "
-            "needed or performed. Only generatePurkinjeTree reads it "
-            "(readCoordinateSystem: get<word> with no default, and a FatalError "
-            "for any other value); it is required of every case that carries the "
-            "file, so a case that never runs generatePurkinjeTree states it anyway."
+            "setCardiacAnatomy and generatePurkinjeTree read it (readCoordinateSystem: get<word> with no "
+            "default, and a FatalError for any other value); it is required of every case that carries the "
+            "file. What each system changes in the face sets both build is src/endocardialSurfaces/README.md."
         ),
     ),
     DictEntry(
@@ -363,13 +375,6 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
     ),
 )
 
-#: The ventricle blocks generatePurkinjeTree reads, in the order it reads
-#: them: ``readVentParams("lv")`` then ``readVentParams("rv")``
-#: (generatePurkinjeTree.C). The domain is closed -- a third block would be
-#: ignored -- so a ``<ventKey>`` path expands to exactly these two.
-VENT_KEYS: Final[tuple[str, ...]] = ("lv", "rv")
-
-
 # --- generatePurkinjeTreeDict -------------------------------------------------
 #
 # These tree parameters document the native contract.
@@ -398,7 +403,7 @@ _TREE_ROOT_ENTRIES: Final[tuple[DictEntry, ...]] = (
 
 TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
     # allowed_bindings is declared from VENT_KEYS -- the closed domain
-    # generatePurkinjeTree.C actually reads -- rather than retyped literally
+    # readVentParams actually reads -- rather than retyped literally
     # on every entry, so an invalid ventricle name (e.g. "banana") is rejected
     # for all <ventKey> entries at once.
     {"allowed_bindings": {"<ventKey>": VENT_KEYS}},
@@ -410,19 +415,19 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.seed",
         description="Initial point of the ventricular tree.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="vector3",
         required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.lineEnd",
         description="Point defining the initial trunk direction together with seed (direction = lineEnd - seed).",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="vector3",
         mutually_exclusive_with=("$PURKINJE_TREE.<ventKey>.initDir",),
         constraints=(
             "Alternative to initDir; a ventricular block must provide exactly one "
-            "(generatePurkinjeTree.C's lineEnd/initDir branch raises a FatalError if neither is "
+            "(readVentParams' lineEnd/initDir branch raises a FatalError if neither is "
             "present). If both are present the native code silently prefers "
             "lineEnd and never reads initDir (readVentParams' if/else-if), so "
             "`mutually_exclusive_with` is a stricter check than the native code "
@@ -432,7 +437,7 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.initDir",
         description="Initial trunk direction vector, used directly instead of deriving it from lineEnd.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="vector3",
         mutually_exclusive_with=("$PURKINJE_TREE.<ventKey>.lineEnd",),
         constraints=("Alternative to lineEnd; see lineEnd sibling entry.",),
@@ -440,28 +445,28 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.initLength",
         description="Initial trunk length.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
         required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.N_it",
         description="Number of branching generations grown after the trunk.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="integer",
         required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.length",
         description="Mean length of each new branch.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
         required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.l_segment",
         description="Discretization step length used while growing each branch.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
         required=True,
         constraints=("Must suit local mesh resolution (README): too coarse relative to surface triangle size/curvature can walk the march out of its local projection neighbourhood.",),
@@ -469,7 +474,7 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.branchAngle",
         description="Half-angle between the two daughter branches at a bifurcation.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
         required=True,
         unit="rad",
@@ -477,44 +482,44 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.repulsivity",
         description="Local branch-separation correction weight.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
         required=True,
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.transmuralMin",
         description="Minimum accepted transmural coordinate for a surface growth point.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
-        notes="Defaults to transmuralLowerValue($COORDINATES_CONVENTION.transmural) = min(endocardium, epicardium) when omitted (generatePurkinjeTree.C's transmuralMin getOrDefault and its range guard); not a fixed literal, so no typical_value is given.",
+        notes="Defaults to transmuralLowerValue($COORDINATES_CONVENTION.transmural) = min(endocardium, epicardium) when omitted (readVentParams' transmuralMin getOrDefault and its range guard); not a fixed literal, so no typical_value is given.",
         constraints=("Must satisfy transmuralLowerValue <= transmuralMin <= transmuralMax <= transmuralUpperValue (the numeric bounds of $COORDINATES_CONVENTION.transmural, not necessarily endocardium <= epicardium -- see that document's notes on CObiveco).",),
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.transmuralMax",
         description="Maximum accepted transmural coordinate for a surface growth point.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
-        notes="Defaults to transmuralUpperValue($COORDINATES_CONVENTION.transmural) = max(endocardium, epicardium) when omitted (generatePurkinjeTree.C's transmuralMax getOrDefault and its range guard); not a fixed literal, so no typical_value is given.",
+        notes="Defaults to transmuralUpperValue($COORDINATES_CONVENTION.transmural) = max(endocardium, epicardium) when omitted (readVentParams' transmuralMax getOrDefault and its range guard); not a fixed literal, so no typical_value is given.",
         constraints=("Must satisfy transmuralLowerValue <= transmuralMin <= transmuralMax <= transmuralUpperValue; see transmuralMin sibling entry.",),
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.longitudinalMin",
         description="Minimum accepted longitudinal coordinate for a surface growth point.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
         typical_value="-GREAT (unbounded)",
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.longitudinalMax",
         description="Maximum accepted longitudinal coordinate for a surface growth point.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
         typical_value="GREAT (unbounded)",
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.terminalModel",
         description="Terminal (PMJ) placement model.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="enum",
         enum_values=("endocardial", "transmural"),
         typical_value="endocardial",
@@ -523,7 +528,7 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.extension.type",
         description="Transmural terminal-extension march style.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="enum",
         enum_values=("straightSegment", "gradientFollow"),
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
@@ -533,16 +538,16 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.extension.depthMin",
         description="Minimum depth into the wall, as a fraction of thickness from the endocardium, sampled as a terminal-extension target.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
-        constraints=("Must satisfy 0 <= depthMin <= depthMax <= 1 (generatePurkinjeTree.C's extension depth guard). 0 is the endocardial surface and 1 the epicardial one, whichever numeric transmural value each carries, so one value means the same place under uvc and cobiveco.",),
+        constraints=("Must satisfy 0 <= depthMin <= depthMax <= 1 (readVentParams' extension depth guard). 0 is the endocardial surface and 1 the epicardial one, whichever numeric transmural value each carries, so one value means the same place under uvc and cobiveco.",),
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.extension.depthMax",
         description="Maximum depth into the wall sampled as a terminal-extension target; the effective ceiling since the march stops as soon as it crosses the sampled depth.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
@@ -551,46 +556,41 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.extension.stepLen",
         description="Terminal-extension marching step length.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
-        constraints=("Must be positive (generatePurkinjeTree.C's extension.stepLen/maxSteps guard).",),
+        constraints=("Must be positive (readVentParams' extension.stepLen/maxSteps guard).",),
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.extension.maxSteps",
         description="Safety limit on the number of marching steps for one terminal extension.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="integer",
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
-        constraints=("Must be positive (generatePurkinjeTree.C's extension.stepLen/maxSteps guard).",),
+        constraints=("Must be positive (readVentParams' extension.stepLen/maxSteps guard).",),
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.terminalSelectionModel",
         description="Terminal-sampling model: which grown leaves become terminals.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="enum",
         enum_values=("allLeaves", "weightedField"),
         typical_value="allLeaves",
-        constraints=(
-            "weightedField is supported for the lv block only in v1 "
-            "(generatePurkinjeTree.C's weightedField ventKey guard raises a FatalError for "
-            "ventKey != 'lv'). This restricts one *instance* of the "
-            "<ventKey> dynamic block relative to another (lv vs rv), which "
-            "the applicable_when/forbidden_when predicates cannot express: "
-            "they compare values, never an instance's name "
-            "(omnidriver.openfoam.case_rules).",
+        notes=(
+            "weightedField reads the weights setPurkinjeMorphometry writes; an rv block's needs an rv block "
+            "in setPurkinjeMorphometryDict, without which every RV weight is 0 (README)."
         ),
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.terminalCount",
-        description="Number of distinct LV source leaves sampled by terminalSelectionModel=weightedField.",
-        source_refs=(_TREE_SOURCE, _TREE_README),
+        description="Number of distinct source leaves of this ventricle's tree sampled by terminalSelectionModel=weightedField.",
+        source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="integer",
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalSelectionModel": ("weightedField",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalSelectionModel": ("weightedField",)},
-        constraints=("Must be positive (generatePurkinjeTree.C's terminalCount positivity guard).",),
+        constraints=("Must be positive (readVentParams' terminalCount positivity guard).",),
     ),
     ),
 )

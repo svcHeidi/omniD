@@ -3,6 +3,7 @@ file; ``omnidriver scan`` and ``omnidriver check`` run against the whole trees."
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -879,6 +880,65 @@ DICTIONARY_PATTERNS = '''void pattern(const fvMesh& mesh_, const dictionary& dic
 }
 '''
 
+
+# cardiacCore src/purkinjeMorphometry/PurkinjeMorphometryCore.H: readClassWeights.
+READ_CLASS_WEIGHTS = '''inline ClassWeights readClassWeights
+(
+    const dictionary& dict,
+    const ClassWeights& defaults
+)
+{
+    ClassWeights w = defaults;
+    const dictionary& l = dict.optionalSubDict("longitudinal");
+    const dictionary& c = dict.optionalSubDict("circumferential");
+    const dictionary& t = dict.optionalSubDict("transmural");
+    w.base = l.getOrDefault<scalar>("base", w.base);
+    w.mid = l.getOrDefault<scalar>("mid", w.mid);
+    w.apex = l.getOrDefault<scalar>("apex", w.apex);
+    w.posterior = c.getOrDefault<scalar>("posterior", w.posterior);
+    w.septal = c.getOrDefault<scalar>("septal", w.septal);
+    w.anterior = c.getOrDefault<scalar>("anterior", w.anterior);
+    w.lateral = c.getOrDefault<scalar>("lateral", w.lateral);
+    w.subendocardial = t.getOrDefault<scalar>("subendocardial", w.subendocardial);
+    w.intramural = t.getOrDefault<scalar>("intramural", w.intramural);
+    return w;
+}
+'''
+
+# cardiacCore applications/utilities/setPurkinjeMorphometry/setPurkinjeMorphometry.C: main's dictionaries and its
+# two calls of readClassWeights.
+SET_PURKINJE_MORPHOMETRY = '''int main(int argc, char *argv[])
+{
+    IOdictionary morphDict
+    (
+        IOobject
+        (
+            "setPurkinjeMorphometryDict", runTime.system(), mesh,
+            IOobject::MUST_READ, IOobject::NO_WRITE
+        )
+    );
+    IOdictionary conventionDict
+    (
+        IOobject
+        (
+            "coordinatesConventionDict", runTime.system(), mesh,
+            IOobject::MUST_READ, IOobject::NO_WRITE
+        )
+    );
+    const IntraventricularConvention convention =
+        readIntraventricularConvention(conventionDict);
+
+    const ClassWeights lvWeights =
+        readClassWeights(morphDict.optionalSubDict("lv"), ClassWeights());
+    const bool classifyRV = morphDict.found("rv");
+    const ClassWeights rvWeights =
+        classifyRV
+      ? readClassWeights(morphDict.subDict("rv"), lvWeights)
+      : ClassWeights();
+}
+'''
+
+
 def _tree(tmp_path: Path, **files: str) -> Path:
     root = tmp_path / "src"
     for name, text in files.items():
@@ -1488,3 +1548,22 @@ def test_a_key_a_struct_member_names_is_read_once_per_caller_that_builds_or_forw
     }
     read = next(read for read in scan.reads if read.key == "conductivity" and read.method == "dimensioned")
     assert (read.type, read.file, read.conditional) == ("dimensionedSymmTensor", "conductivityFieldIO.C", True)
+
+
+def test_a_block_read_by_a_literal_name_is_the_catalogued_instance_its_placeholder_allows(tmp_path):
+    files = {"PurkinjeMorphometryCore.H": READ_CLASS_WEIGHTS, "setPurkinjeMorphometry.C": SET_PURKINJE_MORPHOMETRY}
+    entries = tuple(
+        _entry(f"$PURKINJE_MORPHOMETRY.<ventKey>.{axis}.{name}", allowed_bindings={"<ventKey>": ("lv", "rv")})
+        for axis, names in (
+            ("longitudinal", ("base", "mid", "apex")),
+            ("circumferential", ("posterior", "septal", "anterior", "lateral")),
+            ("transmural", ("subendocardial", "intramural")),
+        )
+        for name in names
+    )
+    report = _report(tmp_path, entries, document="setPurkinjeMorphometryDict", **files)
+    assert (report["uncatalogued"], report["unread"], report["disagreements"]) == ([], [], [])
+
+    lv_only = tuple(replace(entry, allowed_bindings={"<ventKey>": ("lv",)}) for entry in entries)
+    report = _report(tmp_path / "lv", lv_only, document="setPurkinjeMorphometryDict", **files)
+    assert [(note["kind"], note["path"]) for note in report["uncatalogued"]] == [("dictionary", "rv")]
