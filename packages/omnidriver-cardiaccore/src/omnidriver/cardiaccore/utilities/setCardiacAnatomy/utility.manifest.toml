@@ -8,6 +8,7 @@ inputs = [
   "system/coordinatesConventionDict",
   "0/<longitudinalField>",
   "0/<intraventricularField>",
+  "0/<transmuralField> (only without endo_lv/endo_rv/epi patches)",
 ]
 requires_mesh = true
 example = "setCardiacAnatomy -case <case>"
@@ -31,6 +32,35 @@ artifact_id = "aha_z"
 path_pattern = "0/aha_z"
 format = "openfoam_field"
 description = "Position along the cell's own ventricle's cavity (0 at the cavity end, 1 at the base); the AHA rings are thresholds on it. 0 outside ventricularCellZone"
+produced_by = "setCardiacAnatomy"
+
+# The face sets generatePurkinjeTree also builds, by the same code (src/endocardialSurfaces).
+[[produces]]
+artifact_id = "lv_endo_faces"
+path_pattern = "constant/polyMesh/sets/LVEndoFaces"
+format = "openfoam_face_set"
+description = "LV endocardial face set"
+produced_by = "setCardiacAnatomy"
+
+[[produces]]
+artifact_id = "rv_endo_faces"
+path_pattern = "constant/polyMesh/sets/RVEndoFaces"
+format = "openfoam_face_set"
+description = "RV endocardial face set"
+produced_by = "setCardiacAnatomy"
+
+[[produces]]
+artifact_id = "epi_faces"
+path_pattern = "constant/polyMesh/sets/EpiFaces"
+format = "openfoam_face_set"
+description = "Epicardial face set"
+produced_by = "setCardiacAnatomy"
+
+[[produces]]
+artifact_id = "rv_septal_endo_faces"
+path_pattern = "constant/polyMesh/sets/RVSeptalEndoFaces"
+format = "openfoam_face_set"
+description = "RV endocardial face set over the septum, which decides the AHA chamber"
 produced_by = "setCardiacAnatomy"
 
 # The next three are written unless the dictionary sets auxiliaryFields false.
