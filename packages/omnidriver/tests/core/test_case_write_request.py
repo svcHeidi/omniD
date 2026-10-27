@@ -10,7 +10,7 @@ from omnidriver.core import case_write
 def _assignment(**overrides):
     fields = dict(
         qualified_id="$CARDIAC_CONDUCTIVITY.df",
-        owner="org.cardiaccore",
+        owner="org.cardiacsubstrate",
         document="system/setCardiacConductivityDict",
         key_path=("df",),
         value=0.1,

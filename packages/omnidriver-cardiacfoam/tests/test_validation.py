@@ -1067,7 +1067,7 @@ def test_pvj_resistance_silent_when_rpvj_explicitly_set(tmp_path):
 
 
 def test_pvj_resistance_defers_when_graph_not_yet_materialized(tmp_path):
-    """cardiacCore generates the graph later, so a missing graph defers rather than errors."""
+    """cardiacSubstrateFOAM generates the graph later, so a missing graph defers rather than errors."""
     electro_path = _build_pvj_case(tmp_path, set_rpvj=False, graph_present=False)
     diagnostics = _pvj_diagnostics(tmp_path)
     assert diagnostics == ()

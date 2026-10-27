@@ -22,7 +22,7 @@ _PACKAGES = (
     "omnidriver",
     "omnidriver-openfoam",
     "omnidriver-cardiacfoam",
-    "omnidriver-cardiaccore",
+    "omnidriver-cardiacsubstrate",
     "omnidriver-opencarp",
     "omnidriver-torchcor",
 )
@@ -110,11 +110,11 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
 
         assert files("omnidriver.opencarp").joinpath("opencarp_parameters.json").is_file()
 
-        assert "cardiaccore" in discover_plugins()
+        assert "cardiacsubstrate" in discover_plugins()
         # Same migration as the cardiacFoam assertion above.
-        assert load_plugin_context("cardiaccore").identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiaccore"
-        assert load_plugin_context("cardiaccore").stack.call("get_case_runtime_conventions").generated_directory_names
-        assert "blockMesh" in load_plugin_context("cardiaccore").stack.call("get_environment_commands")
+        assert load_plugin_context("cardiacsubstrate").identity.to_json()["providers"][-1]["id"] == "org.omnidriver.cardiacsubstrate"
+        assert load_plugin_context("cardiacsubstrate").stack.call("get_case_runtime_conventions").generated_directory_names
+        assert "blockMesh" in load_plugin_context("cardiacsubstrate").stack.call("get_environment_commands")
 
         # Core has no path-name default. In a neutral staging call, these are
         # authored inputs, even though the OpenFOAM adapter declares one of
@@ -156,14 +156,14 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         == "org.cardiacfoam"
     )
 
-    cardiaccore_describe = _run(
+    cardiacsubstrate_describe = _run(
         [
             str(python),
             "-m",
             "omnidriver",
             "describe",
             "--plugin",
-            "cardiaccore",
+            "cardiacsubstrate",
             "--entry",
             "idealizedHeart",
             "--cases-root",
@@ -172,9 +172,9 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
         cwd=probe_root,
         env=clean_environment,
     )
-    cardiaccore_payload = json.loads(cardiaccore_describe)
-    assert cardiaccore_payload["entry"]["entry_name"] == "idealizedHeart"
+    cardiacsubstrate_payload = json.loads(cardiacsubstrate_describe)
+    assert cardiacsubstrate_payload["entry"]["entry_name"] == "idealizedHeart"
     assert (
-        cardiaccore_payload["capability_manifest"]["plugin_identity"]["providers"][-1]["id"]
-        == "org.omnidriver.cardiaccore"
+        cardiacsubstrate_payload["capability_manifest"]["plugin_identity"]["providers"][-1]["id"]
+        == "org.omnidriver.cardiacsubstrate"
     )

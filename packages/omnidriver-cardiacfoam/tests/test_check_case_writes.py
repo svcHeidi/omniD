@@ -62,7 +62,7 @@ def test_scanned_roots_are_exactly_the_axes_records_and_planner_paths():
         "packages/omnidriver-openfoam/src/omnidriver/openfoam/case_planning.py",
         "packages/omnidriver-opencarp/src/omnidriver/opencarp/records",
         "packages/omnidriver-torchcor/src/omnidriver/torchcor/records",
-        "packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore/records",
+        "packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate/records",
     }
 
 

@@ -104,7 +104,7 @@ def test_core_executable_literals_do_not_encode_adapter_conventions() -> None:
 ADAPTER_PACKAGES = (
     "packages/omnidriver-openfoam/src",
     "packages/omnidriver-cardiacfoam/src",
-    "packages/omnidriver-cardiaccore/src",
+    "packages/omnidriver-cardiacsubstrate/src",
     "packages/omnidriver-opencarp/src",
     "packages/omnidriver-torchcor/src",
 )

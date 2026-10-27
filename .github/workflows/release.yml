@@ -6,7 +6,7 @@ on:
       - "omnidriver-v*"
       - "omnidriver-openfoam-v*"
       - "omnidriver-cardiacfoam-v*"
-      - "omnidriver-cardiaccore-v*"
+      - "omnidriver-cardiacsubstrate-v*"
       - "omnidriver-opencarp-v*"
       - "omnidriver-torchcor-v*"
 

@@ -19,7 +19,7 @@ OPENFOAM_SRC = REPO_ROOT / "packages/omnidriver-openfoam/src/omnidriver/openfoam
 # The two cardiac adapters are siblings: a direct import would make one
 # adapter's vocabulary a silent dependency of the other, so the seam between
 # them is declared, not imported.
-CARDIACCORE_SRC = REPO_ROOT / "packages/omnidriver-cardiaccore/src/omnidriver/cardiaccore"
+CARDIACSUBSTRATE_SRC = REPO_ROOT / "packages/omnidriver-cardiacsubstrate/src/omnidriver/cardiacsubstrate"
 # openCARP drives a different binary: no OpenFOAM, cardiac or foamlib import
 # belongs in it.
 OPENCARP_SRC = REPO_ROOT / "packages/omnidriver-opencarp/src/omnidriver/opencarp"
@@ -106,11 +106,11 @@ def main() -> int:
     # Each adapter's own rules. Every adapter found on disk must appear here;
     # one that does not is refused below rather than silently exempted.
     adapter_rules: dict[Path, tuple[str, ...]] = {
-        OPENFOAM_SRC: ("omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.opencarp", "omnidriver.torchcor"),
-        CARDIACFOAM_SRC: ("omnidriver.cardiaccore", "omnidriver.opencarp", "omnidriver.torchcor"),
-        CARDIACCORE_SRC: ("omnidriver.cardiacfoam", "omnidriver.opencarp", "omnidriver.torchcor"),
-        OPENCARP_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.torchcor"),
-        TORCHCOR_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiaccore", "omnidriver.opencarp"),
+        OPENFOAM_SRC: ("omnidriver.cardiacfoam", "omnidriver.cardiacsubstrate", "omnidriver.opencarp", "omnidriver.torchcor"),
+        CARDIACFOAM_SRC: ("omnidriver.cardiacsubstrate", "omnidriver.opencarp", "omnidriver.torchcor"),
+        CARDIACSUBSTRATE_SRC: ("omnidriver.cardiacfoam", "omnidriver.opencarp", "omnidriver.torchcor"),
+        OPENCARP_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiacsubstrate", "omnidriver.torchcor"),
+        TORCHCOR_SRC: ("foamlib", "omnidriver.openfoam", "omnidriver.cardiacfoam", "omnidriver.cardiacsubstrate", "omnidriver.opencarp"),
         VERIFIER_SRC: ("foamlib", *sorted(name for name in adapters if name != "omnidriver.verifier")),
     }
     for root in adapter_rules:

@@ -13,7 +13,7 @@ from omnidriver.core.contracts.dictionary_catalog import DictionaryCatalog
 from omnidriver.openfoam.dict_keys_scanner import cached_scan, catalog_report, scan_source, source_digest
 from omnidriver.openfoam.record_key_validation import scanned_key
 
-# cardiacCore applications/utilities/setPurkinjeSlab/setPurkinjeSlab.C: main, up to its two reads.
+# cardiacSubstrateFOAM applications/utilities/setPurkinjeSlab/setPurkinjeSlab.C: main, up to its two reads.
 SET_PURKINJE_SLAB = '''#include "fvCFD.H"
 #include "coordinatesConvention.H"
 
@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
 }
 '''
 
-# cardiacCore src/coordinatesConvention/coordinatesConvention.H: readCoordinatesConvention.
+# cardiacSubstrateFOAM src/coordinatesConvention/coordinatesConvention.H: readCoordinatesConvention.
 READ_COORDINATES_CONVENTION = '''inline CoordinatesConvention readCoordinatesConvention
 (
     const dictionary& conventionDict
@@ -145,7 +145,7 @@ READ_CONDUCTIVITY_FIELD = '''tmp<volTensorField> readConductivityField
 }
 '''
 
-# cardiacCore applications/utilities/generatePurkinjeTree/generatePurkinjeTree.C: main's treeDict and
+# cardiacSubstrateFOAM applications/utilities/generatePurkinjeTree/generatePurkinjeTree.C: main's treeDict and
 # two reads of readVentParams.
 READ_VENT_PARAMS = '''int main(int argc, char *argv[])
 {
@@ -197,7 +197,7 @@ public:
 '''
 
 
-# cardiacCore src/coordinatesConvention/coordinatesConvention.H: readTransmuralConvention.
+# cardiacSubstrateFOAM src/coordinatesConvention/coordinatesConvention.H: readTransmuralConvention.
 READ_TRANSMURAL_CONVENTION = '''inline TransmuralConvention readTransmuralConvention
 (
     const dictionary& conventionDict
@@ -412,7 +412,7 @@ CONFIGURE_NAMED_REGIONS = '''void Foam::ionicHeterogeneityOrchestrator::configur
 }
 '''
 
-# cardiacCore src/coordinatesConvention/coordinatesConvention.H: readCoordinateSystem.
+# cardiacSubstrateFOAM src/coordinatesConvention/coordinatesConvention.H: readCoordinateSystem.
 READ_COORDINATE_SYSTEM = '''inline CoordinateSystem readCoordinateSystem
 (
     const dictionary& conventionDict
@@ -431,7 +431,7 @@ READ_COORDINATE_SYSTEM = '''inline CoordinateSystem readCoordinateSystem
 '''
 
 
-# cardiacCore applications/utilities/setCardiacConductivity/setCardiacConductivity.C: writeConductivity to its first
+# cardiacSubstrateFOAM applications/utilities/setCardiacConductivity/setCardiacConductivity.C: writeConductivity to its first
 # conditional read, and the `small` constructor main applies to a field (the last two lines close the function).
 WRITE_CONDUCTIVITY = '''#include "fvCFD.H"
 
@@ -881,7 +881,7 @@ DICTIONARY_PATTERNS = '''void pattern(const fvMesh& mesh_, const dictionary& dic
 '''
 
 
-# cardiacCore src/purkinjeMorphometry/PurkinjeMorphometryCore.H: readClassWeights.
+# cardiacSubstrateFOAM src/purkinjeMorphometry/PurkinjeMorphometryCore.H: readClassWeights.
 READ_CLASS_WEIGHTS = '''inline ClassWeights readClassWeights
 (
     const dictionary& dict,
@@ -905,7 +905,7 @@ READ_CLASS_WEIGHTS = '''inline ClassWeights readClassWeights
 }
 '''
 
-# cardiacCore applications/utilities/setPurkinjeMorphometry/setPurkinjeMorphometry.C: main's dictionaries and its
+# cardiacSubstrateFOAM applications/utilities/setPurkinjeMorphometry/setPurkinjeMorphometry.C: main's dictionaries and its
 # two calls of readClassWeights.
 SET_PURKINJE_MORPHOMETRY = '''int main(int argc, char *argv[])
 {

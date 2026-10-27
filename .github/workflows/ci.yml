@@ -83,10 +83,10 @@ jobs:
       - name: Run tests
         run: python -m pytest packages/omnidriver-cardiacfoam/tests -m "not slow" -q
 
-  # omnidriver-cardiaccore depends on omnidriver-openfoam: its records, case
+  # omnidriver-cardiacsubstrate depends on omnidriver-openfoam: its records, case
   # rules and key validation are built on the OpenFOAM layer.
-  test-cardiaccore:
-    name: test-cardiaccore (py${{ matrix.python-version }})
+  test-cardiacsubstrate:
+    name: test-cardiacsubstrate (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -102,17 +102,17 @@ jobs:
           cache-dependency-path: |
             packages/omnidriver/pyproject.toml
             packages/omnidriver-openfoam/pyproject.toml
-            packages/omnidriver-cardiaccore/pyproject.toml
+            packages/omnidriver-cardiacsubstrate/pyproject.toml
 
-      - name: Install omnidriver + omnidriver-openfoam + omnidriver-cardiaccore
+      - name: Install omnidriver + omnidriver-openfoam + omnidriver-cardiacsubstrate
         run: |
           pip install -e packages/omnidriver \
                       -e packages/omnidriver-openfoam \
-                      -e packages/omnidriver-cardiaccore \
+                      -e packages/omnidriver-cardiacsubstrate \
                       pytest
 
       - name: Run tests
-        run: python -m pytest packages/omnidriver-cardiaccore/tests -q
+        run: python -m pytest packages/omnidriver-cardiacsubstrate/tests -q
 
   # openCARP drives a different binary entirely and needs no OpenFOAM, so this
   # job installs core and the opencarp adapter only -- which also proves the
@@ -237,7 +237,7 @@ jobs:
             packages/omnidriver/pyproject.toml
             packages/omnidriver-openfoam/pyproject.toml
             packages/omnidriver-cardiacfoam/pyproject.toml
-            packages/omnidriver-cardiaccore/pyproject.toml
+            packages/omnidriver-cardiacsubstrate/pyproject.toml
             packages/omnidriver-opencarp/pyproject.toml
             packages/omnidriver-torchcor/pyproject.toml
 
@@ -246,7 +246,7 @@ jobs:
           pip install -e packages/omnidriver \
                       -e packages/omnidriver-openfoam \
                       -e packages/omnidriver-cardiacfoam \
-                      -e packages/omnidriver-cardiaccore \
+                      -e packages/omnidriver-cardiacsubstrate \
                       -e packages/omnidriver-opencarp \
                       -e packages/omnidriver-torchcor \
                       pytest

@@ -431,7 +431,7 @@ INPUT_DESTINATION = "0/bundle.json"
 
 
 class WithInputPlugin(ToyStack):
-    """One input with no native location, a toy stand-in for cardiacCore's anatomy bundle."""
+    """One input with no native location, a toy stand-in for cardiacSubstrateFOAM's anatomy bundle."""
 
     RECORDS = {"toyTutorial": _toy_record(
         _solve(("touch", "solved.marker"), consumes=("constant/mesh.json", INPUT_DESTINATION)),

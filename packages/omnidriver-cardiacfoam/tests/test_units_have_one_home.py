@@ -1,6 +1,6 @@
 """A unit is declared in the `unit` field, not asserted in prose beside it.
 
-A prose-only unit cannot be checked or converted, e.g. electrode positions "[m]" against cardiacCore's caller-declared ``coordinate_unit``."""
+A prose-only unit cannot be checked or converted, e.g. electrode positions "[m]" against cardiacSubstrateFOAM's caller-declared ``coordinate_unit``."""
 
 from __future__ import annotations
 

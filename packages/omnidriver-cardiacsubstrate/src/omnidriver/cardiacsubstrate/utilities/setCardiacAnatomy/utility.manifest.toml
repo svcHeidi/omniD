@@ -1,0 +1,89 @@
+name = "setCardiacAnatomy"
+description = "Assign AHA segment labels (LV 1-17, RV 18-26), their short-axis angle and the position along each ventricle's cavity the rings are cut on."
+category = "field-setup"
+
+purpose = "Declared from cardiacSubstrateFOAM's native tutorial wrappers and utility documentation."
+inputs = [
+  "system/setCardiacAnatomyDict",
+  "system/coordinatesConventionDict",
+  "0/<longitudinalField>",
+  "0/<intraventricularField>",
+  "0/<transmuralField> (only without endo_lv/endo_rv/epi patches)",
+]
+requires_mesh = true
+example = "setCardiacAnatomy -case <case>"
+
+[[produces]]
+artifact_id = "aha_segment"
+path_pattern = "0/AHA_Segment"
+format = "openfoam_field"
+description = "AHA segment ID per cell: LV 1-17, RV free wall 18-26, 0 outside ventricularCellZone"
+produced_by = "setCardiacAnatomy"
+
+[[produces]]
+artifact_id = "aha_angle"
+path_pattern = "0/aha_angle"
+format = "openfoam_field"
+description = "Short-axis polar angle"
+produced_by = "setCardiacAnatomy"
+
+[[produces]]
+artifact_id = "aha_z"
+path_pattern = "0/aha_z"
+format = "openfoam_field"
+description = "Position along the cell's own ventricle's cavity (0 at the cavity end, 1 at the base); the AHA rings are thresholds on it. 0 outside ventricularCellZone"
+produced_by = "setCardiacAnatomy"
+
+# The face sets generatePurkinjeTree also builds, by the same code (src/endocardialSurfaces).
+[[produces]]
+artifact_id = "lv_endo_faces"
+path_pattern = "constant/polyMesh/sets/LVEndoFaces"
+format = "openfoam_face_set"
+description = "LV endocardial face set"
+produced_by = "setCardiacAnatomy"
+
+[[produces]]
+artifact_id = "rv_endo_faces"
+path_pattern = "constant/polyMesh/sets/RVEndoFaces"
+format = "openfoam_face_set"
+description = "RV endocardial face set"
+produced_by = "setCardiacAnatomy"
+
+[[produces]]
+artifact_id = "epi_faces"
+path_pattern = "constant/polyMesh/sets/EpiFaces"
+format = "openfoam_face_set"
+description = "Epicardial face set"
+produced_by = "setCardiacAnatomy"
+
+[[produces]]
+artifact_id = "rv_septal_endo_faces"
+path_pattern = "constant/polyMesh/sets/RVSeptalEndoFaces"
+format = "openfoam_face_set"
+description = "RV endocardial face set over the septum, which decides the AHA chamber"
+produced_by = "setCardiacAnatomy"
+
+# The next three are written unless the dictionary sets auxiliaryFields false.
+[[produces]]
+artifact_id = "phi_rv"
+path_pattern = "0/phiRV"
+format = "openfoam_field"
+description = "aha_angle on RV cells only, 0 elsewhere"
+produced_by = "setCardiacAnatomy"
+optional = true
+
+[[produces]]
+artifact_id = "groove_interface"
+path_pattern = "0/groove_interface"
+format = "openfoam_field"
+description = "Interventricular groove marker"
+produced_by = "setCardiacAnatomy"
+optional = true
+
+[[produces]]
+artifact_id = "aha_valve_area"
+path_pattern = "0/AHA_ValveArea"
+format = "openfoam_field"
+description = "1/0 per cell: the valve area. Written only with valveAreaMaskField set and auxiliaryFields true"
+produced_by = "setCardiacAnatomy"
+optional = true

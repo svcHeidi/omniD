@@ -1,0 +1,42 @@
+schema_version: 1
+plugin:
+  id: org.omnidriver.cardiacsubstrate
+  api_version: "3"
+requires:
+  - org.omnidriver.openfoam.environment
+# The C++ source the key scanner reads (one mechanism with cardiacFOAM's,
+# omnidriver-openfoam's dict_keys_scanner): supplied, never discovered. The
+# variable is the native tutorials tree;
+# `relative` reaches the repository root from it. Every strict plan compares the
+# catalog (catalogs/inputs.py) with it.
+cxx_mapping:
+  source_root:
+    variable: OMNIDRIVER_CARDIACSUBSTRATE_TREE
+    relative: ..
+  reviewed_allowlist: dict_key_allowlist.json
+case_profile:
+  dictionaries:
+    - path: system/setCardiacConductivityDict
+      kind: openfoam_dictionary
+      role: cardiacsubstrate.conductivity_dictionary
+      required: conditional
+    - path: system/setCardiacAnatomyDict
+      kind: openfoam_dictionary
+      role: cardiacsubstrate.anatomy_dictionary
+      required: conditional
+    - path: system/setPurkinjeSlabDict
+      kind: openfoam_dictionary
+      role: cardiacsubstrate.purkinje_slab_dictionary
+      required: conditional
+    - path: system/setPurkinjeMorphometryDict
+      kind: openfoam_dictionary
+      role: cardiacsubstrate.purkinje_morphometry_dictionary
+      required: conditional
+    - path: system/coordinatesConventionDict
+      kind: openfoam_dictionary
+      role: cardiacsubstrate.coordinates_convention_dictionary
+      required: conditional
+    - path: system/generatePurkinjeTreeDict
+      kind: openfoam_dictionary
+      role: cardiacsubstrate.purkinje_tree_dictionary
+      required: conditional

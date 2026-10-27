@@ -1,7 +1,7 @@
 [project]
 name = "omnidriver-workspace"
 version = "0.1.0"
-description = "Monorepo workspace root. Install individual packages: pip install -e packages/omnidriver -e packages/omnidriver-openfoam -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiaccore -e packages/omnidriver-opencarp -e packages/omnidriver-torchcor -e packages/omnidriver-verifier"
+description = "Monorepo workspace root. Install individual packages: pip install -e packages/omnidriver -e packages/omnidriver-openfoam -e packages/omnidriver-cardiacfoam -e packages/omnidriver-cardiacsubstrate -e packages/omnidriver-opencarp -e packages/omnidriver-torchcor -e packages/omnidriver-verifier"
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
@@ -24,7 +24,7 @@ pythonpath = [
     "packages/omnidriver/tests",
     "packages/omnidriver-openfoam/tests",
     "packages/omnidriver-cardiacfoam/tests",
-    "packages/omnidriver-cardiaccore/tests",
+    "packages/omnidriver-cardiacsubstrate/tests",
     "packages/omnidriver-opencarp/tests",
     "packages/omnidriver-agents/tests",
     "packages/omnidriver-torchcor/tests",

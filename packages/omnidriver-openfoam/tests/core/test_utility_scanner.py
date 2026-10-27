@@ -6,9 +6,9 @@ from pathlib import Path
 from omnidriver.core.utility_catalog import PositionalArg, UtilityFlag, UtilityManifest
 from omnidriver.openfoam.utility_scanner import utility_manifest_report, utility_sources
 
-# cardiacCore main, applications/utilities/refine1Dgraph: Make/files, and refine1Dgraph.C's main from
+# cardiacSubstrateFOAM main, applications/utilities/refine1Dgraph: Make/files, and refine1Dgraph.C's main from
 # argList::noParallel to the reads of its two options.
-REFINE_MAKE_FILES = r'''../ccoreVtkUnstructuredToFoam/vtkUnstructuredReader.C
+REFINE_MAKE_FILES = r'''../csubVtkUnstructuredToFoam/vtkUnstructuredReader.C
 refine1Dgraph.C
 
 EXE = $(FOAM_USER_APPBIN)/refine1Dgraph

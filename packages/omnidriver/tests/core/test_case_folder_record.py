@@ -129,7 +129,7 @@ def test_a_sweep_over_an_unknown_record_is_refused_as_json(tmp_path, capsys):
 
 
 def _repository_with_a_case_that_reaches_its_scripts(root: Path) -> Path:
-    """cases/myCase/run-test-case runs ../../applications/scripts/helper, as a native cardiacCore ``Allrun`` does."""
+    """cases/myCase/run-test-case runs ../../applications/scripts/helper, as a native cardiacSubstrateFOAM ``Allrun`` does."""
     (root / "applications" / "scripts").mkdir(parents=True)
     helper = root / "applications" / "scripts" / "helper"
     helper.write_text("#!/bin/sh\necho done\n")
