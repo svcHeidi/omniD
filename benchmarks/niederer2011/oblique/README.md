@@ -44,5 +44,5 @@ omnidriver sweep-run --plugin torchcor --repo <torchcor-cases> --spec tc.json --
 `<openCARP>/share/tutorials` and `<torchcor-cases>/cases`.
 
 Read P1–P9 with `omnidriver compare`, a request per pair shaped as
-`../requests/cross_*.json`; the points stay those of `niederer2011.json`. The
+`../preregistered/requests/cross_*.json`; the points stay those of `niederer2011.json`. The
 rotation moves no point.

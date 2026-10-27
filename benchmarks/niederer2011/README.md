@@ -21,17 +21,21 @@ P(k+1), with x = a, y = c, z = 7 mm - b of the reference frame. openCARP and
 TorchCor use the reference's own coordinates. The requests state each side's
 points and `max_sampling_offset`.
 
-## Comparison requests
+## Pre-registered comparison requests
 
-`requests/` holds 21 comparison requests: 9 `cross_*` (openCARP against
-cardiacFOAM per level, 5 ms) and 12 `temporal_*` (successive Δt of one solver,
-1 ms). Tolerances and their rationale are in each file. Each names its runs by
-relative `sweep_output` (`../runs/<solver>/cartesianConvergence/dx<mm>`),
-resolved against the request's folder. Run one after both sweeps are done:
+`preregistered/requests/` holds 21 comparison requests, fixed before any
+campaign run: 9 `cross_*` (openCARP against cardiacFOAM per level, 5 ms) and
+12 `temporal_*` (successive Δt of one solver, 1 ms). Tolerances and their
+rationale are in each file. **Do not edit them:** `SHA256SUMS` beside them
+records what was fixed, and a changed request is a new request. They sit three
+folders below `benchmarks/` so their `reference` (`../../../niederer2011.json`)
+resolves. Each names its runs by relative `sweep_output`
+(`../runs/<solver>/cartesianConvergence/dx<mm>`), resolved against the request's
+folder. Run one after both sweeps are done:
 
 ```bash
-omnidriver compare --comparison-request requests/cross_dx0.5_dt0.01.json --report <report.json>
+omnidriver compare --comparison-request preregistered/requests/cross_dx0.5_dt0.01.json --report <report.json>
 ```
 
-A report is written once. `requests/SHA256SUMS` and each request's `reference`
-are checked by `scripts/check-benchmark-references.py`.
+A report is written once. `scripts/check-benchmark-references.py` checks the
+digests and that each `reference` resolves.

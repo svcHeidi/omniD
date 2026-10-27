@@ -2,7 +2,7 @@
 """Every benchmark reference under benchmarks/ is a valid point reference.
 
 The gate checks form (loadable, citations resolvable, units in core's table), not truth.
-A benchmarks/<name>/requests folder is checked too: each request's `reference` resolves
+A requests folder under benchmarks/ is checked too: each request's `reference` resolves
 and `SHA256SUMS` lists exactly its requests with their digests.
 """
 from __future__ import annotations
@@ -28,9 +28,13 @@ def request_failures(requests: Path) -> list[str]:
             digest, _, name = line.partition("  ")
             listed[name] = digest
     for path in files:
-        reference = (requests / json.loads(path.read_text())["reference"]).resolve()
-        if not reference.is_file():
-            failures.append(f"{path}: reference {reference} does not exist")
+        try:
+            reference = (requests / json.loads(path.read_text())["reference"]).resolve()
+        except (ValueError, KeyError, TypeError) as exc:
+            failures.append(f"{path}: no readable `reference` ({exc!r})")
+        else:
+            if not reference.is_file():
+                failures.append(f"{path}: reference {reference} does not exist")
         if listed.get(path.name) != hashlib.sha256(path.read_bytes()).hexdigest():
             failures.append(f"{path}: not the digest in SHA256SUMS")
     for name in sorted(set(listed) - {path.name for path in files}):
@@ -58,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         resolved = sorted(label for label, point in reference.points.items() if point.coordinates is not None)
         print(f"ok {path.name}: {len(reference.points)} points, coordinates for {resolved}")
-    for requests in sorted(args.dir.glob("*/requests")):
+    for requests in sorted(args.dir.glob("**/requests")):
         problems = request_failures(requests)
         failures.extend(problems)
         if not problems:
