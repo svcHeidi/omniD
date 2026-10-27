@@ -43,8 +43,8 @@ def test_the_scan_root_resolves() -> None:
     assert sorted(p.parent.name for p in _PACKAGES.glob("*/src")) == [
         "omnidriver",
         "omnidriver-agents",
-        "omnidriver-cardiacsubstrate",
         "omnidriver-cardiacfoam",
+        "omnidriver-cardiacsubstrate",
         "omnidriver-opencarp",
         "omnidriver-openfoam",
         "omnidriver-torchcor",
