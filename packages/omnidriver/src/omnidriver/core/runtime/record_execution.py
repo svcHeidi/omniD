@@ -226,6 +226,8 @@ def _resolve_and_split(
         notes=notes,
         derive=derive,
     )
+    if notes is not None:
+        notes.extend(_entrypoint_option_notes(record, command_arguments, driver_context))
     to_write, unchanged = split_unchanged(
         combined,
         case_root=staged_case_root,
@@ -235,6 +237,27 @@ def _resolve_and_split(
         values_agree=comparator,
     )
     return to_write, unchanged, command_arguments, replacements, workflow_step_ids, workflow_variant, parallel_request
+
+
+def _entrypoint_option_notes(
+    record: TutorialRecord, command_arguments: Mapping[str, tuple[str, ...]], driver_context: "DriverContext",
+) -> list["StrictDiagnostic"]:
+    """A note for each step that runs a case entrypoint with options: a plan sees the staged case, and what the
+    entrypoint writes from its options when it runs is the entrypoint's alone."""
+    from ..planning_types import diagnostic
+    from ..plugin_profile import entrypoint_relpaths
+
+    entrypoints = set(entrypoint_relpaths(driver_context))
+    return [
+        diagnostic(
+            "info", "entrypoint_options_unplanned",
+            f"step {step.step_id!r} runs {step.command[0]} with options {list(options)}; the plan validates the "
+            f"staged case and the study's patches, not what {step.command[0]} writes from its options when it runs",
+            field=step.step_id, detail={"options": list(options)},
+        )
+        for step in record.workflow_steps
+        if step.command[0] in entrypoints and (options := command_arguments.get(step.step_id))
+    ]
 
 
 def _reader_refusing_as_record_error(
@@ -747,7 +770,11 @@ def _parallel_workflow_dag(
             f"{PARALLEL_STUDY_NAME!r} = {request!r}, but {stack.refusal('get_parallel_steps')}; "
             f"omit {PARALLEL_STUDY_NAME!r}, or set it false, to run serial"
         )
-    solve_commands = stack.call("get_solve_step_commands")
+    from ..plugin_profile import entrypoint_relpaths
+
+    # A case folder's entrypoint decomposes and launches its own solve; the stack's
+    # parallel form checks the request against the case and the allocation.
+    solve_commands = stack.call("get_solve_step_commands") | frozenset(entrypoint_relpaths(driver_context))
     if not any(step["command"] in solve_commands for step in dag["steps"]):
         raise TutorialRecordError(
             f"tutorial record {record.name!r}: the run asks for {PARALLEL_STUDY_NAME!r}, "

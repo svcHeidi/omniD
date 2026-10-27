@@ -89,6 +89,21 @@ class TestRecordParallelForm(unittest.TestCase):
         self.assertIn("numberOfSubdomains", message)
         self.assertIn("6", message)
 
+    def test_a_case_folders_allrun_is_kept_as_it_is_once_n_is_checked(self) -> None:
+        """An Allrun decomposes and launches its own solve from the case's numberOfSubdomains."""
+        allrun = {"id": "run", "command": "Allrun", "args": ["parallel", "-N", "10"], "depends_on": [], "produces": []}
+        allocation = SchedulerAllocation(variable="SLURM_NTASKS", ranks=6)
+        steps = parallel_steps_for_record(
+            dict(allrun), request=6, read_value=self._reader("6"), allocation=allocation, launcher="mpirun",
+        )
+        self.assertEqual(steps, [allrun])
+        for request, ranks in ((4, 6), (True, 4)):
+            with self.assertRaises(ValueError):
+                parallel_steps_for_record(
+                    dict(allrun), request=request, read_value=self._reader("6"),
+                    allocation=SchedulerAllocation(variable="SLURM_NTASKS", ranks=ranks), launcher="mpirun",
+                )
+
     def test_the_openfoam_provider_declares_the_hook(self) -> None:
         from omnidriver.openfoam.environment import OpenFOAMEnvironmentPlugin
 

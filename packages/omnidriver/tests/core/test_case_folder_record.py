@@ -32,7 +32,7 @@ def test_a_folder_with_the_declared_entrypoint_is_a_one_step_record(tmp_path):
     ctx = driver_context(E2EFolderPlugin(), source="test:case-folder")
     record, cases_root = case_folder_record(_case(tmp_path), driver_context=ctx)
     assert (record.name, record.native_case_relpath, cases_root) == ("myCase", "myCase", tmp_path.resolve())
-    assert record.axes == ()
+    assert record.axis_names() == ("args",)
     (step,) = record.workflow_steps
     assert (step.step_id, step.command) == ("run", ("run-test-case",))
 

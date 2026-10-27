@@ -14,12 +14,13 @@ from omnidriver.core.specs.paths import refuse_inside_cases_root
 from omnidriver.core.strict_planning import _strict_plan_for_spec, write_run_document
 from omnidriver.core.sweep.sweep_derivation_catalog import get_derivation
 from omnidriver.core.sweep.sweep_expansion import SweepValidationError, check_case_count_cap, expand_sweep
-from omnidriver.core.tutorial_records import TutorialRecordError, lookup_record, sort_study_name
+from omnidriver.core.tutorial_records import TutorialRecordError, case_folder_record, lookup_record, sort_study_name
 from ..refusal import caught_code, failure
 from .failure_context import why_a_child_stopped
 from .fresh import ensure_fresh_output_dir
 from .attempt_lease import acquire_case_staging_lease
 from .case_records import CASE_RECORD_FILENAME, sweep_case_record, workflow_status, write_case_record
+from .repository_staging import copy_repository_scripts, staged_case_path
 from .record_execution import (
     commit_and_build_record_spec,
     record_case_members,
@@ -97,22 +98,39 @@ def _load_spec(spec_path: str | Path) -> dict[str, Any]:
     return json.loads(Path(spec_path).read_text())
 
 
-#: `entry`/`cases_root` are sweep-dispatch bookkeeping in `base`, not case
+#: `entry`/`cases_root`/`case` name what is swept in `base`, not case
 #: content, so they are stripped before a record's study values are resolved.
-_RECORD_NON_STUDY_BASE_KEYS: frozenset[str] = frozenset({"entry", "cases_root"})
+_RECORD_NON_STUDY_BASE_KEYS: frozenset[str] = frozenset({"entry", "cases_root", "case"})
 
 
 def _sweep_record(
     sweep_spec: dict[str, Any], *, driver_context: "DriverContext",
-) -> tuple[Any, Path]:
-    """The ``(record, cases_root)`` named by ``base``; a record has no ambient cases root, so both are required.
-    A relative ``cases_root`` is read against the root of the repository the stack was selected with
-    (``--repo``), and refused by name when there is none."""
+) -> tuple[Any, Path, bool]:
+    """The ``(record, cases_root, is_case_folder)`` named by ``base``: a record (``entry`` and ``cases_root``,
+    both required: a record has no ambient cases root) or a case folder (``case``, run as ``--case`` runs it).
+    A relative ``cases_root`` or ``case`` is read against the root of the repository the stack was selected
+    with (``--repo``), and refused by name when there is none."""
     base = sweep_spec.get("base", {})
     entry = base.get("entry")
+    if "case" in base:
+        if entry is not None or "cases_root" in base:
+            raise TutorialRecordError(
+                "sweep.json's 'base' names a case folder ('case') and a record ('entry', 'cases_root'); "
+                "a sweep is over one of them"
+            )
+        case = Path(base["case"])
+        if not case.is_absolute():
+            if driver_context.repository is None:
+                raise TutorialRecordError(
+                    f"sweep.json's 'case' {base['case']!r} is relative, and a relative path is read against "
+                    "the root of the repository given with --repo; pass --repo, or write an absolute path"
+                )
+            case = driver_context.repository.root / case
+        record, cases_root = case_folder_record(case, driver_context=driver_context)
+        return record, cases_root, True
     if entry is None:
         raise TutorialRecordError(
-            "sweep.json's 'base' must name the tutorial record to sweep as 'entry'"
+            "sweep.json's 'base' must name the tutorial record to sweep as 'entry', or a case folder as 'case'"
         )
     record = lookup_record(entry, driver_context=driver_context)
     cases_root_value = base.get("cases_root")
@@ -132,7 +150,19 @@ def _sweep_record(
                 "--repo; pass --repo, or write an absolute path"
             )
         cases_root = repository.root / cases_root
-    return record, cases_root
+    return record, cases_root, False
+
+
+def _staged_case_root(
+    record: Any, cases_root: Path, case_dir: Path, *, case_folder: bool, driver_context: "DriverContext",
+) -> Path:
+    """Where one sweep case is staged: ``case_dir`` for a record; for a case folder, as ``--case`` stages one
+    (its repository-relative depth under ``case_dir``, beside a copy of the repository's scripts)."""
+    if not case_folder:
+        return case_dir
+    native_case = cases_root / record.native_case_relpath
+    copy_repository_scripts(driver_context.repository, native_case, staging_root=case_dir)
+    return staged_case_path(native_case, driver_context.repository, staging_root=case_dir, flat=case_dir)
 
 
 def _record_case_study_by_source(
@@ -171,7 +201,7 @@ def _validate_record_sweep_upfront(
 
 def _record_sweep_plan(
     record: Any, cases_root: Path, sweep_spec: dict[str, Any], *,
-    output_dir: Path, cli_study: Mapping[str, Any] | None = None,
+    output_dir: Path, case_folder: bool = False, cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, str | Path] | None = None,
     environment_source: str | None = None,
     driver_context: "DriverContext",
@@ -181,11 +211,14 @@ def _record_sweep_plan(
     base = sweep_spec.get("base", {})
     case_reports: list[dict[str, Any]] = []
     for case in resolved_cases:
-        staged_case_root = output_dir / "cases" / case.case_id
         study_by_source = _record_case_study_by_source(
             base=base, resolved_axis_values=case.resolved_axis_values, cli_study=cli_study,
         )
         try:
+            staged_case_root = _staged_case_root(
+                record, cases_root, output_dir / "cases" / case.case_id,
+                case_folder=case_folder, driver_context=driver_context,
+            )
             commit_result, spec = commit_and_build_record_spec(
                 record, case_id=case.case_id, cases_root=cases_root,
                 staged_case_root=staged_case_root, study_by_source=study_by_source,
@@ -222,7 +255,7 @@ def _record_sweep_plan(
 
 def _record_sweep_run(
     record: Any, cases_root: Path, sweep_spec: dict[str, Any], resolved_cases: Sequence[Any], *,
-    output_dir: Path, case_timeout_s: float | None,
+    output_dir: Path, case_timeout_s: float | None, case_folder: bool = False,
     cli_study: Mapping[str, Any] | None = None,
     inputs: Mapping[str, str | Path] | None = None,
     environment_source: str | None = None,
@@ -286,7 +319,10 @@ def _record_sweep_run(
         try:
             commit_result, spec = commit_and_build_record_spec(
                 record, case_id=case.case_id, cases_root=cases_root,
-                staged_case_root=case_root, study_by_source=study_by_source,
+                staged_case_root=_staged_case_root(
+                    record, cases_root, case_root, case_folder=case_folder, driver_context=driver_context,
+                ),
+                study_by_source=study_by_source,
                 driver_context=driver_context, inputs=inputs,
             )
             commit_status = commit_result.status
@@ -537,12 +573,12 @@ def sweep_plan(
         # answer. Same shape, zero cases, one explicit reason.
         return {"case_count": 0, "cases": [], "spec_error": str(exc), "code": "spec_unreadable"}
     check_case_count_cap(sweep_spec, max_cases=max_cases)
-    record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
+    record, cases_root, case_folder = _sweep_record(sweep_spec, driver_context=driver_context)
     refuse_inside_cases_root(output_dir, cases_root, name="sweep output directory", flag="--output-dir")
     # Resolved to absolute before staging: a relative --output-dir otherwise
     # reaches commit_record_case unresolved.
     return _record_sweep_plan(
-        record, cases_root, sweep_spec, output_dir=Path(output_dir).resolve(),
+        record, cases_root, sweep_spec, output_dir=Path(output_dir).resolve(), case_folder=case_folder,
         cli_study=cli_study, inputs=inputs, environment_source=environment_source, driver_context=driver_context,
     )
 
@@ -573,7 +609,7 @@ def sweep_run(
     """
     sweep_spec = _load_spec(spec_path)
     check_case_count_cap(sweep_spec, max_cases=max_cases)
-    record, cases_root = _sweep_record(sweep_spec, driver_context=driver_context)
+    record, cases_root, case_folder = _sweep_record(sweep_spec, driver_context=driver_context)
     refuse_inside_cases_root(output_dir, cases_root, name="sweep output directory", flag="--output-dir")
     # Resolved to absolute before staging: commit_record_case requires
     # CaseMutationRequest.case_root to be absolute.
@@ -611,6 +647,96 @@ def sweep_run(
         )
     return _record_sweep_run(
         record, cases_root, sweep_spec, resolved_cases, output_dir=output_dir,
-        case_timeout_s=case_timeout_s, cli_study=cli_study,
+        case_timeout_s=case_timeout_s, case_folder=case_folder, cli_study=cli_study,
         inputs=inputs, environment_source=environment_source, driver_context=driver_context,
     )
+
+
+def sweep_plan_status(result: Mapping[str, Any]) -> tuple[str, str | None]:
+    """A ``sweep_plan`` result's ``(status, code)``: ``ok``; ``blocked`` when every case that is not ok is
+    blocked (a valid plan whose environment is not ready); else ``failed``, a spec that could not be read
+    included, since it yields zero cases and "no case failed" would read as success."""
+    not_ok = {case["status"] for case in result["cases"] if case["status"] != "ok"}
+    if result.get("spec_error"):
+        return "failed", "cases_failed"
+    if not not_ok:
+        return "ok", None
+    return ("blocked", "cases_blocked") if not_ok == {"blocked"} else ("failed", "cases_failed")
+
+
+def _planned_case_summary(case: Mapping[str, Any]) -> dict[str, Any]:
+    """One planned case as ``check --studies`` reports it: its status and, when not ok, its code and error."""
+    summary = {"case_id": case["case_id"], "status": case["status"]}
+    if case["status"] == "ok":
+        return summary
+    plan = case.get("plan")
+    if plan is None:
+        return {**summary, "code": case.get("code"), "error": case.get("error")}
+    errors = [
+        f"{item['code']}: {item['message']}"
+        for name, group in plan.items() if name.endswith("_diagnostics") and isinstance(group, list)
+        for item in group if item.get("level") == "error"
+    ]
+    return {**summary, "code": plan.get("code"), "error": "; ".join(errors)}
+
+
+def plan_studies(
+    studies_root: Path,
+    *,
+    scratch_root: Path,
+    max_cases: int = 200,
+    inputs: Mapping[str, str | Path] | None = None,
+    environment_source: str | None = None,
+    driver_context: "DriverContext",
+) -> dict[str, Any]:
+    """``check --studies``: plan every sweep spec under ``studies_root`` as :func:`sweep_plan` does, each into
+    ``<scratch_root>/studies/<its path under studies_root>``, and report each study and case.
+
+    A sweep spec is a JSON object holding ``base`` and ``sweep``; any other JSON file is not a study and is
+    left out, and one that cannot be read is reported. A study that is refused costs that study alone.
+    """
+    studies_root = Path(studies_root)
+    if not studies_root.is_dir():
+        raise TutorialRecordError(f"--studies {studies_root} is not a directory")
+    if Path(scratch_root).resolve().is_relative_to(studies_root.resolve()):
+        raise TutorialRecordError(
+            f"the scratch root {scratch_root} is inside the studies folder {studies_root}: the staged cases "
+            "would be read as studies; supply a --scratch-dir outside it"
+        )
+    studies: list[dict[str, Any]] = []
+    for path in sorted(studies_root.rglob("*.json")):
+        relative = path.relative_to(studies_root)
+        try:
+            spec = json.loads(path.read_text())
+        except (OSError, ValueError) as exc:
+            studies.append({"study": relative.as_posix(), "status": "failed", **_case_failure(exc, code="spec_unreadable"), "cases": []})
+            continue
+        if not (isinstance(spec, dict) and "base" in spec and "sweep" in spec):
+            continue
+        try:
+            result = sweep_plan(
+                path, output_dir=Path(scratch_root) / "studies" / relative.with_suffix(""), max_cases=max_cases,
+                inputs=inputs, environment_source=environment_source, driver_context=driver_context,
+            )
+        except Exception as exc:
+            studies.append({"study": relative.as_posix(), "status": "failed", **_case_failure(exc, code=caught_code(exc)), "cases": []})
+            continue
+        status, code = sweep_plan_status(result)
+        studies.append({
+            "study": relative.as_posix(), "status": status, **({"code": code} if code else {}),
+            "case_count": result["case_count"],
+            "cases": [_planned_case_summary(case) for case in result["cases"]],
+        })
+    statuses = [study["status"] for study in studies]
+    cases = [case for study in studies for case in study["cases"]]
+    return {
+        "action": "check",
+        "studies_root": str(studies_root),
+        "summary": {
+            "studies": len(studies),
+            **{status: statuses.count(status) for status in ("ok", "blocked", "failed")},
+            "cases": len(cases),
+            "cases_ok": sum(case["status"] == "ok" for case in cases),
+        },
+        "studies": studies,
+    }

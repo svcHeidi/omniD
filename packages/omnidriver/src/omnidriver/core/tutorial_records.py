@@ -1427,10 +1427,22 @@ def lookup_record(entry: "str | TutorialRecord", *, driver_context: Any) -> Tuto
     return record
 
 
+ENTRYPOINT_ARGUMENTS_STUDY_NAME = "args"
+"""The one axis of a case folder's ad hoc record: the options its entrypoint
+is run with, a list of words, as ``--case DIR -- <options>`` passes them."""
+
+CASE_FOLDER_STEP_ID = "run"
+
+
+def _entrypoint_arguments(value: Any, _staged_case_root: Path) -> AxisResult:
+    return AxisResult(command_arguments={CASE_FOLDER_STEP_ID: tuple(value)})
+
+
 def case_folder_record(case_dir: str | Path, *, driver_context: Any) -> tuple[TutorialRecord, Path]:
     """An ad hoc record for a case folder the stack declares an entrypoint for:
-    one step running that entrypoint, no axes. Returns the record and the
-    cases root (the folder's parent) it is staged from."""
+    one step running that entrypoint, and one axis, ``args``, the options it
+    is run with. Returns the record and the cases root (the folder's parent)
+    it is staged from."""
     from .plugin_profile import entrypoint_relpaths
 
     case = Path(case_dir).expanduser().resolve()
@@ -1447,6 +1459,11 @@ def case_folder_record(case_dir: str | Path, *, driver_context: Any) -> tuple[Tu
         raise TutorialRecordError(f"--case {str(case)!r} has no {entrypoint!r} to run")
     record = TutorialRecord(
         name=case.name, native_case_relpath=case.name,
-        workflow_steps=(WorkflowStep(step_id="run", command=(entrypoint,)),),
+        workflow_steps=(WorkflowStep(step_id=CASE_FOLDER_STEP_ID, command=(entrypoint,)),),
+        axes=(AxisContract(
+            name=ENTRYPOINT_ARGUMENTS_STUDY_NAME, value_kind="word_list", unit=None,
+            description=f"the options {entrypoint} is run with, in order",
+            resolve=_entrypoint_arguments,
+        ),),
     )
     return record, case.parent

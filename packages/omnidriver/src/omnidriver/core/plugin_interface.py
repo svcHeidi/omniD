@@ -315,7 +315,8 @@ class SolverPlugin(Protocol):
         """A ``(path, key_path_tuple) -> value | None`` reader of this format."""
 
     def get_parallel_steps(self, step, *, request, read_value, allocation, launcher):
-        """The steps replacing one serial solve step for a parallel run.
+        """The steps replacing one serial solve step for a parallel run, or a
+        case folder's entrypoint step, which runs its own decomposition.
         Exactly one keeps ``step["id"]`` and its ``produces``; the first
         follows ``step["depends_on"]``. ``launcher`` is the stack's declared
         ``environment.mpi_launcher`` (``None`` when it declares none). Raises

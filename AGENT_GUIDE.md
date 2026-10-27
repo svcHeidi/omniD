@@ -21,7 +21,8 @@ is tested against the code; verify any other module path before relying on it.
 | Build a runnable case from the catalogue when there is no native case | `omnidriver build --plugin cardiacfoam --out <dir>` (see "Build a case from the catalogue") | `omnidriver.cardiacfoam.case_builder` |
 | Locate predicted outputs | `strict_plan(...)`'s `expected_artifacts` field (also in `omnidriver plan --strict` JSON) | `omnidriver.core.strict_planning` |
 | Verify outputs vs predictions | `artifact_reconciliation` in `run`/`step` JSON output | `omnidriver.core.runtime.reconciler` |
-| Plan/run a study over a record | `omnidriver sweep-plan/sweep-run --spec sweep.json --output-dir <dir>` | `omnidriver.core.runtime.sweep_runner` |
+| Plan/run a study over a record or a case folder | `omnidriver sweep-plan/sweep-run --spec sweep.json --output-dir <dir>` | `omnidriver.core.runtime.sweep_runner` |
+| Plan every native study of a repository, as a check | `omnidriver check --repo <repo> --studies <dir> --scratch-dir <scratch>` | `omnidriver.core.runtime.sweep_runner.plan_studies` |
 | Check a solver's results against a manufactured solution | `omnidriver-verify problems/show/residual/cell-model/norms/compare` | `omnidriver.verifier` |
 
 ## Selecting the stack
@@ -230,6 +231,48 @@ finds the repository's layout; `check --regression` runs the native regression
 script the same way. A folder outside the repository, or with no `--repo`, is
 staged at `<scratch>/records/<dir name>`.
 
+**The entrypoint's options.** Words after a bare `--` are passed to the
+entrypoint, in order, as the case's `args`:
+
+```bash
+omnidriver plan --strict --repo <cardiacFOAM> --scratch-dir <scratch> \
+  --case <cardiacFOAM>/tutorials/manufacturedSolutions/monodomainPseudoECG \
+  -- -mesh hex -dim 1 -N 10 -field fda -dt 0.00892857
+```
+
+The run document records them as the one step's arguments
+(`workflowDag.steps[0].args`), so `run --run-document` runs exactly that
+command line. `args` is the ad hoc record's one axis, a list of words
+(`describe --case <dir>` lists it); a word with whitespace is refused. A sweep
+spec passes it as `args` too (see "Running a study: sweeps"). Words after `--`
+are refused anywhere but `describe`, `plan`, `step` and `run` with `--case`.
+
+**What the plan validates, and what it cannot.** The plan stages the folder,
+applies the study's `document:key` patches, and validates that staged case: the
+catalogue's keys, menus and rules, and the C++'s reads when the source is
+supplied. It cannot see what the entrypoint writes from its options when it
+runs. cardiacFOAM's manufactured `Allrun`s write `local/` (mesh size, time
+step, field, verifier) after the plan, and the dictionaries include it, so the
+values the solver reads for those come from the options, not the folder: a
+patch to a key the `Allrun` rewrites from an option has no effect, and a bad
+option value is refused by the `Allrun` itself (it exits 2 with its usage)
+when it runs, not by the plan. A plan with options carries an info note
+`entrypoint_options_unplanned` in `run_document.validation.diagnostics` saying
+so. Pass a value through the option that sets it; patch only what no option
+sets.
+
+**Ranks.** A case folder's `Allrun` decomposes and launches its own solve, so
+omniD does not rewrite its step. The rank count is the case's own
+`system/decomposeParDict:numberOfSubdomains`, as for a record: set it with a
+`document:key` patch in a sweep spec. Whether the `Allrun` runs in parallel at
+all is its own option (cardiacFOAM's: `parallel`), passed after `--`.
+`--parallel N` (or the study value `parallel`) states the count: the OpenFOAM
+layer checks it equals `numberOfSubdomains` and the scheduler allocation, as
+for a record, and the run document records it (`resolvedEntry.parallel`). It
+does not add the entrypoint's option: `--parallel 6 -- parallel ...` runs on
+six ranks, and `--parallel 6` without `parallel` records six ranks for an
+`Allrun` that runs serial.
+
 When an OpenFOAM `Allrun` fails, the step carries the solver's own error (read from
 its `log.<application>`; see "Reading a failed strict step"). Fix the cause in
 `<dir>` and run `--case` again: it restages from `<dir>`. Do not rerun in the staged
@@ -308,7 +351,9 @@ has two top-level objects:
 - `"base"`: `entry` (the record) and `cases_root` (where its native case
   lives; a relative path is read against the root of the `--repo` repository, and refused by name without one), both required: a
   record has no ambient cases root, and the sweep commands refuse
-  `--cases-root`. Every other key is a study value fixed across every case.
+  `--cases-root`. Or, in place of both, `case`: a case folder, run as
+  `--case` runs it (relative paths read the same way). Every other key is a
+  study value fixed across every case.
 - `"sweep"`: `"mode"` (`"cross_product"` or `"zip"`), `"independent"` (axis
   name to list of values), and `"dependent"` (a list of
   `{"name", "derive", "of"}` entries for derived *labels only*; the registered
@@ -316,9 +361,12 @@ has two top-level objects:
   `caseId`, and `output_dir_name_template`).
 
 Each `independent`/`dependent` name, and each `base` key other than
-`entry`/`cases_root`, is a `document:dotted.path` key, one of the record's own
+`entry`/`cases_root`/`case`, is a `document:dotted.path` key, one of the record's own
 axes, its route selector (`mesh`), `parallel`, or a naming key (`caseId`,
 `output_dir_name`). Anything else is refused up front, for the whole sweep.
+A case folder's one axis is `args`, its entrypoint's options as a list of
+words; give it in `base` or vary it, not both (two different option lists for
+one step are refused per case).
 `describe --entry <record> --cases-root <tutorials>` lists the record's axes
 and keys.
 
@@ -361,8 +409,37 @@ One case with study values is the same spec with one-value axes:
 }
 ```
 
+A case folder with options, ranks and edits, as a run kit states a row
+(native `Allrun`, its options, checked edits, ranks). Here the one edit is the
+rank count; the gradient is the `Allrun`'s own option, since it writes the
+gradient scheme into `local/` and a patch of `gradSchemes` would have no effect:
+
+```json
+{
+  "base": {
+    "case": "tutorials/manufacturedSolutions/monodomainPseudoECG",
+    "parallel": 12,
+    "system/decomposeParDict:numberOfSubdomains": 12
+  },
+  "sweep": {
+    "mode": "zip",
+    "independent": {
+      "args": [
+        ["parallel", "-mesh", "tet", "-N", "10", "-seed", "1", "-field", "fda", "-gradient", "GaussLinear", "-dt", "0.00892857"],
+        ["parallel", "-mesh", "tet", "-N", "20", "-seed", "1", "-field", "fda", "-gradient", "GaussLinear", "-dt", "0.00224215"]
+      ],
+      "caseId": ["GaussLinear_fda_N10", "GaussLinear_fda_N20"]
+    }
+  }
+}
+```
+
 Each case is staged from the native case into `<output_dir>/cases/<case_id>/`
-and committed there; the native tree is never written. That one folder is the
+and committed there; the native tree is never written. A case folder inside
+the `--repo` repository is staged at its repository-relative depth under that
+folder, beside a copy of the repository's scripts, as `--case` stages it, so
+its `run_document.json` is in the staged case, not at the top of
+`<case_id>/`. That one folder is the
 case. `sweep-plan` writes its `run_document.json` there, so each case can be
 submitted on its own (`omnidriver run --run-document
 <output_dir>/cases/<case_id>/run_document.json`, one job per case), and
@@ -480,9 +557,14 @@ drops `source` and puts openCARP's own MPI launcher first on `PATH`. A case
 whose count disagrees with `$SLURM_NTASKS` fails at plan time, before any
 solver starts, naming both numbers.
 
+A case folder (`--case`, or a sweep's `base.case`) is the exception to the
+form: its `Allrun` decomposes and launches its own solve, so the OpenFOAM layer
+checks N and keeps the step as it is (see "Running a case folder that is not a
+record").
+
 **Refused by name:** a stack with no parallel form (`get_parallel_steps`); a
 record whose selected steps run no declared solve command
-(`get_solve_step_commands`); `parallel: null`; OpenFOAM given a count that differs from
+(`get_solve_step_commands`) or case entrypoint; `parallel: null`; OpenFOAM given a count that differs from
 `numberOfSubdomains`, or a case with no `numberOfSubdomains`; openCARP given `true` with no allocation, or
 a count that disagrees with one; a malformed `SLURM_NTASKS`; `--parallel` with
 `--run-document`.
@@ -969,6 +1051,29 @@ quantity C13 and C14 compare); a record that declares none is reported
 from the solver's shell (`omnidriver env`). A record that needs a supplied
 input takes `--input NAME=PATH`, as in a plan. The native tree is never written:
 a check fails if anything under the cases root changed while it ran.
+
+### Every native study: `check --studies`
+
+```bash
+omnidriver check --repo <cardiacFOAM> --scratch-dir <scratch> --studies <cardiacFOAM>/tutorials \
+  --environment-source <env.sh>
+```
+
+In place of the conformance checks, `check --studies DIR` plans every sweep
+spec under `DIR` as `sweep-plan` does. A sweep spec is any `*.json` under `DIR`
+holding a JSON object with `base` and `sweep`; any other JSON file is left out,
+and one that is not readable JSON is reported (`spec_unreadable`). `DIR` is
+supplied, never searched for, and omniD names no layout inside it: pass the
+tutorials folder for every study, or one tutorial's folder for its own. Each
+study is staged into `<scratch>/studies/<its path under DIR, less .json>`; a
+scratch root inside `DIR` is refused, and nothing is written outside it. The
+report lists each study's `status` (`ok`, `blocked` or `failed`, as
+`sweep-plan` would exit) with its `code`, its `case_count`, and each case's
+`status`, with the `code` and `error` of a case that is not ok; `summary` counts
+studies and cases. It reports and never gates: the exit code is 0 whenever the
+studies were planned, and a refused study costs that study alone. It takes
+`--plugin` or `--repo`, `--scratch-dir`, `--input`, `--environment-source` and
+`--max-cases`, which reach every study's plan.
 
 ## Discovering what's valid
 
