@@ -9,7 +9,7 @@ owner's decisions sit with the work they settle.
 |---|---|---|
 | omniD (`svcHeidi/omniD`) | `main` = `origin/main` | The only long-lived branch. The follow-up to cardiacFOAM #59, cardiacCore's new layout and the audit fixes (§2a) are on `audit/2026-10-26`, which lands on `main` next. Local-only and ignored: `.venv`, caches, `.claude/`, `.superpowers/` (agent reports) |
 | cardiacFOAM (`solids4foam/cardiacFoam`) | `main` | PR #59 merged on 2026-10-25. v0.1 is not tagged yet; omniD relates to cardiacFOAM by version and PR, never by commit |
-| cardiacCore (`svcHeidi/cardiacCore`) | `main` | Carries the repository layout omniD follows (`applications/utilities/`, `applications/scripts/`, `tutorials/idealizedHeart/`) and PR #2 (`generatePurkinjeTree` as named stages). The owner's checkout matches `origin/main` |
+| cardiacCore (`svcHeidi/cardiacCore`) | `main` | Carries the repository layout omniD follows (`applications/utilities/`, `applications/scripts/`, `tutorials/idealizedHeart/`), the `ccore` utility names and PRs #2 to #7, which omniD follows; #6 adds an OpenFOAM build and regression CI on every pull request. PR #8, docs only, is open. The owner's checkout matches `origin/main` |
 
 Pass 2 (`plans/2026-10-01-pass2-convergence.md`) is complete.
 
@@ -175,17 +175,14 @@ built from other source.
   | `applications/scripts/check_purkinje_activation.py` | current | the owner's original tool, used by the same results |
   | `applications/scripts/legacy/purkinje_coverage.py` | legacy | the seed-deduction coverage check, superseded and unconfirmed by the owner. Keep it unchanged and separate |
 
-- **Pending native changes omniD follows once they reach `main`:**
-  - `feat/rv-septal-faces-always`: `generatePurkinjeTree` writes
-    `RVSeptalEndoFaces` in every case, and `place_purkinje_seeds.py` puts the
-    RV seed on it. omniD's manifest then declares the face set unconditionally;
-  - `feat/morphometry-aha-z`: `setPurkinjeMorphometry` zones on `aha_z`, with
-    per-ventricle class weights in its dictionary and named segments. omniD's
-    catalogue follows the new keys from `catalog --uncatalogued`.
-- **AHA septum, the owner's decision.** Under `cobiveco`, `setCardiacAnatomy`
-  assigns LV and RV from `tv`, which splits the septum at mid-wall, so the
-  septal AHA segments hold only its LV half. Under `uvc` the septum is LV
-  whole. Whether the two conventions should agree, and which way, is open.
+- **omniD follows `main`.** `catalog --uncatalogued` and `--unread` report
+  nothing against it, for the dictionaries and the utility manifests:
+  `setPurkinjeMorphometry`'s per-ventricle class weights are catalogued, its
+  manifest reads the AHA fields and writes `PurkinjeMorphometrySegment`,
+  `RVSeptalEndoFaces` is declared in every coordinate system, and
+  `setCardiacAnatomy` declares the four face sets it now builds. The AHA
+  chamber puts the whole septum in the LV under both conventions, which
+  settles the septum question. omniD holds no regression reference value.
 - **Not on `main`:** the scar work stays on the `scar` branch.
 
 ## 5. Next
@@ -395,11 +392,11 @@ built from other source.
 6. **Native, not edited by omniD:** #59's `dryrun` authorship; the
    eikonal-domain warning of unconstrained regions; eight silent selectors;
    cardiacFOAM's `source = "."`; the eikonalECG `electrodes` default;
-   cardiacCore's conventions (RunFunctions, `lib.sh`, PR CI); the electroHeart
-   Purkinje provenance; the `solids4foam` fork branch; deleting the native
-   utility-manifest copies now that omniD's have landed; `1DgraphToFoam` and
-   `newVtkUnstructuredToFoam`, which cardiacCore renames
-   (`ccore1DgraphToFoam`, `ccoreVtkUnstructuredToFoam`).
+   cardiacCore's conventions (RunFunctions, `lib.sh`); the electroHeart
+   Purkinje provenance; the `solids4foam` fork branch; deleting cardiacCore's
+   native `refine1Dgraph` manifest now that omniD's has landed
+   (`ccore1DgraphToFoam` and `ccoreVtkUnstructuredToFoam` keep theirs, since
+   omniD declares neither).
 7. **The guidance the OpenFOAM layer serves.** The layer implements no
    `get_agent_guidance`, so the paragraph on its `controlDict` and `fvSchemes`
    catalogue is repeated, word for word, in both cardiac `guidance.md` files.
