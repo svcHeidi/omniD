@@ -50,7 +50,9 @@ from .core.runtime.execution_context import (
     StepExecutionContext as _ExecutionContext,
 )
 from .core.sweep.sweep_expansion import SweepValidationError
-from .core.tutorial_records import PARALLEL_STUDY_NAME, TutorialRecordError, case_folder_record
+from .core.tutorial_records import (
+    ENTRYPOINT_ARGUMENTS_STUDY_NAME, PARALLEL_STUDY_NAME, TutorialRecordError, case_folder_record,
+)
 
 
 if TYPE_CHECKING:
@@ -699,7 +701,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Run a case folder that is not a record, in place of --entry: an "
             "ad hoc record of one step, the stack's declared case entrypoint, "
             "staged from DIR, which is never written. Refused where the "
-            "stack declares no entrypoint."
+            "stack declares no entrypoint. Words after a bare '--' are the "
+            "entrypoint's own options (`plan --strict --case DIR -- -N 10`), "
+            "recorded as the step's arguments; the plan validates the staged "
+            "folder, never what the entrypoint writes from its options when it "
+            "runs."
         ),
     )
     parser.add_argument(
@@ -988,6 +994,13 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
                 "action=check takes --plugin or --repo, --cases-root, --scratch-dir, --input, --record, "
                 "--checks, --benchmarks and --regression only"
             )
+    if args.entrypoint_options is not None and not (
+        args.case and args.action in {"describe", "plan", "step", "run"}
+    ):
+        parser.error(
+            "words after '--' are the options of a case folder's entrypoint: they are only valid "
+            "with --case and action=describe, plan, step or run"
+        )
     if args.uncatalogued and args.unread:
         parser.error("--uncatalogued and --unread are separate listings: pass one")
     if (args.uncatalogued or args.unread) and (args.entry or args.case or args.document or args.key):
@@ -1254,7 +1267,7 @@ def _select_stack(parser: argparse.ArgumentParser, args):
 
 
 def main(argv: list[str] | None = None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
+    argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["build"]:
         from .core.case_build import main as build_main
 
@@ -1265,7 +1278,12 @@ def main(argv: list[str] | None = None) -> int:
     previous_environ = dict(os.environ)
     previous_handlers: dict = {}
     try:
+        entrypoint_options = None
+        if "--" in argv:
+            split = argv.index("--")
+            argv, entrypoint_options = argv[:split], argv[split + 1:]
         args = parser.parse_args(argv)
+        args.entrypoint_options = entrypoint_options
         _validate_args(parser, args)
         if args.action in {"step", "run", "sweep-run", "check"}:
             previous_handlers = install_signal_handlers()
@@ -1317,6 +1335,8 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
 
     # The CLI's own study source, beside a sweep's `base`.
     cli_study = {PARALLEL_STUDY_NAME: args.parallel} if args.parallel is not None else {}
+    if args.entrypoint_options is not None:
+        cli_study[ENTRYPOINT_ARGUMENTS_STUDY_NAME] = list(args.entrypoint_options)
     # --input NAME=PATH, repeatable; never discovered (CLAUDE.md).
     cli_inputs: dict[str, str] = {}
     for raw in args.inputs:

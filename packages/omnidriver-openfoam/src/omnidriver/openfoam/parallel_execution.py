@@ -7,6 +7,8 @@ from typing import Any, Callable, Mapping
 
 from omnidriver.core.runtime import mpi
 
+from .case_runtime_conventions import openfoam_case_runtime_conventions
+
 DECOMPOSE_PAR_DICT = "system/decomposeParDict"
 _SUBDOMAINS_KEY_PATH = ("numberOfSubdomains",)
 _SUBDOMAINS = f"{DECOMPOSE_PAR_DICT}:{_SUBDOMAINS_KEY_PATH[0]}"
@@ -18,7 +20,8 @@ def parallel_steps_for_record(
 ) -> list[dict]:
     """The OpenFOAM layer's ``get_parallel_steps``: a record's serial solve step as
     ``<id>.decompose`` -> ``<id>`` under ``<launcher> -np N ... -parallel`` ->
-    ``<id>.reconstruct``; later steps follow the reconstruct step.
+    ``<id>.reconstruct``; later steps follow the reconstruct step. A case
+    folder's ``Allrun`` step is kept as it is, once N is checked.
 
     N is the case's own ``numberOfSubdomains``, read through ``read_value``.
     A count in the request must equal it, and a scheduler allocation must
@@ -43,6 +46,10 @@ def parallel_steps_for_record(
             f"{supplied} in the study, or ask with parallel true"
         )
     mpi.agree(n, allocation, stated_by=_SUBDOMAINS)
+    if step["command"] in openfoam_case_runtime_conventions().case_entrypoints:
+        # An Allrun decomposes and launches its own solve from the same numberOfSubdomains;
+        # whether it runs in parallel at all is its own option, passed in its arguments.
+        return [dict(step)]
     id_ = step["id"]
     solve = mpi.wrap({**step, "args": [*step.get("args", ()), "-parallel"], "depends_on": [f"{id_}.decompose"]}, n, launcher)
     return [
