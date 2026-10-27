@@ -39,7 +39,7 @@ Recorded per house style rather than silently fixed in the plan.
 ## Reproducing the current refusal
 
 A **real** cardiacSubstrateFOAM case was required and one was available at
-`/Users/simaocastro/cardiacSubstrateFOAM-local-cases/bivCase_Pig_Morphometric_Tree` —
+`<local cases>/bivCase_Pig_Morphometric_Tree` —
 a previously-executed native cardiacSubstrateFOAM case (real anatomy, UVC, fibre and
 Purkinje-tree fields under `0/`, real `Allrun`/dict files, `postProcessing/`
 output from an actual run). No case was invented. It was copied into the
@@ -400,7 +400,7 @@ machinery, and neither prototype touched them.
 - The copied case directories used for real-file mutation testing
   (`spike-case`, `spike-case-b`, `spike-case-b-cli`) live only under this
   session's scratchpad, never under the original
-  `/Users/simaocastro/cardiacSubstrateFOAM-local-cases/`, which was never written to.
+  the local cases folder, which was never written to.
 - This spike touched only files inside the two throwaway worktrees plus this
   document in the main working tree. The pre-existing uncommitted changes
   present in the main working tree before this task started (`.github/workflows/ci.yml`,

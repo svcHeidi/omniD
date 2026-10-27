@@ -32,8 +32,8 @@ destinations. Nothing else changes: `WorkflowStep`, `DefaultArgument`,
 | omniD factory workflow | native tutorial (`tutorials/biventricularPreprocessing/variants/`) | native case folder on `main` | anatomy bundle (local, git-ignored) |
 |---|---|---|---|
 | `cardiacsubstrate-human-purkinje-slab` | `humanSlab` | `cases/bivCase`: `Allrun`, `system/` (controlDict, fvSchemes, fvSolution, coordinatesConventionDict, 4 utility dicts) | only inside the owner's checkout, `cases/bivCase/{0,constant}` |
-| `cardiacsubstrate-human-purkinje-endocardial` | `humanEndocardial` (the human anatomy bundle) | **none**. `COMPARISON.md` names the human anatomy bundle's directory, which `.gitignore` ignores whole | `~/cardiacSubstrateFOAM-local-cases/<human anatomy bundle>` |
-| `cardiacsubstrate-pig-morphometric-purkinje` (weighted LV) | `pigMorphometricTransmural` (the pig-extended anatomy bundle) | **none**. The pig-extended bundle's directory is ignored whole | `~/cardiacSubstrateFOAM-local-cases/<pig-extended anatomy bundle>` (to confirm, §6) |
+| `cardiacsubstrate-human-purkinje-endocardial` | `humanEndocardial` (the human anatomy bundle) | **none**. `COMPARISON.md` names the human anatomy bundle's directory, which `.gitignore` ignores whole | `<local cases>/<human anatomy bundle>` |
+| `cardiacsubstrate-pig-morphometric-purkinje` (weighted LV) | `pigMorphometricTransmural` (the pig-extended anatomy bundle) | **none**. The pig-extended bundle's directory is ignored whole | `<local cases>/<pig-extended anatomy bundle>` (to confirm, §6) |
 | `cardiacsubstrate-pig-transmural-purkinje` (all-leaves LV) | **none**. `.gitignore` lists `variants/pigTransmural/` as exploratory and "redundant with one of the three canonical tutorials" | none | — |
 
 Every factory workflow defaults to `case_dir_name="bivCase"`. So on a clean
@@ -276,7 +276,7 @@ fields). Clone-on-write copies are deferred until a sweep shows the cost.
 - **Input mappings that change with the route.** An agent supplies a
   different file instead (§3).
 - **A per-case input in a sweep.** §4.
-- **A default location for cardiacSubstrateFOAM bundles** (`~/cardiacSubstrateFOAM-local-cases`,
+- **A default location for cardiacSubstrateFOAM bundles** (a local cases folder,
   or the owner's `cases/`). It would invent an answer.
 
 ## 3. One reality: the same mechanism on the idealized heart
@@ -365,10 +365,10 @@ S3's parity report is accepted.
 | # | decision | recommendation |
 |---|---|---|
 | D1 | Where the two new native cases live | `cases/humanEndocardial/` and `cases/pigMorphometricTransmural/` beside `cases/bivCase`, so the existing `cases/*/0/` and `cases/*/constant/polyMesh/` ignore rules keep the data out. The alternative, un-ignoring the two anatomy-bundle directories under `cases/` to match `COMPARISON.md`, would mark the owner's local data directories as untracked |
-| D2 | Which of the human case's dicts are authoritative | The owner's checkout copy (the human bundle's `system/`, 23 September, `coordinatesConventionDict`, seeds from a placement script) differs in its seeds from `~/cardiacSubstrateFOAM-local-cases/<human anatomy bundle>`. Recommend the newer one, confirmed by a run |
+| D2 | Which of the human case's dicts are authoritative | The owner's checkout copy (the human bundle's `system/`, 23 September, `coordinatesConventionDict`, seeds from a placement script) differs in its seeds from `<local cases>/<human anatomy bundle>`. Recommend the newer one, confirmed by a run |
 | D3 | The pig case's dicts and bundle | The only dicts use `uvcConventionDict`. Rewrite them as `coordinatesConventionDict`, and confirm the pig-extended anatomy bundle is the pig-extended case's mesh and fields |
 | D4 | `1DgraphToFoam` in the tree records | Leave it out now (the factory never ran it; the edge-length scaling is pending); add it as a step when the graph hand-off is decided |
-| D5 | The `humanSlab` bundle for S3 | It exists only inside the owner's checkout (`cases/bivCase/{0,constant}`), which agents must not touch. The owner copies `constant/polyMesh/{boundary,faces,neighbour,owner,points}`, `0/fiber`, `0/sheet` and `0/uvc_*` to `~/cardiacSubstrateFOAM-local-cases/bivCase_base/`, or allows a read-only supply from the checkout |
+| D5 | The `humanSlab` bundle for S3 | It exists only inside the owner's checkout (`cases/bivCase/{0,constant}`), which agents must not touch. The owner copies `constant/polyMesh/{boundary,faces,neighbour,owner,points}`, `0/fiber`, `0/sheet` and `0/uvc_*` to `<local cases>/bivCase_base/`, or allows a read-only supply from the checkout |
 | D6 | Record names | The native variant names (`humanSlab`, `humanEndocardial`, `pigMorphometricTransmural`), replacing `cardiacsubstrate-*` with no alias |
 | D7 | The native test marker | `native_cardiacsubstrate`, with the two variables of S3, and the cardiacSubstrateFOAM utilities built from the native worktree (the binaries on `/Volumes/OpenFOAM-v2412` were built on different days, and include `setCardiacScar` from 16 September, before `main` removed scar, so which commit built each one is unknown) |
 | D8 | S7 and the idealized-heart native defaults | Yes, after S4: it is the second consumer that proves one reality. The native change (monodomain as the plain files) is the owner's |
