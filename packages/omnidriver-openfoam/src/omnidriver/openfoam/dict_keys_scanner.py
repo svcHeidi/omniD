@@ -1507,6 +1507,17 @@ class CatalogReport:
         return asdict(self)
 
 
+def _bound_spellings(entry, path: tuple[str, ...]) -> list[tuple[str, ...]]:
+    """``path`` as the catalogue spells it and with each ``<name>`` segment
+    replaced by every instance its entry allows, so a read naming an allowed
+    instance literally (``subDict("lv")``) is that entry's."""
+    spellings = [path]
+    for index, segment in enumerate(path):
+        for instance in entry.allowed_bindings.get(segment) or ():
+            spellings += [spelled[:index] + (instance,) + spelled[index + 1:] for spelled in spellings if spelled[index] == segment]
+    return spellings
+
+
 def unread_entries(scan: Scan, entries: Iterable, reviewed: dict) -> list:
     """The ``entries`` whose key the scanned C++ reads nowhere: catalogued, and
     no longer read. A path ``reviewed`` lists under ``unseen_reads`` is read
@@ -1636,7 +1647,9 @@ def catalog_report(
         listings[document] = listing = [
             (entry, tuple(path.split("."))) for entry, path in zip(document_entries, catalogued_paths(document_entries))
         ]
-        containers[document] = [path[:i] for _entry, path in listing for i in range(1, len(path))]
+        containers[document] = [
+            spelled[:i] for entry, path in listing for spelled in _bound_spellings(entry, path) for i in range(1, len(path))
+        ]
         gone = unread_entries(view, document_entries, reviewed)
         unread += [
             {
@@ -1699,7 +1712,9 @@ def catalog_report(
             continue
         read_path = read.scope + (read.key,)
         homes = [document for document in found if read in homed[document]]
-        listed = [path for document in homes for _entry, path in listings[document]]
+        listed = [
+            spelled for document in homes for entry, path in listings[document] for spelled in _bound_spellings(entry, path)
+        ]
         listed += [path for document in homes for path in containers[document]] if read.subdict else []
         if any(_path_matches(read_path, path) for path in listed) or (read.root, read_path, read.method) in seen:
             continue
