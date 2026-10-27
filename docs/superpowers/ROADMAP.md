@@ -9,7 +9,7 @@ owner's decisions sit with the work they settle.
 |---|---|---|
 | omniD (`svcHeidi/omniD`) | `main` = `origin/main` | The only long-lived branch. The follow-up to cardiacFOAM #59, cardiacCore's new layout and the audit fixes (§2a) are on `audit/2026-10-26`, which lands on `main` next. Local-only and ignored: `.venv`, caches, `.claude/`, `.superpowers/` (agent reports) |
 | cardiacFOAM (`solids4foam/cardiacFoam`) | `main` | PR #59 merged on 2026-10-25. v0.1 is not tagged yet; omniD relates to cardiacFOAM by version and PR, never by commit |
-| cardiacCore (`svcHeidi/cardiacCore`) | `main` | Carries the repository layout omniD follows (`applications/utilities/`, `applications/scripts/`, `tutorials/idealizedHeart/`), the `ccore` utility names and PRs #2 to #7, which omniD follows; #6 adds an OpenFOAM build and regression CI on every pull request. PR #8, docs only, is open. The owner's checkout matches `origin/main` |
+| cardiacCore (`svcHeidi/cardiacCore`) | `main` | Carries the repository layout omniD follows (`applications/utilities/`, `applications/scripts/`, `tutorials/idealizedHeart/`), the `ccore` utility names and PRs #2 to #7, which omniD follows; #6 adds an OpenFOAM build and regression CI on every pull request. PR #8 (a HeartViz README section) is closed unmerged on the owner's decision; PR #9, docs only, adds an outputs table to `docs/architecture.md`. The owner's checkout matches `origin/main` |
 
 Pass 2 (`plans/2026-10-01-pass2-convergence.md`) is complete.
 
@@ -364,6 +364,10 @@ built from other source.
        agent meets it;
      - openCARP's conformance offset unit resolves only with `--benchmarks`;
        `describe` reports `null` without it.
+     - a step whose binary cannot load its libraries (macOS `dyld`:
+       "Library not loaded", for example a private build whose `../lib` is not
+       OpenFOAM's) fails with no named reason; the message is only in the
+       step's stderr log. Step-failure explanation should name it.
 
 ## 6. For the owner, from the audit
 

@@ -20,7 +20,6 @@ _MORPHOMETRY_WEIGHTS_SOURCE = "src/purkinjeMorphometry/PurkinjeMorphometryCore.H
 _MORPHOMETRY_README = "applications/utilities/setPurkinjeMorphometry/README.md"
 _COORDINATES_CONVENTION_SOURCE = "src/coordinatesConvention/coordinatesConvention.H"
 _ANATOMY_README = "applications/utilities/setCardiacAnatomy/README.md"
-_AHA_SEGMENT_NAMES = "applications/utilities/setCardiacAnatomy/aha_segment_names.json"
 _TREE_SOURCE = "applications/utilities/generatePurkinjeTree/generatePurkinjeTree.C"
 _TREE_PARAMS_SOURCE = "applications/utilities/generatePurkinjeTree/PurkinjeVentricleParams.H"
 _TREE_README = "applications/utilities/generatePurkinjeTree/README.md"
