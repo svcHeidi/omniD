@@ -1,12 +1,10 @@
 # Working in this repository
 
-For provider-neutral task routing, start with [`AGENTS.md`](AGENTS.md) and
-load the selected role's documents from
+[`AGENTS.md`](AGENTS.md) is the one entry point for an agent; it routes each
+role to its documents through
 [`agent-handbook/guidance-manifest.yaml`](agent-handbook/guidance-manifest.yaml).
-This file remains the maintainer-specific package and verification guide.
-
-Read this first. It is the entry point for agents and the fastest way to avoid
-re-deriving what the last five sessions established.
+This file is the maintainer's package and verification guide, which the
+maintainer role loads.
 
 ## What this is
 
@@ -53,7 +51,7 @@ uv venv --python 3.11 /tmp/odcore && VIRTUAL_ENV=/tmp/odcore uv pip install -q \
 | all packages | `python -m pytest packages/ -q -m "not slow"` | ordinary regressions |
 | core alone | `python -m pytest packages/omnidriver/tests -q` | core reaching into a sibling package |
 | **installed wheel** | see below | core reading repo-relative state at import time |
-| static gates | `python3 scripts/check-import-boundaries.py`, `scripts/check-case-writes.py`, `scripts/check-core-shape.py`, `scripts/check-openfoam-shape.py`, and `scripts/check-benchmark-references.py` | import direction; a tutorial-record/axis module writing a case directly instead of through `commit_case_write`; core gaining a new OpenFOAM layout token or growing its recorded debt; the OpenFOAM layer gaining a cardiac token (`scripts/openfoam-shape-baseline.txt`, empty); a benchmark reference under `benchmarks/` that fails to load, misnames its own id, or cites nothing |
+| static gates | `python3 scripts/check-import-boundaries.py`, `scripts/check-case-writes.py`, `scripts/check-core-shape.py`, `scripts/check-openfoam-shape.py`, and `scripts/check-benchmark-references.py` | import direction; a tutorial-record/axis module writing a case directly instead of through `commit_case_write`; core gaining an OpenFOAM layout token (`scripts/core-shape-baseline.txt`, empty); the OpenFOAM layer gaining a cardiac token (`scripts/openfoam-shape-baseline.txt`, empty); a benchmark reference under `benchmarks/` that fails to load, misnames its own id, or cites nothing |
 
 The wheel shape is the one people skip and the one that found the worst
 defects. Rebuild it after **every** source change or it tests stale code:
@@ -145,7 +143,7 @@ A skip here hides exactly what the guard exists to find.
 | a resolved record case passes the catalogue's relations and numeric bounds, the enum menus (the names the C++'s selection table registers, or the literals its code compares the value against, when its source is supplied) and the cross-field rules before it runs, `omnidriver.openfoam.case_rules` being the one evaluator of them; a key the supplied C++ reads with no default in a class the case builds is refused when missing, and noted when the scan cannot tell whether the case builds the class; `step --apply` runs the same rules after its edit and rolls the edit back when they refuse it | `test_case_rules.py`, `test_cxx_requirements.py` (openfoam), `test_case_rules.py` (cardiacCore), the commit and apply tests in core's `test_tutorial_records.py` |
 | a solver's shell is declared in its manifest and rendered from supplied values only; a launcher from the other solver's MPI is refused | `test_environment_and_machine.py`; `test_an_mpirun_from_another_mpi_family_is_refused` (openfoam) |
 | a run document lists each solver's builds with the source each was built from, and a plan compares that source with the supplied repository by digest (never by file times) | `test_solver_provenance.py`, `test_build_record.py`, `test_build_identity.py` (core); `test_build_products.py` (openfoam); `test_solver_builds.py` (opencarp, torchcor) |
-| core names no OpenFOAM layout beyond its recorded, shrinking debt | `scripts/check-core-shape.py` (baseline `scripts/core-shape-baseline.txt`; new tokens never added) |
+| core names no OpenFOAM layout, and the OpenFOAM layer no cardiac vocabulary | `scripts/check-core-shape.py`, `scripts/check-openfoam-shape.py` (both baselines empty; a baseline may only shrink) |
 | every conformance check C1-C14 passes for the toy target, or is `not_applicable` where the toy verifies nothing (C12, C13, C14 for its record), and C3 to C14 are each given a deliberate break it must catch (a broken toy plugin; for C14, a quantity pair the target breaks; C1 and C2 fail only for a record the stack does not serve); a real solver's records are exercised by `omnidriver check`, which reports and never gates | `test_conformance_toy.py` (core); `test_check_command.py` (core) |
 
 ## One reality
