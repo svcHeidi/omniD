@@ -24,3 +24,19 @@ path_pattern = "0/Conductivity"
 format = "openfoam_field"
 description = "Conductivity tensor updated in the Purkinje slab"
 produced_by = "setPurkinjeSlab"
+
+[[produces]]
+artifact_id = "conductivity_intracellular"
+path_pattern = "0/ConductivityIntracellular"
+format = "openfoam_field"
+description = "Intracellular tensor updated in the Purkinje slab, when the case has one"
+produced_by = "setPurkinjeSlab"
+optional = true
+
+[[produces]]
+artifact_id = "conductivity_extracellular"
+path_pattern = "0/ConductivityExtracellular"
+format = "openfoam_field"
+description = "Extracellular tensor updated in the Purkinje slab, when the case has one"
+produced_by = "setPurkinjeSlab"
+optional = true
