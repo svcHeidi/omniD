@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "reference": "../../../niederer2011.json",
+  "reference": "../../niederer2011.json",
   "tolerance": {
     "kind": "absolute",
     "value": 5.0,

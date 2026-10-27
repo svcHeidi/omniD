@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "reference": "../../../niederer2011.json",
+  "reference": "../../niederer2011.json",
   "tolerance": {
     "kind": "absolute",
     "value": 1.0,
@@ -11,7 +11,7 @@
   "runs": {
     "dt0.01": {
       "plugin": "cardiacfoam",
-      "sweep_output": "../runs/cardiacfoam/cartesianConvergence/dx0.2",
+      "sweep_output": "../runs/cardiacfoam/cartesianConvergence/dx0.5",
       "case_id": "case_0002",
       "artifact_id": "record.samplePoints.0",
       "points": {
@@ -64,11 +64,11 @@
           ]
         }
       },
-      "max_sampling_offset": 0.0001733
+      "max_sampling_offset": 0.0004331
     },
     "dt0.005": {
       "plugin": "cardiacfoam",
-      "sweep_output": "../runs/cardiacfoam/cartesianConvergence/dx0.2",
+      "sweep_output": "../runs/cardiacfoam/cartesianConvergence/dx0.5",
       "case_id": "case_0003",
       "artifact_id": "record.samplePoints.0",
       "points": {
@@ -121,7 +121,7 @@
           ]
         }
       },
-      "max_sampling_offset": 0.0001733
+      "max_sampling_offset": 0.0004331
     }
   },
   "pairs": [
@@ -135,7 +135,7 @@
         "run": "dt0.005",
         "quantity": "0"
       },
-      "note": "P1 [0, 0, 0] mm in the reference frame; one solver, one frame, dx 0.2 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 1e-05 s, endTime 0.08 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s)"
+      "note": "P1 [0, 0, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
     },
     {
       "reference_label": "P2",
@@ -147,7 +147,7 @@
         "run": "dt0.005",
         "quantity": "1"
       },
-      "note": "P2 [0, 7, 0] mm in the reference frame; one solver, one frame, dx 0.2 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 1e-05 s, endTime 0.08 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s)"
+      "note": "P2 [0, 7, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
     },
     {
       "reference_label": "P3",
@@ -159,7 +159,7 @@
         "run": "dt0.005",
         "quantity": "2"
       },
-      "note": "P3 [20, 0, 0] mm in the reference frame; one solver, one frame, dx 0.2 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 1e-05 s, endTime 0.08 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s)"
+      "note": "P3 [20, 0, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
     },
     {
       "reference_label": "P4",
@@ -171,7 +171,7 @@
         "run": "dt0.005",
         "quantity": "3"
       },
-      "note": "P4 [20, 7, 0] mm in the reference frame; one solver, one frame, dx 0.2 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 1e-05 s, endTime 0.08 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s)"
+      "note": "P4 [20, 7, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
     },
     {
       "reference_label": "P5",
@@ -183,7 +183,7 @@
         "run": "dt0.005",
         "quantity": "4"
       },
-      "note": "P5 [0, 0, 3] mm in the reference frame; one solver, one frame, dx 0.2 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 1e-05 s, endTime 0.08 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s)"
+      "note": "P5 [0, 0, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
     },
     {
       "reference_label": "P6",
@@ -195,7 +195,7 @@
         "run": "dt0.005",
         "quantity": "5"
       },
-      "note": "P6 [0, 7, 3] mm in the reference frame; one solver, one frame, dx 0.2 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 1e-05 s, endTime 0.08 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s)"
+      "note": "P6 [0, 7, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
     },
     {
       "reference_label": "P7",
@@ -207,7 +207,7 @@
         "run": "dt0.005",
         "quantity": "6"
       },
-      "note": "P7 [20, 0, 3] mm in the reference frame; one solver, one frame, dx 0.2 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 1e-05 s, endTime 0.08 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s)"
+      "note": "P7 [20, 0, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
     },
     {
       "reference_label": "P8",
@@ -219,7 +219,7 @@
         "run": "dt0.005",
         "quantity": "7"
       },
-      "note": "P8 [20, 7, 3] mm in the reference frame; one solver, one frame, dx 0.2 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 1e-05 s, endTime 0.08 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s)"
+      "note": "P8 [20, 7, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
     },
     {
       "reference_label": "P9",
@@ -231,7 +231,7 @@
         "run": "dt0.005",
         "quantity": "8"
       },
-      "note": "P9 [10, 3.5, 1.5] mm in the reference frame; one solver, one frame, dx 0.2 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 1e-05 s, endTime 0.08 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.2 (dx 0.0002 m, deltaT 5e-06 s, endTime 0.08 s)"
+      "note": "P9 [10, 3.5, 1.5] mm in the reference frame; one solver, one frame, dx 0.5 mm: cardiacfoam case_0002 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 1e-05 s, endTime 0.2 s) against cardiacfoam case_0003 of runs/cardiacfoam/cartesianConvergence/dx0.5 (dx 0.0005 m, deltaT 5e-06 s, endTime 0.2 s)"
     }
   ]
 }

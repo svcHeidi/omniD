@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "reference": "../../../niederer2011.json",
+  "reference": "../../niederer2011.json",
   "tolerance": {
     "kind": "absolute",
     "value": 1.0,
@@ -11,7 +11,7 @@
   "runs": {
     "dt0.01": {
       "plugin": "opencarp",
-      "sweep_output": "../runs/opencarp/cartesianConvergence/dx0.2",
+      "sweep_output": "../runs/opencarp/cartesianConvergence/dx0.5",
       "case_id": "case_0002",
       "artifact_id": "record.solve.2",
       "points": {
@@ -64,11 +64,11 @@
           ]
         }
       },
-      "max_sampling_offset": 0.1415
+      "max_sampling_offset": 0.001
     },
     "dt0.005": {
       "plugin": "opencarp",
-      "sweep_output": "../runs/opencarp/cartesianConvergence/dx0.2",
+      "sweep_output": "../runs/opencarp/cartesianConvergence/dx0.5",
       "case_id": "case_0003",
       "artifact_id": "record.solve.2",
       "points": {
@@ -121,7 +121,7 @@
           ]
         }
       },
-      "max_sampling_offset": 0.1415
+      "max_sampling_offset": 0.001
     }
   },
   "pairs": [
@@ -135,7 +135,7 @@
         "run": "dt0.005",
         "quantity": "P1"
       },
-      "note": "P1 [0, 0, 0] mm in the reference frame; one solver, one frame, dx 0.2 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 10 us, tend 80 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms)"
+      "note": "P1 [0, 0, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 10 us, tend 200 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 5 us, tend 200 ms)"
     },
     {
       "reference_label": "P2",
@@ -147,7 +147,7 @@
         "run": "dt0.005",
         "quantity": "P2"
       },
-      "note": "P2 [0, 7, 0] mm in the reference frame; one solver, one frame, dx 0.2 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 10 us, tend 80 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms)"
+      "note": "P2 [0, 7, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 10 us, tend 200 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 5 us, tend 200 ms)"
     },
     {
       "reference_label": "P3",
@@ -159,7 +159,7 @@
         "run": "dt0.005",
         "quantity": "P3"
       },
-      "note": "P3 [20, 0, 0] mm in the reference frame; one solver, one frame, dx 0.2 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 10 us, tend 80 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms)"
+      "note": "P3 [20, 0, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 10 us, tend 200 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 5 us, tend 200 ms)"
     },
     {
       "reference_label": "P4",
@@ -171,7 +171,7 @@
         "run": "dt0.005",
         "quantity": "P4"
       },
-      "note": "P4 [20, 7, 0] mm in the reference frame; one solver, one frame, dx 0.2 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 10 us, tend 80 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms)"
+      "note": "P4 [20, 7, 0] mm in the reference frame; one solver, one frame, dx 0.5 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 10 us, tend 200 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 5 us, tend 200 ms)"
     },
     {
       "reference_label": "P5",
@@ -183,7 +183,7 @@
         "run": "dt0.005",
         "quantity": "P5"
       },
-      "note": "P5 [0, 0, 3] mm in the reference frame; one solver, one frame, dx 0.2 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 10 us, tend 80 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms)"
+      "note": "P5 [0, 0, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 10 us, tend 200 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 5 us, tend 200 ms)"
     },
     {
       "reference_label": "P6",
@@ -195,7 +195,7 @@
         "run": "dt0.005",
         "quantity": "P6"
       },
-      "note": "P6 [0, 7, 3] mm in the reference frame; one solver, one frame, dx 0.2 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 10 us, tend 80 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms)"
+      "note": "P6 [0, 7, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 10 us, tend 200 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 5 us, tend 200 ms)"
     },
     {
       "reference_label": "P7",
@@ -207,7 +207,7 @@
         "run": "dt0.005",
         "quantity": "P7"
       },
-      "note": "P7 [20, 0, 3] mm in the reference frame; one solver, one frame, dx 0.2 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 10 us, tend 80 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms)"
+      "note": "P7 [20, 0, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 10 us, tend 200 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 5 us, tend 200 ms)"
     },
     {
       "reference_label": "P8",
@@ -219,7 +219,7 @@
         "run": "dt0.005",
         "quantity": "P8"
       },
-      "note": "P8 [20, 7, 3] mm in the reference frame; one solver, one frame, dx 0.2 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 10 us, tend 80 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms)"
+      "note": "P8 [20, 7, 3] mm in the reference frame; one solver, one frame, dx 0.5 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 10 us, tend 200 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 5 us, tend 200 ms)"
     },
     {
       "reference_label": "P9",
@@ -231,7 +231,7 @@
         "run": "dt0.005",
         "quantity": "P9"
       },
-      "note": "P9 [10, 3.5, 1.5] mm in the reference frame; one solver, one frame, dx 0.2 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 10 us, tend 80 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.2 (dx 200 um, nversion.par:dt 5 us, tend 80 ms)"
+      "note": "P9 [10, 3.5, 1.5] mm in the reference frame; one solver, one frame, dx 0.5 mm: opencarp case_0002 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 10 us, tend 200 ms) against opencarp case_0003 of runs/opencarp/cartesianConvergence/dx0.5 (dx 500 um, nversion.par:dt 5 us, tend 200 ms)"
     }
   ]
 }

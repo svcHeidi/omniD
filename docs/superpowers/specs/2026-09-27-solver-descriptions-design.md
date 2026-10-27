@@ -184,7 +184,7 @@ files. Two commits in one change.
     - equal refusals for 0, −1, NaN and `"x"`.
   - Case level (`native_opencarp`): two strict plans per study case, into two
     scratch roots, for the campaign study
-    (`benchmarks/niederer2011/campaign/studies/opencarp_cartesianConvergence.json`,
+    (`benchmarks/niederer2011/studies/opencarp_cartesianConvergence.json`,
     read-only) and the conformance base study. It asserts two things:
     - the run documents' workflow DAG (argv, consumes, produces ids) is
       byte-identical;
