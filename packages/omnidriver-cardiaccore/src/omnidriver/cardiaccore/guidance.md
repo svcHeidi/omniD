@@ -65,10 +65,13 @@ infer one from field names, and never convert one into the other's spelling.
   declared value), and apex-to-base direction is not guaranteed.
 - What a utility does under each coordinate system, and what it writes, is
   its own `README.md` in `applications/utilities/<utility>/`: for
-  `generatePurkinjeTree`, the endocardial face sets it builds and from what;
-  for `setCardiacAnatomy`, `AHA_Segment`, `aha_angle`, `aha_z` and its
-  auxiliary fields, with the segment names in `aha_segment_names.json`. A
-  record step's outputs are the utility manifest's, so they follow it.
+  `setCardiacAnatomy`, `AHA_Segment`, `aha_angle`, `aha_z` and its auxiliary
+  fields, with the segment names in `aha_segment_names.json`; for
+  `setPurkinjeMorphometry`, its classes and weights, with the segment names in
+  `src/purkinjeMorphometry/purkinje_morphometry_segment_names.json`. The
+  endocardial face sets `setCardiacAnatomy` and `generatePurkinjeTree` both
+  build are `src/endocardialSurfaces/README.md`. A record step's outputs are
+  the utility manifest's, so they follow it.
 
 ## Helper scripts
 
