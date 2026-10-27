@@ -4,6 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from omnidriver.core.runtime.build_identity import write_records
 from omnidriver.core.runtime.solver_provenance import provenance_diagnostics, to_json
 from omnidriver.openfoam.build_products import (
@@ -101,17 +103,24 @@ def test_module_products_land_in_the_user_platform_when_no_module_folder_is_set(
     }
 
 
-def test_module_products_are_found_in_the_module_folder_first(tmp_path):
-    root = _module_repository(tmp_path / "repo")
-    env = _install(tmp_path)
-    (Path(env["FOAM_USER_APPBIN"]) / "x").write_bytes(b"older copy")
-    module_bin, module_lib = tmp_path / "module" / "bin", tmp_path / "module" / "lib"
-    module_bin.mkdir(parents=True)
-    module_lib.mkdir(parents=True)
-    (module_bin / "x").write_bytes(b"solver")
-    (module_lib / "liby.dylib").write_bytes(b"library")
-    env = {**env, "FOAM_MODULE_APPBIN": str(module_bin), "FOAM_MODULE_LIBBIN": str(module_lib)}
-    assert dict(products(root, env)) == {"x": module_bin / "x", "liby": module_lib / "liby.dylib"}
+@pytest.mark.parametrize("named", ["MODULE", "USER"])
+def test_a_product_is_found_first_in_the_folder_its_rule_names(tmp_path, named):
+    root = tmp_path / "repo"
+    (root / "solver" / "Make").mkdir(parents=True)
+    (root / "solver" / "Make" / "files").write_text(f"x.C\n\nEXE = $(FOAM_{named}_APPBIN)/x\n")
+    (root / "lib" / "Make").mkdir(parents=True)
+    (root / "lib" / "Make" / "files").write_text(f"y.C\n\nLIB = $(FOAM_{named}_LIBBIN)/liby\n")
+    env = {}
+    for kind in ("MODULE", "USER"):
+        appbin, libbin = tmp_path / kind / "bin", tmp_path / kind / "lib"
+        appbin.mkdir(parents=True)
+        libbin.mkdir(parents=True)
+        (appbin / "x").write_bytes(kind.encode())
+        (libbin / "liby.so").write_bytes(kind.encode())
+        env |= {f"FOAM_{kind}_APPBIN": str(appbin), f"FOAM_{kind}_LIBBIN": str(libbin)}
+    assert dict(products(root, env)) == {
+        "x": tmp_path / named / "bin" / "x", "liby": tmp_path / named / "lib" / "liby.so",
+    }
 
 
 def test_a_recorded_build_from_this_repository_matches_and_says_nothing(tmp_path):
