@@ -27,7 +27,7 @@ from .core.case_transaction import interrupted_commit
 from .core.environment_connection import load_environment
 from .core.refusal import Refusal, RefusingParser, caught_code, failure, print_refusal
 from .core.plugin_discovery import discover_plugins
-from .core.runtime.sweep_runner import SweepStopped, sweep_plan, sweep_run
+from .core.runtime.sweep_runner import SweepStopped, plan_studies, sweep_plan, sweep_plan_status, sweep_run
 from omnidriver.core.introspection import describe_entry, describe_stack, named_catalog
 from omnidriver.core.planning_types import diagnostic
 from omnidriver.core.quantities.errors import PointReferenceError
@@ -932,6 +932,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--studies",
+        metavar="DIR",
+        help=(
+            "For action=check, in place of the conformance checks: plan every sweep spec "
+            "(a JSON object with 'base' and 'sweep') under DIR, as sweep-plan does, "
+            "staging each into <scratch>/studies/<its path under DIR>, and report each "
+            "study's status and case count, and each case's status, with its code and error. "
+            "DIR is supplied, never searched for; reports and never gates."
+        ),
+    )
+    parser.add_argument(
         "--checks",
         help="For action=check: the conformance checks to run, comma-separated (default: C1 to C14).",
     )
@@ -992,8 +1003,15 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         )):
             parser.error(
                 "action=check takes --plugin or --repo, --cases-root, --scratch-dir, --input, --record, "
-                "--checks, --benchmarks and --regression only"
+                "--checks, --benchmarks and --regression only, or --studies"
             )
+        if args.studies and (args.record or args.checks or args.regression or args.benchmarks or args.cases_root):
+            parser.error(
+                "check --studies plans the studies under DIR in place of the conformance checks: it takes "
+                "--plugin or --repo, --scratch-dir, --input, --environment-source and --max-cases only"
+            )
+    elif args.studies:
+        parser.error("--studies is only valid with action=check")
     if args.entrypoint_options is not None and not (
         args.case and args.action in {"describe", "plan", "step", "run"}
     ):
@@ -1011,9 +1029,10 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error(
             "--allow-unresolved-configuration is only valid with action=plan, action=step, or action=run"
         )
-    if args.environment_source and args.action not in {"plan", "step", "run", "sweep-plan", "sweep-run"}:
+    if args.environment_source and args.action not in {"plan", "step", "run", "sweep-plan", "sweep-run"} and not args.studies:
         parser.error(
-            "--environment-source is only valid with action=plan, step, run, sweep-plan or sweep-run"
+            "--environment-source is only valid with action=plan, step, run, sweep-plan, sweep-run "
+            "or check --studies"
         )
     if args.action != "step" and args.step:
         parser.error("--step is only valid with action=step")
@@ -1062,8 +1081,8 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         )
     if args.fresh and args.action not in {"step", "run", "sweep-run"}:
         parser.error("--fresh is only valid with action=step, action=run, or action=sweep-run")
-    if args.max_cases != 200 and args.action not in {"sweep-plan", "sweep-run"}:
-        parser.error("--max-cases is only valid with action=sweep-plan or action=sweep-run")
+    if args.max_cases != 200 and args.action not in {"sweep-plan", "sweep-run"} and not args.studies:
+        parser.error("--max-cases is only valid with action=sweep-plan, sweep-run or check --studies")
     if args.action not in {"sweep-plan", "sweep-run"} and (args.spec or args.output_dir):
         parser.error("--spec/--output-dir are only valid with action=sweep-plan or action=sweep-run")
     if args.action == "compare":
@@ -1177,6 +1196,21 @@ def _check(args, driver_context, repository, cases_root: Path, inputs: dict[str,
         )
     except (TutorialRecordError, KeyError) as exc:
         print(json.dumps(failure(exc, action="check", error=str(exc.args[0] if exc.args else exc)), indent=2))
+        return 1
+    print(json.dumps(report, indent=2))
+    return 0
+
+
+def _check_studies(args, driver_context, inputs: dict[str, str]) -> int:
+    """``check --studies``: report only; the exit code is 0 whenever the studies were planned."""
+    try:
+        scratch_root = resolve_scratch_root(args.scratch_dir)
+        report = plan_studies(
+            Path(args.studies).expanduser(), scratch_root=scratch_root, max_cases=args.max_cases,
+            inputs=inputs, environment_source=args.environment_source, driver_context=driver_context,
+        )
+    except TutorialRecordError as exc:
+        print(json.dumps(failure(exc, action="check"), indent=2))
         return 1
     print(json.dumps(report, indent=2))
     return 0
@@ -1355,7 +1389,7 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
         except TutorialRecordError as exc:
             print(json.dumps(failure(exc, action=args.action), indent=2))
             return 1
-    elif args.action not in {"sweep-plan", "sweep-run"} and not args.run_document and (
+    elif args.action not in {"sweep-plan", "sweep-run"} and not args.run_document and not args.studies and (
         selected_entry is not None or args.action == "check"
     ):
         cases_root = (
@@ -1366,6 +1400,8 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
     entry_label = getattr(selected_entry, "name", selected_entry)
 
     if args.action == "check":
+        if args.studies:
+            return _check_studies(args, driver_context, cli_inputs)
         return _check(args, driver_context, repository, cases_root, cli_inputs)
 
     if args.action == "catalog":
@@ -1470,16 +1506,9 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
             )
         except (SweepValidationError, TutorialRecordError, AttemptLeaseError) as exc:
             return _sweep_refusal(args, exc)
-        # A spec that could not be read yields zero cases, so "no case
-        # failed" would otherwise read as success.
-        not_ok = [case["status"] for case in result["cases"] if case["status"] != "ok"]
-        failed = bool(result.get("spec_error")) or bool(not_ok)
-        if failed and not result.get("spec_error") and set(not_ok) == {"blocked"}:
-            # A valid plan whose environment is not ready: blocked, as `plan --strict` reports it.
-            print(json.dumps({"status": "blocked", "code": "cases_blocked", **result}, indent=2))
-            return 1
-        print(json.dumps({"status": "failed" if failed else "ok", **_cases_failed(failed), **result}, indent=2))
-        return 1 if failed else 0
+        status, code = sweep_plan_status(result)
+        print(json.dumps({"status": status, **({"code": code} if code else {}), **result}, indent=2))
+        return 0 if status == "ok" else 1
 
     if args.action == "sweep-run":
         output_dir = _sweep_output_dir(args)

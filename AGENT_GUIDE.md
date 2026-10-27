@@ -22,6 +22,7 @@ is tested against the code; verify any other module path before relying on it.
 | Locate predicted outputs | `strict_plan(...)`'s `expected_artifacts` field (also in `omnidriver plan --strict` JSON) | `omnidriver.core.strict_planning` |
 | Verify outputs vs predictions | `artifact_reconciliation` in `run`/`step` JSON output | `omnidriver.core.runtime.reconciler` |
 | Plan/run a study over a record or a case folder | `omnidriver sweep-plan/sweep-run --spec sweep.json --output-dir <dir>` | `omnidriver.core.runtime.sweep_runner` |
+| Plan every native study of a repository, as a check | `omnidriver check --repo <repo> --studies <dir> --scratch-dir <scratch>` | `omnidriver.core.runtime.sweep_runner.plan_studies` |
 | Check a solver's results against a manufactured solution | `omnidriver-verify problems/show/residual/cell-model/norms/compare` | `omnidriver.verifier` |
 
 ## Selecting the stack
@@ -1050,6 +1051,29 @@ quantity C13 and C14 compare); a record that declares none is reported
 from the solver's shell (`omnidriver env`). A record that needs a supplied
 input takes `--input NAME=PATH`, as in a plan. The native tree is never written:
 a check fails if anything under the cases root changed while it ran.
+
+### Every native study: `check --studies`
+
+```bash
+omnidriver check --repo <cardiacFOAM> --scratch-dir <scratch> --studies <cardiacFOAM>/tutorials \
+  --environment-source <env.sh>
+```
+
+In place of the conformance checks, `check --studies DIR` plans every sweep
+spec under `DIR` as `sweep-plan` does. A sweep spec is any `*.json` under `DIR`
+holding a JSON object with `base` and `sweep`; any other JSON file is left out,
+and one that is not readable JSON is reported (`spec_unreadable`). `DIR` is
+supplied, never searched for, and omniD names no layout inside it: pass the
+tutorials folder for every study, or one tutorial's folder for its own. Each
+study is staged into `<scratch>/studies/<its path under DIR, less .json>`; a
+scratch root inside `DIR` is refused, and nothing is written outside it. The
+report lists each study's `status` (`ok`, `blocked` or `failed`, as
+`sweep-plan` would exit) with its `code`, its `case_count`, and each case's
+`status`, with the `code` and `error` of a case that is not ok; `summary` counts
+studies and cases. It reports and never gates: the exit code is 0 whenever the
+studies were planned, and a refused study costs that study alone. It takes
+`--plugin` or `--repo`, `--scratch-dir`, `--input`, `--environment-source` and
+`--max-cases`, which reach every study's plan.
 
 ## Discovering what's valid
 

@@ -651,3 +651,92 @@ def sweep_run(
         inputs=inputs, environment_source=environment_source, driver_context=driver_context,
     )
 
+
+def sweep_plan_status(result: Mapping[str, Any]) -> tuple[str, str | None]:
+    """A ``sweep_plan`` result's ``(status, code)``: ``ok``; ``blocked`` when every case that is not ok is
+    blocked (a valid plan whose environment is not ready); else ``failed``, a spec that could not be read
+    included, since it yields zero cases and "no case failed" would read as success."""
+    not_ok = {case["status"] for case in result["cases"] if case["status"] != "ok"}
+    if result.get("spec_error"):
+        return "failed", "cases_failed"
+    if not not_ok:
+        return "ok", None
+    return ("blocked", "cases_blocked") if not_ok == {"blocked"} else ("failed", "cases_failed")
+
+
+def _planned_case_summary(case: Mapping[str, Any]) -> dict[str, Any]:
+    """One planned case as ``check --studies`` reports it: its status and, when not ok, its code and error."""
+    summary = {"case_id": case["case_id"], "status": case["status"]}
+    if case["status"] == "ok":
+        return summary
+    plan = case.get("plan")
+    if plan is None:
+        return {**summary, "code": case.get("code"), "error": case.get("error")}
+    errors = [
+        f"{item['code']}: {item['message']}"
+        for name, group in plan.items() if name.endswith("_diagnostics") and isinstance(group, list)
+        for item in group if item.get("level") == "error"
+    ]
+    return {**summary, "code": plan.get("code"), "error": "; ".join(errors)}
+
+
+def plan_studies(
+    studies_root: Path,
+    *,
+    scratch_root: Path,
+    max_cases: int = 200,
+    inputs: Mapping[str, str | Path] | None = None,
+    environment_source: str | None = None,
+    driver_context: "DriverContext",
+) -> dict[str, Any]:
+    """``check --studies``: plan every sweep spec under ``studies_root`` as :func:`sweep_plan` does, each into
+    ``<scratch_root>/studies/<its path under studies_root>``, and report each study and case.
+
+    A sweep spec is a JSON object holding ``base`` and ``sweep``; any other JSON file is not a study and is
+    left out, and one that cannot be read is reported. A study that is refused costs that study alone.
+    """
+    studies_root = Path(studies_root)
+    if not studies_root.is_dir():
+        raise TutorialRecordError(f"--studies {studies_root} is not a directory")
+    if Path(scratch_root).resolve().is_relative_to(studies_root.resolve()):
+        raise TutorialRecordError(
+            f"the scratch root {scratch_root} is inside the studies folder {studies_root}: the staged cases "
+            "would be read as studies; supply a --scratch-dir outside it"
+        )
+    studies: list[dict[str, Any]] = []
+    for path in sorted(studies_root.rglob("*.json")):
+        relative = path.relative_to(studies_root)
+        try:
+            spec = json.loads(path.read_text())
+        except (OSError, ValueError) as exc:
+            studies.append({"study": relative.as_posix(), "status": "failed", **_case_failure(exc, code="spec_unreadable"), "cases": []})
+            continue
+        if not (isinstance(spec, dict) and "base" in spec and "sweep" in spec):
+            continue
+        try:
+            result = sweep_plan(
+                path, output_dir=Path(scratch_root) / "studies" / relative.with_suffix(""), max_cases=max_cases,
+                inputs=inputs, environment_source=environment_source, driver_context=driver_context,
+            )
+        except Exception as exc:
+            studies.append({"study": relative.as_posix(), "status": "failed", **_case_failure(exc, code=caught_code(exc)), "cases": []})
+            continue
+        status, code = sweep_plan_status(result)
+        studies.append({
+            "study": relative.as_posix(), "status": status, **({"code": code} if code else {}),
+            "case_count": result["case_count"],
+            "cases": [_planned_case_summary(case) for case in result["cases"]],
+        })
+    statuses = [study["status"] for study in studies]
+    cases = [case for study in studies for case in study["cases"]]
+    return {
+        "action": "check",
+        "studies_root": str(studies_root),
+        "summary": {
+            "studies": len(studies),
+            **{status: statuses.count(status) for status in ("ok", "blocked", "failed")},
+            "cases": len(cases),
+            "cases_ok": sum(case["status"] == "ok" for case in cases),
+        },
+        "studies": studies,
+    }
