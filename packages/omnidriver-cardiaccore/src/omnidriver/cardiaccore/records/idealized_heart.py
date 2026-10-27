@@ -37,9 +37,10 @@ ANATOMY_STEP = step(
     consumes=(CONV, "0/apicobasal", "0/tv"),
 )
 
+#: Its AHA fields are ANATOMY_STEP's `produces`, not authored inputs.
 MORPHOMETRY = step(
     "purkinje_morphometry", "setPurkinjeMorphometry",
-    consumes=(CONV, "0/apicobasal", "0/tv"),
+    consumes=(CONV,),
 )
 
 #: Mirrors the native humanSlab variant's workflow (conductivity, anatomy, slab, morphometry).
@@ -76,8 +77,7 @@ IDEALIZED_HEART_ENDOCARDIAL = TutorialRecord(
 )
 
 #: Mirrors pigMorphometricTransmural's workflow (conductivity, anatomy,
-#: morphometry, generatePurkinjeTree with LV weightedField+transmural and RV
-#: allLeaves+transmural).
+#: morphometry, generatePurkinjeTree).
 IDEALIZED_HEART_PIG_TRANSMURAL = TutorialRecord(
     name="idealizedHeartPigTransmural",
     native_case_relpath="idealizedHeart/pigMorphometricTransmural",
