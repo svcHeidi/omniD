@@ -53,7 +53,7 @@ def utility_sources(repository_root: Path) -> dict[str, tuple[Path, ...]]:
     found: dict[str, tuple[Path, ...]] = {}
     for make_files in (path for path in _walk(Path(repository_root)) if path.name == "files" and path.parent.name == "Make"):
         text = make_files.read_text(errors="replace")
-        names = _EXE_RULE.findall(text)
+        names = [name for _, name in _EXE_RULE.findall(text)]
         if not names:
             continue
         folder = make_files.parent.parent

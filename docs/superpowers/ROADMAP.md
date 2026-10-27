@@ -221,6 +221,12 @@ built from other source.
      sweep spec.
    - *After `step --apply` changes a swept key,* the case record still shows
      the sweep's axis values.
+   - *`build-record` after an incremental build.* A product whose file is
+     unchanged keeps its last record, so a source edit that relinks a library
+     but not the solver leaves the solver recorded at the old digest and every
+     plan warns `stale_build`. Options: re-credit by repository path (can claim
+     old source matches new), a source digest per product from its `Make/files`
+     and `Make/options`, or keep the rule and document the rebuild that clears it.
 2a. **Where a record run is not the native default run.** The records follow
    #59's Allruns: N, the time step, `writeInterval` and the 1D-3D graph are
    derived as `Allrun -N`/`-endTime` derive them. Measured byte-identical to
@@ -291,8 +297,9 @@ built from other source.
    - openCARP's generated RK4 blocks read an uninitialised `t`
      (`GlobalData_t t = t + dt/2;`), harmless unless a rate names `t`; with N
      and O's defects, whether to report them upstream.
-5. **The Niederer campaign on a cluster** (`benchmarks/niederer2011/campaign/`),
-   once the owner decides its shape (§6, item 1). Use `check --checks C13` for
+5. **The Niederer campaign on a cluster**, from `benchmarks/niederer2011/`
+   (its README, studies and pre-registered requests); the cluster scripts are
+   the cluster's own. Use `check --checks C13` for
    N-rank evidence, and rescan first if the solver changed.
 6. **The Niederer comparison across solvers and meshes** (owner, 2026-10-09).
    The goal is an agent that reasons with each solver's mapping and tries the
@@ -371,12 +378,10 @@ built from other source.
 
 ## 6. For the owner, from the audit
 
-1. **The Niederer campaign** (`benchmarks/niederer2011/campaign/`: a runbook,
-   a Slurm script, a summariser and the pre-registered requests) breaks "a
-   study needs no machinery", but was prepared for the cluster run.
-   Recommended: keep `niederer2011.json`, the openCARP study JSON and a short
-   per-solver mapping README, and move the requests to the paper repository
-   as evidence.
+1. **The Niederer data** stays in `benchmarks/niederer2011/`: the reference,
+   openCARP's study, the 21 pre-registered requests and a short per-solver
+   README. The runbook, Slurm script, summariser and request generator are
+   removed. Open: whether the requests move to the paper repository as evidence.
 2. **Native post-processing helpers** (`postprocessing.style`,
    `plotting_common`, `table_writer`) are used only by cardiacFOAM's native
    scripts. Recommended: move them into cardiacFOAM's `applications/scripts`,

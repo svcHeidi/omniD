@@ -1,12 +1,12 @@
 # Niederer 2011 with the fibre at 45°: openCARP and TorchCor
 
 These two files pose the Niederer slab with its fibre rotated 45° to openCARP
-and TorchCor, on the campaign's grid (Δx 0.5, 0.2, 0.1 mm × Δt 0.05, 0.01,
+and TorchCor, on the paper's grid (Δx 0.5, 0.2, 0.1 mm × Δt 0.05, 0.01,
 0.005 ms; end times 200, 80 and 75 ms).
 
 | file | solver | what it changes in the native case |
 |---|---|---|
-| `opencarp_obliqueWall.json` | openCARP `niedererNVersion` | `fibers.imbrication 90` (mesher), `mass_lumping 0` as the campaign |
+| `opencarp_obliqueWall.json` | openCARP `niedererNVersion` | `fibers.imbrication 90` (mesher), `mass_lumping 0` as the openCARP study |
 | `torchcor_obliqueWall.json` | TorchCor `nversion` (`--repo` the TorchCor cases repository) | `case.json:fibre` (1, 0, 1)/√2 |
 
 **cardiacFOAM has no counterpart:** its oblique study awaits a redesign under
@@ -31,19 +31,18 @@ another problem, and it orders P3 and P7 the other way
 
 ## Running one level
 
-As the campaign: slice a level with `../campaign/level_study.py`, then run it
-from the solver's own shell (`omnidriver env --plugin <p>`).
+A study is JSON: keep the one row you want (the same index in each list of
+`sweep.independent`, here Δx 0.2 mm and Δt 0.01 ms) and run it from the
+solver's own shell (`omnidriver env --plugin <p>`).
 
 ```bash
-python3 ../campaign/level_study.py --study opencarp_obliqueWall.json \
-  --cases-root <openCARP>/share/tutorials --where dx=200.0 --where nversion.par:dt=10.0 --out oc.json
 omnidriver sweep-run --plugin opencarp --spec oc.json --output-dir <out> --scratch-dir <scratch>
-
-python3 ../campaign/level_study.py --study torchcor_obliqueWall.json \
-  --cases-root <torchcor-cases>/cases --where case.json:dx_mm=0.2 --where case.json:dt_ms=0.01 --out tc.json
 omnidriver sweep-run --plugin torchcor --repo <torchcor-cases> --spec tc.json --output-dir <out> --scratch-dir <scratch>
 ```
 
-Read P1–P9 with `omnidriver compare`, a request per pair shaped as the
-campaign's `cross_*.json`; the points stay those of `niederer2011.json`. The
+`oc.json` and `tc.json` are those one-row copies, with `cases_root` set to
+`<openCARP>/share/tutorials` and `<torchcor-cases>/cases`.
+
+Read P1–P9 with `omnidriver compare`, a request per pair shaped as
+`../preregistered/requests/cross_*.json`; the points stay those of `niederer2011.json`. The
 rotation moves no point.

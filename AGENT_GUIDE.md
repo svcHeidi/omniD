@@ -538,7 +538,7 @@ refuses a parallel run by name.
   `--parallel N` equal to what the case says.
 - openCARP: `--parallel` with no count uses the allocation.
 
-A Slurm job script for the Niederer campaign:
+A Slurm job script for a sweep:
 
 ```bash
 #!/bin/bash
@@ -818,8 +818,9 @@ the worked case (`omnidriver check`'s C13 and C14; evidence in
    between two discretisations is a finding to report, not a request to
    retune.
 
-`benchmarks/niederer2011/campaign/` holds the pre-registered requests for the
-paper's full grid; whether it stays in omniD is open (ROADMAP).
+`benchmarks/niederer2011/` holds the reference, openCARP's study, the
+pre-registered requests for the paper's full grid and a README naming each
+solver's Δx, Δt and end-time keys.
 
 ## Verifying against a manufactured solution: `omnidriver-verify`
 

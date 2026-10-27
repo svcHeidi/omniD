@@ -185,7 +185,7 @@ session scratchpad, never in the native tree.
     0.2 ms of G4's dt 50 µs value, and P1 is 0.1 ms earlier.
   - The `solve` step took 9.6 s. Every P1-P9 is a slab node (offset 0).
 - **G10, the mass matrix (2026-09-27, the Niederer campaign,
-  `benchmarks/niederer2011/campaign/`).**
+  `benchmarks/niederer2011/`).**
   - **What the binary does by default.** `openCARP +Help mass_lumping`
     reports `default:(Short)(1)`, "Lump mass matrix"; 0 means "Use full
     mass matrix".

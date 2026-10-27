@@ -15,11 +15,11 @@ from omnidriver.core.runtime.build_identity import git_identity, recorded_build,
 _EXCLUDED = frozenset({"tutorials", "lnInclude", "platforms"})
 _SOURCE_SUFFIXES = frozenset({".C", ".H", ".cu", ".cuh"})
 _MAKE_FILES = frozenset({"files", "options"})
-_EXE_RULE = re.compile(r"^\s*EXE\s*=\s*\$\(FOAM_(?:USER|MODULE)_APPBIN\)/(\S+)", re.MULTILINE)
-_LIB_RULE = re.compile(r"^\s*LIB\s*=\s*\$\(FOAM_(?:USER|MODULE)_LIBBIN\)/(\S+)", re.MULTILINE)
+_EXE_RULE = re.compile(r"^\s*EXE\s*=\s*\$\((FOAM_(?:USER|MODULE)_APPBIN)\)/(\S+)", re.MULTILINE)
+_LIB_RULE = re.compile(r"^\s*LIB\s*=\s*\$\((FOAM_(?:USER|MODULE)_LIBBIN)\)/(\S+)", re.MULTILINE)
 _LIBRARY_SUFFIXES = (".so", ".dylib")
 # wmake puts an unset FOAM_MODULE_* folder at the user one, so a library whose Make/files names
-# FOAM_MODULE_LIBBIN can land in FOAM_USER_LIBBIN: search every defined folder.
+# FOAM_MODULE_LIBBIN can land in FOAM_USER_LIBBIN: search the folder the rule names, then the other.
 _APP_FOLDERS = ("FOAM_MODULE_APPBIN", "FOAM_USER_APPBIN")
 _LIB_FOLDERS = ("FOAM_MODULE_LIBBIN", "FOAM_USER_LIBBIN")
 
@@ -53,17 +53,21 @@ def source_identity(root: Path) -> SourceIdentity:
 
 def products(root: Path, env: Mapping[str, str]) -> list[tuple[str, Path | None]]:
     """``(name, path)`` for every ``EXE``/``LIB`` a ``Make/files`` under ``root`` builds into the module
-    or user platform folders; ``path`` is ``None`` when the product is in neither."""
-    appbins = [Path(env[name]) for name in _APP_FOLDERS if env.get(name)]
-    libbins = [Path(env[name]) for name in _LIB_FOLDERS if env.get(name)]
+    or user platform folders, looked for in the folder its rule names first; ``path`` is ``None`` when
+    the product is in neither."""
     found: dict[str, Path | None] = {}
     for make_files in (path for path in _walk(Path(root)) if path.name == "files" and path.parent.name == "Make"):
         text = make_files.read_text(errors="replace")
-        for name in _EXE_RULE.findall(text):
-            found.setdefault(name, _first_file(folder / name for folder in appbins))
-        for lib in _LIB_RULE.findall(text):
-            found.setdefault(lib, _first_file(folder / (lib + suffix) for folder in libbins for suffix in _LIBRARY_SUFFIXES))
+        for named, name in _EXE_RULE.findall(text):
+            found.setdefault(name, _first_file(folder / name for folder in _folders(env, named, _APP_FOLDERS)))
+        for named, lib in _LIB_RULE.findall(text):
+            found.setdefault(lib, _first_file(
+                folder / (lib + suffix) for folder in _folders(env, named, _LIB_FOLDERS) for suffix in _LIBRARY_SUFFIXES))
     return list(found.items())
+
+
+def _folders(env: Mapping[str, str], named: str, kinds: tuple[str, ...]) -> list[Path]:
+    return [Path(env[name]) for name in (named, *(kind for kind in kinds if kind != named)) if env.get(name)]
 
 
 def _first_file(candidates: Iterable[Path]) -> Path | None:

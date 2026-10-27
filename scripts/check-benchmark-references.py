@@ -2,16 +2,44 @@
 """Every benchmark reference under benchmarks/ is a valid point reference.
 
 The gate checks form (loadable, citations resolvable, units in core's table), not truth.
+A requests folder under benchmarks/ is checked too: each request's `reference` resolves
+and `SHA256SUMS` lists exactly its requests with their digests.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import sys
 from pathlib import Path
 
 from omnidriver.core.quantities import PointReferenceError, load_point_reference
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def request_failures(requests: Path) -> list[str]:
+    failures = []
+    files = sorted(requests.glob("*.json"))
+    sums = requests / "SHA256SUMS"
+    listed = {}
+    if sums.is_file():
+        for line in sums.read_text().splitlines():
+            digest, _, name = line.partition("  ")
+            listed[name] = digest
+    for path in files:
+        try:
+            reference = (requests / json.loads(path.read_text())["reference"]).resolve()
+        except (ValueError, KeyError, TypeError) as exc:
+            failures.append(f"{path}: no readable `reference` ({exc!r})")
+        else:
+            if not reference.is_file():
+                failures.append(f"{path}: reference {reference} does not exist")
+        if listed.get(path.name) != hashlib.sha256(path.read_bytes()).hexdigest():
+            failures.append(f"{path}: not the digest in SHA256SUMS")
+    for name in sorted(set(listed) - {path.name for path in files}):
+        failures.append(f"{sums}: lists {name}, which is not a request")
+    return failures
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -34,6 +62,11 @@ def main(argv: list[str] | None = None) -> int:
             continue
         resolved = sorted(label for label, point in reference.points.items() if point.coordinates is not None)
         print(f"ok {path.name}: {len(reference.points)} points, coordinates for {resolved}")
+    for requests in sorted(args.dir.glob("**/requests")):
+        problems = request_failures(requests)
+        failures.extend(problems)
+        if not problems:
+            print(f"ok {requests.relative_to(args.dir)}: {len(list(requests.glob('*.json')))} requests match SHA256SUMS")
     for failure in failures:
         print(f"FAIL {failure}", file=sys.stderr)
     return 1 if failures else 0
