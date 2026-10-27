@@ -14,7 +14,7 @@ records what they read and wrote.
   They run on the idealized biventricular mesh the variants share
   (`idealizedHeart/mesh` in the tutorials root, Git LFS), which a record reads as its
   native `mesh` input in place of the copy each `Allrun` makes, so they need
-  no `--input`. They use the `cobiveco` convention (`0/tm`, `0/tv`,
+  no `--input`. They use the `fiberfoam` convention (`0/tm`, `0/tv`,
   `0/apicobasal`). The endocardial and pig-transmural variants end in
   `generatePurkinjeTree`.
 - No record runs `refine1Dgraph` or the Purkinje graph hand-off to
@@ -52,7 +52,7 @@ A study addresses a utility's dictionary directly, as
 ## Coordinates are case inputs
 
 Every case declares its own convention in `system/coordinatesConventionDict`:
-a required `coordinateSystem` (`uvc` or `cobiveco`), an optional `coordinates`
+a required `coordinateSystem` (`uvc` or `fiberfoam`), an optional `coordinates`
 block naming its fields, the transmural endocardium/epicardium values and the
 `intraventricularChambers` LV/RV values. Both systems are first-class; never
 infer one from field names, and never convert one into the other's spelling.

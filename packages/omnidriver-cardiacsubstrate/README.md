@@ -20,7 +20,7 @@ print(catalogs["cardiacsubstrate_support_boundary"]["pending"])
 `describe --entry` lists it under the record surface.
 
 A case declares which ventricular coordinate system it uses -- `uvc` or
-`cobiveco`, both first-class -- in `system/coordinatesConventionDict`, with
+`fiberfoam`, both first-class -- in `system/coordinatesConventionDict`, with
 its transmural and chamber reference values and, optionally, its own field
 names. Read that declaration (the repository's `coordinates_convention.py`
 prints it) before touching a coordinate field.

@@ -296,10 +296,10 @@ MORPHOMETRY_ENTRIES: Final[tuple[DictEntry, ...]] = build_group(
 
 # --- coordinatesConventionDict -----------------------------------------------
 #
-# coordinatesConventionDict selects a `coordinateSystem` (`uvc` or `cobiveco`);
+# coordinatesConventionDict selects a `coordinateSystem` (`uvc` or `fiberfoam`);
 # the `coordinates` sub-block gives real field-name defaults via getOrDefault,
 # and `transmural.{endocardium,epicardium}` are named by anatomical meaning
-# because CObiveco's `tm` has endocardium > epicardium. Confirmed against
+# because fiberFOAM's `tm` has endocardium > epicardium. Confirmed against
 # tutorials/template/system/coordinatesConventionDict and the idealized heart's own.
 #
 # Shared across setCardiacAnatomy, setPurkinjeSlab, setPurkinjeMorphometry
@@ -314,11 +314,12 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
         source_refs=("tutorials/template/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="enum",
         required=True,
-        enum_values=("uvc", "cobiveco"),
+        enum_values=("uvc", "fiberfoam", "cobiveco"),
         notes=(
             "setCardiacAnatomy and generatePurkinjeTree read it (readCoordinateSystem: get<word> with no "
             "default, and a FatalError for any other value); it is required of every case that carries the "
-            "file. What each system changes in the face sets both build is src/endocardialSurfaces/README.md."
+            "file. What each system changes in the face sets both build is src/endocardialSurfaces/README.md.",
+            "readCoordinateSystem reads `cobiveco` as `fiberfoam` and says so in its log; a case should write `fiberfoam`."
         ),
     ),
     DictEntry(
@@ -360,7 +361,7 @@ COORDINATES_CONVENTION_ENTRIES: Final[tuple[DictEntry, ...]] = (
     ),
     DictEntry(
         driver_path="$COORDINATES_CONVENTION.transmural.endocardium",
-        description="Transmural-coordinate value at the endocardium. Not necessarily numerically smaller than epicardium (e.g. CObiveco's tm reads 1=endocardium, 0=epicardium).",
+        description="Transmural-coordinate value at the endocardium. Not necessarily numerically smaller than epicardium (e.g. fiberFOAM's tm reads 1=endocardium, 0=epicardium).",
         source_refs=("tutorials/template/system/coordinatesConventionDict", _COORDINATES_CONVENTION_SOURCE),
         value_kind="scalar",
         required=True,
@@ -491,7 +492,7 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         source_refs=(_TREE_PARAMS_SOURCE, _TREE_README),
         value_kind="scalar",
         notes="Defaults to transmuralLowerValue($COORDINATES_CONVENTION.transmural) = min(endocardium, epicardium) when omitted (readVentParams' transmuralMin getOrDefault and its range guard); not a fixed literal, so no typical_value is given.",
-        constraints=("Must satisfy transmuralLowerValue <= transmuralMin <= transmuralMax <= transmuralUpperValue (the numeric bounds of $COORDINATES_CONVENTION.transmural, not necessarily endocardium <= epicardium -- see that document's notes on CObiveco).",),
+        constraints=("Must satisfy transmuralLowerValue <= transmuralMin <= transmuralMax <= transmuralUpperValue (the numeric bounds of $COORDINATES_CONVENTION.transmural, not necessarily endocardium <= epicardium -- see that document's notes on fiberfoam).",),
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.transmuralMax",
@@ -541,7 +542,7 @@ TREE_ENTRIES: Final[tuple[DictEntry, ...]] = _TREE_ROOT_ENTRIES + build_group(
         value_kind="scalar",
         applicable_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
         required_when={"$PURKINJE_TREE.<ventKey>.terminalModel": ("transmural",)},
-        constraints=("Must satisfy 0 <= depthMin <= depthMax <= 1 (readVentParams' extension depth guard). 0 is the endocardial surface and 1 the epicardial one, whichever numeric transmural value each carries, so one value means the same place under uvc and cobiveco.",),
+        constraints=("Must satisfy 0 <= depthMin <= depthMax <= 1 (readVentParams' extension depth guard). 0 is the endocardial surface and 1 the epicardial one, whichever numeric transmural value each carries, so one value means the same place under uvc and fiberfoam.",),
     ),
     DictEntry(
         driver_path="$PURKINJE_TREE.<ventKey>.extension.depthMax",

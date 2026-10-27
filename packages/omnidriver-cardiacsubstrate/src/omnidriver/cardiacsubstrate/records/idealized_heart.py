@@ -1,5 +1,5 @@
 """The idealized-heart records: three variants under ``idealizedHeart`` in the tutorials root on its one shared mesh (Git LFS), needing no ``--input``.
-The mesh is the native ``mesh`` input, overlaid onto the staged variant as each variant's ``Allrun`` copies it. They use the ``cobiveco`` convention, so steps declare their own field paths instead of ``anatomy.py``'s ``uvc_*``.
+The mesh is the native ``mesh`` input, overlaid onto the staged variant as each variant's ``Allrun`` copies it. They use the ``fiberfoam`` convention, so steps declare their own field paths instead of ``anatomy.py``'s ``uvc_*``.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from omnidriver.openfoam.polymesh import POLY_MESH_FILES
 from .anatomy import CONV, step
 
 #: The idealized mesh's coordinate fields, as its own ``coordinatesConventionDict`` names and orients them.
-COBIVECO = ("0/tm", "0/tv", "0/apicobasal")
+PER_CHAMBER = ("0/tm", "0/tv", "0/apicobasal")
 
 #: This mesh's polyMesh in full: it also carries `cellZones`/`faceZones`/`pointZones`.
 IDEALIZED_MESH = POLY_MESH_FILES + tuple(
@@ -22,7 +22,7 @@ IDEALIZED_MESH = POLY_MESH_FILES + tuple(
 #: location, as a supplied input would be read.
 MESH_INPUT = RecordInput(
     name="mesh",
-    files=tuple((path, path) for path in (*IDEALIZED_MESH, "0/fiber", "0/sheet", *COBIVECO)),
+    files=tuple((path, path) for path in (*IDEALIZED_MESH, "0/fiber", "0/sheet", *PER_CHAMBER)),
     native_relpath="idealizedHeart/mesh",
 )
 
@@ -71,7 +71,7 @@ IDEALIZED_HEART_ENDOCARDIAL = TutorialRecord(
         ANATOMY_STEP,
         step(
             "purkinje_tree", "generatePurkinjeTree",
-            consumes=(CONV, *COBIVECO),
+            consumes=(CONV, *PER_CHAMBER),
         ),
     ),
 )
@@ -91,7 +91,7 @@ IDEALIZED_HEART_PIG_TRANSMURAL = TutorialRecord(
         # consumed here.
         step(
             "purkinje_tree", "generatePurkinjeTree",
-            consumes=(CONV, *COBIVECO),
+            consumes=(CONV, *PER_CHAMBER),
         ),
     ),
 )
