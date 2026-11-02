@@ -7,8 +7,8 @@ owner's decisions sit with the work they settle.
 
 | repository | remote | notes |
 |---|---|---|
-| omniD (`svcHeidi/omniD`) | `main` = `origin/main` | The only long-lived branch. The follow-up to cardiacFOAM #59, cardiacSubstrateFOAM's new layout and the audit fixes (§2a) are on `audit/2026-10-26`, which lands on `main` next. Local-only and ignored: `.venv`, caches, `.claude/`, `.superpowers/` (agent reports) |
-| cardiacFOAM (`solids4foam/cardiacFoam`) | `main` | PR #59 merged on 2026-10-25. v0.1 is not tagged yet; omniD relates to cardiacFOAM by version and PR, never by commit |
+| omniD (`svcHeidi/omniD`) | `main` = `origin/main` | The only long-lived branch. It follows cardiacFOAM `main` through PR #66 and cardiacSubstrateFOAM `main`. The follow-up to cardiacFOAM's open PR #62 (lead-field ECG, the root `torso`/`torsoCoupling`/`ecgDomains` layout) waits on its own branch until #62 merges. Local-only and ignored: `.venv`, caches, `.claude/`, `.superpowers/` (agent reports) |
+| cardiacFOAM (`solids4foam/cardiacFoam`) | `main` | PRs #59 and #63–#66 are merged (#65 adds the strict key check; #66 the ionic and active-tension templates and `pvjDelay`). PR #62 (lead-field ECG) and #67 (PVJ coupling) are open. v0.1 is not tagged yet; omniD relates to cardiacFOAM by version and PR, never by commit |
 | cardiacSubstrateFOAM (`svcHeidi/cardiacSubstrateFOAM`) | `main` | Carries the repository layout omniD follows (`applications/utilities/`, `applications/scripts/`, `tutorials/idealizedHeart/`), the `csub` utility names and PRs #2 to #7, which omniD follows; #6 adds an OpenFOAM build and regression CI on every pull request. PR #8 (a HeartViz README section) is closed unmerged on the owner's decision; PR #9 (docs only) added an outputs table to `docs/architecture.md`, naming the tool that writes each field, face set, seed and tree. The owner's checkout matches `origin/main` |
 
 Pass 2 (`plans/2026-10-01-pass2-convergence.md`) is complete.
@@ -221,6 +221,7 @@ built from other source.
      sweep spec.
    - *After `step --apply` changes a swept key,* the case record still shows
      the sweep's axis values.
+   - *Strict key allow-lists as data.* cardiacFOAM's `electroPropertiesKeys.C` (#65) rejects unknown keys by allow-list; scanning those lists would let omniD refuse before the run what the solver refuses at start.
    - *`build-record` after an incremental build.* A product whose file is
      unchanged keeps its last record, so a source edit that relinks a library
      but not the solver leaves the solver recorded at the old digest and every
