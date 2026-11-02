@@ -1614,3 +1614,13 @@ def test_a_uniform_conductivity_tensor_has_no_negative_diagonal_component(key):
     assert "diagonal" in found.message and "-0.0176" in found.message
     assert judged([0.1, 0, 0, 0, 0, 0]) == []
 
+
+@pytest.mark.parametrize(("coupler", "refused"), [
+    ("reactionDiffusionPvjCoupler", True), ("eikonalPvjCoupler", False), ("eikonalMonodomainPvjCoupler", False),
+])
+def test_only_the_reaction_diffusion_coupler_refuses_a_junction_delay(coupler, refused):
+    """configurationChecks' pvjDelayWithReactionDiffusion and eikonalPurkinjePvjDelay: pvjDelay=0.005 on purkinjeToMyocardium."""
+    block = "domainCouplings.purkinjeToMyocardium."
+    context = {block + "electroDomainCoupler": coupler, block + "pvjDelay": 0.005}
+    assert any(e.field == block + "pvjDelay" for e in cross_field_diagnostics(context)) is refused
+    assert not any(e.field == block + "pvjDelay" for e in cross_field_diagnostics({**context, block + "pvjDelay": 0}))

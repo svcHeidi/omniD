@@ -1859,6 +1859,17 @@ ELECTRO_PROPERTY_ENTRY_GROUPS: Final[dict[str, tuple[DictEntry, ...]]] = {
             allowed_bindings={"<name>": None},
         ),
         DictEntry(
+            driver_path='$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.pvjDelay',
+            description="Anterograde junction delay [s]. eikonalPvjCoupler seeds the tissue at a junction at the terminal's activation time plus pvjDelay; eikonalMonodomainPvjCoupler starts the Purkinje action-potential template that much later.",
+            source_refs=('src/electroModels/electroCouplers/pvjCoupler/pvjCoupler.C', 'src/electroModels/electroCouplers/pvjCoupler/eikonal/eikonalPvjCoupler.C', 'src/electroModels/electroCouplers/pvjCoupler/eikonalMonodomain/eikonalMonodomainPvjCoupler.C', 'src/electroModels/electroCouplers/pvjCoupler/reactionDiffusion/reactionDiffusionPvjCoupler.C'),
+            value_kind='scalar',
+            unit='s',
+            default='0',
+            minimum=0,
+            allowed_bindings={"<name>": None},
+            constraints=("reactionDiffusionPvjCoupler refuses a non-zero value: its delay comes from rPvj and the junction load.",),
+        ),
+        DictEntry(
             driver_path='$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.pvjKernel',
             description='Interpolation kernel used when mapping 1D Purkinje junctions to 3D myocardium. Options: uniform, gaussian, linear. Default: uniform.',
             source_refs=('src/electroModels/electroCouplers/pvjCoupler/pvjCoupler.C',),

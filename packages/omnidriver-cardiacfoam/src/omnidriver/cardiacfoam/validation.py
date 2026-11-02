@@ -179,6 +179,24 @@ def _evaluate_solver_coupling(context: dict[str, Any]) -> list["StrictDiagnostic
     return errors
 
 
+def _evaluate_pvj_delay(context: dict[str, Any]) -> list["StrictDiagnostic"]:
+    """reactionDiffusionPvjCoupler refuses a non-zero pvjDelay; the catalogue bounds it below."""
+    return [
+        _diagnostic_from_phase(
+            phase="physics", field=key,
+            message=(
+                f"{key}: reactionDiffusionPvjCoupler refuses a non-zero pvjDelay; its junction delay comes from "
+                "rPvj and the junction load."
+            ),
+            level="error",
+        )
+        for key, value in context.items()
+        if key.startswith(_DOMAIN_COUPLINGS_PREFIX) and key.endswith(".pvjDelay")
+        and context.get(key.removesuffix(".pvjDelay") + _COUPLER_SUFFIX) == _RPVJ_COUPLER
+        and (delay := _scalar(value)) is not None and delay > 0
+    ]
+
+
 def _declared_conduction_networks(context: dict[str, Any]) -> set[str]:
     """Names of the conductionNetworkDomains.<name> blocks with a sub-key in ``context``."""
     declared_networks: set[str] = set()
@@ -1161,6 +1179,7 @@ def cross_field_diagnostics(context: dict[str, Any]) -> list["StrictDiagnostic"]
     dotted path, plus ``myocardiumSolver``."""
     return (
         _evaluate_solver_coupling(context)
+        + _evaluate_pvj_delay(context)
         + _evaluate_block_references(context)
         + _evaluate_heterogeneity(context)
         + _evaluate_personalized_templates(context)
