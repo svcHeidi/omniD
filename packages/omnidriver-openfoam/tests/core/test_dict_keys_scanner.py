@@ -1567,3 +1567,91 @@ def test_a_block_read_by_a_literal_name_is_the_catalogued_instance_its_placehold
     lv_only = tuple(replace(entry, allowed_bindings={"<ventKey>": ("lv",)}) for entry in entries)
     report = _report(tmp_path / "lv", lv_only, document="setPurkinjeMorphometryDict", **files)
     assert [(note["kind"], note["path"]) for note in report["uncatalogued"]] == [("dictionary", "rv")]
+
+
+# cardiacFOAM (#65) src/genericWriter/dictionaryKeyCheck.C: checkValue and getWord, a reader whose key, default and
+# menu are its caller's arguments.
+DICTIONARY_KEY_CHECK = '''void Foam::dictionaryKeyCheck::checkValue
+(
+    const dictionary& dict,
+    const word& keyword,
+    const word& value,
+    const wordList& valid
+)
+{
+    if (valid.found(value))
+    {
+        return;
+    }
+
+    const word suggestion(closestMatch(value, valid));
+
+    FatalIOErrorInFunction(dict)
+        << "Unknown " << keyword << " '" << value << "' in dictionary "
+        << dict.relativeName();
+
+    if (!suggestion.empty())
+    {
+        FatalIOError << ", did you mean '" << suggestion << "'?";
+    }
+
+    FatalIOError
+        << nl << "Valid " << keyword << " values are " << flatOutput(valid)
+        << exit(FatalIOError);
+}
+
+
+Foam::word Foam::dictionaryKeyCheck::getWord
+(
+    const dictionary& dict,
+    const word& keyword,
+    const word& deflt,
+    const wordList& valid
+)
+{
+    const word value(dict.getOrDefault<word>(keyword, deflt));
+    checkValue(dict, keyword, value, valid);
+    return value;
+}
+'''
+# src/electroModels/electroCouplers/pvjCoupler/eikonalMonodomain/eikonalMonodomainPvjCoupler.C: the constructor up to
+# its implicitCoupling_ initialiser, the list closed there.
+EIKONAL_MONODOMAIN_PVJ_COUPLER = '''eikonalMonodomainPvjCoupler::eikonalMonodomainPvjCoupler
+(
+    tissueCouplingEndpoint& primaryDomain,
+    electroDomainInterface& secondaryDomain,
+    const dictionary& dict
+)
+:
+    pvjCoupler(primaryDomain, secondaryDomain, dict),
+    terminalActivationBuffer_(),
+    R_pvj_(),
+    implicitCoupling_
+    (
+        dictionaryKeyCheck::getWord
+        (
+            dict,
+            "pvjCouplingScheme",
+            "explicit",
+            wordList({"explicit", "implicit"})
+        ) == "implicit"
+    )
+{}
+'''
+
+
+def test_a_key_a_reader_s_parameter_names_is_read_at_each_caller_with_its_default_and_validated_menu(tmp_path):
+    scan = scan_source(_tree(tmp_path, **{
+        "dictionaryKeyCheck.C": DICTIONARY_KEY_CHECK,
+        "eikonalMonodomainPvjCoupler.C": EIKONAL_MONODOMAIN_PVJ_COUPLER,
+    }))
+    read = next(read for read in scan.reads if read.key == "pvjCouplingScheme")
+    function = "eikonalMonodomainPvjCoupler::eikonalMonodomainPvjCoupler"
+    assert (read.root, read.scope, read.function, read.file) == (
+        f"param:{function}:dict", (), function, "eikonalMonodomainPvjCoupler.C",
+    )
+    assert (read.type, read.default, read.compared, read.closed, read.conditional) == (
+        "word", '"explicit"', ("explicit", "implicit"), True, False,
+    )
+    assert [read.key for read in scan.reads if read.file == "dictionaryKeyCheck.C"] == [None]
+

@@ -104,6 +104,15 @@ _CAST_OPEN = re.compile(r"(?:Foam::)?\b(?:word|string|fileName)\s*\(\s*$")
 #: The name a value is bound to: ``name = <read>``, ``Type name(<read>)``, ``member_(<read>)``.
 _BOUND_TO = re.compile(r"(?P<name>[A-Za-z_]\w*)\s*(?:=(?!=)|[({])\s*$")
 _STRING_TYPES = {None, "word", "string", "fileName"}
+#: A parameter type that can name a dictionary key.
+_KEY_TYPES = {"word", "keyType", "string"}
+#: ``if (valid.found(value)) return;`` or ``if (!valid.found(value)) {`` up to the statement it guards.
+_VALIDATION = re.compile(
+    r"\bif\s*\(\s*(?P<negated>!\s*)?(?P<list>[A-Za-z_]\w*)\s*\.\s*found\s*\(\s*(?P<value>[A-Za-z_]\w*)\s*\)\s*\)\s*"
+    r"(?:(?(negated)\{?\s*|(?:\{\s*return\s*;\s*\}|return\s*;)))"
+)
+#: A list built in place from literals: ``wordList({"a", "b"})``, ``{"a", "b"}``.
+_LISTED = re.compile(r"(?:[A-Za-z_][\w:]*\s*(?:<[^<>]*>)?\s*\(\s*)?\{(?P<items>[^{}]*)\}\s*\)?")
 
 
 @dataclass(frozen=True)
@@ -308,7 +317,8 @@ def scan_source(source_root: Path, *, digest: str | None = None) -> Scan:
     calls: list[tuple[str, int, int, str, tuple[str, ...]]] = []
     dispatch: set[tuple[str, str]] = set()
     structs = _struct_members(texts)
-    keyed: list[tuple[DictRead, tuple[int, int, int, int]]] = []
+    keyed: list[tuple[DictRead, _Keyed]] = []
+    validators: list[tuple[str, tuple[int, int, int]]] = []
     aggregate_calls: list[_AggregateCall] = []
     for relative, (text, structure, functions) in files.items():
         for function in functions or _includers(relative, files, includes):
@@ -322,6 +332,14 @@ def scan_source(source_root: Path, *, digest: str | None = None) -> Scan:
                 text, structure, function, relative, classes, selected, registrations, calls,
                 structs=structs, keyed=keyed, aggregate_calls=aggregate_calls,
             ))
+            validators.extend((function.name, found) for found in _validators(structure, function))
+    for _keyed_read, at in keyed:
+        for callee, count, value, arguments in at.checks:
+            at.menu = next((
+                arguments[argument] for function, (total, checked, listed) in validators
+                if total == count and checked == value and _same_function(function, callee)
+                for argument in (listed,) if argument in arguments
+            ), at.menu)
     reads.extend(_reads_keyed_by_caller(keyed, aggregate_calls))
     return Scan(
         digest=digest or source_digest(source_root), reads=tuple(reads), registrations=registrations,
@@ -870,23 +888,30 @@ def _reads_in(
     params = _split_args(function.params)
     by_name = {match.group("name"): (index, match.group("type")) for index, param in enumerate(params)
                if (match := _PLAIN_PARAM.fullmatch(param.strip()))}
-    keyed_at: dict[int, tuple[int, int, int, int]] = {}
+    keyed_at: dict[int, _Keyed] = {}
 
-    def member_key(argument: str, root: str | None) -> tuple[int, int, int, int] | None:
-        """``(struct parameter, member, dictionary parameter, parameter count)`` for a key named by a member of a
-        struct parameter (``spec.dictionaryEntry``) read from a dictionary parameter."""
+    def member_key(argument: str, root: str | None) -> _Keyed | None:
+        """How a caller names the key a parameter names, read from a dictionary parameter: a member of a struct
+        parameter (``spec.dictionaryEntry``), or a ``word`` parameter itself (``dict.get<word>(keyword)``)."""
+        if not root or not root.startswith(f"param:{function.name}:"):
+            return None
+        dictionary = by_name.get(root.rsplit(":", 1)[1], (None, None))[0]
+        index, type_name = by_name.get(argument.strip(), (None, None))
+        if index is not None and dictionary is not None and index != dictionary and _plain(type_name) in _KEY_TYPES:
+            return _Keyed(index, None, dictionary, len(params))
         match = _MEMBER_KEY.fullmatch(argument)
-        if match is None or structs is None or not root or not root.startswith(f"param:{function.name}:"):
+        if match is None or structs is None:
             return None
         index, type_name = by_name.get(match.group("param"), (None, None))
         members = structs.get(type_name or "", ())
-        dictionary = by_name.get(root.rsplit(":", 1)[1], (None, None))[0]
         if index is None or match.group("member") not in members or dictionary is None:
             return None
-        return index, members.index(match.group("member")), dictionary, len(params)
+        return _Keyed(index, members.index(match.group("member")), dictionary, len(params))
 
     def emit(read: DictRead, start: int, close_at: int, variable: str | None) -> None:
         if read.key is None and args and (found := member_key(args[0], read.root)) is not None:
+            if read.default is not None:
+                found.default = by_name.get(read.default.strip(), (None, None))[0]
             keyed_at[len(produced)] = found
         produced.append((read, start, close_at, variable))
 
@@ -904,7 +929,14 @@ def _reads_in(
             if aggregate_calls is not None:
                 _record_aggregate_call(
                     callee, args, environment, function, selected_as, aggregate_calls, by_name, structs or {},
+                    relative, _line(text, position), _conditional(structure, position, function.start),
                 )
+            for index, at in keyed_at.items():
+                variable = produced[index][3]
+                if variable is not None and variable in args:
+                    at.checks.append((callee, len(args), args.index(variable), {
+                        place: by_name[argument][0] for place, argument in enumerate(args) if argument in by_name
+                    }))
             continue
         key = _literal(args[0]) if args else None
         if kind == "dimensioned":
@@ -952,16 +984,55 @@ def _reads_in(
         yield read
 
 
+@dataclass
+class _Keyed:
+    """Where a read keyed by its function's parameter finds its key at each call: argument ``key`` (``member`` of
+    the struct passed there, or the argument itself when ``None``), read from the dictionary at argument
+    ``dictionary`` of ``count``; its default at argument ``default``, and its whole menu at argument ``menu``."""
+
+    key: int
+    member: int | None
+    dictionary: int
+    count: int
+    default: int | None = None
+    menu: int | None = None
+    #: Calls the read's value is passed to, a validator perhaps: ``(callee, count, value argument, {argument:
+    #: parameter of the reading function})``.
+    checks: list = field(default_factory=list)
+
+
+def _validators(structure: str, function: _Function) -> Iterator[tuple[int, int, int]]:
+    """``(parameter count, value parameter, list parameter)`` when ``function`` fails on a value its list parameter
+    does not hold: ``if (valid.found(value)) return;`` and then an error, or ``if (!valid.found(value))`` guarding one."""
+    params = _split_args(function.params)
+    by_name = {match.group("name"): index for index, param in enumerate(params)
+               if (match := _PLAIN_PARAM.fullmatch(param.strip()))}
+    error = re.compile(r"\bFatal(?:IO)?Error\w*|\bthrow\b")
+    for match in _VALIDATION.finditer(structure, function.start, function.end):
+        listed, value = by_name.get(match.group("list")), by_name.get(match.group("value"))
+        if listed is None or value is None or _conditional(structure, match.start(), function.start):
+            continue
+        if match.group("negated"):
+            closes = error.match(structure, match.end()) is not None
+        else:
+            closes = any(
+                not _conditional(structure, found.start(), function.start)
+                for found in error.finditer(structure, match.end(), function.end)
+            )
+        if closes:
+            yield len(params), value, listed
+
+
 @dataclass(frozen=True)
 class _AggregateCall:
-    """A call that passes a struct, built in place from literals or forwarded from the caller's own parameter,
-    beside dictionaries."""
+    """A call that passes, beside dictionaries, a literal or a struct built in place from literals, or forwards
+    the caller's own parameter."""
 
     callee: str
     count: int
     #: Argument index -> the literals an aggregate built in place holds, by position.
     literals: dict[int, tuple[str | None, ...]]
-    #: Argument index -> the caller's struct parameter forwarded there.
+    #: Argument index -> the caller's parameter forwarded there.
     forwarded: dict[int, int]
     scopes: dict[int, "_Scope"]
     function: str
@@ -969,6 +1040,10 @@ class _AggregateCall:
     #: The caller's parameters: count, and the index of each by name.
     parameter_count: int
     parameters: dict[str, int]
+    arguments: tuple[str, ...] = ()
+    file: str = ""
+    line: int = 0
+    conditional: bool = False
 
 
 def _struct_members(texts: Mapping[str, str]) -> dict[str, tuple[str, ...]]:
@@ -986,58 +1061,75 @@ def _record_aggregate_call(
     callee: str, args: list[str], environment: "_Environment", function: _Function,
     selected_as: tuple[tuple[str, str], ...], aggregate_calls: list,
     parameters: Mapping[str, tuple[int, str]], structs: Mapping[str, tuple[str, ...]],
+    file: str, line: int, conditional: bool,
 ) -> None:
     literals = {
         index: tuple(_literal(item) for item in _split_args(braced.group("items")))
-        for index, argument in enumerate(args) if (braced := _BRACED.fullmatch(argument.strip()))
-    }
-    forwarded = {
-        index: parameters[argument.strip()][0] for index, argument in enumerate(args)
-        if argument.strip() in parameters and parameters[argument.strip()][1] in structs
+        for index, argument in enumerate(args)
+        if (braced := _BRACED.fullmatch(argument.strip()) or _LISTED.fullmatch(argument.strip()))
     }
     scopes = {
         index: scope for index, argument in enumerate(args)
-        if index not in literals and index not in forwarded
-        and (scope := environment.resolve(argument)) is not None and scope is not NOT_A_DICTIONARY
+        if index not in literals and (scope := environment.resolve(argument)) is not None and scope is not NOT_A_DICTIONARY
     }
-    if (literals or forwarded) and scopes:
+    forwarded = {
+        index: parameters[argument.strip()][0] for index, argument in enumerate(args)
+        if argument.strip() in parameters and index not in scopes
+    }
+    if scopes and (literals or forwarded or any(_literal(argument) is not None for argument in args)):
         aggregate_calls.append(_AggregateCall(
             callee, len(args), literals, forwarded, scopes, function.name, selected_as,
             len(_split_args(function.params)), {name: index for name, (index, _type) in parameters.items()},
+            tuple(args), file, line, conditional,
         ))
 
 
 def _reads_keyed_by_caller(keyed: list, aggregate_calls: list) -> list[DictRead]:
-    """A read whose key a struct parameter names (``readField(dict, Spec{"a", "key"})`` reading ``spec.member``), once
-    per call that builds that struct from literals: the key is the call's literal, the dictionary the one the call
-    passes, and the function and selection the caller's. A caller that forwards its own struct parameter takes the
-    read over, keyed by that parameter."""
+    """A read whose key a parameter names, once per call that passes a literal there: a struct built in place
+    (``readField(dict, Spec{"a", "key"})`` reading ``spec.member``), or the key itself (``getWord(dict, "key",
+    "deflt", wordList({...}))`` reading ``keyword``). The dictionary is the one the call passes, the function and
+    selection the caller's, and a default or validated menu named by a parameter the call's literals. A caller that
+    forwards its own parameter takes the read over, keyed by that parameter."""
     found: list[DictRead] = []
     pending = list(keyed)
     for _depth in range(8):
         following = []
-        for read, (struct_index, member_index, dictionary_index, count) in pending:
+        for read, at in pending:
             for call in aggregate_calls:
-                if call.count != count or not _same_function(read.function or "", call.callee):
+                if call.count != at.count or not _same_function(read.function or "", call.callee):
                     continue
-                scope = call.scopes.get(dictionary_index)
+                scope = call.scopes.get(at.dictionary)
                 if scope is None:
                     continue
                 moved = replace(
                     read, root=scope.root, scope=scope.path + (read.scope or ()),
                     function=call.function, selected_as=call.selected_as,
                 )
-                if struct_index in call.literals:
-                    items = call.literals[struct_index]
-                    key = items[member_index] if member_index < len(items) else None
-                    if key is not None:
-                        found.append(replace(moved, key=key))
-                elif struct_index in call.forwarded and scope.root and scope.root.startswith(f"param:{call.function}:"):
+                if at.member is None:
+                    # A reader helper is the same code for every key; the call is where this one is read.
+                    moved = replace(
+                        moved, file=call.file, line=call.line, conditional=read.conditional or call.conditional,
+                    )
+                    if at.default is not None:
+                        moved = replace(moved, default=None if at.default in call.forwarded else call.arguments[at.default])
+                    menu = tuple(item for item in call.literals.get(at.menu, ()) if item is not None)
+                    if menu:
+                        moved = replace(moved, compared=tuple(sorted(menu)), closed=True)
+                    key = _literal(call.arguments[at.key])
+                elif at.key in call.literals:
+                    items = call.literals[at.key]
+                    key = items[at.member] if at.member < len(items) else None
+                else:
+                    key = None
+                if key is not None:
+                    found.append(replace(moved, key=key))
+                elif at.key in call.forwarded and scope.root and scope.root.startswith(f"param:{call.function}:"):
                     forwarded_dictionary = call.parameters.get(scope.root.rsplit(":", 1)[1])
                     if forwarded_dictionary is not None:
-                        following.append((
-                            moved, (call.forwarded[struct_index], member_index, forwarded_dictionary, call.parameter_count),
-                        ))
+                        following.append((moved, _Keyed(
+                            call.forwarded[at.key], at.member, forwarded_dictionary, call.parameter_count,
+                            call.forwarded.get(at.default), call.forwarded.get(at.menu),
+                        )))
         if not following:
             break
         pending = following
