@@ -165,6 +165,38 @@ _EM = "src/electroMechanicalModels/"
 _EM_VERIFIER = "src/verificationModels/electromechanicsVerification/"
 _EM_COEFFS = "$ELECTRO_MECHANICAL_COEFFS."
 _EM_VERIFIER_APPLIES = {_EM_COEFFS + "verificationModel.type": "manufacturedElectromechanicsVerifier"}
+_EM_TEMPLATES = {_EM_COEFFS + "activeTensionSignal": "templates"}
+
+
+def _active_tension_template_entries() -> tuple[DictEntry, ...]:
+    """``activeTensionTemplates``, which ``templateSignalProvider`` hands to the same ``ionicTemplates::generate`` as
+    eikonalECG's ``personalizedTemplates``: that block's entries, re-rooted under the electromechanical Coeffs and
+    applying when ``activeTensionSignal`` is ``templates``."""
+    ecg = "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>."
+    block = ecg + "personalizedTemplates."
+    here = _EM_COEFFS + "activeTensionTemplates."
+
+    def moved(path: str) -> str:
+        return here + path.removeprefix(block)
+
+    def renamed(text: str) -> str:
+        return text.replace("personalizedTemplates", "activeTensionTemplates")
+
+    return tuple(
+        replace(
+            entry, driver_path=moved(entry.driver_path), allowed_bindings={}, applicable_when=_EM_TEMPLATES,
+            description=renamed(entry.description), notes=renamed(entry.notes),
+            constraints=tuple(renamed(text) for text in entry.constraints),
+            required_when={
+                (_EM_COEFFS + "activeTensionSignal" if key == ecg + "$personalizedTemplates_present" else moved(key)):
+                    ("templates" if key == ecg + "$personalizedTemplates_present" else value)
+                for key, value in entry.required_when.items()
+            },
+            source_refs=(_EM + "sequentialElectroMechanical/sequentialElectroMechanical.C", *entry.source_refs),
+        )
+        for entry in ELECTRO_PROPERTY_ENTRY_GROUPS["ecg"] if entry.driver_path.startswith(block)
+    )
+
 
 #: ``constant/electroMechanicalProperties``: ``electroMechanicalModel`` selects the model, and its settings
 #: sit in ``<electroMechanicalModel>Coeffs`` (token ``$ELECTRO_MECHANICAL_COEFFS``). Catalogued for the keys the
@@ -176,6 +208,22 @@ ELECTRO_MECHANICAL_PROPERTY_ENTRIES: Final[tuple[DictEntry, ...]] = (
         description="Electromechanical model; its settings are read from the <electroMechanicalModel>Coeffs sub-dictionary.",
         source_refs=(_EM + "electroMechanicalModel/electroMechanicalModel.C",),
     ),
+    DictEntry(
+        driver_path=_EM_COEFFS + "activeTensionSignal", phases=frozenset({"physics"}), value_kind="enum",
+        enum_values=("electro", "templates"), default="electro",
+        description=(
+            "Where the active-tension model reads Vm and Cai. electro: the electrophysiology's ionic model. templates: "
+            "one single-cell template per ionicHeterogeneity region (activeTensionTemplates), evaluated at "
+            "t - activationTime in each cell."
+        ),
+        source_refs=(_EM + "sequentialElectroMechanical/sequentialElectroMechanical.C",),
+        notes=(
+            "With templates and an eikonal electrophysiology, the activation is solved once in the first step and the "
+            "controlDict deltaT drives the run. The templates need an activationTime field and an ionicHeterogeneity "
+            "block in electroProperties or its myocardium solver Coeffs."
+        ),
+    ),
+    *_active_tension_template_entries(),
     DictEntry(
         driver_path=_EM_COEFFS + "TaScale", phases=frozenset({"physics"}), value_kind="scalar", typical_value="1e3",
         description="Factor from the active-tension model's units to the active tension Ta in Pa.",

@@ -49,7 +49,8 @@ _VIRTUAL_PRESENCE_TRIGGERS: tuple[tuple[str, str], ...] = (
 def infer_virtual_presence(ctx: dict[str, Any], *, empty_blocks: "frozenset[str]" = frozenset()) -> None:
     """Set, in place, the virtual keys that a leaf of `ctx` under a block
     implies, and for each ECG domain holding ``personalizedTemplates`` the
-    domain's own ``$personalizedTemplates_present``. A block named in
+    domain's own ``$personalizedTemplates_present`` and the block's
+    ``$regionStates_present``, false without regionStates. A block named in
     ``empty_blocks`` (the case holds it with no leaf) counts as present. Idempotent."""
     for prefix, virtual_key in _VIRTUAL_PRESENCE_TRIGGERS:
         if virtual_key in ctx:
@@ -64,7 +65,10 @@ def infer_virtual_presence(ctx: dict[str, Any], *, empty_blocks: "frozenset[str]
     for existing_key in [key for key in ctx if key.startswith("regions.") and ".singleCellStimulus." in key]:
         ctx[existing_key.split(".singleCellStimulus.")[0] + ".$singleCellStimulus_present"] = True
     for existing_key in [key for key in ctx if key.startswith(_ECG_DOMAIN_PREFIX) and _PERSONALIZED_TEMPLATES_SUFFIX in key]:
-        ctx[existing_key.split(_PERSONALIZED_TEMPLATES_SUFFIX)[0] + ".$personalizedTemplates_present"] = True
+        domain = existing_key.split(_PERSONALIZED_TEMPLATES_SUFFIX)[0]
+        ctx[domain + ".$personalizedTemplates_present"] = True
+        templates = domain + _PERSONALIZED_TEMPLATES_SUFFIX
+        ctx[templates + "$regionStates_present"] = templates + "regionStates" in ctx
 
     if ctx.get("myocardiumSolver") == "eikonalSolver" or ctx.get("ionicModel") in HETEROGENEITY_MODELS:
         ctx["$ionicHeterogeneity_supported"] = True

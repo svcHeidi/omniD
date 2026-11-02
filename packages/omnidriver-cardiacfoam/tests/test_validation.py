@@ -204,6 +204,11 @@ def test_a_configured_personalized_templates_block_must_set_the_keys_the_catalog
     )
     assert judge({k: v for k, v in case.items() if "personalizedTemplates" not in k}) == []
 
+    paced = {"ecgDomains.A.ecgSolver": "eikonalECG", "ecgDomains.A.personalizedTemplates.duration": 0.5}
+    assert "ecgDomains.A.personalizedTemplates.nBeats" in judge(paced)
+    seeded = {**paced, "ecgDomains.A.personalizedTemplates.regionStates": "system/setIonicRestartStateDict"}
+    assert "ecgDomains.A.personalizedTemplates.nBeats" not in judge(seeded)
+
 
 def test_personalized_templates_rejects_manufactured_ecg_before_execution():
     from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
@@ -1608,3 +1613,4 @@ def test_a_uniform_conductivity_tensor_has_no_negative_diagonal_component(key):
     assert found.detail == {"rule": {"diagonal_minimum": 0}}
     assert "diagonal" in found.message and "-0.0176" in found.message
     assert judged([0.1, 0, 0, 0, 0, 0]) == []
+

@@ -55,3 +55,17 @@ def test_the_purkinje_fibre_radius_is_catalogued_in_metres_for_the_cardiacfoam_5
     (entry,) = [entry for entry in CardiacFoamPlugin.get_dictionary_catalog().entries if entry.driver_path.endswith("purkinjeFibreRadius")]
     assert (entry.unit, entry.exclusive_minimum) == ("m", 0)
     assert entry.required_when == {"$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.couplingMode": "bidirectional"}
+
+
+def test_the_active_tension_templates_are_the_personalized_templates_under_the_templates_signal():
+    """sequentialElectroMechanical hands activeTensionTemplates to the same ionicTemplates reader as eikonalECG."""
+    signal = _EM[_COEFFS + "activeTensionSignal"]
+    assert (signal.enum_values, signal.default) == (("electro", "templates"), "electro")
+    personalized = "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates."
+    leaves = {path.removeprefix(personalized) for path in _ELECTRO if path.startswith(personalized)}
+    templates = {path.removeprefix(_COEFFS + "activeTensionTemplates."): entry for path, entry in _EM.items()
+                 if path.startswith(_COEFFS + "activeTensionTemplates.")}
+    assert set(templates) == leaves
+    assert all(entry.applicable_when == {_COEFFS + "activeTensionSignal": "templates"} for entry in templates.values())
+    assert templates["duration"].required_when == {_COEFFS + "activeTensionSignal": "templates"}
+    assert templates["nBeats"].required_when == {_COEFFS + "activeTensionTemplates.$regionStates_present": False}

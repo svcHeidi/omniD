@@ -21,7 +21,10 @@
       "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.solver",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.absTol",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.relTol",
-      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.solver"
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.solver",
+      "$ELECTRO_MECHANICAL_COEFFS.activeTensionTemplates.ionicModelConfig.absTol",
+      "$ELECTRO_MECHANICAL_COEFFS.activeTensionTemplates.ionicModelConfig.relTol",
+      "$ELECTRO_MECHANICAL_COEFFS.activeTensionTemplates.ionicModelConfig.solver"
     ]
   },
   "runtime_selection": {
@@ -105,7 +108,7 @@
       }
     },
     "not_runtime_selected": {
-      "$ELECTRO_MODEL_COEFFS.solutionAlgorithm": "implicit/explicit",
+      "$ELECTRO_MODEL_COEFFS.solutionAlgorithm": "explicit/implicit, the menu myocardiumDomain.C hands dictionaryKeyCheck::getWord",
       "$ELECTRO_MODEL_COEFFS.tissue": "tissue enum",
       "$ELECTRO_MODEL_COEFFS.sex": "biological-sex selector",
       "$ELECTRO_MODEL_COEFFS.dimension": "1D/2D/3D",
@@ -116,8 +119,8 @@
       "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.couplingMode": "plain word",
       "$ELECTRO_MODEL_COEFFS.verificationModel.fdaBathVariant": "groundElectrode/electrodePair selects the outer bath boundary-condition layout for the FDA bath-bidomain verifier; a plain NamedEnum word read by manufacturedFDABathBidomainVerifier.C",
       "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.purkinjeGraphModelCoeffs.tissue": "tissue enum at Purkinje scope",
-      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.pvjKernel": "selects the PVJ spatial-spreading kernel via a plain lookupOrDefault<word> in pvjCoupler.C",
-      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.pvjCouplingScheme": "selects explicit vs split implicit source assembly by a plain word in reactionDiffusionPvjCoupler.C",
+      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.pvjKernel": "selects the PVJ spatial-spreading kernel from the menu pvjCoupler.C hands dictionaryKeyCheck::getWord",
+      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.pvjCouplingScheme": "selects explicit vs split implicit source assembly by a plain word compared in reactionDiffusionPvjCoupler.C and read through dictionaryKeyCheck::getWord in eikonalMonodomainPvjCoupler.C",
       "myocardiumSolver": "a UNION of the electroModel table, the myocardiumSolver table and the eikonalMyocardiumDomain factory: no single base to check against",
       "$ELECTRO_MODEL_COEFFS.conductionNetworkDomains.<name>.conductionSystemDomain": "a single accepted value (purkinjeGraphModel), registered in no table",
       "$ELECTRO_MODEL_COEFFS.batchedIntegrator": "selects the ODE integrator for compactBatched GPU models (euler / rushLarsen, the two values batchedIonicModel.H accepts and otherwise fails on): an internal solver-algorithm enum with no runtime table",
@@ -131,7 +134,9 @@
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.dimension": "1D/2D/3D, a plain word (cfg.lookup) in manufacturedPseudoECGVerifier.C and manufacturedEikonalECGVerifier.C",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.template": "singleEvent/sine, a plain lookupOrDefault<word> manufacturedTemplate.H compares with \"sine\" only",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.domain": "cube/shell, a plain lookupOrDefault<word> compared against two literals in manufacturedPseudoECGVerifier.C and manufacturedEikonalECGVerifier.C, with a FatalError otherwise",
-      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.tissue": "eikonalTemplateGenerator.C hands ionicModelConfig to ionicModel::New, which reads tissue as the top-level tissue enum"
+      "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.tissue": "ionicTemplates.C hands ionicModelConfig to ionicModel::New, which reads tissue as the top-level tissue enum",
+      "$ELECTRO_MECHANICAL_COEFFS.activeTensionTemplates.ionicModelConfig.tissue": "ionicTemplates.C hands ionicModelConfig to ionicModel::New, which reads tissue as the top-level tissue enum",
+      "$ELECTRO_MECHANICAL_COEFFS.activeTensionSignal": "electro/templates, the menu sequentialElectroMechanical.C hands dictionaryKeyCheck::getWord"
     },
     "internal_bases": {
       "electroModel": "a lower-level table the myocardiumSolver key resolves through; its values appear in the union enum",
