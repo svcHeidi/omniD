@@ -6,11 +6,13 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping
 
-from omnidriver.core.plugin_interface import RuntimeDependency, SolverEntry, SourceIdentity
-from omnidriver.core.runtime.build_identity import git_identity, recorded_build, tree_digest
+from omnidriver.core.plugin_interface import RuntimeDependency, SolverBuild, SolverEntry, SourceIdentity
+from omnidriver.core.runtime.build_identity import file_digest, git_identity, recorded_build, tree_digest
 
 _EXCLUDED = frozenset({"tutorials", "lnInclude", "platforms"})
 _SOURCE_SUFFIXES = frozenset({".C", ".H", ".cu", ".cuh"})
@@ -74,27 +76,129 @@ def _first_file(candidates: Iterable[Path]) -> Path | None:
     return next((path for path in candidates if path.is_file()), None)
 
 
+_SYSTEM_PREFIXES = ("/usr/lib/", "/System/", "/lib/", "/lib64/", "/usr/lib64/")
+# Where OpenFOAM itself and its third-party libraries live; a library there is the install, not a build.
+_INSTALL_VARIABLES = ("WM_PROJECT_DIR", "WM_THIRD_PARTY_DIR", "FOAM_LIBBIN", "FOAM_EXT_LIBBIN")
+_OTOOL_LOAD = re.compile(r"^\s+(\S+) \(compatibility version")
+_OTOOL_RPATH = re.compile(r"^\s+path (\S+) \(offset \d+\)")
+_LDD_LINE = re.compile(r"^\s*\S+ => (/\S+) \(0x[0-9a-f]+\)")
+
+
+def otool_libraries(text: str) -> list[str]:
+    """The install names ``otool -L`` lists for one image (its own first line skipped)."""
+    return [match.group(1) for line in text.splitlines()[1:] if (match := _OTOOL_LOAD.match(line))]
+
+
+def otool_rpaths(text: str) -> list[str]:
+    """The ``LC_RPATH`` entries of ``otool -l``, in load order."""
+    return [match.group(1) for line in text.splitlines() if (match := _OTOOL_RPATH.match(line))]
+
+
+def ldd_libraries(text: str) -> list[str]:
+    """The files ``ldd`` resolved, in its order."""
+    return [match.group(1) for line in text.splitlines() if (match := _LDD_LINE.match(line))]
+
+
+def _run(argv: tuple[str, ...], env: Mapping[str, str]) -> str:
+    try:
+        done = subprocess.run(argv, env=dict(env), capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return done.stdout if done.returncode == 0 else ""
+
+
+def _resolve_install_name(name: str, image: Path, executable: Path, rpaths: list[str],
+                          env: Mapping[str, str]) -> Path | None:
+    # dyld's order: DYLD_LIBRARY_PATH by leaf name first, then @rpath through the image's rpaths, then the name.
+    leaf = name.rsplit("/", 1)[-1]
+    for folder in (entry for entry in env.get("DYLD_LIBRARY_PATH", "").split(os.pathsep) if entry):
+        if (Path(folder) / leaf).is_file():
+            return (Path(folder) / leaf).resolve()
+
+    def expand(value: str) -> str:
+        return value.replace("@executable_path", str(executable.parent)).replace("@loader_path", str(image.parent))
+
+    if name.startswith("@rpath/"):
+        rest = name[len("@rpath/"):]
+        return next(((Path(expand(r)) / rest).resolve() for r in rpaths if (Path(expand(r)) / rest).is_file()), None)
+    candidate = Path(expand(name))
+    return candidate.resolve() if candidate.is_file() else None
+
+
+def _direct_links(image: Path, executable: Path, env: Mapping[str, str]) -> list[Path]:
+    if sys.platform == "darwin" and shutil.which("otool"):
+        rpaths = otool_rpaths(_run(("otool", "-l", str(image)), env))
+        names = otool_libraries(_run(("otool", "-L", str(image)), env))
+        return [path for name in names if (path := _resolve_install_name(name, image, executable, rpaths, env))]
+    if shutil.which("ldd"):
+        return [Path(path) for path in ldd_libraries(_run(("ldd", str(image)), env)) if Path(path).is_file()]
+    return []
+
+
+def _is_install_or_system(path: Path, env: Mapping[str, str]) -> bool:
+    text = str(path.resolve())
+    roots = [str(Path(env[name]).resolve()) for name in _INSTALL_VARIABLES if env.get(name)]
+    return text.startswith(_SYSTEM_PREFIXES) or any(text == root or text.startswith(root + os.sep) for root in roots)
+
+
+def linked_libraries(binaries: Iterable[Path], env: Mapping[str, str]) -> list[Path]:
+    """Every library ``binaries`` load at run time, followed through the libraries they load in turn,
+    as the dynamic loader resolves it in ``env``; OpenFOAM's install and the system are left out."""
+    found: dict[Path, Path] = {}
+    pending = [(Path(binary), Path(binary)) for binary in binaries]
+    seen: set[Path] = set()
+    while pending:
+        image, executable = pending.pop()
+        if image.resolve() in seen:
+            continue
+        seen.add(image.resolve())
+        for library in _direct_links(image, executable, env):
+            if _is_install_or_system(library, env) or library.resolve() in found:
+                continue
+            found[library.resolve()] = library.resolve()
+            pending.append((library, executable))
+    return sorted(found.values())
+
+
 def wmake_solver_builds(
     env: Mapping[str, str], *, repository: Any, used_paths: frozenset[Path] | None,
 ) -> tuple[SolverEntry, ...]:
     """The supplied repository's products as their build records state them; nothing without a
-    repository, without products, or when the plan runs none of them."""
+    repository, without products, or when the plan runs none of them.
+
+    For a plan (``used_paths`` given), the products the run uses include the libraries its binaries load,
+    and the libraries they load from outside the repository and the OpenFOAM install are a second entry,
+    each by file and digest: which build of them a run loaded is part of what ran."""
     if repository is None:
         return ()
     root = Path(repository.root)
     built = products(root, env)
     if not built:
         return ()
+    linked: list[Path] = []
+    used = used_paths
+    if used_paths is not None:
+        linked = linked_libraries([path for _, path in built if path is not None and path.resolve() in used_paths], env)
+        used = frozenset(used_paths) | frozenset(linked)
     selected = [
         (name, path) for name, path in built
-        if used_paths is None or (path is not None and path.resolve() in used_paths)
+        if used is None or (path is not None and path.resolve() in used)
     ]
     if not selected:
         return ()
-    return (SolverEntry(
+    entries = [SolverEntry(
         solver=repository.plugin, repository=source_identity(root),
         builds=tuple(recorded_build(name, path) for name, path in selected), recordable=True,
-    ),)
+    )]
+    own = {path.resolve() for _, path in built if path is not None}
+    outside = [library for library in linked if library not in own]
+    if outside:
+        entries.append(SolverEntry(
+            solver=f"{repository.plugin} (linked libraries)", repository=None, recordable=False,
+            builds=tuple(SolverBuild(name=library.name, path=library, digest=file_digest(library), known="unknown")
+                         for library in outside),
+        ))
+    return tuple(entries)
 
 
 # FOAM_LIBBIN too: a controlDict may load one of OpenFOAM's own libraries.

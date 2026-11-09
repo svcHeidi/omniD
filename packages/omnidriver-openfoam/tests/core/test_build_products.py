@@ -196,3 +196,85 @@ def test_no_repository_or_no_make_files_is_no_entry(tmp_path):
     assert wmake_solver_builds(env, repository=None, used_paths=None) == ()
     (tmp_path / "cases").mkdir()
     assert wmake_solver_builds(env, repository=_repo(tmp_path / "cases"), used_paths=None) == ()
+
+
+_FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def test_otool_output_gives_the_install_names_and_the_rpaths_in_load_order():
+    """``otool -L`` and ``otool -l`` of a cardiacFoam build, verbatim but for the image path on the first line."""
+    from omnidriver.openfoam.build_products import otool_libraries, otool_rpaths
+
+    names = otool_libraries((_FIXTURES / "otool_L.cardiacFoam").read_text())
+    assert names[0] == "@rpath/libsolids4FoamModels.dylib" and "@rpath/libOpenFOAM.dylib" in names
+    assert "/usr/lib/libSystem.B.dylib" in names and len(names) == 9
+    assert otool_rpaths((_FIXTURES / "otool_l_rpath.cardiacFoam").read_text()) == [
+        "@executable_path/../lib/sys-openmpi", "@executable_path/../lib", "@executable_path/../lib/dummy",
+    ]
+
+
+def test_ldd_output_gives_the_files_the_loader_resolved():
+    from omnidriver.openfoam.build_products import ldd_libraries
+
+    text = ("\tlinux-vdso.so.1 (0x00007ffd)\n"
+            "\tlibmodels.so => /opt/user/lib/libmodels.so (0x00007f12)\n"
+            "\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f34)\n")
+    assert ldd_libraries(text) == ["/opt/user/lib/libmodels.so", "/lib/x86_64-linux-gnu/libc.so.6"]
+
+
+def test_an_rpath_name_resolves_through_the_library_path_first_then_the_images_rpaths(tmp_path):
+    from omnidriver.openfoam.build_products import _resolve_install_name
+
+    executable = tmp_path / "platform" / "bin" / "myFoam"
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"solver")
+    beside = tmp_path / "platform" / "lib" / "libmodels.dylib"
+    beside.parent.mkdir()
+    beside.write_bytes(b"beside")
+    first = tmp_path / "other" / "libmodels.dylib"
+    first.parent.mkdir()
+    first.write_bytes(b"other")
+    rpaths = ["@executable_path/../lib"]
+    assert _resolve_install_name("@rpath/libmodels.dylib", executable, executable, rpaths, {}) == beside.resolve()
+    assert _resolve_install_name("@rpath/libmodels.dylib", executable, executable, rpaths,
+                                 {"DYLD_LIBRARY_PATH": str(first.parent)}) == first.resolve()
+    assert _resolve_install_name("@rpath/libabsent.dylib", executable, executable, rpaths, {}) is None
+
+
+def test_a_plan_lists_the_libraries_its_binary_loads_and_those_from_outside_the_repository(tmp_path, monkeypatch):
+    """A binary the plan runs brings its repository's libraries into the list; a library it loads from neither
+    the repository nor the OpenFOAM install is a second entry, by file and digest."""
+    import omnidriver.openfoam.build_products as build_products
+
+    root = _repository(tmp_path / "repo")
+    env = _install(tmp_path)
+    install = tmp_path / "openfoam"
+    (install / "lib").mkdir(parents=True)
+    (install / "lib" / "libOpenFOAM.dylib").write_bytes(b"openfoam")
+    elsewhere = tmp_path / "elsewhere" / "libphysics.dylib"
+    elsewhere.parent.mkdir()
+    elsewhere.write_bytes(b"physics")
+    env["WM_PROJECT_DIR"] = str(install)
+    solver = Path(env["FOAM_USER_APPBIN"]) / "myFoam"
+    models = Path(env["FOAM_USER_LIBBIN"]) / "libmodels.dylib"
+    links = {solver.resolve(): [models, install / "lib" / "libOpenFOAM.dylib"], models.resolve(): [elsewhere]}
+    monkeypatch.setattr(build_products, "_direct_links", lambda image, executable, env: links.get(Path(image).resolve(), []))
+
+    entries = wmake_solver_builds(env, repository=_repo(root), used_paths=frozenset({solver.resolve()}))
+    own, outside = entries
+    assert {build.name for build in own.builds} == {"myFoam", "libmodels"} and own.recordable
+    assert outside.solver == "mySolver (linked libraries)" and not outside.recordable and outside.repository is None
+    (library,) = outside.builds
+    assert (library.name, library.path, library.known) == ("libphysics.dylib", elsewhere.resolve(), "unknown")
+    assert library.digest and library.digest.startswith("sha256:")
+
+
+def test_build_record_lists_no_linked_libraries(tmp_path, monkeypatch):
+    import omnidriver.openfoam.build_products as build_products
+
+    root = _repository(tmp_path / "repo")
+    env = _install(tmp_path)
+    monkeypatch.setattr(build_products, "_direct_links",
+                        lambda image, executable, env: (_ for _ in ()).throw(AssertionError("not asked")))
+    (entry,) = wmake_solver_builds(env, repository=_repo(root), used_paths=None)
+    assert {build.name for build in entry.builds} == {"myFoam", "libmodels"}

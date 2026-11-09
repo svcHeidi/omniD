@@ -1,0 +1,12 @@
+Load command 22
+          cmd LC_RPATH
+      cmdsize 48
+         path @executable_path/../lib/sys-openmpi (offset 12)
+Load command 23
+          cmd LC_RPATH
+      cmdsize 40
+         path @executable_path/../lib (offset 12)
+Load command 24
+          cmd LC_RPATH
+      cmdsize 48
+         path @executable_path/../lib/dummy (offset 12)
