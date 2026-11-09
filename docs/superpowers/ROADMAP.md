@@ -52,6 +52,19 @@ Pass 2 (`plans/2026-10-01-pass2-convergence.md`) is complete.
   (`omnidriver.openfoam.case_rules`). A break refuses the plan, naming the key
   and the rule. A plan that is not `ok` carries a code (`plan_failed`,
   `plan_blocked`).
+- **A plan names the builds its run executes.** The binaries its steps run and
+  the extra provenance paths are found in the environment the plan loads, never
+  the caller's shell; the libraries those binaries load are followed as the
+  dynamic loader resolves them, a repository's own judged by its build record and
+  any other (the physics-model library, say) listed by file and digest. A shell
+  that finds other builds gets `build_differs_from_shell`, and `build-record`
+  refuses (`build_environment_mismatch`) rather than credit binaries a plan would
+  not run; both take `--environment-source`. One build folder per source state,
+  with its `env.sh` (AGENT_GUIDE "Making a build omniD uses"):
+  `~/OpenFOAM/cardiacfoam-main-v2412` holds cardiacFOAM `main` (be9f4e10),
+  recorded. The shared `simaocastro-v2412` is not rebuilt: P1 and P5 evidence
+  names its `cardiacFoam` (sha256 8f1e3fbf); it links the lightweight
+  `libphysicsModel` and mixes PR #62 libraries with a `main` solver.
 - **A run is stateful through its run document.** `--entry` and `--case`
   always restage; `plan`, then `run`/`step --run-document`, resumes. `--fresh`
   starts a run document or a sweep over. `step --apply` edits the staged case,

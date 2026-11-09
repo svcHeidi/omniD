@@ -47,6 +47,7 @@ CODES: dict[str, str] = {
     "cxx_source_not_scanned": "the C++ source could not be scanned",
     "build_products_undeclared": "the stack lists no build of the repository that only a build record can identify",
     "nothing_built": "the stack lists builds of the repository but none exists where the environment says it is built; run in the solver's shell after building",
+    "build_environment_mismatch": "the shell and the environment a plan loads find different builds of the repository; pass --environment-source naming the environment the build was made in",
     "run_without_report": "a child run exited without a JSON report",
     "case_timeout": "a sweep case exceeded --case-timeout-s",
     "sweep_stopped": "a signal stopped the sweep",

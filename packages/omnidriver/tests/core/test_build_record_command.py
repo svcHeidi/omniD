@@ -1,6 +1,7 @@
 """`omnidriver build-record`: record what a repository built, for a stack whose binaries cannot identify themselves."""
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from cli_refusal import refusal
@@ -96,3 +97,30 @@ def test_a_stack_whose_builds_are_all_absent_refuses_by_name(tmp_path):
     report = build_record_report(_context(_Unbuilt(), tmp_path), {})
     assert (report["status"], report["code"]) == ("failed", "nothing_built")
     assert "mySolver" in report["error"]
+
+
+def test_a_shell_that_finds_other_builds_than_the_loaded_environment_records_nothing(tmp_path):
+    """The record must sit beside the binaries a plan runs: when the shell built elsewhere, it is refused by name."""
+    planned, built = tmp_path / "plan" / "mySolver", tmp_path / "shell" / "mySolver"
+    for binary in (planned, built):
+        binary.parent.mkdir()
+        binary.write_bytes(b"bin")
+
+    class _Wmake:
+        plugin_id = "org.wmake"
+        plugin_api_version = "3"
+
+        def get_solver_builds(self, env, *, repository, used_paths):
+            path = Path(env["BIN"]) / "mySolver"
+            return (SolverEntry(solver="toySolver", repository=SOURCE, recordable=True, builds=(
+                SolverBuild(name="mySolver", path=path, digest=file_digest(path), known="unknown"),
+            )),)
+
+    context = _context(_Wmake(), tmp_path)
+    report = build_record_report(context, {"BIN": str(planned.parent)}, shell_env={"BIN": str(built.parent)})
+    assert (report["status"], report["code"]) == ("failed", "build_environment_mismatch")
+    assert str(built) in report["error"] and str(planned) in report["error"]
+    assert not (planned.parent / RECORD_FILENAME).exists() and not (built.parent / RECORD_FILENAME).exists()
+
+    same = build_record_report(context, {"BIN": str(built.parent)}, shell_env={"BIN": str(built.parent)})
+    assert same["status"] == "ok" and (built.parent / RECORD_FILENAME).is_file()

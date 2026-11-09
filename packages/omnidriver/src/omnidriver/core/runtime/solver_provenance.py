@@ -86,6 +86,41 @@ def provenance_diagnostics(entries: Iterable[SolverEntry]) -> tuple[StrictDiagno
     return tuple(found)
 
 
+def diverging_builds(loaded: Iterable[SolverEntry], shell: Iterable[SolverEntry]) -> list[dict[str, Any]]:
+    """Each build the process environment (``shell``) finds at another file than the loaded environment
+    does, or finds where the loaded environment finds none: the two environments name different builds."""
+    in_shell = {(entry.solver, build.name): build.path for entry in shell for build in entry.builds
+                if build.path is not None}
+    found: list[dict[str, Any]] = []
+    for entry in loaded:
+        for build in entry.builds:
+            other = in_shell.get((entry.solver, build.name))
+            if other is None:
+                continue
+            if build.path is None or Path(build.path).resolve() != Path(other).resolve():
+                found.append({"solver": entry.solver, "name": build.name,
+                              "loaded": str(build.path) if build.path is not None else None, "shell": str(other)})
+    return found
+
+
+def shell_divergence_diagnostics(diverging: list[dict[str, Any]]) -> tuple[StrictDiagnostic, ...]:
+    """``build_differs_from_shell``, one per solver: the plan runs other builds than the shell it was called from."""
+    by_solver: dict[str, list[dict[str, Any]]] = {}
+    for item in diverging:
+        by_solver.setdefault(item["solver"], []).append(item)
+    return tuple(
+        diagnostic(
+            "warning", "build_differs_from_shell",
+            f"{solver}: the plan runs " + ", ".join(f"{item['name']} at {item['loaded']}" for item in items)
+            + ", but this shell finds " + ", ".join(f"{item['shell']}" for item in items)
+            + ": the plan loads its own environment; pass --environment-source naming the environment of the "
+            "build you mean",
+            source="environment", field=items[0]["name"], detail={"solver": solver, "builds": items},
+        )
+        for solver, items in by_solver.items()
+    )
+
+
 def _commit(identity: SourceIdentity) -> str | None:
     return (identity.git or {}).get("commit")
 

@@ -929,6 +929,46 @@ source than the supplied repository gets a `stale_build` warning naming both
 repositories, commits and digests; a build nothing identifies gets a
 `build_source_unknown` note. Neither blocks a plan.
 
+The builds a plan lists are the ones its run executes: the binaries its steps run,
+found in the environment the plan loads, and every library those binaries load,
+followed as the dynamic loader resolves them in that environment (`otool` on macOS,
+`ldd` on Linux). A library of the repository is listed and judged like its binaries;
+a library from outside both the repository and the OpenFOAM install (another
+project's model library, say) is listed under `<solver> (linked libraries)` by file
+and digest, with no source, so a run names which build of it was loaded.
+
+A plan loads its own environment (`--environment-source`, else the bashrc), so a
+shell that put another build first on `PATH` does not change what runs. When the
+shell and the loaded environment find a build at different files, the plan warns
+`build_differs_from_shell`, naming both, and `build-record` refuses
+(`build_environment_mismatch`) instead of crediting binaries a plan would not run.
+`build-record` takes `--environment-source` as a plan does.
+
+### Making a build omniD uses
+
+One build folder per source state, each with the environment file that selects it:
+
+```bash
+# env.sh, beside the build: OpenFOAM, then this folder's products first
+source <OpenFOAM>/etc/bashrc
+export WM_PROJECT_USER_DIR=<build folder>
+export FOAM_USER_APPBIN="$WM_PROJECT_USER_DIR/platforms/$WM_OPTIONS/bin"
+export FOAM_USER_LIBBIN="$WM_PROJECT_USER_DIR/platforms/$WM_OPTIONS/lib"
+export PATH="$FOAM_USER_APPBIN:$PATH"
+export DYLD_LIBRARY_PATH="$FOAM_USER_LIBBIN:$DYLD_LIBRARY_PATH"   # macOS
+
+source env.sh
+(cd <solver repository> && ./Allwmake)
+omnidriver build-record --repo <solver repository> --environment-source env.sh
+omnidriver plan --strict --repo <solver repository> --entry <record> \
+  --scratch-dir <scratch> --environment-source env.sh
+```
+
+The plan's `solverProvenance` then lists every build as `recorded` with
+`matchesRepository: true`. Building every branch into one shared folder overwrites
+one build with another, library by library; a folder per source state keeps each
+build whole and its record true.
+
 The catalogues stay the source of truth, and a key that appears in or
 disappears from the C++ never fails a plan. A plan compares them with the scan:
 - a key, sub-dictionary, menu value or selection table the C++ reads and the
@@ -1127,6 +1167,7 @@ expression of other parameters is a string under its own key
 | `cxx_source_not_scanned` | the C++ source could not be scanned |
 | `build_products_undeclared` | the stack lists no build of the repository that only a build record can identify |
 | `nothing_built` | the stack lists builds of the repository but none exists where the environment says it is built; run in the solver's shell after building |
+| `build_environment_mismatch` | the shell and the environment a plan loads find different builds of the repository; pass --environment-source naming the environment the build was made in |
 | `run_without_report` | a child run exited without a JSON report |
 | `case_timeout` | a sweep case exceeded --case-timeout-s |
 | `sweep_stopped` | a signal stopped the sweep |

@@ -138,3 +138,36 @@ def test_the_builds_are_read_in_the_environment_the_run_executes_in(tmp_path):
     strict_plan(record, overrides={"cases_root": str(cases_root)}, scratch_root=tmp_path / "scratch2",
                 driver_context=ctx)
     assert plugin.seen == ["/opt/solver/bashrc", None]
+
+
+def test_builds_the_shell_finds_elsewhere_or_where_the_plan_finds_none_diverge():
+    from omnidriver.core.runtime.solver_provenance import diverging_builds
+
+    def entry(*builds):
+        return SolverEntry(solver="wmakeSolver", repository=HERE, builds=builds, recordable=True)
+
+    loaded = entry(SolverBuild(name="a", path=Path("/plan/a"), digest=DIGEST, known="unknown"),
+                   SolverBuild(name="b", path=Path("/same/b"), digest=DIGEST, known="unknown"),
+                   SolverBuild(name="c", path=None, digest=None, known="unknown"),
+                   SolverBuild(name="d", path=Path("/plan/d"), digest=DIGEST, known="unknown"))
+    shell = entry(SolverBuild(name="a", path=Path("/shell/a"), digest=DIGEST, known="unknown"),
+                  SolverBuild(name="b", path=Path("/same/b"), digest=DIGEST, known="unknown"),
+                  SolverBuild(name="c", path=Path("/shell/c"), digest=DIGEST, known="unknown"))
+    assert diverging_builds((loaded,), (shell,)) == [
+        {"solver": "wmakeSolver", "name": "a", "loaded": "/plan/a", "shell": "/shell/a"},
+        {"solver": "wmakeSolver", "name": "c", "loaded": None, "shell": "/shell/c"},
+    ]
+    assert diverging_builds((loaded,), ()) == []
+
+
+def test_a_plan_that_runs_other_builds_than_its_shell_warns_once_per_solver_naming_both():
+    from omnidriver.core.runtime.solver_provenance import shell_divergence_diagnostics
+
+    (warning,) = shell_divergence_diagnostics([
+        {"solver": "wmakeSolver", "name": "a", "loaded": "/plan/a", "shell": "/shell/a"},
+        {"solver": "wmakeSolver", "name": "b", "loaded": "/plan/b", "shell": "/shell/b"},
+    ])
+    assert (warning.level, warning.code) == ("warning", "build_differs_from_shell")
+    for fragment in ("/plan/a", "/shell/a", "/plan/b", "/shell/b", "--environment-source"):
+        assert fragment in warning.message, fragment
+    assert shell_divergence_diagnostics([]) == ()
