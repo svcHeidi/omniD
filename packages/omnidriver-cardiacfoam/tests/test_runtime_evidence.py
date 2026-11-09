@@ -3,6 +3,7 @@ cardiacFoam binary as a dependency."""
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from omnidriver.cardiacfoam.cardiacfoam_plugin import CardiacFoamPlugin
@@ -29,7 +30,7 @@ def test_cardiac_extra_provenance_paths_declares_the_solver_as_a_dependency(
     """The binary is never named by an Allrun-driven step's command, yet must still be fingerprinted."""
     from omnidriver.core.plugin_interface import RuntimeDependency
 
-    dependencies = _CTX.stack.call("get_extra_provenance_paths", tmp_path)
+    dependencies = _CTX.stack.call("get_extra_provenance_paths", tmp_path, env=dict(os.environ))
     assert dependencies
     assert all(isinstance(dependency, RuntimeDependency) for dependency in dependencies)
     by_name = {dependency.name: dependency for dependency in dependencies}
@@ -48,3 +49,13 @@ def test_the_solver_binary_resolves_on_path(tmp_path: Path) -> None:
     assert (dependency.name, dependency.path, dependency.required) == ("cardiacFoam", solver, True)
     (dependency,) = solver_dependencies({"PATH": ""})
     assert dependency.path is None and dependency.required is True
+
+
+def test_the_extra_provenance_paths_resolve_the_solver_in_the_environment_given(tmp_path: Path) -> None:
+    """The run's environment, not the process's: a plan that loads another build must fingerprint that build."""
+    solver = tmp_path / "bin" / "cardiacFoam"
+    solver.parent.mkdir()
+    solver.write_text("#!/bin/sh\n")
+    solver.chmod(0o755)
+    dependencies = _CTX.stack.call("get_extra_provenance_paths", tmp_path, env={"PATH": str(solver.parent)})
+    assert {dependency.name: dependency.path for dependency in dependencies}["cardiacFoam"] == solver

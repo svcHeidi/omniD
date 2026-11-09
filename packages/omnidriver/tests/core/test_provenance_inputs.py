@@ -56,7 +56,7 @@ class _FakePlugin(ToyProvider):
     def get_generated_output_globs(self, case_root, resolved_case):
         return self._generated_output_globs
 
-    def get_extra_provenance_paths(self, case_root):
+    def get_extra_provenance_paths(self, case_root, *, env):
         return self._extra_provenance_paths
 
     def get_input_roots(self, case_root, resolved_case, *, conventions):

@@ -152,13 +152,11 @@ class OpenFOAMEnvironmentPlugin:
 
         return wmake_solver_builds(env, repository=repository, used_paths=used_paths)
 
-    def get_extra_provenance_paths(self, case_root) -> tuple:
-        """The libraries the case's ``controlDict`` loads, and gmsh for a case with a ``.geo``."""
-        import os
-
+    def get_extra_provenance_paths(self, case_root, *, env) -> tuple:
+        """The libraries the case's ``controlDict`` loads, and gmsh for a case with a ``.geo``, found in ``env``."""
         from .build_products import case_runtime_dependencies
 
-        return case_runtime_dependencies(case_root, env=os.environ)
+        return case_runtime_dependencies(case_root, env=env)
 
     def get_plan_diagnostics(self, case_root, *, workflow_dag, env, scratch_root, driver_context):
         from .plan_diagnostics import plan_diagnostics
