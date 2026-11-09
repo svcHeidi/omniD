@@ -136,7 +136,11 @@
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.verificationModel.domain": "cube/shell, a plain lookupOrDefault<word> compared against two literals in manufacturedPseudoECGVerifier.C and manufacturedEikonalECGVerifier.C, with a FatalError otherwise",
       "$ELECTRO_MODEL_COEFFS.ecgDomains.<name>.personalizedTemplates.ionicModelConfig.tissue": "ionicTemplates.C hands ionicModelConfig to ionicModel::New, which reads tissue as the top-level tissue enum",
       "$ELECTRO_MECHANICAL_COEFFS.activeTensionTemplates.ionicModelConfig.tissue": "ionicTemplates.C hands ionicModelConfig to ionicModel::New, which reads tissue as the top-level tissue enum",
-      "$ELECTRO_MECHANICAL_COEFFS.activeTensionSignal": "electro/templates, the menu sequentialElectroMechanical.C hands dictionaryKeyCheck::getWord"
+      "$ELECTRO_MECHANICAL_COEFFS.activeTensionSignal": "electro/templates, the menu sequentialElectroMechanical.C hands dictionaryKeyCheck::getWord",
+      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.seedProfile": "flat/front/curvedFront, the menu eikonalPvjCoupler.C hands dictionaryKeyCheck::getWord",
+      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.verificationModel.reference": "discrete/continuum, a plain word coupled1D3DMonodomainVerifier.C compares, any other value fatal",
+      "$ELECTRO_MODEL_COEFFS.domainCouplings.<name>.verificationModel.tissueField": "box/shell, a plain word coupled1D3DMonodomainVerifier.C compares, any other value fatal",
+      "$ELECTRO_MODEL_COEFFS.verificationModel.seedProfile": "flat/exact, the menu manufacturedRadialEikonalVerifier.C checks with dictionaryKeyCheck::checkValue"
     },
     "internal_bases": {
       "electroModel": "a lower-level table the myocardiumSolver key resolves through; its values appear in the union enum",
