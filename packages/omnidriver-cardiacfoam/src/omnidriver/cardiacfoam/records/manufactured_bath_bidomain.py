@@ -1,5 +1,5 @@
 """``manufacturedBathBidomain``, the FDA bidomain-with-bath manufactured-solution record.
-Native case: ``manufacturedSolutions/bathBidomain``; hex and tet routes."""
+Native case: ``manufacturedSolutions/bathBidomain/slab``; hex and tet routes."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ AXES = (
 
 RECORD = TutorialRecord(
     name="manufacturedBathBidomain",
-    native_case_relpath="manufacturedSolutions/bathBidomain",
+    native_case_relpath="manufacturedSolutions/bathBidomain/slab",
     axes=AXES,
     derivations=(allrun_time_controls(_ALLRUN_STEP_AT_TEN),),
     workflow_steps=(

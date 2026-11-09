@@ -1,5 +1,5 @@
 """``niederer2011``, the Niederer et al. (2011) N-version slab benchmark.
-Native case: ``NiedererEtAl2011verification``; a hex (blockMesh) and a tet (gmsh) route."""
+Native case: ``benchmarks/NiedererEtAl2011verification``; a hex (blockMesh) and a tet (gmsh) route."""
 
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ AXES = (
 
 RECORD = TutorialRecord(
     name="niederer2011",
-    native_case_relpath="NiedererEtAl2011verification",
+    native_case_relpath="benchmarks/NiedererEtAl2011verification",
     axes=AXES,
     variant_selector=MESH_SELECTOR_NAME,
     default_variant=HEX_VARIANT,

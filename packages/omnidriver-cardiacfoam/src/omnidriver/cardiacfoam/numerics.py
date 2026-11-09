@@ -12,7 +12,7 @@ _SRC = "src/electroModels/"
 _DOMAIN = _SRC + "electroDomains/myocardiumDomain/"
 _MONODOMAIN = _SRC + "myocardiumModels/monodomainSolver/monodomainSolver.C"
 _BATCHED = "src/ionicModels/ionicModel/batchedIonicModel.H"
-_TEMPORAL_README = "tutorials/manufacturedSolutions/monodomainPseudoECG/setup/studies/temporalConvergence/README.md"
+_TEMPORAL_README = "tutorials/manufacturedSolutions/monodomain/cube/setup/studies/temporalConvergence/README.md"
 
 
 def _source(file: str, excerpt: str, reading: str) -> dict[str, Any]:

@@ -1,5 +1,5 @@
 """``manufacturedEikonalECG``, the eikonal activation-time and template ECG manufactured-solution record.
-Native case: ``manufacturedSolutions/eikonalECG``; hex, tet and the tet route with the error field."""
+Native case: ``manufacturedSolutions/eikonal/cube``; hex, tet and the tet route with the error field."""
 
 from __future__ import annotations
 
@@ -132,7 +132,7 @@ _WRITE_CELL_CENTRES_STEP = WorkflowStep(
 
 RECORD = TutorialRecord(
     name="manufacturedEikonalECG",
-    native_case_relpath="manufacturedSolutions/eikonalECG",
+    native_case_relpath="manufacturedSolutions/eikonal/cube",
     axes=AXES,
     workflow_steps=(
         _MESH_STEP, _SOLVE_STEP, *gmsh_route(_TET_TEMPLATE_RELPATH, _TET_MESH, "internal", allrun_n=_ALLRUN_N),
