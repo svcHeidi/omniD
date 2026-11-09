@@ -75,7 +75,7 @@ def test_all_package_wheels_discover_and_invoke_cardiacfoam(tmp_path: Path) -> N
     cases_root = probe_root / "cases"
     cases_root.mkdir(parents=True)
     # A record's describe needs its native case directory to exist; nothing in it is read.
-    (cases_root / "NiedererEtAl2011verification").mkdir()
+    (cases_root / "benchmarks" / "NiedererEtAl2011verification").mkdir(parents=True)
     (cases_root / "idealizedHeart" / "humanSlab").mkdir(parents=True)
     (cases_root / "idealizedHeart" / "mesh").mkdir()
     clean_environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
