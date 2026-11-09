@@ -88,12 +88,12 @@ class CardiacFoamPlugin:
 
         return solver_commands()
 
-    def get_extra_provenance_paths(self, case_root) -> tuple:
-        """The solver binary; what the case loads is the OpenFOAM layer's."""
+    def get_extra_provenance_paths(self, case_root, *, env) -> tuple:
+        """The solver binary on ``env``'s PATH; what the case loads is the OpenFOAM layer's."""
         del case_root
         from omnidriver.cardiacfoam.runtime_evidence import solver_dependencies
 
-        return solver_dependencies()
+        return solver_dependencies(env)
 
     def get_artifact_value_reader(self, artifact_format: str):
         """Reader for a cardiac artifact format, or None if unsupported."""

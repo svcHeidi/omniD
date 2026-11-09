@@ -267,8 +267,8 @@ class SolverPlugin(Protocol):
         """Case-relative directories a run reads as state (the instance it
         resumes from); ``conventions`` is the stack's merged declaration."""
 
-    def get_extra_provenance_paths(self, case_root: Path) -> tuple[RuntimeDependency, ...]:
-        """Run-time dependencies outside the case tree."""
+    def get_extra_provenance_paths(self, case_root: Path, *, env: Mapping[str, str]) -> tuple[RuntimeDependency, ...]:
+        """Run-time dependencies outside the case tree, resolved in ``env``, the environment the run executes in."""
 
     def get_solver_builds(
         self, env: Mapping[str, str], *, repository: "Repository | None", used_paths: frozenset[Path] | None,

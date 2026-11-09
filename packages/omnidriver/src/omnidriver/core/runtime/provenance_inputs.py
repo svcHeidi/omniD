@@ -190,7 +190,7 @@ def runtime_dependencies(
                     payload, resolved_cwd=resolved_cwd, case_root=case_root, env=environment,
                     add_case_file=add, dependencies=dependencies, driver_context=driver_context,
                 )
-    for dependency in driver_context.stack.call("get_extra_provenance_paths", case_root):
+    for dependency in driver_context.stack.call("get_extra_provenance_paths", case_root, env=environment):
         dependencies[dependency.name] = dependency
     return dependencies
 

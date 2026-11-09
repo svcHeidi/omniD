@@ -154,16 +154,40 @@ def _identity(raw: Any) -> SourceIdentity | None:
     return SourceIdentity(repository=raw.get("repository"), digest=digest, git=dict(git) if git is not None else None)
 
 
-def build_record_report(driver_context: Any, env: Mapping[str, str]) -> dict[str, Any]:
+def build_record_report(
+    driver_context: Any, env: Mapping[str, str], *, shell_env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     """``build-record``: record every existing build of the stack's recordable solvers as built from
-    the supplied repository; the JSON report, or a refusal payload."""
+    the supplied repository; the JSON report, or a refusal payload.
+
+    ``env`` is the environment a plan loads (``--environment-source``); ``shell_env``, when given, the
+    process environment. Where the two find a build at different files, nothing is recorded: the record
+    would credit binaries a plan does not run, or miss the ones it does."""
     from ..refusal import failure
+    from .solver_provenance import diverging_builds
 
     repository = driver_context.repository
-    entries = [
-        entry for entry in driver_context.stack.call("get_solver_builds", env, repository=repository, used_paths=None)
-        if entry.recordable and entry.repository is not None
-    ]
+
+    def recordable(environment: Mapping[str, str]) -> list[Any]:
+        return [
+            entry for entry in driver_context.stack.call(
+                "get_solver_builds", environment, repository=repository, used_paths=None)
+            if entry.recordable and entry.repository is not None
+        ]
+
+    entries = recordable(env)
+    if shell_env is not None and dict(shell_env) != dict(env):
+        diverging = diverging_builds(entries, recordable(shell_env))
+        if diverging:
+            shown = "; ".join(
+                f"{item['name']}: shell {item['shell']}, plan {item['loaded'] or 'none'}" for item in diverging[:3]
+            )
+            return failure(
+                None, code="build_environment_mismatch", action="build-record",
+                error=f"this shell and the environment a plan loads find different builds ({shown}"
+                      f"{', ...' if len(diverging) > 3 else ''}); pass --environment-source naming the "
+                      "environment the build was made in",
+            )
     if not entries:
         return failure(
             None, code="build_products_undeclared", action="build-record",

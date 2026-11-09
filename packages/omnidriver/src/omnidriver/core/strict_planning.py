@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
@@ -372,7 +373,14 @@ def _strict_plan_for_spec(
         Path(spec.case_root), workflow_dag=workflow_dag, driver_context=driver_context,
         env=env,
     )
-    env_diagnostics = tuple(env_diagnostics) + solver_provenance.provenance_diagnostics(solvers)
+    shell_solvers = solver_provenance.solver_entries(
+        Path(spec.case_root), workflow_dag=workflow_dag, driver_context=driver_context,
+        env=dict(os.environ),
+    ) if solvers and env != dict(os.environ) else ()
+    env_diagnostics = (
+        tuple(env_diagnostics) + solver_provenance.provenance_diagnostics(solvers)
+        + solver_provenance.shell_divergence_diagnostics(solver_provenance.diverging_builds(solvers, shell_solvers))
+    )
     if solvers:
         run_document.solverProvenance = solver_provenance.to_json(solvers)
     plugin_diagnostics = driver_context.stack.call(

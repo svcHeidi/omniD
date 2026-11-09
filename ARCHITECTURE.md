@@ -170,7 +170,7 @@ nowhere. Where the solvers differ, the row says so.
 | current case values | unknown | unknown | unknown |
 | shell | data: `env` (`variables`, `shell_prefix`, `commands`, `preflight`) | same | same |
 | MPI | data: `env` (`launcher`, the 2-rank `parallel` probe); preflight refuses the other MPI's launcher | same | n/a: `serial_only` |
-| builds and source | data: `build-record`, the run document's `solverProvenance`, `stale_build` / `build_source_unknown` | data: `-buildinfo` | data: the editable install |
+| builds and source | data: `build-record`, the run document's `solverProvenance`, `stale_build` / `build_source_unknown` / `build_differs_from_shell`, linked libraries by digest | data: `-buildinfo` | data: the editable install |
 | machine | data: `env`'s `host`, each step's `host` in `workflow_state.json`; a run document's process count is rechecked against the allocation at dispatch (`allocation_mismatch`) | same | same |
 | job submission | prose: `AGENT_GUIDE.md`'s Slurm script; `sweep-plan` writes each case's run document, so a sweep can be one job per case | same | n/a |
 | cross-solver mappings | prose: `docs/solver-learning/cross-solver-variables.md` | same | not covered |

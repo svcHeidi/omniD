@@ -1029,9 +1029,10 @@ def _validate_args(parser: argparse.ArgumentParser, args) -> None:
         parser.error(
             "--allow-unresolved-configuration is only valid with action=plan, action=step, or action=run"
         )
-    if args.environment_source and args.action not in {"plan", "step", "run", "sweep-plan", "sweep-run"} and not args.studies:
+    if (args.environment_source and args.action not in {"plan", "step", "run", "sweep-plan", "sweep-run", "build-record"}
+            and not args.studies):
         parser.error(
-            "--environment-source is only valid with action=plan, step, run, sweep-plan, sweep-run "
+            "--environment-source is only valid with action=plan, step, run, sweep-plan, sweep-run, build-record "
             "or check --studies"
         )
     if args.action != "step" and args.step:
@@ -1350,9 +1351,12 @@ def _dispatch(parser: argparse.ArgumentParser, args) -> int:
         return 0 if report["status"] in ("ok", "degraded") else 1
 
     if args.action == "build-record":
+        from .core.environment_connection import load_environment
         from .core.runtime.build_identity import build_record_report
 
-        report = build_record_report(driver_context, os.environ)
+        report = build_record_report(
+            driver_context, load_environment(driver_context, args.environment_source), shell_env=os.environ,
+        )
         print(json.dumps(report, indent=2))
         return 0 if report["status"] == "ok" else 1
 

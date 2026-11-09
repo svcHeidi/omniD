@@ -1,0 +1,10 @@
+/opt/solver/bin/cardiacFoam:
+	@rpath/libsolids4FoamModels.dylib (compatibility version 0.0.0, current version 0.0.0)
+	@rpath/libelectroMechanicalModels.dylib (compatibility version 0.0.0, current version 0.0.0)
+	@rpath/libelectroModels.dylib (compatibility version 0.0.0, current version 0.0.0)
+	@rpath/libionicModels.dylib (compatibility version 0.0.0, current version 0.0.0)
+	@rpath/libgenericWriter.dylib (compatibility version 0.0.0, current version 0.0.0)
+	@rpath/libactiveTensionModels.dylib (compatibility version 0.0.0, current version 0.0.0)
+	@rpath/libOpenFOAM.dylib (compatibility version 0.0.0, current version 0.0.0)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)
+	/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2000.63.0)
