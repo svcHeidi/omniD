@@ -1,5 +1,5 @@
 """``manufacturedMonodomain1D3D``, the coupled 1D-3D monodomain manufactured-solution record.
-Native case: ``manufacturedSolutions/monodomain1D3D``; a ``coupled`` and a ``graphOnly`` variant.
+Native case: ``manufacturedSolutions/monodomain/coupled1D3DCube``; a ``coupled`` and a ``graphOnly`` variant.
 """
 
 from __future__ import annotations
@@ -29,9 +29,8 @@ _PURKINJE_GRAPH_MODEL_COEFFS = (
 
 #: Every graph file the native case ships, so the solve steps' `consumes`
 #: covers whichever one a study names.
-GRAPH_FILES: tuple[str, ...] = (
-    "purkinjeGraph.nodes003", "purkinjeGraph.nodes011", "purkinjeGraph.nodes021",
-    "purkinjeGraph.nodes041", "purkinjeGraph.nodes081", "purkinjeGraph.nodes161",
+GRAPH_FILES: tuple[str, ...] = tuple(
+    f"purkinjeGraph.nodes{k:03d}" for k in (3, 11, 17, 21, 25, 33, 41, 49, 65, 81, 97, 161)
 )
 
 COUPLED_SOLVE_STEP_ID = "solve"
@@ -123,7 +122,7 @@ _GRAPH_VERIFIER_OUTPUTS = (
 
 RECORD = TutorialRecord(
     name="manufacturedMonodomain1D3D",
-    native_case_relpath="manufacturedSolutions/monodomain1D3D",
+    native_case_relpath="manufacturedSolutions/monodomain/coupled1D3DCube",
     axes=AXES,
     workflow_steps=(
         block_mesh_step(

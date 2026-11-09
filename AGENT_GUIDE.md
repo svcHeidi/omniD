@@ -371,7 +371,7 @@ one step are refused per case).
 and keys.
 
 `niederer2011` is a **tutorial record** (`records/niederer_2011.py`), a thin,
-declarative pointer at the native case (`NiedererEtAl2011verification`). Its
+declarative pointer at the native case (`benchmarks/NiedererEtAl2011verification`). Its
 study names real `document:dotted.path` keys and its own `dx`/`tetDx` axes
 directly, in the case's own units (metres, seconds):
 
@@ -394,11 +394,11 @@ directly, in the case's own units (metres, seconds):
 ```
 
 This is the native study
-`NiedererEtAl2011verification/setup/studies/cartesianConvergence/sweep_hex_convergence.json`:
+`benchmarks/NiedererEtAl2011verification/setup/studies/cartesianConvergence/sweep_hex_convergence.json`:
 Niederer et al. (2011)'s grid, Δx 0.5/0.2/0.1 mm × Δt 0.05/0.01/0.005 ms,
 with `endTime` per Δx chosen so every probe has activated. Run it from
 the native repository root:
-`omnidriver sweep-plan --repo . --scratch-dir <scratch> --spec tutorials/NiedererEtAl2011verification/setup/studies/cartesianConvergence/sweep_hex_convergence.json`.
+`omnidriver sweep-plan --repo . --scratch-dir <scratch> --spec tutorials/benchmarks/NiedererEtAl2011verification/setup/studies/cartesianConvergence/sweep_hex_convergence.json`.
 
 One case with study values is the same spec with one-value axes:
 

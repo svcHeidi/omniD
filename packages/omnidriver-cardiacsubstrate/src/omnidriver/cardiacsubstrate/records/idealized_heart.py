@@ -43,7 +43,8 @@ MORPHOMETRY = step(
     consumes=(CONV,),
 )
 
-#: Mirrors the native humanSlab variant's workflow (conductivity, anatomy, slab, morphometry).
+#: Mirrors the native humanSlab variant's workflow (conductivity, anatomy, slab). The morphometry weights serve only
+#: weightedField tree terminals, so the slab route has no morphometry step.
 IDEALIZED_HEART = TutorialRecord(
     name="idealizedHeart",
     native_case_relpath="idealizedHeart/humanSlab",
@@ -55,7 +56,6 @@ IDEALIZED_HEART = TutorialRecord(
             "purkinje_slab", "setPurkinjeSlab",
             consumes=(CONV, "0/tm"),
         ),
-        MORPHOMETRY,
     ),
 )
 

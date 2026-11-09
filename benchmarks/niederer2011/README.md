@@ -6,7 +6,7 @@ JSON; a zip study's lists are rows, so one level is the row at one index.
 
 | solver | study or record | Δx | Δt | end time |
 |---|---|---|---|---|
-| cardiacFOAM | native `NiedererEtAl2011verification/setup/studies/cartesianConvergence/sweep_hex_convergence.json`, entry `niederer2011` | `dx`, m | `system/controlDict:deltaT`, s | `system/controlDict:endTime`, s |
+| cardiacFOAM | native `benchmarks/NiedererEtAl2011verification/setup/studies/cartesianConvergence/sweep_hex_convergence.json`, entry `niederer2011` | `dx`, m | `system/controlDict:deltaT`, s | `system/controlDict:endTime`, s |
 | openCARP | `studies/opencarp_cartesianConvergence.json`, entry `niedererNVersion` (here because openCARP's tutorials are a read-only install) | `dx`, µm | `nversion.par:dt`, µs | `nversion.par:tend`, ms |
 | TorchCor | its cases repository's `nversion` (`oblique/torchcor_obliqueWall.json` shows the keys) | `case.json:dx_mm`, mm | `case.json:dt_ms`, ms | `case.json:t_end_ms`, ms |
 

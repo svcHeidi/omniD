@@ -1,5 +1,5 @@
 """``manufacturedBidomain``, the bidomain manufactured-solution record.
-Native case: ``manufacturedSolutions/bidomain``; hex and tet routes."""
+Native case: ``manufacturedSolutions/bidomain/cube``; hex and tet routes."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ AXES = (
 
 RECORD = TutorialRecord(
     name="manufacturedBidomain",
-    native_case_relpath="manufacturedSolutions/bidomain",
+    native_case_relpath="manufacturedSolutions/bidomain/cube",
     axes=AXES,
     derivations=(allrun_time_controls(_ALLRUN_STEP_AT_TEN),),
     workflow_steps=(

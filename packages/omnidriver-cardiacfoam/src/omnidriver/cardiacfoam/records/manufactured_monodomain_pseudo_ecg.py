@@ -1,5 +1,5 @@
 """``manufacturedMonodomainPseudoECG``, the monodomain manufactured-solution record with pseudo-ECG output.
-Native case: ``manufacturedSolutions/monodomainPseudoECG``; hex and tet routes.
+Native case: ``manufacturedSolutions/monodomain/cube``; hex and tet routes.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ _SOLVE_OUTPUTS = (WITH_DEFAULT_VALUES, "postProcessing/*_cells.dat")
 
 RECORD = TutorialRecord(
     name="manufacturedMonodomainPseudoECG",
-    native_case_relpath="manufacturedSolutions/monodomainPseudoECG",
+    native_case_relpath="manufacturedSolutions/monodomain/cube",
     axes=AXES,
     derivations=(allrun_time_controls(_ALLRUN_STEP_AT_TEN),),
     workflow_steps=(
